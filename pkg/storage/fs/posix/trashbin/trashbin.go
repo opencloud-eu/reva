@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/pkg/xattr"
 	"github.com/rs/zerolog"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -240,21 +241,23 @@ func (tb *Trashbin) RestoreRecycleItem(ctx context.Context, ref *provider.Refere
 	}
 	restorePath := filepath.Join(restoreBaseNode.InternalPath(), restoreRef.GetPath())
 
-	spaceID, id, _, err := tb.lu.MetadataBackend().IdentifyPath(ctx, trashPath)
+	attr, err := xattr.Get(trashPath, prefixes.IDAttr)
 	if err != nil {
 		return err
 	}
+	id := string(attr)
 
 	// update parent id in case it was restored to a different location
-	_, parentID, _, err := tb.lu.MetadataBackend().IdentifyPath(ctx, filepath.Dir(restorePath))
+	attr, err = xattr.Get(filepath.Dir(restorePath), prefixes.IDAttr)
 	if err != nil {
 		return err
 	}
+	parentID := string(attr)
 	if len(parentID) == 0 {
 		return fmt.Errorf("trashbin: parent id not found for %s", restorePath)
 	}
 
-	trashNode := node.NewBaseNode(spaceID, id, tb.lu)
+	trashNode := node.NewBaseNode(n.SpaceID, id, tb.lu)
 	err = tb.lu.MetadataBackend().Set(ctx, trashNode, prefixes.ParentidAttr, []byte(parentID))
 	if err != nil {
 		return err
