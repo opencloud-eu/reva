@@ -376,25 +376,29 @@ func (t *Tree) assimilate(item scanItem) error {
 	}
 
 	// check for the id attribute again after grabbing the lock, maybe the file was assimilated/created by us in the meantime
-	_, id, mtime, err := t.lookup.MetadataBackend().IdentifyPath(context.Background(), item.Path)
-	if err != nil {
-		return err
-	}
-
-	// compare metadata mtime with actual mtime. if it matches we can skip the assimilation because the file was handled by us
-	fi, err := os.Stat(item.Path)
+	bid, err := xattr.Get(item.Path, prefixes.IDAttr)
+	id := ""
 	if err == nil {
-		// FIXME the mtime does not change on a move, so we have to compare ctime
-		stat := fi.Sys().(*syscall.Stat_t)
-		ctime := time.Unix(int64(stat.Ctim.Sec), int64(stat.Ctim.Nsec))
-		if mtime.Equal(ctime) && !item.ForceRescan {
-			return nil
-		}
+		id = string(bid)
 	}
 
 	if id != "" {
 		// the file has an id set, we already know it from the past
 		n := node.NewBaseNode(spaceID, id, t.lookup)
+
+		// compare metadata mtime with actual mtime. if it matches we can skip the assimilation because the file was handled by us
+		fi, err := os.Stat(item.Path)
+		if err == nil {
+			attr, _ := t.lookup.MetadataBackend().Get(context.Background(), n, prefixes.MTimeAttr)
+			mtime, _ := time.Parse(time.RFC3339Nano, string(attr))
+
+			// FIXME the mtime does not change on a move, so we have to compare ctime
+			stat := fi.Sys().(*syscall.Stat_t)
+			ctime := time.Unix(int64(stat.Ctim.Sec), int64(stat.Ctim.Nsec))
+			if mtime.Equal(ctime) && !item.ForceRescan {
+				return nil
+			}
+		}
 
 		previousPath, ok := t.lookup.(*lookup.Lookup).GetCachedID(context.Background(), spaceID, string(id))
 		previousParentID, _ := t.lookup.MetadataBackend().Get(context.Background(), n, prefixes.ParentidAttr)
@@ -669,6 +673,14 @@ assimilate:
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "failed to set attributes")
 	}
+	err = xattr.Set(path, prefixes.IDAttr, attributes[prefixes.IDAttr])
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "failed to set ID in xattrs")
+	}
+	err = xattr.Set(path, prefixes.SpaceIDAttr, attributes[prefixes.SpaceIDAttr])
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "failed to set SpaceID in xattrs")
+	}
 
 	if err := t.lookup.(*lookup.Lookup).CacheID(context.Background(), spaceID, id, path); err != nil {
 		t.log.Error().Err(err).Str("spaceID", spaceID).Str("id", id).Str("path", path).Msg("could not cache id")
@@ -730,8 +742,12 @@ func (t *Tree) WarmupIDCache(root string, assimilate, onlyDirty bool) error {
 			sizes[path] += 0 // Make sure to set the size to 0 for empty directories
 		}
 
-		nodeSpaceID, id, _, err := t.lookup.MetadataBackend().IdentifyPath(context.Background(), path)
-		if err == nil && len(id) > 0 {
+		bid, _ := xattr.Get(path, prefixes.IDAttr)
+		id := string(bid)
+		sid, _ := xattr.Get(path, prefixes.SpaceIDAttr)
+		nodeSpaceID := string(sid)
+
+		if len(id) > 0 {
 			if len(nodeSpaceID) > 0 {
 				spaceID = nodeSpaceID
 
@@ -752,8 +768,9 @@ func (t *Tree) WarmupIDCache(root string, assimilate, onlyDirty bool) error {
 						break
 					}
 
-					spaceID, _, _, err = t.lookup.MetadataBackend().IdentifyPath(context.Background(), spaceCandidate)
-					if err == nil {
+					sid, _ := xattr.Get(path, prefixes.SpaceIDAttr)
+					spaceID = string(sid)
+					if spaceID != "" {
 						err = scopeSpace(path)
 						if err != nil {
 							return err
