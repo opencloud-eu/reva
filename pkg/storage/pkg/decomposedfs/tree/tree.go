@@ -26,7 +26,6 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"time"
 
@@ -41,7 +40,6 @@ import (
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/options"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/permissions"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/tree/propagator"
-	"github.com/opencloud-eu/reva/v2/pkg/utils"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	"go-micro.dev/v4/store"
@@ -523,140 +521,6 @@ func (t *Tree) Delete(ctx context.Context, n *node.Node) (err error) {
 	return t.Propagate(ctx, n, sizeDiff)
 }
 
-// RestoreRecycleItemFunc returns a node and a function to restore it from the trash.
-func (t *Tree) RestoreRecycleItemFunc(ctx context.Context, spaceid, key, relativePath string, targetNode *node.Node) (*node.Node, *node.Node, func() error, error) {
-	_, span := tracer.Start(ctx, "RestoreRecycleItemFunc")
-	defer span.End()
-	logger := appctx.GetLogger(ctx)
-
-	trashNode, trashItem, origin, err := t.readRecycleItem(ctx, spaceid, key, relativePath)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-
-	targetRef := &provider.Reference{
-		ResourceId: &provider.ResourceId{SpaceId: spaceid, OpaqueId: spaceid},
-		Path:       utils.MakeRelativePath(origin),
-	}
-
-	if targetNode == nil {
-		targetNode, err = t.lookup.NodeFromResource(ctx, targetRef)
-		if err != nil {
-			return nil, nil, nil, err
-		}
-	}
-
-	if err := targetNode.CheckLock(ctx); err != nil {
-		return nil, nil, nil, err
-	}
-
-	parentNode, err := targetNode.Parent(ctx)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-
-	fn := func() error {
-		if targetNode.Exists {
-			return errtypes.AlreadyExists("origin already exists")
-		}
-
-		parts := strings.SplitN(trashNode.ID, node.TrashIDDelimiter, 2)
-		originalId := parts[0]
-		restoreNode := node.NewBaseNode(targetNode.SpaceID, originalId, t.lookup)
-
-		// add the entry for the parent dir
-		err = os.Symlink("../../../../../"+lookup.Pathify(originalId, 4, 2), filepath.Join(targetNode.ParentPath(), targetNode.Name))
-		if err != nil {
-			return err
-		}
-
-		// attempt to rename only if we're not in a subfolder
-		if trashNode.ID != restoreNode.ID {
-			err = os.Rename(trashNode.InternalPath(), restoreNode.InternalPath())
-			if err != nil {
-				return err
-			}
-			err = t.lookup.MetadataBackend().Rename(trashNode, restoreNode)
-			if err != nil {
-				return err
-			}
-		}
-
-		targetNode.Exists = true
-
-		attrs := node.Attributes{}
-		attrs.SetString(prefixes.NameAttr, targetNode.Name)
-		// set ParentidAttr to restorePath's node parent id
-		attrs.SetString(prefixes.ParentidAttr, targetNode.ParentID)
-
-		if err = t.lookup.MetadataBackend().SetMultiple(ctx, restoreNode, map[string][]byte(attrs), true); err != nil {
-			return errors.Wrap(err, "Decomposedfs: could not update recycle node")
-		}
-
-		// delete item link in trash
-		deletePath := trashItem
-		if relativePath != "" && relativePath != "/" {
-			resolvedTrashRoot, err := filepath.EvalSymlinks(trashItem)
-			if err != nil {
-				return errors.Wrap(err, "Decomposedfs: could not resolve trash root")
-			}
-			deletePath = filepath.Join(resolvedTrashRoot, relativePath)
-			if err = os.Remove(deletePath); err != nil {
-				logger.Error().Err(err).Str("trashItem", trashItem).Str("deletePath", deletePath).Str("relativePath", relativePath).Msg("error deleting trash item")
-			}
-		} else {
-			if err = utils.RemoveItem(deletePath); err != nil {
-				logger.Error().Err(err).Str("trashItem", trashItem).Str("deletePath", deletePath).Str("relativePath", relativePath).Msg("error recursively deleting trash item")
-			}
-		}
-
-		var sizeDiff int64
-		if trashNode.IsDir(ctx) {
-			treeSize, err := trashNode.GetTreeSize(ctx)
-			if err != nil {
-				return err
-			}
-			sizeDiff = int64(treeSize)
-		} else {
-			sizeDiff = trashNode.Blobsize
-		}
-		return t.Propagate(ctx, targetNode, sizeDiff)
-	}
-	return trashNode, parentNode, fn, nil
-}
-
-// PurgeRecycleItemFunc returns a node and a function to purge it from the trash
-func (t *Tree) PurgeRecycleItemFunc(ctx context.Context, spaceid, key string, path string) (*node.Node, func() error, error) {
-	_, span := tracer.Start(ctx, "PurgeRecycleItemFunc")
-	defer span.End()
-	logger := appctx.GetLogger(ctx)
-
-	recycleNode, trashItem, _, err := t.readRecycleItem(ctx, spaceid, key, path)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	fn := func() error {
-
-		if err := t.removeNode(ctx, recycleNode); err != nil {
-			return err
-		}
-
-		// delete item link in trash
-		if path != "" && path != "/" {
-			return nil
-		}
-		if err = utils.RemoveItem(trashItem); err != nil {
-			logger.Error().Err(err).Str("trashItem", trashItem).Msg("error deleting trash item")
-			return err
-		}
-
-		return nil
-	}
-
-	return recycleNode, fn, nil
-}
-
 // InitNewNode initializes a new node
 func (t *Tree) InitNewNode(ctx context.Context, n *node.Node, fsize uint64) (metadata.UnlockFunc, error) {
 	_, span := tracer.Start(ctx, "InitNewNode")
@@ -714,84 +578,6 @@ func (t *Tree) InitNewNode(ctx context.Context, n *node.Node, fsize uint64) (met
 	log.Info().Msg("initNewNode: symlink created")
 
 	return unlock, nil
-}
-
-func (t *Tree) removeNode(ctx context.Context, n *node.Node) error {
-	path := n.InternalPath()
-	logger := appctx.GetLogger(ctx)
-
-	if n.IsDir(ctx) {
-		item, err := t.ListFolder(ctx, n)
-		if err != nil {
-			logger.Error().Err(err).Str("path", path).Msg("error listing folder")
-		} else {
-			for _, child := range item {
-				if err := t.removeNode(ctx, child); err != nil {
-					return err
-				}
-			}
-		}
-	}
-
-	// delete the actual node
-	if err := utils.RemoveItem(path); err != nil {
-		logger.Error().Err(err).Str("path", path).Msg("error purging node")
-		return err
-	}
-
-	if err := t.lookup.MetadataBackend().Purge(ctx, n); err != nil {
-		logger.Error().Err(err).Str("path", t.lookup.MetadataBackend().MetadataPath(n)).Msg("error purging node metadata")
-		return err
-	}
-
-	// delete blob from blobstore
-	if n.BlobID != "" {
-		if err := t.DeleteBlob(n); err != nil {
-			logger.Error().Err(err).Str("blobID", n.BlobID).Msg("error purging nodes blob")
-			return err
-		}
-	}
-
-	// delete revisions
-	originalNodeID := nodeIDRegep.ReplaceAllString(n.InternalPath(), "$1")
-	revs, err := filepath.Glob(originalNodeID + node.RevisionIDDelimiter + "*")
-	if err != nil {
-		logger.Error().Err(err).Str("path", n.InternalPath()+node.RevisionIDDelimiter+"*").Msg("glob failed badly")
-		return err
-	}
-	for _, rev := range revs {
-		if t.lookup.MetadataBackend().IsMetaFile(rev) {
-			continue
-		}
-
-		revID := nodeFullIDRegep.ReplaceAllString(rev, "$1")
-		revID = strings.ReplaceAll(revID, "/", "")
-		revNode := node.NewBaseNode(n.SpaceID, revID, t.lookup)
-
-		bID, _, err := t.lookup.ReadBlobIDAndSizeAttr(ctx, revNode, nil)
-		if err != nil {
-			logger.Error().Err(err).Str("revision", rev).Msg("error reading blobid attribute")
-			return err
-		}
-
-		if err := utils.RemoveItem(rev); err != nil {
-			logger.Error().Err(err).Str("revision", rev).Msg("error removing revision node")
-			return err
-		}
-
-		if bID != "" {
-			if err := t.DeleteBlob(&node.Node{
-				BaseNode: node.BaseNode{
-					SpaceID: n.SpaceID,
-				}, BlobID: bID}); err != nil {
-				logger.Error().Err(err).Str("revision", rev).Str("blobID", bID).Msg("error removing revision node blob")
-				return err
-			}
-		}
-
-	}
-
-	return nil
 }
 
 // Propagate propagates changes to the root of the tree
@@ -864,85 +650,6 @@ func (t *Tree) createDirNode(ctx context.Context, n *node.Node) (err error) {
 		attributes[prefixes.PropagationAttr] = []byte("1") // mark the node for propagation
 	}
 	return n.SetXattrsWithContext(ctx, attributes, true)
-}
-
-var nodeIDRegep = regexp.MustCompile(`.*/nodes/([^.]*).*`)
-var nodeFullIDRegep = regexp.MustCompile(`.*/nodes/(.*)`)
-
-// TODO refactor the returned params into Node properties? would make all the path transformations go away...
-func (t *Tree) readRecycleItem(ctx context.Context, spaceID, key, path string) (recycleNode *node.Node, trashItem string, origin string, err error) {
-	_, span := tracer.Start(ctx, "readRecycleItem")
-	defer span.End()
-	logger := appctx.GetLogger(ctx)
-
-	if key == "" {
-		return nil, "", "", errtypes.InternalError("key is empty")
-	}
-
-	trashItem = filepath.Join(t.lookup.InternalRoot(), "spaces", lookup.Pathify(spaceID, 1, 2), "trash", lookup.Pathify(key, 4, 2))
-	resolvedTrashRootNodePath, err := filepath.EvalSymlinks(trashItem)
-	trashedNodeId := nodeFullIDRegep.ReplaceAllString(resolvedTrashRootNodePath, "$1")
-	trashedNodeId = strings.ReplaceAll(trashedNodeId, "/", "")
-
-	if err != nil {
-		return
-	}
-	recycleNodePath, err := filepath.EvalSymlinks(filepath.Join(resolvedTrashRootNodePath, path))
-	if err != nil {
-		return
-	}
-	nodeID := nodeFullIDRegep.ReplaceAllString(recycleNodePath, "$1")
-	nodeID = strings.ReplaceAll(nodeID, "/", "")
-
-	recycleNode = node.New(spaceID, nodeID, "", "", 0, "", provider.ResourceType_RESOURCE_TYPE_INVALID, nil, t.lookup)
-	recycleNode.SpaceRoot, err = node.ReadNode(ctx, t.lookup, spaceID, spaceID, false, nil, false)
-	if err != nil {
-		return
-	}
-	raw, err := t.lookup.MetadataBackend().All(ctx, recycleNode)
-	if err != nil {
-		return
-	}
-	attrs := node.Attributes(raw)
-
-	typeInt, err := attrs.Int64(prefixes.TypeAttr)
-	if provider.ResourceType(typeInt) == provider.ResourceType_RESOURCE_TYPE_FILE {
-		// lookup blobID in extended attributes
-		recycleNode.BlobID = attrs.String(prefixes.BlobIDAttr)
-		if recycleNode.BlobID == "" {
-			return
-		}
-
-		// lookup blobSize in extended attributes
-		if recycleNode.Blobsize, err = attrs.Int64(prefixes.BlobsizeAttr); err != nil {
-			return
-		}
-	}
-
-	// lookup parent id in extended attributes
-	recycleNode.ParentID = attrs.String(prefixes.ParentidAttr)
-	if recycleNode.ParentID == "" {
-		return
-	}
-
-	// lookup name in extended attributes
-	recycleNode.Name = attrs.String(prefixes.NameAttr)
-	if recycleNode.Name == "" {
-		return
-	}
-
-	// get origin node, is relative to space root
-	origin = "/"
-
-	// lookup origin path in extended attributes
-	rootNode := node.NewBaseNode(spaceID, trashedNodeId, t.lookup)
-	if attrBytes, err := t.lookup.MetadataBackend().Get(ctx, rootNode, prefixes.TrashOriginAttr); err == nil {
-		origin = filepath.Join(string(attrBytes), path)
-	} else {
-		logger.Error().Err(err).Str("trashItem", trashItem).Str("deletedNodePath", recycleNodePath).Msg("could not read origin path, restoring to /")
-	}
-
-	return
 }
 
 func getNodeIDFromCache(ctx context.Context, path string, cache store.Store) string {

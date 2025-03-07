@@ -32,6 +32,7 @@ import (
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata/prefixes"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/permissions"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/trashbin"
 	"github.com/opencloud-eu/reva/v2/pkg/storagespace"
 	"github.com/opencloud-eu/reva/v2/pkg/store"
 	"github.com/rs/zerolog"
@@ -57,6 +58,7 @@ type TestEnv struct {
 	Root                 string
 	Fs                   *decomposedfs.Decomposedfs
 	Tree                 *tree.Tree
+	TrashBin             trashbin.Trashbin
 	Permissions          *mocks.PermissionsChecker
 	Blobstore            *treemocks.Blobstore
 	Owner                *userpb.User
@@ -195,6 +197,7 @@ func NewTestEnv(config map[string]interface{}) (*TestEnv, error) {
 		Root:                 tmpRoot,
 		Fs:                   tmpFs,
 		Tree:                 tree,
+		TrashBin:             aspects.Trashbin,
 		Lookup:               lu,
 		Permissions:          pmock,
 		Blobstore:            bs,

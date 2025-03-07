@@ -341,3 +341,10 @@ func (tb *Trashbin) EmptyRecycle(ctx context.Context, spaceID string) error {
 	}
 	return os.RemoveAll(filepath.Clean(filepath.Join(trashRoot, "info")))
 }
+
+func (tb *Trashbin) RestoreRecycleItemFunc(ctx context.Context, spaceid, key, relativePath string, targetNode *node.Node) (*node.Node, *node.Node, func() error, error) {
+	return nil, nil, nil, fmt.Errorf("not implemented") // FIXME get rid of this in interface
+}
+func (tb *Trashbin) PurgeRecycleItemFunc(ctx context.Context, spaceid, key string, path string) (*node.Node, func() error, error) {
+	return nil, nil, fmt.Errorf("not implemented") // FIXME get rid of this in interface
+}

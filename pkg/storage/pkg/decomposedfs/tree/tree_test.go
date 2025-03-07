@@ -30,6 +30,7 @@ import (
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata/prefixes"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/node"
 	helpers "github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/testhelpers"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/trashbin"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/tree"
 	"github.com/stretchr/testify/mock"
 
@@ -41,7 +42,8 @@ var _ = Describe("Tree", func() {
 	var (
 		env *helpers.TestEnv
 
-		t *tree.Tree
+		t  *tree.Tree
+		tb trashbin.Trashbin
 	)
 
 	JustBeforeEach(func() {
@@ -49,6 +51,7 @@ var _ = Describe("Tree", func() {
 		env, err = helpers.NewTestEnv(nil)
 		Expect(err).ToNot(HaveOccurred())
 		t = env.Tree
+		tb = env.TrashBin
 	})
 
 	AfterEach(func() {
@@ -154,7 +157,7 @@ var _ = Describe("Tree", func() {
 					_, err := os.Stat(trashPath)
 					Expect(err).ToNot(HaveOccurred())
 
-					_, purgeFunc, err := t.PurgeRecycleItemFunc(env.Ctx, n.SpaceRoot.ID, n.ID, "")
+					_, purgeFunc, err := tb.PurgeRecycleItemFunc(env.Ctx, n.SpaceRoot.ID, n.ID, "")
 					Expect(err).ToNot(HaveOccurred())
 					Expect(purgeFunc()).To(Succeed())
 				})
@@ -178,7 +181,7 @@ var _ = Describe("Tree", func() {
 				})
 
 				It("restores the file to its original location if the targetPath is empty", func() {
-					_, _, restoreFunc, err := t.RestoreRecycleItemFunc(env.Ctx, n.SpaceRoot.ID, n.ID, "", nil)
+					_, _, restoreFunc, err := tb.RestoreRecycleItemFunc(env.Ctx, n.SpaceRoot.ID, n.ID, "", nil)
 					Expect(err).ToNot(HaveOccurred())
 
 					Expect(restoreFunc()).To(Succeed())
@@ -199,7 +202,7 @@ var _ = Describe("Tree", func() {
 					dest, err := env.Lookup.NodeFromResource(env.Ctx, ref)
 					Expect(err).ToNot(HaveOccurred())
 
-					_, _, restoreFunc, err := t.RestoreRecycleItemFunc(env.Ctx, n.SpaceRoot.ID, n.ID, "", dest)
+					_, _, restoreFunc, err := tb.RestoreRecycleItemFunc(env.Ctx, n.SpaceRoot.ID, n.ID, "", dest)
 					Expect(err).ToNot(HaveOccurred())
 
 					Expect(restoreFunc()).To(Succeed())
@@ -215,7 +218,7 @@ var _ = Describe("Tree", func() {
 				})
 
 				It("removes the file from the trash", func() {
-					_, _, restoreFunc, err := t.RestoreRecycleItemFunc(env.Ctx, n.SpaceRoot.ID, n.ID, "", nil)
+					_, _, restoreFunc, err := tb.RestoreRecycleItemFunc(env.Ctx, n.SpaceRoot.ID, n.ID, "", nil)
 					Expect(err).ToNot(HaveOccurred())
 
 					Expect(restoreFunc()).To(Succeed())
@@ -277,7 +280,7 @@ var _ = Describe("Tree", func() {
 					_, err := os.Stat(trashPath)
 					Expect(err).ToNot(HaveOccurred())
 
-					_, purgeFunc, err := t.PurgeRecycleItemFunc(env.Ctx, n.SpaceRoot.ID, n.ID, "")
+					_, purgeFunc, err := tb.PurgeRecycleItemFunc(env.Ctx, n.SpaceRoot.ID, n.ID, "")
 					Expect(err).ToNot(HaveOccurred())
 					Expect(purgeFunc()).To(Succeed())
 				})

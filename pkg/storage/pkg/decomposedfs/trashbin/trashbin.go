@@ -23,6 +23,7 @@ import (
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/opencloud-eu/reva/v2/pkg/storage"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/node"
 )
 
 type Trashbin interface {
@@ -32,4 +33,7 @@ type Trashbin interface {
 	RestoreRecycleItem(ctx context.Context, spaceID, key, relativePath string, restoreRef *provider.Reference) error
 	PurgeRecycleItem(ctx context.Context, spaceID, key, relativePath string) error
 	EmptyRecycle(ctx context.Context, spaceID string) error
+
+	RestoreRecycleItemFunc(ctx context.Context, spaceid, key, relativePath string, targetNode *node.Node) (*node.Node, *node.Node, func() error, error)
+	PurgeRecycleItemFunc(ctx context.Context, spaceid, key string, path string) (*node.Node, func() error, error)
 }

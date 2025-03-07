@@ -23,6 +23,7 @@ import (
 	iofs "io/fs"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -37,8 +38,8 @@ import (
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/lookup"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata/prefixes"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/node"
-	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/tree"
 	"github.com/opencloud-eu/reva/v2/pkg/storagespace"
+	"github.com/opencloud-eu/reva/v2/pkg/utils"
 )
 
 type DecomposedfsTrashbin struct {
@@ -344,6 +345,163 @@ func (tb *DecomposedfsTrashbin) listTrashRoot(ctx context.Context, spaceID strin
 	return items, nil
 }
 
+var nodeIDRegep = regexp.MustCompile(`.*/nodes/([^.]*).*`)
+var nodeFullIDRegep = regexp.MustCompile(`.*/nodes/(.*)`)
+
+// TODO refactor the returned params into Node properties? would make all the path transformations go away...
+func (tb *DecomposedfsTrashbin) readRecycleItem(ctx context.Context, spaceID, key, path string) (recycleNode *node.Node, trashItem string, origin string, err error) {
+	_, span := tracer.Start(ctx, "readRecycleItem")
+	defer span.End()
+	logger := appctx.GetLogger(ctx)
+
+	if key == "" {
+		return nil, "", "", errtypes.InternalError("key is empty")
+	}
+
+	trashItem = filepath.Join(tb.fs.lu.InternalRoot(), "spaces", lookup.Pathify(spaceID, 1, 2), "trash", lookup.Pathify(key, 4, 2))
+	resolvedTrashRootNodePath, err := filepath.EvalSymlinks(trashItem)
+	trashedNodeId := nodeFullIDRegep.ReplaceAllString(resolvedTrashRootNodePath, "$1")
+	trashedNodeId = strings.ReplaceAll(trashedNodeId, "/", "")
+
+	if err != nil {
+		return
+	}
+	recycleNodePath, err := filepath.EvalSymlinks(filepath.Join(resolvedTrashRootNodePath, path))
+	if err != nil {
+		return
+	}
+	nodeID := nodeFullIDRegep.ReplaceAllString(recycleNodePath, "$1")
+	nodeID = strings.ReplaceAll(nodeID, "/", "")
+
+	recycleNode = node.New(spaceID, nodeID, "", "", 0, "", provider.ResourceType_RESOURCE_TYPE_INVALID, nil, tb.fs.lu)
+	recycleNode.SpaceRoot, err = node.ReadNode(ctx, tb.fs.lu, spaceID, spaceID, false, nil, false)
+	if err != nil {
+		return
+	}
+	raw, err := tb.fs.lu.MetadataBackend().All(ctx, recycleNode)
+	if err != nil {
+		return
+	}
+	attrs := node.Attributes(raw)
+
+	typeInt, err := attrs.Int64(prefixes.TypeAttr)
+	if provider.ResourceType(typeInt) == provider.ResourceType_RESOURCE_TYPE_FILE {
+		// lookup blobID in extended attributes
+		recycleNode.BlobID = attrs.String(prefixes.BlobIDAttr)
+		if recycleNode.BlobID == "" {
+			return
+		}
+
+		// lookup blobSize in extended attributes
+		if recycleNode.Blobsize, err = attrs.Int64(prefixes.BlobsizeAttr); err != nil {
+			return
+		}
+	}
+
+	// lookup parent id in extended attributes
+	recycleNode.ParentID = attrs.String(prefixes.ParentidAttr)
+	if recycleNode.ParentID == "" {
+		return
+	}
+
+	// lookup name in extended attributes
+	recycleNode.Name = attrs.String(prefixes.NameAttr)
+	if recycleNode.Name == "" {
+		return
+	}
+
+	// get origin node, is relative to space root
+	origin = "/"
+
+	// lookup origin path in extended attributes
+	rootNode := node.NewBaseNode(spaceID, trashedNodeId, tb.fs.lu)
+	if attrBytes, err := tb.fs.lu.MetadataBackend().Get(ctx, rootNode, prefixes.TrashOriginAttr); err == nil {
+		origin = filepath.Join(string(attrBytes), path)
+	} else {
+		logger.Error().Err(err).Str("trashItem", trashItem).Str("deletedNodePath", recycleNodePath).Msg("could not read origin path, restoring to /")
+	}
+
+	return
+}
+
+func (tb *DecomposedfsTrashbin) removeNode(ctx context.Context, n *node.Node) error {
+	path := n.InternalPath()
+	logger := appctx.GetLogger(ctx)
+
+	if n.IsDir(ctx) {
+		item, err := tb.fs.tp.ListFolder(ctx, n)
+		if err != nil {
+			logger.Error().Err(err).Str("path", path).Msg("error listing folder")
+		} else {
+			for _, child := range item {
+				if err := tb.removeNode(ctx, child); err != nil {
+					return err
+				}
+			}
+		}
+	}
+
+	// delete the actual node
+	if err := utils.RemoveItem(path); err != nil {
+		logger.Error().Err(err).Str("path", path).Msg("error purging node")
+		return err
+	}
+
+	if err := tb.fs.lu.MetadataBackend().Purge(ctx, n); err != nil {
+		logger.Error().Err(err).Str("path", tb.fs.lu.MetadataBackend().MetadataPath(n)).Msg("error purging node metadata")
+		return err
+	}
+
+	// delete blob from blobstore
+	if n.BlobID != "" {
+		if err := tb.fs.tp.DeleteBlob(n); err != nil {
+			logger.Error().Err(err).Str("blobID", n.BlobID).Msg("error purging nodes blob")
+			return err
+		}
+	}
+
+	// delete revisions
+	originalNodeID := nodeIDRegep.ReplaceAllString(n.InternalPath(), "$1")
+	revs, err := filepath.Glob(originalNodeID + node.RevisionIDDelimiter + "*")
+	if err != nil {
+		logger.Error().Err(err).Str("path", n.InternalPath()+node.RevisionIDDelimiter+"*").Msg("glob failed badly")
+		return err
+	}
+	for _, rev := range revs {
+		if tb.fs.lu.MetadataBackend().IsMetaFile(rev) {
+			continue
+		}
+
+		revID := nodeFullIDRegep.ReplaceAllString(rev, "$1")
+		revID = strings.ReplaceAll(revID, "/", "")
+		revNode := node.NewBaseNode(n.SpaceID, revID, tb.fs.lu)
+
+		bID, _, err := tb.fs.lu.ReadBlobIDAndSizeAttr(ctx, revNode, nil)
+		if err != nil {
+			logger.Error().Err(err).Str("revision", rev).Msg("error reading blobid attribute")
+			return err
+		}
+
+		if err := utils.RemoveItem(rev); err != nil {
+			logger.Error().Err(err).Str("revision", rev).Msg("error removing revision node")
+			return err
+		}
+
+		if bID != "" {
+			if err := tb.fs.tp.DeleteBlob(&node.Node{
+				BaseNode: node.BaseNode{
+					SpaceID: n.SpaceID,
+				}, BlobID: bID}); err != nil {
+				logger.Error().Err(err).Str("revision", rev).Str("blobID", bID).Msg("error removing revision node blob")
+				return err
+			}
+		}
+
+	}
+
+	return nil
+}
+
 // RestoreRecycleItem restores the specified item
 func (tb *DecomposedfsTrashbin) RestoreRecycleItem(ctx context.Context, spaceID string, key, relativePath string, restoreRef *provider.Reference) error {
 	_, span := tracer.Start(ctx, "RestoreRecycleItem")
@@ -359,7 +517,7 @@ func (tb *DecomposedfsTrashbin) RestoreRecycleItem(ctx context.Context, spaceID 
 		targetNode = tn
 	}
 
-	trashNode, parent, restoreFunc, err := tb.fs.tp.(*tree.Tree).RestoreRecycleItemFunc(ctx, spaceID, key, relativePath, targetNode)
+	trashNode, parent, restoreFunc, err := tb.RestoreRecycleItemFunc(ctx, spaceID, key, relativePath, targetNode)
 	if err != nil {
 		return err
 	}
@@ -396,12 +554,114 @@ func (tb *DecomposedfsTrashbin) RestoreRecycleItem(ctx context.Context, spaceID 
 	return restoreFunc()
 }
 
+// RestoreRecycleItemFunc returns a node and a function to restore it from the trash.
+func (tb *DecomposedfsTrashbin) RestoreRecycleItemFunc(ctx context.Context, spaceid, key, relativePath string, targetNode *node.Node) (*node.Node, *node.Node, func() error, error) {
+	_, span := tracer.Start(ctx, "RestoreRecycleItemFunc")
+	defer span.End()
+	logger := appctx.GetLogger(ctx)
+
+	trashNode, trashItem, origin, err := tb.readRecycleItem(ctx, spaceid, key, relativePath)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	targetRef := &provider.Reference{
+		ResourceId: &provider.ResourceId{SpaceId: spaceid, OpaqueId: spaceid},
+		Path:       utils.MakeRelativePath(origin),
+	}
+
+	if targetNode == nil {
+		targetNode, err = tb.fs.lu.NodeFromResource(ctx, targetRef)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+	}
+
+	if err := targetNode.CheckLock(ctx); err != nil {
+		return nil, nil, nil, err
+	}
+
+	parentNode, err := targetNode.Parent(ctx)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	fn := func() error {
+		if targetNode.Exists {
+			return errtypes.AlreadyExists("origin already exists")
+		}
+
+		parts := strings.SplitN(trashNode.ID, node.TrashIDDelimiter, 2)
+		originalId := parts[0]
+		restoreNode := node.NewBaseNode(targetNode.SpaceID, originalId, tb.fs.lu)
+
+		// add the entry for the parent dir
+		err = os.Symlink("../../../../../"+lookup.Pathify(originalId, 4, 2), filepath.Join(targetNode.ParentPath(), targetNode.Name))
+		if err != nil {
+			return err
+		}
+
+		// attempt to rename only if we're not in a subfolder
+		if trashNode.ID != restoreNode.ID {
+			err = os.Rename(trashNode.InternalPath(), restoreNode.InternalPath())
+			if err != nil {
+				return err
+			}
+			err = tb.fs.lu.MetadataBackend().Rename(trashNode, restoreNode)
+			if err != nil {
+				return err
+			}
+		}
+
+		targetNode.Exists = true
+
+		attrs := node.Attributes{}
+		attrs.SetString(prefixes.NameAttr, targetNode.Name)
+		// set ParentidAttr to restorePath's node parent id
+		attrs.SetString(prefixes.ParentidAttr, targetNode.ParentID)
+
+		if err = tb.fs.lu.MetadataBackend().SetMultiple(ctx, restoreNode, map[string][]byte(attrs), true); err != nil {
+			return errors.Wrap(err, "Decomposedfs: could not update recycle node")
+		}
+
+		// delete item link in trash
+		deletePath := trashItem
+		if relativePath != "" && relativePath != "/" {
+			resolvedTrashRoot, err := filepath.EvalSymlinks(trashItem)
+			if err != nil {
+				return errors.Wrap(err, "Decomposedfs: could not resolve trash root")
+			}
+			deletePath = filepath.Join(resolvedTrashRoot, relativePath)
+			if err = os.Remove(deletePath); err != nil {
+				logger.Error().Err(err).Str("trashItem", trashItem).Str("deletePath", deletePath).Str("relativePath", relativePath).Msg("error deleting trash item")
+			}
+		} else {
+			if err = utils.RemoveItem(deletePath); err != nil {
+				logger.Error().Err(err).Str("trashItem", trashItem).Str("deletePath", deletePath).Str("relativePath", relativePath).Msg("error recursively deleting trash item")
+			}
+		}
+
+		var sizeDiff int64
+		if trashNode.IsDir(ctx) {
+			treeSize, err := trashNode.GetTreeSize(ctx)
+			if err != nil {
+				return err
+			}
+			sizeDiff = int64(treeSize)
+		} else {
+			sizeDiff = trashNode.Blobsize
+		}
+		return tb.fs.tp.Propagate(ctx, targetNode, sizeDiff)
+	}
+	return trashNode, parentNode, fn, nil
+}
+
 // PurgeRecycleItem purges the specified item, all its children and all their revisions
 func (tb *DecomposedfsTrashbin) PurgeRecycleItem(ctx context.Context, spaceID, key, relativePath string) error {
 	_, span := tracer.Start(ctx, "PurgeRecycleItem")
 	defer span.End()
 
-	rn, purgeFunc, err := tb.fs.tp.(*tree.Tree).PurgeRecycleItemFunc(ctx, spaceID, key, relativePath)
+	rn, purgeFunc, err := tb.PurgeRecycleItemFunc(ctx, spaceID, key, relativePath)
 	if err != nil {
 		if errors.Is(err, iofs.ErrNotExist) {
 			return errtypes.NotFound(key)
@@ -445,6 +705,37 @@ func (tb *DecomposedfsTrashbin) EmptyRecycle(ctx context.Context, spaceID string
 	return os.RemoveAll(tb.getRecycleRoot(spaceID))
 }
 
+// PurgeRecycleItemFunc returns a node and a function to purge it from the trash
+func (tb *DecomposedfsTrashbin) PurgeRecycleItemFunc(ctx context.Context, spaceid, key string, path string) (*node.Node, func() error, error) {
+	_, span := tracer.Start(ctx, "PurgeRecycleItemFunc")
+	defer span.End()
+	logger := appctx.GetLogger(ctx)
+
+	recycleNode, trashItem, _, err := tb.readRecycleItem(ctx, spaceid, key, path)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	fn := func() error {
+
+		if err := tb.removeNode(ctx, recycleNode); err != nil {
+			return err
+		}
+
+		// delete item link in trash
+		if path != "" && path != "/" {
+			return nil
+		}
+		if err = utils.RemoveItem(trashItem); err != nil {
+			logger.Error().Err(err).Str("trashItem", trashItem).Msg("error deleting trash item")
+			return err
+		}
+
+		return nil
+	}
+
+	return recycleNode, fn, nil
+}
 func (tb *DecomposedfsTrashbin) getRecycleRoot(spaceID string) string {
 	return filepath.Join(tb.fs.o.Root, "spaces", lookup.Pathify(spaceID, 1, 2), "trash")
 }
