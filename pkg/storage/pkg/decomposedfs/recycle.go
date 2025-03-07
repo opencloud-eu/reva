@@ -359,13 +359,13 @@ func (tb *DecomposedfsTrashbin) RestoreRecycleItem(ctx context.Context, spaceID 
 		targetNode = tn
 	}
 
-	rn, parent, restoreFunc, err := tb.fs.tp.(*tree.Tree).RestoreRecycleItemFunc(ctx, spaceID, key, relativePath, targetNode)
+	trashNode, parent, restoreFunc, err := tb.fs.tp.(*tree.Tree).RestoreRecycleItemFunc(ctx, spaceID, key, relativePath, targetNode)
 	if err != nil {
 		return err
 	}
 
 	// check permissions of deleted node
-	rp, err := tb.fs.p.AssembleTrashPermissions(ctx, rn)
+	rp, err := tb.fs.p.AssembleTrashPermissions(ctx, trashNode)
 	switch {
 	case err != nil:
 		return err
@@ -377,7 +377,7 @@ func (tb *DecomposedfsTrashbin) RestoreRecycleItem(ctx context.Context, spaceID 
 	}
 
 	// Set space owner in context
-	storagespace.ContextSendSpaceOwnerID(ctx, rn.SpaceOwnerOrManager(ctx))
+	storagespace.ContextSendSpaceOwnerID(ctx, trashNode.SpaceOwnerOrManager(ctx))
 
 	// check we can write to the parent of the restore reference
 	pp, err := tb.fs.p.AssemblePermissions(ctx, parent)

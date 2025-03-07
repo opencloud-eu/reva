@@ -1269,19 +1269,24 @@ func (fs *Decomposedfs) RestoreRecycleItem(ctx context.Context, space *provider.
 	if key == "" && relativePath != "" {
 		return errtypes.BadRequest("key is required when navigating with a path")
 	}
+	// we need to look up various nodes
+	// 1. keyNode: the trashed base node that is located in the trash folder, this is identifiey by the key, its metadata contains the original path
+	// 2. trashNode: the trashed node after walking the relative path
+	// 3. targetNode: the target node where the trashed node should be restored to
+	// 4. parentNode: the parent of the target node to propagate size changes
 
 	trashItem := &provider.ResourceId{
 		SpaceId:  spaceID,
 		OpaqueId: key,
 	}
 
-	restoreBaseNode, err := fs.lu.NodeFromID(ctx, trashItem)
+	keyNode, err := fs.lu.NodeFromID(ctx, trashItem)
 	if err != nil {
 		return err
 	}
 
 	// check permissions of deleted node
-	rp, err := fs.p.AssembleTrashPermissions(ctx, restoreBaseNode)
+	rp, err := fs.p.AssembleTrashPermissions(ctx, keyNode)
 	switch {
 	case err != nil:
 		return err
