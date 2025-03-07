@@ -152,14 +152,18 @@ var _ = Describe("Tree", func() {
 				Expect(t.Delete(env.Ctx, n)).To(Succeed())
 			})
 
-			Describe("PurgeRecycleItemFunc", func() {
+			Describe("PurgeRecycleItem", func() {
 				JustBeforeEach(func() {
+					env.Permissions.On("AssembleTrashPermissions", mock.Anything, mock.Anything, mock.Anything).Return(&provider.ResourcePermissions{
+						PurgeRecycle: true,
+						Stat:         true,
+					}, nil)
+
 					_, err := os.Stat(trashPath)
 					Expect(err).ToNot(HaveOccurred())
 
-					_, purgeFunc, err := tb.PurgeRecycleItemFunc(env.Ctx, n.SpaceRoot.ID, n.ID, "")
+					err = tb.PurgeRecycleItem(env.Ctx, n.SpaceRoot.ID, n.ID, "")
 					Expect(err).ToNot(HaveOccurred())
-					Expect(purgeFunc()).To(Succeed())
 				})
 
 				It("removes the file from the trash", func() {
@@ -172,8 +176,18 @@ var _ = Describe("Tree", func() {
 				})
 			})
 
-			Describe("RestoreRecycleItemFunc", func() {
+			Describe("RestoreRecycleItem", func() {
 				JustBeforeEach(func() {
+					env.Permissions.On("AssembleTrashPermissions", mock.Anything, mock.Anything, mock.Anything).Return(&provider.ResourcePermissions{
+						RestoreRecycleItem: true,
+						Stat:               true,
+					}, nil)
+
+					env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(&provider.ResourcePermissions{
+						InitiateFileUpload: true,
+						Stat:               true,
+					}, nil)
+
 					_, err := os.Stat(trashPath)
 					Expect(err).ToNot(HaveOccurred())
 					_, err = os.Stat(n.InternalPath())
@@ -181,10 +195,8 @@ var _ = Describe("Tree", func() {
 				})
 
 				It("restores the file to its original location if the targetPath is empty", func() {
-					_, _, restoreFunc, err := tb.RestoreRecycleItemFunc(env.Ctx, n.SpaceRoot.ID, n.ID, "", nil)
+					err := tb.RestoreRecycleItem(env.Ctx, n.SpaceRoot.ID, n.ID, "", nil)
 					Expect(err).ToNot(HaveOccurred())
-
-					Expect(restoreFunc()).To(Succeed())
 
 					originalNode, err := env.Lookup.NodeFromResource(env.Ctx, &provider.Reference{
 						ResourceId: env.SpaceRootRes,
@@ -199,13 +211,9 @@ var _ = Describe("Tree", func() {
 						ResourceId: env.SpaceRootRes,
 						Path:       "dir1/newLocation",
 					}
-					dest, err := env.Lookup.NodeFromResource(env.Ctx, ref)
-					Expect(err).ToNot(HaveOccurred())
 
-					_, _, restoreFunc, err := tb.RestoreRecycleItemFunc(env.Ctx, n.SpaceRoot.ID, n.ID, "", dest)
+					err := tb.RestoreRecycleItem(env.Ctx, n.SpaceRoot.ID, n.ID, "", ref)
 					Expect(err).ToNot(HaveOccurred())
-
-					Expect(restoreFunc()).To(Succeed())
 
 					newNode, err := env.Lookup.NodeFromResource(env.Ctx, ref)
 					Expect(err).ToNot(HaveOccurred())
@@ -218,10 +226,8 @@ var _ = Describe("Tree", func() {
 				})
 
 				It("removes the file from the trash", func() {
-					_, _, restoreFunc, err := tb.RestoreRecycleItemFunc(env.Ctx, n.SpaceRoot.ID, n.ID, "", nil)
+					err := tb.RestoreRecycleItem(env.Ctx, n.SpaceRoot.ID, n.ID, "", nil)
 					Expect(err).ToNot(HaveOccurred())
-
-					Expect(restoreFunc()).To(Succeed())
 
 					_, err = os.Stat(trashPath)
 					Expect(err).To(HaveOccurred())
@@ -275,14 +281,18 @@ var _ = Describe("Tree", func() {
 				env.Blobstore.On("Delete", mock.Anything).Return(nil)
 			})
 
-			Describe("PurgeRecycleItemFunc", func() {
+			Describe("PurgeRecycleItem", func() {
 				JustBeforeEach(func() {
+					env.Permissions.On("AssembleTrashPermissions", mock.Anything, mock.Anything, mock.Anything).Return(&provider.ResourcePermissions{
+						PurgeRecycle: true,
+						Stat:         true,
+					}, nil)
+
 					_, err := os.Stat(trashPath)
 					Expect(err).ToNot(HaveOccurred())
 
-					_, purgeFunc, err := tb.PurgeRecycleItemFunc(env.Ctx, n.SpaceRoot.ID, n.ID, "")
+					err = tb.PurgeRecycleItem(env.Ctx, n.SpaceRoot.ID, n.ID, "")
 					Expect(err).ToNot(HaveOccurred())
-					Expect(purgeFunc()).To(Succeed())
 				})
 
 				It("removes the file from the trash", func() {
