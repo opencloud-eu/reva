@@ -517,7 +517,7 @@ func (tb *DecomposedfsTrashbin) RestoreRecycleItem(ctx context.Context, spaceID 
 		targetNode = tn
 	}
 
-	trashNode, parent, restoreFunc, err := tb.RestoreRecycleItemFunc(ctx, spaceID, key, relativePath, targetNode)
+	trashNode, parent, restoreFunc, err := tb.restoreRecycleItemFunc(ctx, spaceID, key, relativePath, targetNode)
 	if err != nil {
 		return err
 	}
@@ -554,9 +554,9 @@ func (tb *DecomposedfsTrashbin) RestoreRecycleItem(ctx context.Context, spaceID 
 	return restoreFunc()
 }
 
-// RestoreRecycleItemFunc returns a node and a function to restore it from the trash.
-func (tb *DecomposedfsTrashbin) RestoreRecycleItemFunc(ctx context.Context, spaceid, key, relativePath string, targetNode *node.Node) (*node.Node, *node.Node, func() error, error) {
-	_, span := tracer.Start(ctx, "RestoreRecycleItemFunc")
+// restoreRecycleItemFunc returns a node and a function to restore it from the trash.
+func (tb *DecomposedfsTrashbin) restoreRecycleItemFunc(ctx context.Context, spaceid, key, relativePath string, targetNode *node.Node) (*node.Node, *node.Node, func() error, error) {
+	_, span := tracer.Start(ctx, "restoreRecycleItemFunc")
 	defer span.End()
 	logger := appctx.GetLogger(ctx)
 
@@ -661,7 +661,7 @@ func (tb *DecomposedfsTrashbin) PurgeRecycleItem(ctx context.Context, spaceID, k
 	_, span := tracer.Start(ctx, "PurgeRecycleItem")
 	defer span.End()
 
-	rn, purgeFunc, err := tb.PurgeRecycleItemFunc(ctx, spaceID, key, relativePath)
+	rn, purgeFunc, err := tb.purgeRecycleItemFunc(ctx, spaceID, key, relativePath)
 	if err != nil {
 		if errors.Is(err, iofs.ErrNotExist) {
 			return errtypes.NotFound(key)
@@ -705,9 +705,9 @@ func (tb *DecomposedfsTrashbin) EmptyRecycle(ctx context.Context, spaceID string
 	return os.RemoveAll(tb.getRecycleRoot(spaceID))
 }
 
-// PurgeRecycleItemFunc returns a node and a function to purge it from the trash
-func (tb *DecomposedfsTrashbin) PurgeRecycleItemFunc(ctx context.Context, spaceid, key string, path string) (*node.Node, func() error, error) {
-	_, span := tracer.Start(ctx, "PurgeRecycleItemFunc")
+// purgeRecycleItemFunc returns a node and a function to purge it from the trash
+func (tb *DecomposedfsTrashbin) purgeRecycleItemFunc(ctx context.Context, spaceid, key string, path string) (*node.Node, func() error, error) {
+	_, span := tracer.Start(ctx, "purgeRecycleItemFunc")
 	defer span.End()
 	logger := appctx.GetLogger(ctx)
 
