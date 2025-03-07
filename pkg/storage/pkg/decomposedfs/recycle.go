@@ -506,6 +506,7 @@ func (tb *DecomposedfsTrashbin) removeNode(ctx context.Context, n *node.Node) er
 func (tb *DecomposedfsTrashbin) RestoreRecycleItem(ctx context.Context, spaceID string, key, relativePath string, restoreRef *provider.Reference) error {
 	_, span := tracer.Start(ctx, "RestoreRecycleItem")
 	defer span.End()
+	logger := appctx.GetLogger(ctx)
 
 	var targetNode *node.Node
 	if restoreRef != nil {
@@ -516,8 +517,28 @@ func (tb *DecomposedfsTrashbin) RestoreRecycleItem(ctx context.Context, spaceID 
 
 		targetNode = tn
 	}
+	trashNode, trashItem, origin, err := tb.readRecycleItem(ctx, spaceID, key, relativePath)
+	if err != nil {
+		return err
+	}
 
-	trashNode, parent, restoreFunc, err := tb.restoreRecycleItemFunc(ctx, spaceID, key, relativePath, targetNode)
+	targetRef := &provider.Reference{
+		ResourceId: &provider.ResourceId{SpaceId: spaceID, OpaqueId: spaceID},
+		Path:       utils.MakeRelativePath(origin),
+	}
+
+	if targetNode == nil {
+		targetNode, err = tb.fs.lu.NodeFromResource(ctx, targetRef)
+		if err != nil {
+			return err
+		}
+	}
+
+	if err := targetNode.CheckLock(ctx); err != nil {
+		return err
+	}
+
+	parent, err := targetNode.Parent(ctx)
 	if err != nil {
 		return err
 	}
@@ -550,110 +571,73 @@ func (tb *DecomposedfsTrashbin) RestoreRecycleItem(ctx context.Context, spaceID 
 		return errtypes.NotFound(key)
 	}
 
-	// Run the restore func
-	return restoreFunc()
-}
+	// actually delete the node
 
-// restoreRecycleItemFunc returns a node and a function to restore it from the trash.
-func (tb *DecomposedfsTrashbin) restoreRecycleItemFunc(ctx context.Context, spaceid, key, relativePath string, targetNode *node.Node) (*node.Node, *node.Node, func() error, error) {
-	_, span := tracer.Start(ctx, "restoreRecycleItemFunc")
-	defer span.End()
-	logger := appctx.GetLogger(ctx)
+	if targetNode.Exists {
+		return errtypes.AlreadyExists("origin already exists")
+	}
 
-	trashNode, trashItem, origin, err := tb.readRecycleItem(ctx, spaceid, key, relativePath)
+	parts := strings.SplitN(trashNode.ID, node.TrashIDDelimiter, 2)
+	originalId := parts[0]
+	restoreNode := node.NewBaseNode(targetNode.SpaceID, originalId, tb.fs.lu)
+
+	// add the entry for the parent dir
+	err = os.Symlink("../../../../../"+lookup.Pathify(originalId, 4, 2), filepath.Join(targetNode.ParentPath(), targetNode.Name))
 	if err != nil {
-		return nil, nil, nil, err
+		return err
 	}
 
-	targetRef := &provider.Reference{
-		ResourceId: &provider.ResourceId{SpaceId: spaceid, OpaqueId: spaceid},
-		Path:       utils.MakeRelativePath(origin),
-	}
-
-	if targetNode == nil {
-		targetNode, err = tb.fs.lu.NodeFromResource(ctx, targetRef)
-		if err != nil {
-			return nil, nil, nil, err
-		}
-	}
-
-	if err := targetNode.CheckLock(ctx); err != nil {
-		return nil, nil, nil, err
-	}
-
-	parentNode, err := targetNode.Parent(ctx)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-
-	fn := func() error {
-		if targetNode.Exists {
-			return errtypes.AlreadyExists("origin already exists")
-		}
-
-		parts := strings.SplitN(trashNode.ID, node.TrashIDDelimiter, 2)
-		originalId := parts[0]
-		restoreNode := node.NewBaseNode(targetNode.SpaceID, originalId, tb.fs.lu)
-
-		// add the entry for the parent dir
-		err = os.Symlink("../../../../../"+lookup.Pathify(originalId, 4, 2), filepath.Join(targetNode.ParentPath(), targetNode.Name))
+	// attempt to rename only if we're not in a subfolder
+	if trashNode.ID != restoreNode.ID {
+		err = os.Rename(trashNode.InternalPath(), restoreNode.InternalPath())
 		if err != nil {
 			return err
 		}
-
-		// attempt to rename only if we're not in a subfolder
-		if trashNode.ID != restoreNode.ID {
-			err = os.Rename(trashNode.InternalPath(), restoreNode.InternalPath())
-			if err != nil {
-				return err
-			}
-			err = tb.fs.lu.MetadataBackend().Rename(trashNode, restoreNode)
-			if err != nil {
-				return err
-			}
+		err = tb.fs.lu.MetadataBackend().Rename(trashNode, restoreNode)
+		if err != nil {
+			return err
 		}
-
-		targetNode.Exists = true
-
-		attrs := node.Attributes{}
-		attrs.SetString(prefixes.NameAttr, targetNode.Name)
-		// set ParentidAttr to restorePath's node parent id
-		attrs.SetString(prefixes.ParentidAttr, targetNode.ParentID)
-
-		if err = tb.fs.lu.MetadataBackend().SetMultiple(ctx, restoreNode, map[string][]byte(attrs), true); err != nil {
-			return errors.Wrap(err, "Decomposedfs: could not update recycle node")
-		}
-
-		// delete item link in trash
-		deletePath := trashItem
-		if relativePath != "" && relativePath != "/" {
-			resolvedTrashRoot, err := filepath.EvalSymlinks(trashItem)
-			if err != nil {
-				return errors.Wrap(err, "Decomposedfs: could not resolve trash root")
-			}
-			deletePath = filepath.Join(resolvedTrashRoot, relativePath)
-			if err = os.Remove(deletePath); err != nil {
-				logger.Error().Err(err).Str("trashItem", trashItem).Str("deletePath", deletePath).Str("relativePath", relativePath).Msg("error deleting trash item")
-			}
-		} else {
-			if err = utils.RemoveItem(deletePath); err != nil {
-				logger.Error().Err(err).Str("trashItem", trashItem).Str("deletePath", deletePath).Str("relativePath", relativePath).Msg("error recursively deleting trash item")
-			}
-		}
-
-		var sizeDiff int64
-		if trashNode.IsDir(ctx) {
-			treeSize, err := trashNode.GetTreeSize(ctx)
-			if err != nil {
-				return err
-			}
-			sizeDiff = int64(treeSize)
-		} else {
-			sizeDiff = trashNode.Blobsize
-		}
-		return tb.fs.tp.Propagate(ctx, targetNode, sizeDiff)
 	}
-	return trashNode, parentNode, fn, nil
+
+	targetNode.Exists = true
+
+	attrs := node.Attributes{}
+	attrs.SetString(prefixes.NameAttr, targetNode.Name)
+	// set ParentidAttr to restorePath's node parent id
+	attrs.SetString(prefixes.ParentidAttr, targetNode.ParentID)
+
+	if err = tb.fs.lu.MetadataBackend().SetMultiple(ctx, restoreNode, map[string][]byte(attrs), true); err != nil {
+		return errors.Wrap(err, "Decomposedfs: could not update recycle node")
+	}
+
+	// delete item link in trash
+	deletePath := trashItem
+	if relativePath != "" && relativePath != "/" {
+		resolvedTrashRoot, err := filepath.EvalSymlinks(trashItem)
+		if err != nil {
+			return errors.Wrap(err, "Decomposedfs: could not resolve trash root")
+		}
+		deletePath = filepath.Join(resolvedTrashRoot, relativePath)
+		if err = os.Remove(deletePath); err != nil {
+			logger.Error().Err(err).Str("trashItem", trashItem).Str("deletePath", deletePath).Str("relativePath", relativePath).Msg("error deleting trash item")
+		}
+	} else {
+		if err = utils.RemoveItem(deletePath); err != nil {
+			logger.Error().Err(err).Str("trashItem", trashItem).Str("deletePath", deletePath).Str("relativePath", relativePath).Msg("error recursively deleting trash item")
+		}
+	}
+
+	var sizeDiff int64
+	if trashNode.IsDir(ctx) {
+		treeSize, err := trashNode.GetTreeSize(ctx)
+		if err != nil {
+			return err
+		}
+		sizeDiff = int64(treeSize)
+	} else {
+		sizeDiff = trashNode.Blobsize
+	}
+	return tb.fs.tp.Propagate(ctx, targetNode, sizeDiff)
 }
 
 // PurgeRecycleItem purges the specified item, all its children and all their revisions
