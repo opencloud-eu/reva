@@ -508,37 +508,15 @@ func (tb *DecomposedfsTrashbin) RestoreRecycleItem(ctx context.Context, spaceID 
 	defer span.End()
 	logger := appctx.GetLogger(ctx)
 
-	var targetNode *node.Node
-	if restoreRef != nil {
-		tn, err := tb.fs.lu.NodeFromResource(ctx, restoreRef)
-		if err != nil {
-			return err
-		}
+	// TODO next steps
+	// extract functions to look up necessary nodes
+	// check permissions on the correct nodes
+	// move lookup of trash nodes to decomposedfs trishbin interface
+	// implement lookup functions in posix trash as well
+	// move permission check to generic decomposedfs
+	// add actual restore call to trash interface
 
-		targetNode = tn
-	}
 	trashNode, trashItem, origin, err := tb.readRecycleItem(ctx, spaceID, key, relativePath)
-	if err != nil {
-		return err
-	}
-
-	targetRef := &provider.Reference{
-		ResourceId: &provider.ResourceId{SpaceId: spaceID, OpaqueId: spaceID},
-		Path:       utils.MakeRelativePath(origin),
-	}
-
-	if targetNode == nil {
-		targetNode, err = tb.fs.lu.NodeFromResource(ctx, targetRef)
-		if err != nil {
-			return err
-		}
-	}
-
-	if err := targetNode.CheckLock(ctx); err != nil {
-		return err
-	}
-
-	parent, err := targetNode.Parent(ctx)
 	if err != nil {
 		return err
 	}
@@ -553,6 +531,34 @@ func (tb *DecomposedfsTrashbin) RestoreRecycleItem(ctx context.Context, spaceID 
 			return errtypes.PermissionDenied(key)
 		}
 		return errtypes.NotFound(key)
+	}
+
+	var targetNode *node.Node
+	if restoreRef != nil {
+		targetNode, err = tb.fs.lu.NodeFromResource(ctx, restoreRef)
+		if err != nil {
+			return err
+		}
+	}
+
+	if targetNode == nil {
+		targetRef := &provider.Reference{
+			ResourceId: &provider.ResourceId{SpaceId: spaceID, OpaqueId: spaceID},
+			Path:       utils.MakeRelativePath(origin),
+		}
+		targetNode, err = tb.fs.lu.NodeFromResource(ctx, targetRef)
+		if err != nil {
+			return err
+		}
+	}
+
+	if err := targetNode.CheckLock(ctx); err != nil {
+		return err
+	}
+
+	parent, err := targetNode.Parent(ctx)
+	if err != nil {
+		return err
 	}
 
 	// Set space owner in context
