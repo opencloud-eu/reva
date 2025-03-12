@@ -1,6 +1,7 @@
 ---
 variables:
   - &golang_image 'docker.io/golang:1.24'
+  - &cs3apivalidator_image 'owncloud/cs3api-validator:0.2.1'
 
 when:
   - event: [ push , manual ]
@@ -11,28 +12,17 @@ workspace:
   base: /go # use the go home dir as workspace to share go packages, see https://woodpecker-ci.org/docs/usage/workflow-syntax#workspace
 
 steps:
-  inotify-info:
-    image: *golang_image
-    depends_on: [] # enable parallel steps
-    commands:
-      - git clone https://github.com/mikesart/inotify-info
-      - cd inotify-info
-      - make
-      - _release/inotify-info
   generate:
     image: *golang_image
-    depends_on: [] # enable parallel steps
     commands:
       - make go-generate
       - git diff --exit-code
   lint:
     image: *golang_image
-    depends_on: [ generate ]
     commands:
       - make lint
   build:
     image: *golang_image
-    depends_on: [ generate ]
     commands:
       - make build-ci
   test:
@@ -45,9 +35,34 @@ steps:
     image: *golang_image
     depends_on: [ build ]
     commands:
-      - make test-integration
+      - cd tests/integration && go test -race ./...
   test-benchmark:
     image: *golang_image
     depends_on: [ build ]
     commands:
       - make test-benchmark
+  revad-services-decomposed:
+    image: *golang_image
+    depends_on: [ test-benchmark ]
+    detach: true
+    commands:       
+      - cd tests/oc-integration-tests/ci/
+      - ../../../cmd/revad/revad -c frontend.toml &
+      - ../../../cmd/revad/revad -c gateway.toml &
+      - ../../../cmd/revad/revad -c storage-users-decomposed.toml &
+      - ../../../cmd/revad/revad -c storage-shares.toml &
+      - ../../../cmd/revad/revad -c storage-publiclink.toml &
+      - ../../../cmd/revad/revad -c shares.toml &
+      - ../../../cmd/revad/revad -c permissions-demo-ci.toml &
+      - ../../../cmd/revad/revad -c users.toml
+  wait-for-revad-services-decomposed:
+    image: ghcr.io/dvjn/woodpecker-is-it-up-yet-plugin
+    depends_on: [ test-benchmark ]
+    settings:
+      host: revad-services-decomposed
+      port: 19000
+  cs3api-validator-decomposed:
+    image: *cs3apivalidator_image
+    depends_on: [ wait-for-revad-services-decomposed ]
+    commands:
+      - /usr/bin/cs3api-validator /var/lib/cs3api-validator --endpoint=revad-services-decomposed:19000
