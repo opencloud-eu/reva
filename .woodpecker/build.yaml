@@ -1,6 +1,11 @@
 ---
 variables:
   - &golang_image 'docker.io/golang:1.24'
+  - &environment
+    HTTP_PROXY:
+      from_secret: ci_http_proxy
+    HTTPS_PROXY:
+      from_secret: ci_http_proxy
 
 when:
   - event: [ push , manual ]
@@ -13,33 +18,20 @@ workspace:
 steps:
   generate:
     image: *golang_image
+    environment: *environment
     commands:
       - make go-generate
       - git diff --exit-code
   lint:
     image: *golang_image
+    environment: *environment
     commands:
       - make lint
   build:
     image: *golang_image
+    environment: *environment
     commands:
       - make build-ci
-  #test:
-  #  image: *golang_image
-  #  depends_on: [ build ]
-  #  commands:
-  #    - apt-get update -qq && apt-get install -y inotify-tools 
-  #    - make test
-  #test-integration:
-  #  image: *golang_image
-  #  depends_on: [ build ]
-  #  commands:
-  #    - cd tests/integration && go test -race ./...
-  #test-benchmark:
-  #  image: *golang_image
-  #  depends_on: [ build ]
-  #  commands:
-  #    - make test-benchmark
   upload:
     image: minio/mc:RELEASE.2021-10-07T04-19-58Z
     depends_on: [ build ]
