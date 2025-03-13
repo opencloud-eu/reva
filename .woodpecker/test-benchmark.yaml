@@ -1,6 +1,4 @@
 ---
-depends_on: [ build ]
-
 variables:
   - &golang_image 'docker.io/golang:1.24'
 
@@ -15,6 +13,10 @@ workspace:
 steps:
   test-benchmark:
     image: *golang_image
-    depends_on: []
+    environment:
+      HTTP_PROXY:
+        from_secret: ci_http_proxy
+      HTTPS_PROXY:
+        from_secret: ci_http_proxy
     commands:
       - make test-benchmark
