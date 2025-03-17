@@ -116,4 +116,4 @@ const compareVersions = (a: string, b: string) => {
   }
 
   return 0;
-};
+}
