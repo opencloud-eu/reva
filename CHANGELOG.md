@@ -8,6 +8,7 @@
 
 ### 🐛 Bug Fixes
 
+- Properly purge nodes depending on the storage type [[#108](https://github.com/opencloud-eu/reva/pull/108)]
 - Fix traversing thrash items [[#106](https://github.com/opencloud-eu/reva/pull/106)]
 
 ### 📦️ Dependency
