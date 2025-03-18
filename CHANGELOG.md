@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.28.1](https://github.com/opencloud-eu/reva/releases/tag/v2.28.1) - 2025-03-18
+
+### 📦️ Dependency
+
+- Bump github.com/shamaton/msgpack/v2 from 2.2.2 to 2.2.3 [[#103](https://github.com/opencloud-eu/reva/pull/103)]
+- Bump github.com/coreos/go-oidc/v3 from 3.12.0 to 3.13.0 [[#104](https://github.com/opencloud-eu/reva/pull/104)]
+
 ## [2.28.0](https://github.com/opencloud-eu/reva/releases/tag/v2.28.0) - 2025-03-17
 
 ### ❤️ Thanks to all contributors! ❤️
