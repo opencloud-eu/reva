@@ -2,6 +2,14 @@
 
 ## [2.28.1](https://github.com/opencloud-eu/reva/releases/tag/v2.28.1) - 2025-03-18
 
+### ❤️ Thanks to all contributors! ❤️
+
+@aduffeck
+
+### 🐛 Bug Fixes
+
+- Fix traversing thrash items [[#106](https://github.com/opencloud-eu/reva/pull/106)]
+
 ### 📦️ Dependency
 
 - Bump github.com/shamaton/msgpack/v2 from 2.2.2 to 2.2.3 [[#103](https://github.com/opencloud-eu/reva/pull/103)]
