@@ -8,6 +8,7 @@
 
 ### 🐛 Bug Fixes
 
+- Replace revisions with the exact same mtime [[#114](https://github.com/opencloud-eu/reva/pull/114)]
 - Properly support disabling versioning [[#113](https://github.com/opencloud-eu/reva/pull/113)]
 - Properly purge nodes depending on the storage type [[#108](https://github.com/opencloud-eu/reva/pull/108)]
 - Fix traversing thrash items [[#106](https://github.com/opencloud-eu/reva/pull/106)]
