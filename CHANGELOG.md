@@ -6,16 +6,17 @@
 
 @JammingBen, @aduffeck, @rhafer
 
-### 📈 Enhancement
-
-- New "jsoncs3" backend for app token storage [[#112](https://github.com/opencloud-eu/reva/pull/112)]
-
 ### 🐛 Bug Fixes
 
+- appauth/jsoncs3: Allow deletion using password hash [[#119](https://github.com/opencloud-eu/reva/pull/119)]
 - Replace revisions with the exact same mtime [[#114](https://github.com/opencloud-eu/reva/pull/114)]
 - Properly support disabling versioning [[#113](https://github.com/opencloud-eu/reva/pull/113)]
 - Properly purge nodes depending on the storage type [[#108](https://github.com/opencloud-eu/reva/pull/108)]
 - Fix traversing thrash items [[#106](https://github.com/opencloud-eu/reva/pull/106)]
+
+### 📈 Enhancement
+
+- New "jsoncs3" backend for app token storage [[#112](https://github.com/opencloud-eu/reva/pull/112)]
 
 ### 📦️ Dependency
 
