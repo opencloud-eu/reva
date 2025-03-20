@@ -15,6 +15,7 @@
 
 ### 📦️ Dependency
 
+- Bump github.com/cheggaaa/pb/v3 from 3.1.6 to 3.1.7 [[#117](https://github.com/opencloud-eu/reva/pull/117)]
 - Bump github.com/onsi/ginkgo/v2 from 2.23.0 to 2.23.1 [[#116](https://github.com/opencloud-eu/reva/pull/116)]
 - Bump github.com/minio/minio-go/v7 from 7.0.87 to 7.0.88 [[#111](https://github.com/opencloud-eu/reva/pull/111)]
 - Bump github.com/opencloud-eu/opencloud from 1.0.0 to 1.1.0 [[#110](https://github.com/opencloud-eu/reva/pull/110)]
