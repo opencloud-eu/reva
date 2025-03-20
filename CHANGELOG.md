@@ -1,6 +1,6 @@
 # Changelog
 
-## [2.28.1](https://github.com/opencloud-eu/reva/releases/tag/v2.28.1) - 2025-03-19
+## [2.28.1](https://github.com/opencloud-eu/reva/releases/tag/v2.28.1) - 2025-03-20
 
 ### ❤️ Thanks to all contributors! ❤️
 
@@ -15,6 +15,7 @@
 
 ### 📦️ Dependency
 
+- Bump github.com/onsi/ginkgo/v2 from 2.23.0 to 2.23.1 [[#116](https://github.com/opencloud-eu/reva/pull/116)]
 - Bump github.com/minio/minio-go/v7 from 7.0.87 to 7.0.88 [[#111](https://github.com/opencloud-eu/reva/pull/111)]
 - Bump github.com/opencloud-eu/opencloud from 1.0.0 to 1.1.0 [[#110](https://github.com/opencloud-eu/reva/pull/110)]
 - Bump github.com/shamaton/msgpack/v2 from 2.2.2 to 2.2.3 [[#103](https://github.com/opencloud-eu/reva/pull/103)]
