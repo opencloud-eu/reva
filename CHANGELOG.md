@@ -1,10 +1,14 @@
 # Changelog
 
-## [2.28.1](https://github.com/opencloud-eu/reva/releases/tag/v2.28.1) - 2025-03-20
+## [2.29.0](https://github.com/opencloud-eu/reva/releases/tag/v2.29.0) - 2025-03-20
 
 ### ❤️ Thanks to all contributors! ❤️
 
 @JammingBen, @aduffeck, @rhafer
+
+### 📈 Enhancement
+
+- New "jsoncs3" backend for app token storage [[#112](https://github.com/opencloud-eu/reva/pull/112)]
 
 ### 🐛 Bug Fixes
 
