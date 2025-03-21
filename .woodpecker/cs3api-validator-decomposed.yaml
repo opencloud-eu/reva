@@ -1,4 +1,6 @@
 ---
+depends_on: [ build ]
+
 variables:
   - &golang_image 'docker.io/golang:1.24'
   - &cs3apivalidator_image 'owncloud/cs3api-validator:0.2.1'
@@ -12,22 +14,24 @@ workspace:
   base: /go # use the go home dir as workspace to share go packages, see https://woodpecker-ci.org/docs/usage/workflow-syntax#workspace
 
 steps:
-  wait_for_server:
-    image: ghcr.io/dvjn/woodpecker-is-it-up-yet-plugin
-    settings:
-      host: revad-services
-      port: 19000
-  cs3api-validator-oci:
-    image: *cs3apivalidator_image
-    depends_on: [ wait_for_server ]
+  fetch-binary:
+    image: minio/mc:RELEASE.2021-10-07T04-19-58Z
+    environment:
+      AWS_ACCESS_KEY_ID:
+        from_secret: cache_s3_access_key
+      AWS_SECRET_ACCESS_KEY:
+        from_secret: cache_s3_secret_key
+      S3_BUCKET:
+        from_secret: cache_s3_bucket
+      S3_ENDPOINT:
+        from_secret: cache_s3_server
     commands:
-      - /usr/bin/cs3api-validator /var/lib/cs3api-validator --endpoint=revad-services:19000
-
-services:
+      - mc alias set s3 $S3_ENDPOINT $AWS_ACCESS_KEY_ID $AWS_SECRET_ACCESS_KEY
+      - mc cp -a s3/$S3_BUCKET/opencloud-eu/reva/$CI_COMMIT_SHA-$CI_PIPELINE_NUMBER-revad $CI_WORKSPACE/cmd/revad/revad
   revad-services:
     image: *golang_image
+    detach: true
     commands:
-      - go build -o ./cmd/revad/revad ./cmd/revad
       - cd tests/oc-integration-tests/ci/
       - ../../../cmd/revad/revad -c frontend.toml &
       - ../../../cmd/revad/revad -c gateway.toml &
@@ -37,3 +41,12 @@ services:
       - ../../../cmd/revad/revad -c shares.toml &
       - ../../../cmd/revad/revad -c permissions-demo-ci.toml &
       - ../../../cmd/revad/revad -c users.toml
+  wait_for_server:
+    image: ghcr.io/dvjn/woodpecker-is-it-up-yet-plugin
+    settings:
+      host: revad-services
+      port: 19000
+  cs3api-validator-oci:
+    image: *cs3apivalidator_image
+    commands:
+      - /usr/bin/cs3api-validator /var/lib/cs3api-validator --endpoint=revad-services:19000
