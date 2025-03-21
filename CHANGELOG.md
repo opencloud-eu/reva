@@ -1,6 +1,6 @@
 # Changelog
 
-## [2.29.0](https://github.com/opencloud-eu/reva/releases/tag/v2.29.0) - 2025-03-20
+## [2.29.0](https://github.com/opencloud-eu/reva/releases/tag/v2.29.0) - 2025-03-21
 
 ### ❤️ Thanks to all contributors! ❤️
 
@@ -20,6 +20,8 @@
 
 ### 📦️ Dependency
 
+- Bump github.com/nats-io/nats-server/v2 from 2.10.26 to 2.11.0 [[#122](https://github.com/opencloud-eu/reva/pull/122)]
+- Bump github.com/onsi/ginkgo/v2 from 2.23.1 to 2.23.2 [[#121](https://github.com/opencloud-eu/reva/pull/121)]
 - Bump github.com/cheggaaa/pb/v3 from 3.1.6 to 3.1.7 [[#117](https://github.com/opencloud-eu/reva/pull/117)]
 - Bump github.com/onsi/ginkgo/v2 from 2.23.0 to 2.23.1 [[#116](https://github.com/opencloud-eu/reva/pull/116)]
 - Bump github.com/minio/minio-go/v7 from 7.0.87 to 7.0.88 [[#111](https://github.com/opencloud-eu/reva/pull/111)]
