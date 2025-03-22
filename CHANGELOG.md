@@ -1,6 +1,6 @@
 # Changelog
 
-## [2.29.0](https://github.com/opencloud-eu/reva/releases/tag/v2.29.0) - 2025-03-21
+## [2.29.0](https://github.com/opencloud-eu/reva/releases/tag/v2.29.0) - 2025-03-22
 
 ### ❤️ Thanks to all contributors! ❤️
 
@@ -22,6 +22,7 @@
 
 ### 📦️ Dependency
 
+- Bump github.com/golang-jwt/jwt/v5 from 5.2.1 to 5.2.2 in the go_modules group [[#126](https://github.com/opencloud-eu/reva/pull/126)]
 - Bump github.com/nats-io/nats-server/v2 from 2.10.26 to 2.11.0 [[#122](https://github.com/opencloud-eu/reva/pull/122)]
 - Bump github.com/onsi/ginkgo/v2 from 2.23.1 to 2.23.2 [[#121](https://github.com/opencloud-eu/reva/pull/121)]
 - Bump github.com/cheggaaa/pb/v3 from 3.1.6 to 3.1.7 [[#117](https://github.com/opencloud-eu/reva/pull/117)]
