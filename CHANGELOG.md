@@ -1,6 +1,6 @@
 # Changelog
 
-## [2.29.0](https://github.com/opencloud-eu/reva/releases/tag/v2.29.0) - 2025-03-24
+## [2.29.0](https://github.com/opencloud-eu/reva/releases/tag/v2.29.0) - 2025-03-25
 
 ### ❤️ Thanks to all contributors! ❤️
 
@@ -22,6 +22,8 @@
 
 ### 📦️ Dependency
 
+- Bump github.com/onsi/gomega from 1.36.2 to 1.36.3 [[#134](https://github.com/opencloud-eu/reva/pull/134)]
+- Bump github.com/BurntSushi/toml from 1.4.0 to 1.5.0 [[#133](https://github.com/opencloud-eu/reva/pull/133)]
 - Bump github.com/go-sql-driver/mysql from 1.9.0 to 1.9.1 [[#128](https://github.com/opencloud-eu/reva/pull/128)]
 - Bump go.etcd.io/etcd/client/v3 from 3.5.19 to 3.5.20 [[#127](https://github.com/opencloud-eu/reva/pull/127)]
 - Bump github.com/golang-jwt/jwt/v5 from 5.2.1 to 5.2.2 in the go_modules group [[#126](https://github.com/opencloud-eu/reva/pull/126)]
