@@ -19,5 +19,5 @@ steps:
       HTTPS_PROXY:
         from_secret: ci_http_proxy
     commands:
-      - apt-get update -qq && apt-get install -y inotify-tools 
+      - apt-get update -qq && apt-get install -y inotify-tools
       - make test
