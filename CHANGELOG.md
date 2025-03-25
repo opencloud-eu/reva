@@ -8,6 +8,7 @@
 
 ### 🐛 Bug Fixes
 
+- Make non-collaborative posix driver available on other OSes [[#132](https://github.com/opencloud-eu/reva/pull/132)]
 - Fix moving lockfiles during moves [[#125](https://github.com/opencloud-eu/reva/pull/125)]
 - Keep metadata lock files in .oc-nodes [[#120](https://github.com/opencloud-eu/reva/pull/120)]
 - appauth/jsoncs3: Allow deletion using password hash [[#119](https://github.com/opencloud-eu/reva/pull/119)]
