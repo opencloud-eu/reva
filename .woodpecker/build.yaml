@@ -47,3 +47,4 @@ steps:
     commands:
       - mc alias set s3 $S3_ENDPOINT $AWS_ACCESS_KEY_ID $AWS_SECRET_ACCESS_KEY
       - mc cp -a --attr="content-type=application/octet-stream" $CI_WORKSPACE/cmd/revad/revad s3/$S3_BUCKET/opencloud-eu/reva/$CI_COMMIT_SHA-$CI_PIPELINE_NUMBER-revad
+      - mc ls --recursive s3/$S3_BUCKET/opencloud-eu/reva

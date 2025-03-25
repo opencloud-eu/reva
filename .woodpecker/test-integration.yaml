@@ -1,4 +1,6 @@
 ---
+depends_on: [ build ]
+
 variables:
   - &golang_image 'docker.io/golang:1.24'
 
@@ -11,6 +13,20 @@ workspace:
   base: /go # use the go home dir as workspace to share go packages, see https://woodpecker-ci.org/docs/usage/workflow-syntax#workspace
 
 steps:
+  fetch-binary:
+    image: minio/mc:RELEASE.2021-10-07T04-19-58Z
+    environment:
+      AWS_ACCESS_KEY_ID:
+        from_secret: cache_s3_access_key
+      AWS_SECRET_ACCESS_KEY:
+        from_secret: cache_s3_secret_key
+      S3_BUCKET:
+        from_secret: cache_s3_bucket
+      S3_ENDPOINT:
+        from_secret: cache_s3_server
+    commands:
+      - mc alias set s3 $S3_ENDPOINT $AWS_ACCESS_KEY_ID $AWS_SECRET_ACCESS_KEY
+      - mc cp -a s3/$S3_BUCKET/opencloud-eu/reva/$CI_COMMIT_SHA-$CI_PIPELINE_NUMBER-revad $CI_WORKSPACE/cmd/revad/revad
   test-integration:
     image: *golang_image
     environment:
