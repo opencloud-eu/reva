@@ -21,7 +21,7 @@
 
 - New "jsoncs3" backend for app token storage [[#112](https://github.com/opencloud-eu/reva/pull/112)]
 
-### 📦️ Dependency
+### 📦️ Dependencies
 
 - Bump github.com/rs/zerolog from 1.33.0 to 1.34.0 [[#137](https://github.com/opencloud-eu/reva/pull/137)]
 - Bump github.com/onsi/gomega from 1.36.2 to 1.36.3 [[#134](https://github.com/opencloud-eu/reva/pull/134)]
