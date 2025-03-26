@@ -11,6 +11,8 @@ when:
   - event: [ push , manual ]
     branch: ${CI_REPO_DEFAULT_BRANCH}
   - event: [ pull_request ]
+    path:
+      include: [ 'pkg/user/user.go' ]
 
 workspace:
   base: /go # use the go home dir as workspace to share go packages, see https://woodpecker-ci.org/docs/usage/workflow-syntax#workspace
