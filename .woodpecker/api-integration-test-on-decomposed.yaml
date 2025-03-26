@@ -31,7 +31,12 @@ steps:
         from_secret: cache_s3_server
     commands:
       - mc alias set s3 $S3_ENDPOINT $AWS_ACCESS_KEY_ID $AWS_SECRET_ACCESS_KEY
-      - mc cp -a s3/$S3_BUCKET/opencloud-eu/reva/$CI_COMMIT_SHA-$CI_PIPELINE_NUMBER-revad $CI_WORKSPACE/cmd/revad/revad
+      - mc cp -a s3/$S3_BUCKET/${CI_REPO}/$CI_COMMIT_SHA-$CI_PIPELINE_NUMBER-revad $CI_WORKSPACE/cmd/revad/revad
+  wait_for_ldap:
+    image: *woodpecker_wait_plugin_image
+    settings:
+      host: ldap
+      port: 636
   revad-services:
     image: *golang_image
     detach: true
