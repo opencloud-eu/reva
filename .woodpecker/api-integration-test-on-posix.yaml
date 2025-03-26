@@ -16,7 +16,7 @@ when:
   - event: [ pull_request ]
 
 matrix:
-  RUN_PART: [ 1, 2, 3, 4, 5 ]
+  RUN_PART: [ 1, 2, 3, 4 ]
 
 steps:
   fetch-binary:
@@ -47,7 +47,7 @@ steps:
     image: *golang_image
     detach: true
     commands:
-      - apt-get update -qq && apt-get install -y inotify-tools
+      - apt update -qq && apt install -y inotify-tools
       - cd tests/oc-integration-tests/ci/
       - ../../../cmd/revad/revad -c frontend.toml &
       - ../../../cmd/revad/revad -c gateway.toml &
@@ -85,7 +85,7 @@ steps:
       TEST_REVA: True
       SEND_SCENARIO_LINE_REFERENCES: True
       BEHAT_FILTER_TAGS: "~@skip&&~@skipOnReva&&~@env-config"
-      DIVIDE_INTO_NUM_PARTS: "5"
+      DIVIDE_INTO_NUM_PARTS: "4"
       RUN_PART: "${RUN_PART}"
       EXPECTED_FAILURES_FILE: "/woodpecker/src/github.com/opencloud-eu/reva/tests/acceptance/expected-failures-on-POSIX-storage.md"
       ACCEPTANCE_TEST_TYPE: "core-api"
