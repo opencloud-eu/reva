@@ -13,6 +13,7 @@ when:
   - event: [ pull_request ]
     path:
       include: [ 'pkg/user/user.go' ]
+      exclude: [ 'README.md' ]
 
 workspace:
   base: /go # use the go home dir as workspace to share go packages, see https://woodpecker-ci.org/docs/usage/workflow-syntax#workspace
