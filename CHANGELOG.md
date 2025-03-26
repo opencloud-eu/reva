@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.29.1](https://github.com/opencloud-eu/reva/releases/tag/v2.29.1) - 2025-03-26
+
+### ❤️ Thanks to all contributors! ❤️
+
+@amrita-shrestha
+
+
+
 ## [2.29.0](https://github.com/opencloud-eu/reva/releases/tag/v2.29.0) - 2025-03-26
 
 ### ❤️ Thanks to all contributors! ❤️
