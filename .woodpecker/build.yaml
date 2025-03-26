@@ -11,6 +11,8 @@ when:
   - event: [ push , manual ]
     branch: ${CI_REPO_DEFAULT_BRANCH}
   - event: [ pull_request ]
+    path:
+      exclude: [ 'README.md', '.woodpecker/*.yaml' ]
 
 workspace:
   base: /go # use the go home dir as workspace to share go packages, see https://woodpecker-ci.org/docs/usage/workflow-syntax#workspace
@@ -32,18 +34,3 @@ steps:
     environment: *environment
     commands:
       - make build-ci
-  upload:
-    image: minio/mc:RELEASE.2021-10-07T04-19-58Z
-    depends_on: [ build ]
-    environment:
-      AWS_ACCESS_KEY_ID:
-        from_secret: cache_s3_access_key
-      AWS_SECRET_ACCESS_KEY:
-        from_secret: cache_s3_secret_key
-      S3_BUCKET:
-        from_secret: cache_s3_bucket
-      S3_ENDPOINT:
-        from_secret: cache_s3_server
-    commands:
-      - mc alias set s3 $S3_ENDPOINT $AWS_ACCESS_KEY_ID $AWS_SECRET_ACCESS_KEY
-      - mc cp -a --attr="content-type=application/octet-stream" $CI_WORKSPACE/cmd/revad/revad s3/$S3_BUCKET/opencloud-eu/reva/$CI_COMMIT_SHA-$CI_PIPELINE_NUMBER-revad
