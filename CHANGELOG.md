@@ -1,6 +1,6 @@
 # Changelog
 
-## [2.29.0](https://github.com/opencloud-eu/reva/releases/tag/v2.29.0) - 2025-03-25
+## [2.29.0](https://github.com/opencloud-eu/reva/releases/tag/v2.29.0) - 2025-03-26
 
 ### ❤️ Thanks to all contributors! ❤️
 
@@ -23,6 +23,7 @@
 
 ### 📦️ Dependency
 
+- Bump github.com/rs/zerolog from 1.33.0 to 1.34.0 [[#137](https://github.com/opencloud-eu/reva/pull/137)]
 - Bump github.com/onsi/gomega from 1.36.2 to 1.36.3 [[#134](https://github.com/opencloud-eu/reva/pull/134)]
 - Bump github.com/BurntSushi/toml from 1.4.0 to 1.5.0 [[#133](https://github.com/opencloud-eu/reva/pull/133)]
 - Bump github.com/go-sql-driver/mysql from 1.9.0 to 1.9.1 [[#128](https://github.com/opencloud-eu/reva/pull/128)]
