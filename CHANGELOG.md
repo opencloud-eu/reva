@@ -4,9 +4,11 @@
 
 ### ❤️ Thanks to all contributors! ❤️
 
-@amrita-shrestha
+@aduffeck, @amrita-shrestha
 
+### 🐛 Bug Fixes
 
+- Always try to get the blob id/size from the metadata [[#141](https://github.com/opencloud-eu/reva/pull/141)]
 
 ## [2.29.0](https://github.com/opencloud-eu/reva/releases/tag/v2.29.0) - 2025-03-26
 
