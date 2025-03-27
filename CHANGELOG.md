@@ -1,5 +1,15 @@
 # Changelog
 
+## [2.30.0](https://github.com/opencloud-eu/reva/releases/tag/v2.30.0) - 2025-03-27
+
+### ❤️ Thanks to all contributors! ❤️
+
+@rhafer
+
+### 📈 Enhancement
+
+- enhancement(tus): Improve zerolog wrapper for slog [[#146](https://github.com/opencloud-eu/reva/pull/146)]
+
 ## [2.29.1](https://github.com/opencloud-eu/reva/releases/tag/v2.29.1) - 2025-03-26
 
 ### ❤️ Thanks to all contributors! ❤️
