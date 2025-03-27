@@ -78,7 +78,7 @@ steps:
     environment:
       TEST_SERVER_URL: "http://revad-services:20080"
       OC_REVA_DATA_ROOT: "/woodpecker/src/reva/data"
-      DELETE_USER_DATA_CMD: "bash -cx 'rm -rf /woodpecker/src/reva/data/users/* /woodpecker/src/reva/data/indexes/by-type/*'"
+      DELETE_USER_DATA_CMD: "bash -cx 'rm -rf /woodpecker/src/reva/data/users/* /woodpecker/src/reva/data/uploads/* /woodpecker/src/reva/data/indexes/**/*'"
       STORAGE_DRIVER: "POSIX"
       TEST_WITH_LDAP: True
       REVA_LDAP_HOSTNAME: "ldap"
