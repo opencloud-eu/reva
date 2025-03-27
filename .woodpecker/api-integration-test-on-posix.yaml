@@ -16,7 +16,7 @@ when:
   - event: [ pull_request ]
 
 matrix:
-  RUN_PART: [ 1, 2, 3, 4 ]
+  RUN_PART: [ 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12 ]
 
 steps:
   fetch-binary:
@@ -90,7 +90,7 @@ steps:
       TEST_REVA: True
       SEND_SCENARIO_LINE_REFERENCES: True
       BEHAT_FILTER_TAGS: "~@skip&&~@skipOnReva&&~@env-config"
-      DIVIDE_INTO_NUM_PARTS: "4"
+      DIVIDE_INTO_NUM_PARTS: "12"
       RUN_PART: "${RUN_PART}"
       EXPECTED_FAILURES_FILE: "/woodpecker/src/github.com/opencloud-eu/reva/tests/acceptance/expected-failures-on-POSIX-storage.md"
       ACCEPTANCE_TEST_TYPE: "core-api"
