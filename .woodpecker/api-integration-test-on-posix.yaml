@@ -37,6 +37,11 @@ steps:
     image: *woodpecker_wait_plugin_image
     settings:
       host: ldap
+      port: 389
+  wait_for_ldap2:
+    image: *woodpecker_wait_plugin_image
+    settings:
+      host: ldap
       port: 636
   wait_for_redis:
     image: *woodpecker_wait_plugin_image
