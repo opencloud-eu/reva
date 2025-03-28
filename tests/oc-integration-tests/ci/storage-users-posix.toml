@@ -4,6 +4,9 @@
 # - serves http dataprovider for this storage on port 11001
 #   - /data - dataprovider: file up and download
 
+[log]
+level = "debug"
+
 [shared]
 jwt_secret = "Pive-Fumkiu4"
 gatewaysvc = "localhost:19000"

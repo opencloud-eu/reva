@@ -6,6 +6,9 @@
 #   - /ocs ------------ ocs
 #   - TODO(diocas): ocm
 
+[log]
+level = "debug"
+
 [shared]
 jwt_secret = "Pive-Fumkiu4"
 gatewaysvc = "localhost:19000"
