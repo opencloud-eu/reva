@@ -1,6 +1,6 @@
 # Changelog
 
-## [2.30.0](https://github.com/opencloud-eu/reva/releases/tag/v2.30.0) - 2025-03-27
+## [2.30.0](https://github.com/opencloud-eu/reva/releases/tag/v2.30.0) - 2025-03-31
 
 ### ❤️ Thanks to all contributors! ❤️
 
@@ -9,6 +9,10 @@
 ### 📈 Enhancement
 
 - enhancement(tus): Improve zerolog wrapper for slog [[#146](https://github.com/opencloud-eu/reva/pull/146)]
+
+### 📦️ Dependencies
+
+- Bump google.golang.org/protobuf from 1.36.5 to 1.36.6 [[#142](https://github.com/opencloud-eu/reva/pull/142)]
 
 ## [2.29.1](https://github.com/opencloud-eu/reva/releases/tag/v2.29.1) - 2025-03-26
 
