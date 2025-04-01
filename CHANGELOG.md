@@ -13,6 +13,7 @@
 
 ### 📦️ Dependencies
 
+- Bump github.com/minio/minio-go/v7 from 7.0.88 to 7.0.89 [[#151](https://github.com/opencloud-eu/reva/pull/151)]
 - Bump google.golang.org/protobuf from 1.36.5 to 1.36.6 [[#142](https://github.com/opencloud-eu/reva/pull/142)]
 
 ## [2.29.1](https://github.com/opencloud-eu/reva/releases/tag/v2.29.1) - 2025-03-26
