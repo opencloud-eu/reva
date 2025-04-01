@@ -6,6 +6,10 @@
 
 @aduffeck, @rhafer
 
+### 🐛 Bug Fixes
+
+- Fix move races [[#150](https://github.com/opencloud-eu/reva/pull/150)]
+
 ### 📈 Enhancement
 
 - Cache internal path and disabled flag [[#149](https://github.com/opencloud-eu/reva/pull/149)]
