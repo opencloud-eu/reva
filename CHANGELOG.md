@@ -8,6 +8,7 @@
 
 ### 🐛 Bug Fixes
 
+- Fix handling collaborative moves [[#152](https://github.com/opencloud-eu/reva/pull/152)]
 - Fix move races [[#150](https://github.com/opencloud-eu/reva/pull/150)]
 
 ### 📈 Enhancement
