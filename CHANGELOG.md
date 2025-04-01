@@ -1,6 +1,6 @@
 # Changelog
 
-## [2.30.0](https://github.com/opencloud-eu/reva/releases/tag/v2.30.0) - 2025-03-31
+## [2.30.0](https://github.com/opencloud-eu/reva/releases/tag/v2.30.0) - 2025-04-01
 
 ### ❤️ Thanks to all contributors! ❤️
 
@@ -8,6 +8,7 @@
 
 ### 📈 Enhancement
 
+- Cache internal path and disabled flag [[#149](https://github.com/opencloud-eu/reva/pull/149)]
 - enhancement(tus): Improve zerolog wrapper for slog [[#146](https://github.com/opencloud-eu/reva/pull/146)]
 
 ### 📦️ Dependencies
