@@ -1,6 +1,6 @@
 # Changelog
 
-## [2.30.0](https://github.com/opencloud-eu/reva/releases/tag/v2.30.0) - 2025-04-01
+## [2.30.0](https://github.com/opencloud-eu/reva/releases/tag/v2.30.0) - 2025-04-02
 
 ### ❤️ Thanks to all contributors! ❤️
 
@@ -18,6 +18,7 @@
 
 ### 📦️ Dependencies
 
+- Bump google.golang.org/grpc from 1.71.0 to 1.71.1 [[#154](https://github.com/opencloud-eu/reva/pull/154)]
 - Bump github.com/minio/minio-go/v7 from 7.0.88 to 7.0.89 [[#151](https://github.com/opencloud-eu/reva/pull/151)]
 - Bump google.golang.org/protobuf from 1.36.5 to 1.36.6 [[#142](https://github.com/opencloud-eu/reva/pull/142)]
 
