@@ -8,7 +8,7 @@ variables:
   - &ldap_image 'osixia/openldap:1.3.0'
   - &minio_image 'minio/mc:RELEASE.2021-10-07T04-19-58Z'
   - &woodpecker_wait_plugin_image 'ghcr.io/dvjn/woodpecker-is-it-up-yet-plugin'
-  - &ceph_image 'ceph/daemon'
+  - &redis_image 'redis:6-alpine'
 
 when:
   - event: [ push , manual ]
@@ -37,27 +37,33 @@ steps:
     image: *woodpecker_wait_plugin_image
     settings:
       host: ldap
-      port: 636
-  wait_for_ceph:
+      port: 389
+  wait_for_ldap2:
     image: *woodpecker_wait_plugin_image
     settings:
-      host: ceph
-      port: 8080
+      host: ldap
+      port: 636
+  wait_for_redis:
+    image: *woodpecker_wait_plugin_image
+    settings:
+      host: redis
+      port: 6379
   revad-services:
     image: *golang_image
     detach: true
     commands:
+      - apt update -qq && apt install -y inotify-tools
       - cd tests/oc-integration-tests/ci/
       - ../../../cmd/revad/revad -c frontend.toml &
       - ../../../cmd/revad/revad -c gateway.toml &
       - ../../../cmd/revad/revad -c shares.toml &
       - ../../../cmd/revad/revad -c storage-shares.toml &
       - ../../../cmd/revad/revad -c machine-auth.toml &
-      - ../../../cmd/revad/revad -c storage-users-decomposeds3.toml &
+      - ../../../cmd/revad/revad -c storage-users-posix.toml &
       - ../../../cmd/revad/revad -c storage-publiclink.toml &
       - ../../../cmd/revad/revad -c permissions-demo-ci.toml &
       - ../../../cmd/revad/revad -c ldap-users.toml
-  wait_for_server:
+  wait_for_reva_server:
     image: *woodpecker_wait_plugin_image
     settings:
       host: revad-services
@@ -77,8 +83,8 @@ steps:
     environment:
       TEST_SERVER_URL: "http://revad-services:20080"
       OC_REVA_DATA_ROOT: "/woodpecker/src/reva/data"
-      DELETE_USER_DATA_CMD: "rm -rf /woodpecker/src/reva/data/spaces/* /woodpecker/src/reva/data/blobs/* /woodpecker/src/reva/data/indexes/by-type/*"
-      STORAGE_DRIVER: "decomposeds3"
+      DELETE_USER_DATA_CMD: "bash -cx 'rm -rf /woodpecker/src/reva/data/users/* /woodpecker/src/reva/data/uploads/* /woodpecker/src/reva/data/indexes/**/*'"
+      STORAGE_DRIVER: "POSIX"
       TEST_WITH_LDAP: True
       REVA_LDAP_HOSTNAME: "ldap"
       TEST_REVA: True
@@ -86,7 +92,7 @@ steps:
       BEHAT_FILTER_TAGS: "~@skip&&~@skipOnReva&&~@env-config"
       DIVIDE_INTO_NUM_PARTS: "4"
       RUN_PART: "${RUN_PART}"
-      EXPECTED_FAILURES_FILE: "/woodpecker/src/github.com/opencloud-eu/reva/tests/acceptance/expected-failures-on-DECOMPOSEDS3-storage.md"
+      EXPECTED_FAILURES_FILE: "/woodpecker/src/github.com/opencloud-eu/reva/tests/acceptance/expected-failures-on-POSIX-storage.md"
       ACCEPTANCE_TEST_TYPE: "core-api"
 
 services:
@@ -98,16 +104,7 @@ services:
       LDAP_ADMIN_PASSWORD: "admin"
       LDAP_TLS_VERIFY_CLIENT: "never"
       HOSTNAME: "ldap"
-  ceph:
-    image: *ceph_image
+  redis:
+    image: *redis_image
     environment:
-      CEPH_DAEMON: "demo"
-      NETWORK_AUTO_DETECT: "4"
-      MON_IP: "0.0.0.0"
-      CEPH_PUBLIC_NETWORK: "0.0.0.0/0"
-      RGW_CIVETWEB_PORT: "4000"
-      RGW_NAME: "ceph"
-      CEPH_DEMO_UID: "test-user"
-      CEPH_DEMO_ACCESS_KEY: "test"
-      CEPH_DEMO_SECRET_KEY: "test"
-      CEPH_DEMO_BUCKET: "test"
+      REDIS_DATABASES: 1
