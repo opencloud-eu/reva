@@ -6,16 +6,17 @@
 
 @aduffeck, @rhafer
 
+### 🐛 Bug Fixes
+
+- Fix race condition when moving/restoring items in quick succession [[#158](https://github.com/opencloud-eu/reva/pull/158)]
+- Fix handling collaborative moves [[#152](https://github.com/opencloud-eu/reva/pull/152)]
+- Fix move races [[#150](https://github.com/opencloud-eu/reva/pull/150)]
+
 ### 📈 Enhancement
 
 - Periodically log stats about inotify resources usage on the system [[#155](https://github.com/opencloud-eu/reva/pull/155)]
 - Cache internal path and disabled flag [[#149](https://github.com/opencloud-eu/reva/pull/149)]
 - enhancement(tus): Improve zerolog wrapper for slog [[#146](https://github.com/opencloud-eu/reva/pull/146)]
-
-### 🐛 Bug Fixes
-
-- Fix handling collaborative moves [[#152](https://github.com/opencloud-eu/reva/pull/152)]
-- Fix move races [[#150](https://github.com/opencloud-eu/reva/pull/150)]
 
 ### 📦️ Dependencies
 
