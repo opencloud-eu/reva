@@ -20,6 +20,7 @@
 
 ### 📦️ Dependencies
 
+- Bump github.com/tus/tusd/v2 from 2.7.1 to 2.8.0 [[#159](https://github.com/opencloud-eu/reva/pull/159)]
 - Bump github.com/mattn/go-sqlite3 from 1.14.24 to 1.14.27 [[#156](https://github.com/opencloud-eu/reva/pull/156)]
 - Bump google.golang.org/grpc from 1.71.0 to 1.71.1 [[#154](https://github.com/opencloud-eu/reva/pull/154)]
 - Bump github.com/minio/minio-go/v7 from 7.0.88 to 7.0.89 [[#151](https://github.com/opencloud-eu/reva/pull/151)]
