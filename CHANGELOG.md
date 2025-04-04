@@ -4,7 +4,7 @@
 
 ### ❤️ Thanks to all contributors! ❤️
 
-@aduffeck, @amrita-shrestha, @rhafer
+@aduffeck, @amrita-shrestha, @fschade, @rhafer
 
 ### 🐛 Bug Fixes
 
