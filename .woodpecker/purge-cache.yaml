@@ -1,6 +1,4 @@
 ---
-depends_on: [test, test-integration, api-integration-test-on-decomposed, api-integration-test-on-decomposedS3, api-integration-test-on-posixfs]
-
 variables:
   - &s3_cache_image 'plugins/s3-cache:1'
 
