@@ -3,10 +3,12 @@
 # - serves the storage provider on grpc port 11000
 # - serves http dataprovider for this storage on port 11001
 #   - /data - dataprovider: file up and download
-
 [shared]
 jwt_secret = "Pive-Fumkiu4"
 gatewaysvc = "localhost:19000"
+
+[log]
+level = "trace"
 
 [grpc]
 address = "0.0.0.0:11000"
