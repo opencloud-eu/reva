@@ -2,13 +2,14 @@
 
 when:
   event: push
-  branch: ${CI_REPO_DEFAULT_BRANCH}
+  branch: stable-2.29
 
 steps:
   release-helper:
     image: woodpeckerci/plugin-ready-release-go:latest
     settings:
       git_email: devops@opencloud.eu
+      release_branch: stable-2.29
       forge_type: github
       forge_token:
         from_secret: github_token
