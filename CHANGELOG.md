@@ -2,6 +2,14 @@
 
 ## [2.31.1](https://github.com/opencloud-eu/reva/releases/tag/v2.31.1) - 2025-04-08
 
+### ❤️ Thanks to all contributors! ❤️
+
+@aduffeck
+
+### 🐛 Bug Fixes
+
+- Fix wrong blobsize attributes due to premature assimilation [[#172](https://github.com/opencloud-eu/reva/pull/172)]
+
 ### 📦️ Dependencies
 
 - Bump github.com/nats-io/nats.go from 1.39.1 to 1.41.0 [[#160](https://github.com/opencloud-eu/reva/pull/160)]
