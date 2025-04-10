@@ -13,6 +13,7 @@
 
 ### 📦️ Dependencies
 
+- Bump github.com/nats-io/nats.go from 1.41.0 to 1.41.1 [[#175](https://github.com/opencloud-eu/reva/pull/175)]
 - Bump github.com/nats-io/nats.go from 1.39.1 to 1.41.0 [[#160](https://github.com/opencloud-eu/reva/pull/160)]
 
 ## [2.31.0](https://github.com/opencloud-eu/reva/releases/tag/v2.31.0) - 2025-04-07
