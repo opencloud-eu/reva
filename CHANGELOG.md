@@ -1,5 +1,15 @@
 # Changelog
 
+## [2.29.2](https://github.com/opencloud-eu/reva/releases/tag/v2.29.2) - 2025-04-16
+
+### ❤️ Thanks to all contributors! ❤️
+
+@JammingBen, @aduffeck
+
+### 🐛 Bug Fixes
+
+- Backport spaceid fix [[#179](https://github.com/opencloud-eu/reva/pull/179)]
+
 ## [2.29.1](https://github.com/opencloud-eu/reva/releases/tag/v2.29.1) - 2025-03-26
 
 ### ❤️ Thanks to all contributors! ❤️
