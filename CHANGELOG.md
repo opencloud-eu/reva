@@ -1,5 +1,27 @@
 # Changelog
 
+## [2.32.0](https://github.com/opencloud-eu/reva/releases/tag/v2.32.0) - 2025-04-16
+
+### ❤️ Thanks to all contributors! ❤️
+
+@JammingBen, @aduffeck
+
+### 📈 Enhancement
+
+- Cephfs [[#180](https://github.com/opencloud-eu/reva/pull/180)]
+
+### 🐛 Bug Fixes
+
+- Fix space ids getting overwritten [[#178](https://github.com/opencloud-eu/reva/pull/178)]
+- Improve performance and stabiity of assimilation [[#176](https://github.com/opencloud-eu/reva/pull/176)]
+- Fix wrong blobsize attributes due to premature assimilation [[#172](https://github.com/opencloud-eu/reva/pull/172)]
+
+### 📦️ Dependencies
+
+- Bump golang.org/x/term from 0.30.0 to 0.31.0 [[#177](https://github.com/opencloud-eu/reva/pull/177)]
+- Bump github.com/nats-io/nats.go from 1.41.0 to 1.41.1 [[#175](https://github.com/opencloud-eu/reva/pull/175)]
+- Bump github.com/nats-io/nats.go from 1.39.1 to 1.41.0 [[#160](https://github.com/opencloud-eu/reva/pull/160)]
+
 ## [2.31.0](https://github.com/opencloud-eu/reva/releases/tag/v2.31.0) - 2025-04-07
 
 ### ❤️ Thanks to all contributors! ❤️
