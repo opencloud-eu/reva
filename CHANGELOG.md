@@ -4,9 +4,11 @@
 
 ### ❤️ Thanks to all contributors! ❤️
 
-@JammingBen
+@JammingBen, @aduffeck
 
+### 🐛 Bug Fixes
 
+- Backport spaceid fix [[#179](https://github.com/opencloud-eu/reva/pull/179)]
 
 ## [2.29.1](https://github.com/opencloud-eu/reva/releases/tag/v2.29.1) - 2025-03-26
 
