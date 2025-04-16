@@ -1,10 +1,14 @@
 # Changelog
 
-## [2.31.1](https://github.com/opencloud-eu/reva/releases/tag/v2.31.1) - 2025-04-16
+## [2.32.0](https://github.com/opencloud-eu/reva/releases/tag/v2.32.0) - 2025-04-16
 
 ### ❤️ Thanks to all contributors! ❤️
 
 @JammingBen, @aduffeck
+
+### 📈 Enhancement
+
+- Cephfs [[#180](https://github.com/opencloud-eu/reva/pull/180)]
 
 ### 🐛 Bug Fixes
 
