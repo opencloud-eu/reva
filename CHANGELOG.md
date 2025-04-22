@@ -1,6 +1,6 @@
 # Changelog
 
-## [2.32.0](https://github.com/opencloud-eu/reva/releases/tag/v2.32.0) - 2025-04-16
+## [2.32.0](https://github.com/opencloud-eu/reva/releases/tag/v2.32.0) - 2025-04-22
 
 ### ❤️ Thanks to all contributors! ❤️
 
@@ -18,6 +18,7 @@
 
 ### 📦️ Dependencies
 
+- Bump github.com/nats-io/nats-server/v2 from 2.11.0 to 2.11.1 in the go_modules group [[#182](https://github.com/opencloud-eu/reva/pull/182)]
 - Bump golang.org/x/term from 0.30.0 to 0.31.0 [[#177](https://github.com/opencloud-eu/reva/pull/177)]
 - Bump github.com/nats-io/nats.go from 1.41.0 to 1.41.1 [[#175](https://github.com/opencloud-eu/reva/pull/175)]
 - Bump github.com/nats-io/nats.go from 1.39.1 to 1.41.0 [[#160](https://github.com/opencloud-eu/reva/pull/160)]
