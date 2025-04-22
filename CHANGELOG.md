@@ -18,6 +18,7 @@
 
 ### 📦️ Dependencies
 
+- Bump golang.org/x/net from 0.37.0 to 0.38.0 in the go_modules group [[#185](https://github.com/opencloud-eu/reva/pull/185)]
 - Bump github.com/coreos/go-oidc/v3 from 3.13.0 to 3.14.1 [[#164](https://github.com/opencloud-eu/reva/pull/164)]
 - Bump github.com/nats-io/nats-server/v2 from 2.11.0 to 2.11.1 in the go_modules group [[#182](https://github.com/opencloud-eu/reva/pull/182)]
 - Bump golang.org/x/term from 0.30.0 to 0.31.0 [[#177](https://github.com/opencloud-eu/reva/pull/177)]
