@@ -4,17 +4,18 @@
 
 ### ❤️ Thanks to all contributors! ❤️
 
-@JammingBen, @aduffeck
+@JammingBen, @aduffeck, @rhafer
+
+### 🐛 Bug Fixes
+
+- ocdav: Fix check for empty request body [[#188](https://github.com/opencloud-eu/reva/pull/188)]
+- Fix space ids getting overwritten [[#178](https://github.com/opencloud-eu/reva/pull/178)]
+- Improve performance and stabiity of assimilation [[#176](https://github.com/opencloud-eu/reva/pull/176)]
+- Fix wrong blobsize attributes due to premature assimilation [[#172](https://github.com/opencloud-eu/reva/pull/172)]
 
 ### 📈 Enhancement
 
 - Cephfs [[#180](https://github.com/opencloud-eu/reva/pull/180)]
-
-### 🐛 Bug Fixes
-
-- Fix space ids getting overwritten [[#178](https://github.com/opencloud-eu/reva/pull/178)]
-- Improve performance and stabiity of assimilation [[#176](https://github.com/opencloud-eu/reva/pull/176)]
-- Fix wrong blobsize attributes due to premature assimilation [[#172](https://github.com/opencloud-eu/reva/pull/172)]
 
 ### 📦️ Dependencies
 
