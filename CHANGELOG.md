@@ -1,6 +1,6 @@
 # Changelog
 
-## [2.32.0](https://github.com/opencloud-eu/reva/releases/tag/v2.32.0) - 2025-04-23
+## [2.32.0](https://github.com/opencloud-eu/reva/releases/tag/v2.32.0) - 2025-04-24
 
 ### ❤️ Thanks to all contributors! ❤️
 
@@ -18,6 +18,8 @@
 
 ### 📦️ Dependencies
 
+- Bump golang.org/x/sync from 0.12.0 to 0.13.0 [[#190](https://github.com/opencloud-eu/reva/pull/190)]
+- Bump github.com/nats-io/nats.go from 1.41.1 to 1.41.2 [[#189](https://github.com/opencloud-eu/reva/pull/189)]
 - Bump github.com/go-playground/validator/v10 from 10.25.0 to 10.26.0 [[#187](https://github.com/opencloud-eu/reva/pull/187)]
 - Bump github.com/go-sql-driver/mysql from 1.9.1 to 1.9.2 [[#186](https://github.com/opencloud-eu/reva/pull/186)]
 - Bump golang.org/x/net from 0.37.0 to 0.38.0 in the go_modules group [[#185](https://github.com/opencloud-eu/reva/pull/185)]
