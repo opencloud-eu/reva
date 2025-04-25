@@ -1,6 +1,6 @@
 # Changelog
 
-## [2.32.0](https://github.com/opencloud-eu/reva/releases/tag/v2.32.0) - 2025-04-24
+## [2.32.0](https://github.com/opencloud-eu/reva/releases/tag/v2.32.0) - 2025-04-25
 
 ### ❤️ Thanks to all contributors! ❤️
 
@@ -19,6 +19,8 @@
 
 ### 📦️ Dependencies
 
+- Bump github.com/ceph/go-ceph from 0.32.0 to 0.33.0 [[#192](https://github.com/opencloud-eu/reva/pull/192)]
+- Bump github.com/prometheus/client_golang from 1.21.1 to 1.22.0 [[#191](https://github.com/opencloud-eu/reva/pull/191)]
 - Bump golang.org/x/sync from 0.12.0 to 0.13.0 [[#190](https://github.com/opencloud-eu/reva/pull/190)]
 - Bump github.com/nats-io/nats.go from 1.41.1 to 1.41.2 [[#189](https://github.com/opencloud-eu/reva/pull/189)]
 - Bump github.com/go-playground/validator/v10 from 10.25.0 to 10.26.0 [[#187](https://github.com/opencloud-eu/reva/pull/187)]
