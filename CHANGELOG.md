@@ -2,6 +2,14 @@
 
 ## [2.32.1](https://github.com/opencloud-eu/reva/releases/tag/v2.32.1) - 2025-04-29
 
+### ❤️ Thanks to all contributors! ❤️
+
+@aduffeck
+
+### 🐛 Bug Fixes
+
+- Do not choke when one of the directory entries can't be read [[#196](https://github.com/opencloud-eu/reva/pull/196)]
+
 ### 📦️ Dependencies
 
 - Bump github.com/go-ldap/ldap/v3 from 3.4.10 to 3.4.11 [[#195](https://github.com/opencloud-eu/reva/pull/195)]
