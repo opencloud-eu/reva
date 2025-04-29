@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.32.1](https://github.com/opencloud-eu/reva/releases/tag/v2.32.1) - 2025-04-29
+
+### 📦️ Dependencies
+
+- Bump github.com/go-ldap/ldap/v3 from 3.4.10 to 3.4.11 [[#195](https://github.com/opencloud-eu/reva/pull/195)]
+
 ## [2.32.0](https://github.com/opencloud-eu/reva/releases/tag/v2.32.0) - 2025-04-28
 
 ### ❤️ Thanks to all contributors! ❤️
