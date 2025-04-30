@@ -8,6 +8,7 @@
 
 ### 🐛 Bug Fixes
 
+- Abort when the space root has already been created. [[#199](https://github.com/opencloud-eu/reva/pull/199)]
 - Do not choke when one of the directory entries can't be read [[#196](https://github.com/opencloud-eu/reva/pull/196)]
 
 ### 📦️ Dependencies
