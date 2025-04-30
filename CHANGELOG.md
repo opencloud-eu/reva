@@ -12,6 +12,7 @@
 
 ### 📦️ Dependencies
 
+- Bump github.com/onsi/gomega from 1.36.3 to 1.37.0 [[#194](https://github.com/opencloud-eu/reva/pull/194)]
 - Bump github.com/onsi/ginkgo/v2 from 2.23.3 to 2.23.4 [[#198](https://github.com/opencloud-eu/reva/pull/198)]
 - Bump github.com/go-ldap/ldap/v3 from 3.4.10 to 3.4.11 [[#195](https://github.com/opencloud-eu/reva/pull/195)]
 
