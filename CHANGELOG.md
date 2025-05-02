@@ -1,5 +1,15 @@
 # Changelog
 
+## [2.29.3](https://github.com/opencloud-eu/reva/releases/tag/v2.29.3) - 2025-05-02
+
+### ❤️ Thanks to all contributors! ❤️
+
+@ScharfViktor
+
+### 🐛 Bug Fixes
+
+- Abort when the space root has already been created. port #199 to stable [[#202](https://github.com/opencloud-eu/reva/pull/202)]
+
 ## [2.29.2](https://github.com/opencloud-eu/reva/releases/tag/v2.29.2) - 2025-04-16
 
 ### ❤️ Thanks to all contributors! ❤️
