@@ -1,6 +1,6 @@
 # Changelog
 
-## [2.32.1](https://github.com/opencloud-eu/reva/releases/tag/v2.32.1) - 2025-04-30
+## [2.32.1](https://github.com/opencloud-eu/reva/releases/tag/v2.32.1) - 2025-05-05
 
 ### ❤️ Thanks to all contributors! ❤️
 
@@ -13,7 +13,7 @@
 
 ### 📦️ Dependencies
 
-- Bump github.com/onsi/gomega from 1.36.3 to 1.37.0 [[#194](https://github.com/opencloud-eu/reva/pull/194)]
+- Bump golang.org/x/oauth2 from 0.28.0 to 0.29.0 [[#201](https://github.com/opencloud-eu/reva/pull/201)]
 - Bump github.com/onsi/ginkgo/v2 from 2.23.3 to 2.23.4 [[#198](https://github.com/opencloud-eu/reva/pull/198)]
 - Bump github.com/go-ldap/ldap/v3 from 3.4.10 to 3.4.11 [[#195](https://github.com/opencloud-eu/reva/pull/195)]
 
