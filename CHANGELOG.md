@@ -1,5 +1,24 @@
 # Changelog
 
+## [2.32.1](https://github.com/opencloud-eu/reva/releases/tag/v2.32.1) - 2025-05-09
+
+### ❤️ Thanks to all contributors! ❤️
+
+@aduffeck
+
+### 🐛 Bug Fixes
+
+- Abort when the space root has already been created. [[#199](https://github.com/opencloud-eu/reva/pull/199)]
+- Do not choke when one of the directory entries can't be read [[#196](https://github.com/opencloud-eu/reva/pull/196)]
+
+### 📦️ Dependencies
+
+- Bump golang.org/x/oauth2 from 0.29.0 to 0.30.0 [[#206](https://github.com/opencloud-eu/reva/pull/206)]
+- Bump github.com/beevik/etree from 1.5.0 to 1.5.1 [[#200](https://github.com/opencloud-eu/reva/pull/200)]
+- Bump golang.org/x/oauth2 from 0.28.0 to 0.29.0 [[#201](https://github.com/opencloud-eu/reva/pull/201)]
+- Bump github.com/onsi/ginkgo/v2 from 2.23.3 to 2.23.4 [[#198](https://github.com/opencloud-eu/reva/pull/198)]
+- Bump github.com/go-ldap/ldap/v3 from 3.4.10 to 3.4.11 [[#195](https://github.com/opencloud-eu/reva/pull/195)]
+
 ## [2.32.0](https://github.com/opencloud-eu/reva/releases/tag/v2.32.0) - 2025-04-28
 
 ### ❤️ Thanks to all contributors! ❤️
