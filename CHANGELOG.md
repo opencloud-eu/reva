@@ -1,10 +1,14 @@
 # Changelog
 
-## [2.32.1](https://github.com/opencloud-eu/reva/releases/tag/v2.32.1) - 2025-05-13
+## [2.33.0](https://github.com/opencloud-eu/reva/releases/tag/v2.33.0) - 2025-05-13
 
 ### ❤️ Thanks to all contributors! ❤️
 
 @aduffeck, @rhafer
+
+### 📈 Enhancement
+
+- Add ParentID to events so it's available to the consumer [[#210](https://github.com/opencloud-eu/reva/pull/210)]
 
 ### 🐛 Bug Fixes
 
