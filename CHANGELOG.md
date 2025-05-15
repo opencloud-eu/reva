@@ -1,6 +1,6 @@
 # Changelog
 
-## [2.33.0](https://github.com/opencloud-eu/reva/releases/tag/v2.33.0) - 2025-05-13
+## [2.33.0](https://github.com/opencloud-eu/reva/releases/tag/v2.33.0) - 2025-05-15
 
 ### ❤️ Thanks to all contributors! ❤️
 
@@ -17,6 +17,7 @@
 
 ### 📦️ Dependencies
 
+- Bump golang.org/x/term from 0.31.0 to 0.32.0 [[#211](https://github.com/opencloud-eu/reva/pull/211)]
 - Bump golang.org/x/sys from 0.32.0 to 0.33.0 [[#209](https://github.com/opencloud-eu/reva/pull/209)]
 - Bump golang.org/x/text from 0.24.0 to 0.25.0 [[#207](https://github.com/opencloud-eu/reva/pull/207)]
 - Bump golang.org/x/oauth2 from 0.29.0 to 0.30.0 [[#206](https://github.com/opencloud-eu/reva/pull/206)]
