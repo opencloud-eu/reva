@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.33.1](https://github.com/opencloud-eu/reva/releases/tag/v2.33.1) - 2025-05-20
+
+### 📦️ Dependencies
+
+- Bump github.com/aws/aws-sdk-go from 1.55.6 to 1.55.7 [[#215](https://github.com/opencloud-eu/reva/pull/215)]
+
 ## [2.33.0](https://github.com/opencloud-eu/reva/releases/tag/v2.33.0) - 2025-05-19
 
 ### ❤️ Thanks to all contributors! ❤️
