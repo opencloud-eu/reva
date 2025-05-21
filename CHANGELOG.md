@@ -1,6 +1,6 @@
 # Changelog
 
-## [2.33.1](https://github.com/opencloud-eu/reva/releases/tag/v2.33.1) - 2025-05-20
+## [2.33.1](https://github.com/opencloud-eu/reva/releases/tag/v2.33.1) - 2025-05-21
 
 ### ❤️ Thanks to all contributors! ❤️
 
@@ -8,6 +8,7 @@
 
 ### 📦️ Dependencies
 
+- Bump github.com/minio/minio-go/v7 from 7.0.89 to 7.0.92 [[#218](https://github.com/opencloud-eu/reva/pull/218)]
 - Bump github.com/aws/aws-sdk-go from 1.55.6 to 1.55.7 [[#215](https://github.com/opencloud-eu/reva/pull/215)]
 
 ## [2.33.0](https://github.com/opencloud-eu/reva/releases/tag/v2.33.0) - 2025-05-19
