@@ -8,6 +8,7 @@
 
 ### 📦️ Dependencies
 
+- Bump google.golang.org/grpc from 1.72.0 to 1.72.1 [[#220](https://github.com/opencloud-eu/reva/pull/220)]
 - Bump go.etcd.io/etcd/client/v3 from 3.5.20 to 3.6.0 [[#219](https://github.com/opencloud-eu/reva/pull/219)]
 - Bump github.com/nats-io/nats-server/v2 from 2.11.1 to 2.11.3 [[#204](https://github.com/opencloud-eu/reva/pull/204)]
 - Bump github.com/minio/minio-go/v7 from 7.0.89 to 7.0.92 [[#218](https://github.com/opencloud-eu/reva/pull/218)]
