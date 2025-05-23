@@ -38,7 +38,6 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/iancoleman/strcase"
-	"github.com/opencloud-eu/opencloud/services/thumbnails/pkg/thumbnail"
 	"github.com/opencloud-eu/reva/v2/internal/grpc/services/storageprovider"
 	"github.com/opencloud-eu/reva/v2/internal/http/services/owncloud/ocdav/config"
 	"github.com/opencloud-eu/reva/v2/internal/http/services/owncloud/ocdav/errors"
@@ -494,7 +493,7 @@ func (p *Handler) propfindResponse(ctx context.Context, w http.ResponseWriter, r
 	prefer := net.ParsePrefer(r.Header.Get(net.HeaderPrefer))
 	returnMinimal := prefer[net.HeaderPreferReturn] == "minimal"
 
-	propRes, err := MultistatusResponse(ctx, &pf, resourceInfos, p.PublicURL, namespace, linkshares, returnMinimal)
+	propRes, err := MultistatusResponse(ctx, &pf, resourceInfos, p.PublicURL, namespace, linkshares, returnMinimal, p.c.PreviewSupportedMimetypes)
 	if err != nil {
 		log.Error().Err(err).Msg("error formatting propfind")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -985,7 +984,7 @@ func ReadPropfind(r io.Reader) (pf XML, status int, err error) {
 }
 
 // MultistatusResponse converts a list of resource infos into a multistatus response string
-func MultistatusResponse(ctx context.Context, pf *XML, mds []*provider.ResourceInfo, publicURL, ns string, linkshares map[string]struct{}, returnMinimal bool) ([]byte, error) {
+func MultistatusResponse(ctx context.Context, pf *XML, mds []*provider.ResourceInfo, publicURL, ns string, linkshares map[string]struct{}, returnMinimal bool, mt map[string]struct{}) ([]byte, error) {
 	g, ctx := errgroup.WithContext(ctx)
 
 	type work struct {
@@ -1020,7 +1019,7 @@ func MultistatusResponse(ctx context.Context, pf *XML, mds []*provider.ResourceI
 	for i := 0; i < numWorkers; i++ {
 		g.Go(func() error {
 			for work := range workChan {
-				res, err := mdToPropResponse(ctx, pf, work.info, publicURL, ns, linkshares, returnMinimal)
+				res, err := mdToPropResponse(ctx, pf, work.info, publicURL, ns, linkshares, returnMinimal, mt)
 				if err != nil {
 					return err
 				}
@@ -1061,7 +1060,7 @@ func MultistatusResponse(ctx context.Context, pf *XML, mds []*provider.ResourceI
 // mdToPropResponse converts the CS3 metadata into a webdav PropResponse
 // ns is the CS3 namespace that needs to be removed from the CS3 path before
 // prefixing it with the baseURI
-func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, publicURL, ns string, linkshares map[string]struct{}, returnMinimal bool) (*ResponseXML, error) {
+func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, publicURL, ns string, linkshares map[string]struct{}, returnMinimal bool, mt map[string]struct{}) (*ResponseXML, error) {
 	ctx, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "md_to_prop_response")
 	span.SetAttributes(attribute.KeyValue{Key: "publicURL", Value: attribute.StringValue(publicURL)})
 	span.SetAttributes(attribute.KeyValue{Key: "ns", Value: attribute.StringValue(ns)})
@@ -1292,7 +1291,7 @@ func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, p
 			// directories have no preview
 			appendToNotFound(prop.NotFound("oc:has-preview"))
 		} else if md.MimeType != "" {
-			hasPreview(md, appendToOK)
+			hasPreview(md, mt, appendToOK)
 		}
 
 		// ls do not report any properties as missing by default
@@ -1602,7 +1601,7 @@ func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, p
 						// directories have no preview
 						appendToNotFound(prop.NotFound("oc:has-preview"))
 					} else if md.MimeType != "" {
-						hasPreview(md, appendToOK)
+						hasPreview(md, mt, appendToOK)
 					}
 				default:
 					appendToNotFound(prop.NotFound("oc:" + pf.Prop[i].Local))
@@ -1729,8 +1728,8 @@ func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, p
 	return &response, nil
 }
 
-func hasPreview(md *provider.ResourceInfo, appendToOK func(p ...prop.PropertyXML)) {
-	_, match := thumbnail.SupportedMimeTypes[md.MimeType]
+func hasPreview(md *provider.ResourceInfo, mimetypes map[string]struct{}, appendToOK func(p ...prop.PropertyXML)) {
+	_, match := mimetypes[md.MimeType]
 	if match {
 		appendToOK(prop.Escaped("oc:has-preview", "1"))
 	} else {
