@@ -401,3 +401,16 @@ func RegisterInterval(interval time.Duration) Option {
 		o.RegisterInterval = interval
 	}
 }
+
+// PreviewSupportedMimetypes provides a function to set the PreviewSupportedMimetypes option.
+func PreviewSupportedMimetypes(mts []string) Option {
+	return func(o *Options) {
+		mimetypes := make(map[string]struct{})
+
+		// Import mimetypes slice into mt map
+		for _, mt := range mts {
+			mimetypes[mt] = struct{}{}
+		}
+		o.config.PreviewSupportedMimetypes = mimetypes
+	}
+}

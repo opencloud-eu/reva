@@ -1,6 +1,9 @@
 package config
 
-import "github.com/opencloud-eu/reva/v2/pkg/sharedconf"
+import (
+	"github.com/opencloud-eu/opencloud/services/thumbnails/pkg/thumbnail"
+	"github.com/opencloud-eu/reva/v2/pkg/sharedconf"
+)
 
 // Config holds the config options that need to be passed down to all ocdav handlers
 type Config struct {
@@ -23,6 +26,7 @@ type Config struct {
 	// If true, HTTP COPY will expect the HTTP-TPC (third-party copy) headers
 	EnableHTTPTpc               bool                              `mapstructure:"enable_http_tpc"`
 	PublicURL                   string                            `mapstructure:"public_url"`
+	PreviewSupportedMimetypes   map[string]struct{}               `mapstructure:"preview_mimetypes"`
 	FavoriteStorageDriver       string                            `mapstructure:"favorite_storage_driver"`
 	FavoriteStorageDrivers      map[string]map[string]interface{} `mapstructure:"favorite_storage_drivers"`
 	Version                     string                            `mapstructure:"version"`
@@ -81,5 +85,9 @@ func (c *Config) Init() {
 
 	if c.NameValidation.MaxLength == 0 {
 		c.NameValidation.MaxLength = 255
+	}
+
+	if c.PreviewSupportedMimetypes == nil {
+		c.PreviewSupportedMimetypes = thumbnail.SupportedMimeTypes
 	}
 }
