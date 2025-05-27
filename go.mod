@@ -51,7 +51,7 @@ require (
 	github.com/jedib0t/go-pretty v4.3.0+incompatible
 	github.com/jellydator/ttlcache/v2 v2.11.1
 	github.com/juliangruber/go-intersect v1.1.0
-	github.com/mattn/go-sqlite3 v1.14.27
+	github.com/mattn/go-sqlite3 v1.14.28
 	github.com/maxymania/go-system v0.0.0-20170110133659-647cc364bf0b
 	github.com/mileusna/useragent v1.3.5
 	github.com/minio/minio-go/v7 v7.0.92
@@ -99,7 +99,7 @@ require (
 	golang.org/x/term v0.32.0
 	golang.org/x/text v0.25.0
 	google.golang.org/genproto v0.0.0-20250303144028-a0af3efb3deb
-	google.golang.org/grpc v1.72.1
+	google.golang.org/grpc v1.72.2
 	google.golang.org/protobuf v1.36.6
 )
 
