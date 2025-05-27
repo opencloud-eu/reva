@@ -8,6 +8,7 @@
 
 ### 📦️ Dependencies
 
+- Bump google.golang.org/grpc from 1.72.1 to 1.72.2 [[#224](https://github.com/opencloud-eu/reva/pull/224)]
 - Bump github.com/mattn/go-sqlite3 from 1.14.27 to 1.14.28 [[#223](https://github.com/opencloud-eu/reva/pull/223)]
 - Bump go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc from 0.60.0 to 0.61.0 [[#222](https://github.com/opencloud-eu/reva/pull/222)]
 - Bump google.golang.org/grpc from 1.72.0 to 1.72.1 [[#220](https://github.com/opencloud-eu/reva/pull/220)]
