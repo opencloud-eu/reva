@@ -1,10 +1,14 @@
 # Changelog
 
-## [2.33.1](https://github.com/opencloud-eu/reva/releases/tag/v2.33.1) - 2025-05-27
+## [2.33.1](https://github.com/opencloud-eu/reva/releases/tag/v2.33.1) - 2025-05-28
 
 ### ❤️ Thanks to all contributors! ❤️
 
-@rhafer
+@aduffeck, @rhafer
+
+### 🐛 Bug Fixes
+
+- Fix deadlock while copying metadata to CURRENT file [[#228](https://github.com/opencloud-eu/reva/pull/228)]
 
 ### 📦️ Dependencies
 
