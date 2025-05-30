@@ -313,12 +313,13 @@ func (t *Tree) Move(ctx context.Context, oldNode *node.Node, newNode *node.Node)
 		newNode.ID = oldNode.ID
 	}
 
-	// update target parentid and name
-	attribs := node.Attributes{}
-	attribs.SetString(prefixes.ParentidAttr, newNode.ParentID)
-	attribs.SetString(prefixes.NameAttr, newNode.Name)
-	if err := oldNode.SetXattrsWithContext(ctx, attribs, true); err != nil {
-		return errors.Wrap(err, "Decomposedfs: could not update old node attributes")
+	// rename node
+	err = os.Rename(
+		filepath.Join(oldParent, oldNode.Name),
+		filepath.Join(newParent, newNode.Name),
+	)
+	if err != nil {
+		return errors.Wrap(err, "Decomposedfs: could not move child")
 	}
 
 	// update the id cache
@@ -331,13 +332,12 @@ func (t *Tree) Move(ctx context.Context, oldNode *node.Node, newNode *node.Node)
 		t.log.Error().Err(err).Str("spaceID", newNode.SpaceID).Str("id", newNode.ID).Str("path", filepath.Join(newNode.ParentPath(), newNode.Name)).Msg("could not cache id")
 	}
 
-	// rename node
-	err = os.Rename(
-		filepath.Join(oldParent, oldNode.Name),
-		filepath.Join(newParent, newNode.Name),
-	)
-	if err != nil {
-		return errors.Wrap(err, "Decomposedfs: could not move child")
+	// update target parentid and name
+	attribs := node.Attributes{}
+	attribs.SetString(prefixes.ParentidAttr, newNode.ParentID)
+	attribs.SetString(prefixes.NameAttr, newNode.Name)
+	if err := newNode.SetXattrsWithContext(ctx, attribs, true); err != nil {
+		return errors.Wrap(err, "Decomposedfs: could not update node attributes")
 	}
 
 	// rename the lock (if it exists)
