@@ -1,6 +1,6 @@
 # Changelog
 
-## [2.33.1](https://github.com/opencloud-eu/reva/releases/tag/v2.33.1) - 2025-06-04
+## [2.33.1](https://github.com/opencloud-eu/reva/releases/tag/v2.33.1) - 2025-06-05
 
 ### ❤️ Thanks to all contributors! ❤️
 
@@ -8,6 +8,7 @@
 
 ### 🐛 Bug Fixes
 
+- Fix posixfs id cache after failed renames on disk [[#229](https://github.com/opencloud-eu/reva/pull/229)]
 - Fix deadlock while copying metadata to CURRENT file [[#228](https://github.com/opencloud-eu/reva/pull/228)]
 
 ### 📦️ Dependencies
