@@ -1,6 +1,6 @@
 # Changelog
 
-## [2.33.1](https://github.com/opencloud-eu/reva/releases/tag/v2.33.1) - 2025-06-05
+## [2.33.1](https://github.com/opencloud-eu/reva/releases/tag/v2.33.1) - 2025-06-06
 
 ### ❤️ Thanks to all contributors! ❤️
 
@@ -13,6 +13,8 @@
 
 ### 📦️ Dependencies
 
+- Bump golang.org/x/sync from 0.14.0 to 0.15.0 [[#235](https://github.com/opencloud-eu/reva/pull/235)]
+- Bump golang.org/x/text from 0.25.0 to 0.26.0 [[#234](https://github.com/opencloud-eu/reva/pull/234)]
 - Bump github.com/nats-io/nats.go from 1.42.0 to 1.43.0 [[#232](https://github.com/opencloud-eu/reva/pull/232)]
 - Bump github.com/nats-io/nats-server/v2 from 2.11.3 to 2.11.4 [[#231](https://github.com/opencloud-eu/reva/pull/231)]
 - Bump go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc from 1.35.0 to 1.36.0 [[#225](https://github.com/opencloud-eu/reva/pull/225)]
