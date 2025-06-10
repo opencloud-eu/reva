@@ -41,6 +41,12 @@ var (
 )
 
 var _ = SynchronizedBeforeSuite(func() {
+	// Skip entire suite if inotifywait binary is missing on the system.
+	if _, lookErr := exec.LookPath("inotifywait"); lookErr != nil {
+		GinkgoWriter.Println("inotifywait binary not found – skipping posix/tree watcher tests")
+		Skip("inotifywait binary not found")
+	}
+
 	var err error
 	env, err = helpers.NewTestEnv(map[string]interface{}{"watch_fs": true})
 	Expect(err).ToNot(HaveOccurred())

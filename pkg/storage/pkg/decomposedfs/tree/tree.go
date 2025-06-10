@@ -738,43 +738,45 @@ func (t *Tree) removeNode(ctx context.Context, n *node.Node) error {
 		}
 	}
 
-	// delete revisions
-	originalNodeID := nodeIDRegep.ReplaceAllString(n.InternalPath(), "$1")
-	revs, err := filepath.Glob(originalNodeID + node.RevisionIDDelimiter + "*")
-	if err != nil {
-		logger.Error().Err(err).Str("path", n.InternalPath()+node.RevisionIDDelimiter+"*").Msg("glob failed badly")
-		return err
-	}
-	for _, rev := range revs {
-		if t.lookup.MetadataBackend().IsMetaFile(rev) {
-			continue
-		}
-
-		revID := nodeFullIDRegep.ReplaceAllString(rev, "$1")
-		revID = strings.ReplaceAll(revID, "/", "")
-		revNode := node.NewBaseNode(n.SpaceID, revID, t.lookup)
-
-		bID, _, err := t.lookup.ReadBlobIDAndSizeAttr(ctx, revNode, nil)
+	// delete revisions only if we have a valid internal path; otherwise
+	// skip to avoid generating patterns like ".REV.*" that can match unrelated files
+	if internalPath := n.InternalPath(); internalPath != "" {
+		originalNodeID := nodeIDRegep.ReplaceAllString(internalPath, "$1")
+		revs, err := filepath.Glob(originalNodeID + node.RevisionIDDelimiter + "*")
 		if err != nil {
-			logger.Error().Err(err).Str("revision", rev).Msg("error reading blobid attribute")
+			logger.Error().Err(err).Str("path", internalPath+node.RevisionIDDelimiter+"*").Msg("glob failed badly")
 			return err
 		}
+		for _, rev := range revs {
+			if t.lookup.MetadataBackend().IsMetaFile(rev) {
+				continue
+			}
 
-		if err := utils.RemoveItem(rev); err != nil {
-			logger.Error().Err(err).Str("revision", rev).Msg("error removing revision node")
-			return err
-		}
+			revID := nodeFullIDRegep.ReplaceAllString(rev, "$1")
+			revID = strings.ReplaceAll(revID, "/", "")
+			revNode := node.NewBaseNode(n.SpaceID, revID, t.lookup)
 
-		if bID != "" {
-			if err := t.DeleteBlob(&node.Node{
-				BaseNode: node.BaseNode{
-					SpaceID: n.SpaceID,
-				}, BlobID: bID}); err != nil {
-				logger.Error().Err(err).Str("revision", rev).Str("blobID", bID).Msg("error removing revision node blob")
+			bID, _, err := t.lookup.ReadBlobIDAndSizeAttr(ctx, revNode, nil)
+			if err != nil {
+				logger.Error().Err(err).Str("revision", rev).Msg("error reading blobid attribute")
 				return err
 			}
-		}
 
+			if err := utils.RemoveItem(rev); err != nil {
+				logger.Error().Err(err).Str("revision", rev).Msg("error removing revision node")
+				return err
+			}
+
+			if bID != "" {
+				if err := t.DeleteBlob(&node.Node{
+					BaseNode: node.BaseNode{SpaceID: n.SpaceID}, BlobID: bID}); err != nil {
+					logger.Error().Err(err).Str("revision", rev).Str("blobID", bID).Msg("error removing revision node blob")
+					return err
+				}
+			}
+		}
+	} else {
+		logger.Warn().Str("nodeID", n.ID).Msg("skipping revision deletion due to empty internal path")
 	}
 
 	return nil

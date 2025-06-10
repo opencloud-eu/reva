@@ -737,6 +737,8 @@ func (t *Tree) InitNewNode(ctx context.Context, n *node.Node, fsize uint64) (met
 func (t *Tree) removeNode(ctx context.Context, path, timeSuffix string, n *node.Node) error {
 	logger := appctx.GetLogger(ctx)
 
+	// timeSuffix is non-empty when removing items from trash (format: ".T.2022-02-24T12:35:18.196484592Z")
+	// This indicates the node is being permanently deleted from the trash
 	if timeSuffix != "" {
 		n.ID = n.ID + node.TrashIDDelimiter + timeSuffix
 	}
@@ -747,7 +749,8 @@ func (t *Tree) removeNode(ctx context.Context, path, timeSuffix string, n *node.
 			logger.Error().Err(err).Str("path", path).Msg("error listing folder")
 		} else {
 			for _, child := range item {
-				if err := t.removeNode(ctx, child.InternalPath(), "", child); err != nil {
+				// propagate the timeSuffix so all children are treated consistently
+				if err := t.removeNode(ctx, child.InternalPath(), timeSuffix, child); err != nil {
 					return err
 				}
 			}
@@ -774,34 +777,80 @@ func (t *Tree) removeNode(ctx context.Context, path, timeSuffix string, n *node.
 	}
 
 	// delete revisions
-	revs, err := filepath.Glob(n.InternalPath() + node.RevisionIDDelimiter + "*")
-	if err != nil {
-		logger.Error().Err(err).Str("path", n.InternalPath()+node.RevisionIDDelimiter+"*").Msg("glob failed badly")
-		return err
+	return t.processRevisionDeletion(ctx, n, path)
+}
+
+// processRevisionDeletion handles the deletion of file revisions during node removal.
+// Revision processing is skipped only when the node has an empty internal path.
+func (t *Tree) processRevisionDeletion(ctx context.Context, n *node.Node, nodePath string) error {
+	logger := appctx.GetLogger(ctx)
+
+	internalPath := n.InternalPath()
+
+	// Skip when internalPath is empty, otherwise proceed regardless of trash status
+	if internalPath == "" {
+		t.logEmptyPathWarning(*logger, n, nodePath)
+		return nil
 	}
-	for _, rev := range revs {
-		if t.lookup.MetadataBackend().IsMetaFile(rev) {
+
+	return t.deleteNodeRevisions(ctx, internalPath, n.SpaceID)
+}
+
+// logEmptyPathWarning logs detailed warning information when a node has an empty internal path
+// in non-trash operations, which may indicate node initialization issues
+func (t *Tree) logEmptyPathWarning(logger zerolog.Logger, n *node.Node, nodePath string) {
+	logger.Warn().
+		Str("nodePath", nodePath).
+		Str("nodeID", n.ID).
+		Str("spaceID", n.SpaceID).
+		Str("parentID", n.ParentID).
+		Str("name", n.Name).
+		Bool("exists", n.Exists).
+		Msg("skipping revision deletion due to empty internal path in non-trash operation - this may indicate a node initialization issue")
+}
+
+// deleteNodeRevisions handles the actual deletion of revision files and their associated blobs
+func (t *Tree) deleteNodeRevisions(ctx context.Context, internalPath, spaceID string) error {
+
+	revisionPattern := internalPath + node.RevisionIDDelimiter + "*"
+	revisions, err := filepath.Glob(revisionPattern)
+	if err != nil {
+		return fmt.Errorf("failed to glob revision files for pattern %s: %w", revisionPattern, err)
+	}
+
+	for _, revisionPath := range revisions {
+		if t.lookup.MetadataBackend().IsMetaFile(revisionPath) {
 			continue
 		}
 
-		bID, _, err := t.lookup.ReadBlobIDAndSizeAttr(ctx, rev, nil)
-		if err != nil {
-			logger.Error().Err(err).Str("revision", rev).Msg("error reading blobid attribute")
+		if err := t.deleteRevisionFile(ctx, revisionPath, spaceID); err != nil {
 			return err
 		}
+	}
 
-		if err := utils.RemoveItem(rev); err != nil {
-			logger.Error().Err(err).Str("revision", rev).Msg("error removing revision node")
-			return err
+	return nil
+}
+
+// deleteRevisionFile removes a single revision file and its associated blob
+func (t *Tree) deleteRevisionFile(ctx context.Context, revisionPath, spaceID string) error {
+
+	// Read blob ID before deleting the revision file
+	blobID, _, err := t.lookup.ReadBlobIDAndSizeAttr(ctx, revisionPath, nil)
+	if err != nil {
+		return fmt.Errorf("error reading blob ID attribute from revision %s: %w", revisionPath, err)
+	}
+
+	// Remove the revision file
+	if err := utils.RemoveItem(revisionPath); err != nil {
+		return fmt.Errorf("error removing revision file %s: %w", revisionPath, err)
+	}
+
+	// Delete the associated blob if it exists
+	if blobID != "" {
+		revisionNode := &node.Node{SpaceID: spaceID, BlobID: blobID}
+		if err := t.DeleteBlob(revisionNode); err != nil {
+			return fmt.Errorf("error removing revision blob %s for revision %s: %w", blobID, revisionPath, err)
 		}
-
-		if bID != "" {
-			if err := t.DeleteBlob(&node.Node{SpaceID: n.SpaceID, BlobID: bID}); err != nil {
-				logger.Error().Err(err).Str("revision", rev).Str("blobID", bID).Msg("error removing revision node blob")
-				return err
-			}
-		}
-
 	}
 
 	return nil
