@@ -13,6 +13,7 @@
 
 ### 📦️ Dependencies
 
+- Bump golang.org/x/crypto from 0.38.0 to 0.39.0 [[#236](https://github.com/opencloud-eu/reva/pull/236)]
 - Bump github.com/pkg/xattr from 0.4.10 to 0.4.11 [[#237](https://github.com/opencloud-eu/reva/pull/237)]
 - Bump golang.org/x/sync from 0.14.0 to 0.15.0 [[#235](https://github.com/opencloud-eu/reva/pull/235)]
 - Bump golang.org/x/text from 0.25.0 to 0.26.0 [[#234](https://github.com/opencloud-eu/reva/pull/234)]
