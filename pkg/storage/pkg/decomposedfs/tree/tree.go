@@ -738,45 +738,71 @@ func (t *Tree) removeNode(ctx context.Context, n *node.Node) error {
 		}
 	}
 
-	// delete revisions only if we have a valid internal path; otherwise
-	// skip to avoid generating patterns like ".REV.*" that can match unrelated files
-	if internalPath := n.InternalPath(); internalPath != "" {
-		originalNodeID := nodeIDRegep.ReplaceAllString(internalPath, "$1")
-		revs, err := filepath.Glob(originalNodeID + node.RevisionIDDelimiter + "*")
+	// delete revisions
+	return t.processRevisionDeletion(ctx, n)
+}
+
+// processRevisionDeletion handles the deletion of file revisions during node removal.
+// Revision processing is skipped only when the node has an empty internal path.
+func (t *Tree) processRevisionDeletion(ctx context.Context, n *node.Node) error {
+	logger := appctx.GetLogger(ctx)
+
+	internalPath := n.InternalPath()
+
+	// Skip when internalPath is empty to avoid generating patterns like ".REV.*" that can match unrelated files
+	if internalPath == "" {
+		logger.Warn().
+			Str("nodeID", n.ID).
+			Str("spaceID", n.SpaceID).
+			Str("parentID", n.ParentID).
+			Str("name", n.Name).
+			Bool("exists", n.Exists).
+			Msg("skipping revision deletion due to empty internal path - this may indicate a node initialization issue")
+		return nil
+	}
+
+	return t.deleteNodeRevisions(ctx, internalPath, n.SpaceID)
+}
+
+// deleteNodeRevisions handles the actual deletion of revision files and their associated blobs
+func (t *Tree) deleteNodeRevisions(ctx context.Context, internalPath, spaceID string) error {
+	logger := appctx.GetLogger(ctx)
+
+	originalNodeID := nodeIDRegep.ReplaceAllString(internalPath, "$1")
+	revisionPattern := originalNodeID + node.RevisionIDDelimiter + "*"
+	revisions, err := filepath.Glob(revisionPattern)
+	if err != nil {
+		logger.Error().Err(err).Str("pattern", revisionPattern).Msg("glob failed badly")
+		return err
+	}
+
+	for _, rev := range revisions {
+		if t.lookup.MetadataBackend().IsMetaFile(rev) {
+			continue
+		}
+
+		revID := nodeFullIDRegep.ReplaceAllString(rev, "$1")
+		revID = strings.ReplaceAll(revID, "/", "")
+		revNode := node.NewBaseNode(spaceID, revID, t.lookup)
+
+		bID, _, err := t.lookup.ReadBlobIDAndSizeAttr(ctx, revNode, nil)
 		if err != nil {
-			logger.Error().Err(err).Str("path", internalPath+node.RevisionIDDelimiter+"*").Msg("glob failed badly")
+			logger.Error().Err(err).Str("revision", rev).Msg("error reading blobid attribute")
 			return err
 		}
-		for _, rev := range revs {
-			if t.lookup.MetadataBackend().IsMetaFile(rev) {
-				continue
-			}
 
-			revID := nodeFullIDRegep.ReplaceAllString(rev, "$1")
-			revID = strings.ReplaceAll(revID, "/", "")
-			revNode := node.NewBaseNode(n.SpaceID, revID, t.lookup)
+		if err := utils.RemoveItem(rev); err != nil {
+			logger.Error().Err(err).Str("revision", rev).Msg("error removing revision node")
+			return err
+		}
 
-			bID, _, err := t.lookup.ReadBlobIDAndSizeAttr(ctx, revNode, nil)
-			if err != nil {
-				logger.Error().Err(err).Str("revision", rev).Msg("error reading blobid attribute")
+		if bID != "" {
+			if err := t.DeleteBlob(&node.Node{
+				BaseNode: node.BaseNode{SpaceID: spaceID}, BlobID: bID}); err != nil {
+				logger.Error().Err(err).Str("revision", rev).Str("blobID", bID).Msg("error removing revision node blob")
 				return err
-			}
-
-			if err := utils.RemoveItem(rev); err != nil {
-				logger.Error().Err(err).Str("revision", rev).Msg("error removing revision node")
-				return err
-			}
-
-			if bID != "" {
-				if err := t.DeleteBlob(&node.Node{
-					BaseNode: node.BaseNode{SpaceID: n.SpaceID}, BlobID: bID}); err != nil {
-					logger.Error().Err(err).Str("revision", rev).Str("blobID", bID).Msg("error removing revision node blob")
-					return err
-				}
 			}
 		}
-	} else {
-		logger.Warn().Str("nodeID", n.ID).Msg("skipping revision deletion due to empty internal path")
 	}
 
 	return nil

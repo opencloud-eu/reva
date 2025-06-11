@@ -806,16 +806,18 @@ func (t *Tree) logEmptyPathWarning(logger zerolog.Logger, n *node.Node, nodePath
 		Str("parentID", n.ParentID).
 		Str("name", n.Name).
 		Bool("exists", n.Exists).
-		Msg("skipping revision deletion due to empty internal path in non-trash operation - this may indicate a node initialization issue")
+		Msg("skipping revision deletion due to empty internal path - this may indicate a node initialization issue")
 }
 
 // deleteNodeRevisions handles the actual deletion of revision files and their associated blobs
 func (t *Tree) deleteNodeRevisions(ctx context.Context, internalPath, spaceID string) error {
+	logger := appctx.GetLogger(ctx)
 
 	revisionPattern := internalPath + node.RevisionIDDelimiter + "*"
 	revisions, err := filepath.Glob(revisionPattern)
 	if err != nil {
-		return fmt.Errorf("failed to glob revision files for pattern %s: %w", revisionPattern, err)
+		logger.Error().Err(err).Str("pattern", revisionPattern).Msg("glob failed badly")
+		return err
 	}
 
 	for _, revisionPath := range revisions {
@@ -833,23 +835,27 @@ func (t *Tree) deleteNodeRevisions(ctx context.Context, internalPath, spaceID st
 
 // deleteRevisionFile removes a single revision file and its associated blob
 func (t *Tree) deleteRevisionFile(ctx context.Context, revisionPath, spaceID string) error {
+	logger := appctx.GetLogger(ctx)
 
 	// Read blob ID before deleting the revision file
 	blobID, _, err := t.lookup.ReadBlobIDAndSizeAttr(ctx, revisionPath, nil)
 	if err != nil {
-		return fmt.Errorf("error reading blob ID attribute from revision %s: %w", revisionPath, err)
+		logger.Error().Err(err).Str("revision", revisionPath).Msg("error reading blobid attribute")
+		return err
 	}
 
 	// Remove the revision file
 	if err := utils.RemoveItem(revisionPath); err != nil {
-		return fmt.Errorf("error removing revision file %s: %w", revisionPath, err)
+		logger.Error().Err(err).Str("revision", revisionPath).Msg("error removing revision node")
+		return err
 	}
 
 	// Delete the associated blob if it exists
 	if blobID != "" {
 		revisionNode := &node.Node{SpaceID: spaceID, BlobID: blobID}
 		if err := t.DeleteBlob(revisionNode); err != nil {
-			return fmt.Errorf("error removing revision blob %s for revision %s: %w", blobID, revisionPath, err)
+			logger.Error().Err(err).Str("revision", revisionPath).Str("blobID", blobID).Msg("error removing revision node blob")
+			return err
 		}
 	}
 
