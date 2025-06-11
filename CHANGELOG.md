@@ -4,6 +4,7 @@
 
 ### 📦️ Dependencies
 
+- Bump github.com/cloudflare/circl from 1.3.7 to 1.6.1 in the go_modules group [[#239](https://github.com/opencloud-eu/reva/pull/239)]
 - Bump github.com/ceph/go-ceph from 0.33.0 to 0.34.0 [[#241](https://github.com/opencloud-eu/reva/pull/241)]
 
 ## [2.33.1](https://github.com/opencloud-eu/reva/releases/tag/v2.33.1) - 2025-06-10
