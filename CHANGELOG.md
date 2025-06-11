@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.33.2](https://github.com/opencloud-eu/reva/releases/tag/v2.33.2) - 2025-06-11
+
+### 📦️ Dependencies
+
+- Bump github.com/ceph/go-ceph from 0.33.0 to 0.34.0 [[#241](https://github.com/opencloud-eu/reva/pull/241)]
+
 ## [2.33.1](https://github.com/opencloud-eu/reva/releases/tag/v2.33.1) - 2025-06-10
 
 ### ❤️ Thanks to all contributors! ❤️
