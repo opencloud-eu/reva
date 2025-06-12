@@ -2,6 +2,10 @@
 
 ## [2.33.2](https://github.com/opencloud-eu/reva/releases/tag/v2.33.2) - 2025-06-12
 
+### ❤️ Thanks to all contributors! ❤️
+
+@rhafer
+
 ### 📦️ Dependencies
 
 - Bump github.com/minio/minio-go/v7 from 7.0.92 to 7.0.93 [[#244](https://github.com/opencloud-eu/reva/pull/244)]
