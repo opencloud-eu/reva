@@ -1,0 +1,17 @@
+depends_on: [api-integration-test-on-decomposed, api-integration-test-on-decomposedS3, api-integration-test-on-posixfs, cs3api-validator-decomposed, test, test-benchmark, test-integration]
+when:
+  - event: [ push , manual ]
+    branch: ${CI_REPO_DEFAULT_BRANCH}
+  - event: [ pull_request ]
+
+steps:
+  - name: notify
+    image: plugins/matrix
+    settings:
+      homeserver: https://matrix.org
+      room_id:
+        from_secret: opencloud-notifications-channel
+      user_id:
+        from_secret: opencloud-notifications-user
+      access_token:
+        from_secret: opencloud-notifications-access-token
