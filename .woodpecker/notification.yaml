@@ -1,4 +1,4 @@
-depends_on: [api-integration-test-on-decomposed, api-integration-test-on-decomposedS3, api-integration-test-on-posixfs, cs3api-validator-decomposed, release, test, test-benchmark, test-integration]
+depends_on: [api-integration-test-on-decomposed, api-integration-test-on-decomposedS3, api-integration-test-on-posixfs, cs3api-validator-decomposed, test, test-benchmark, test-integration]
 when:
   - event: [ push , manual ]
     branch: ${CI_REPO_DEFAULT_BRANCH}
