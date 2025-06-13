@@ -6,7 +6,7 @@ when:
 
 steps:
   - name: notify
-    image: quay.io/thegeeklab/matrix
+    image: plugins/matrix
     settings:
       homeserver: https://matrix.org
       room_id:
