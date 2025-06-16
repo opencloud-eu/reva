@@ -48,5 +48,5 @@ steps:
   cs3api-validator-oci:
     image: *cs3apivalidator_image
     commands:
-      - exit 0
+      - exit 1
       - /usr/bin/cs3api-validator /var/lib/cs3api-validator --endpoint=revad-services:19000
