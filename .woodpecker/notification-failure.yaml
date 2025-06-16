@@ -24,3 +24,5 @@ steps:
       - curl $NOTIFICATION_SCRIPT -o matrix-notification.sh
       - chmod +x matrix-notification.sh
       - ./matrix-notification.sh
+    when:
+      - status: [ failure ]
