@@ -3,7 +3,7 @@ variables:
   - &notification_script 'https://raw.githubusercontent.com/opencloud-eu/qa/refs/heads/matrix-notification-script/scripts/matrix-notification.sh'
 
 depends_on: [api-integration-test-on-decomposed, api-integration-test-on-decomposedS3, api-integration-test-on-posixfs, cs3api-validator-decomposed, test, test-benchmark, test-integration]
-runs_on: [ failure ]
+runs_on: failure
 when:
   - event: [ push , manual ]
     branch: ${CI_REPO_DEFAULT_BRANCH}
