@@ -18,7 +18,7 @@ steps:
         from_secret: opencloud-notifications-access-token
       CI_STATUS: "failed :boom:"
     commands:
-      - curl https://raw.githubusercontent.com/opencloud-eu/qa/69e8152ca21e05bb08cb57b419b5a222b8db697a/scripts/matrix-notification.sh -o matrix-notification.sh
+      - curl https://raw.githubusercontent.com/opencloud-eu/qa/refs/heads/matrix-notification-script/scripts/matrix-notification.sh -o matrix-notification.sh
       - chmod +x matrix-notification.sh
       - ./matrix-notification.sh
 
