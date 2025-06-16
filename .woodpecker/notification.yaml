@@ -6,6 +6,7 @@ when:
   - event: [ push , manual ]
     branch: ${CI_REPO_DEFAULT_BRANCH}
   - event: [ pull_request ]
+  - status: [ success, failure ]
 
 steps:
   - name: notify-when-failed
