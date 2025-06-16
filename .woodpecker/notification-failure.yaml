@@ -3,15 +3,14 @@ variables:
   - &notification_script 'https://raw.githubusercontent.com/opencloud-eu/qa/refs/heads/matrix-notification-script/scripts/matrix-notification.sh'
 
 depends_on: [api-integration-test-on-decomposed, api-integration-test-on-decomposedS3, api-integration-test-on-posixfs, cs3api-validator-decomposed, test, test-benchmark, test-integration]
-runs_on: [ success, failure ]
+runs_on: [ failure ]
 when:
   - event: [ push , manual ]
     branch: ${CI_REPO_DEFAULT_BRANCH}
   - event: [ pull_request ]
 
-
 steps:
-  - name: notify-when-failed
+  - name: notify
     image: *alpine_image
     environment:
       MATRIX_SERVER: https://matrix.org
@@ -25,21 +24,3 @@ steps:
       - curl $NOTIFICATION_SCRIPT -o matrix-notification.sh
       - chmod +x matrix-notification.sh
       - ./matrix-notification.sh
-    when:
-      - status: [ failure ]
-
-  - name: notify-when-passed
-    image: *alpine_image
-    environment:
-      MATRIX_SERVER: https://matrix.org
-      MATRIX_ROOM_ALIAS:
-        from_secret: opencloud-notifications-channel
-      MATRIX_TOKEN:
-        from_secret: opencloud-notifications-access-token
-      CI_STATUS: "passed ✅"
-    commands:
-      - curl https://raw.githubusercontent.com/opencloud-eu/qa/refs/heads/matrix-notification-script/scripts/matrix-notification.sh -o matrix-notification.sh
-      - chmod +x matrix-notification.sh
-      - ./matrix-notification.sh
-    when:
-      - status: [ success ]
