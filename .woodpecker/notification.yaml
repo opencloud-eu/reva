@@ -1,3 +1,6 @@
+variables:
+  - &alpine_image 'owncloudci/alpine:latest'
+
 depends_on: [api-integration-test-on-decomposed, api-integration-test-on-decomposedS3, api-integration-test-on-posixfs, cs3api-validator-decomposed, test, test-benchmark, test-integration]
 when:
   - event: [ push , manual ]
@@ -6,12 +9,16 @@ when:
 
 steps:
   - name: notify
-    image: plugins/matrix
-    settings:
-      homeserver: https://matrix.org
-      room_id:
+    image: *alpine_image
+    environment:
+      MATRIX_SERVER: https://matrix.org
+      MATRIX_ROOM_ID:
         from_secret: opencloud-notifications-channel
-      user_id:
-        from_secret: opencloud-notifications-user
-      access_token:
+      MATRIX_TOKEN:
         from_secret: opencloud-notifications-access-token
+      CI_STATUS: "failed :boom:"
+    commands:
+      - curl https://raw.githubusercontent.com/opencloud-eu/qa/69e8152ca21e05bb08cb57b419b5a222b8db697a/scripts/matrix-notification.sh -o matrix-notification.sh
+      - chmod +x matrix-notification.sh
+      - ./matrix-notification.sh
+
