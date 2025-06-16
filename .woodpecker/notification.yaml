@@ -12,7 +12,7 @@ steps:
     image: *alpine_image
     environment:
       MATRIX_SERVER: https://matrix.org
-      MATRIX_ROOM_ID:
+      MATRIX_ROOM_ALIAS:
         from_secret: opencloud-notifications-channel
       MATRIX_TOKEN:
         from_secret: opencloud-notifications-access-token
