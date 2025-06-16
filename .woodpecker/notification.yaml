@@ -8,7 +8,7 @@ when:
   - event: [ pull_request ]
 
 steps:
-  - name: notify
+  - name: notify-when-failed
     image: *alpine_image
     environment:
       MATRIX_SERVER: https://matrix.org
@@ -16,9 +16,26 @@ steps:
         from_secret: opencloud-notifications-channel
       MATRIX_TOKEN:
         from_secret: opencloud-notifications-access-token
-      CI_STATUS: "failed :boom:"
+      CI_STATUS: "failed 💥"
     commands:
       - curl https://raw.githubusercontent.com/opencloud-eu/qa/refs/heads/matrix-notification-script/scripts/matrix-notification.sh -o matrix-notification.sh
       - chmod +x matrix-notification.sh
       - ./matrix-notification.sh
+    when:
+      - status: [ failure ]
 
+  - name: notify-when-passed
+    image: *alpine_image
+    environment:
+      MATRIX_SERVER: https://matrix.org
+      MATRIX_ROOM_ALIAS:
+        from_secret: opencloud-notifications-channel
+      MATRIX_TOKEN:
+        from_secret: opencloud-notifications-access-token
+      CI_STATUS: "passed ✅"
+    commands:
+      - curl https://raw.githubusercontent.com/opencloud-eu/qa/refs/heads/matrix-notification-script/scripts/matrix-notification.sh -o matrix-notification.sh
+      - chmod +x matrix-notification.sh
+      - ./matrix-notification.sh
+    when:
+      - status: [ success ]
