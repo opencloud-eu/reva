@@ -1,10 +1,14 @@
 # Changelog
 
-## [2.33.2](https://github.com/opencloud-eu/reva/releases/tag/v2.33.2) - 2025-06-12
+## [2.33.2](https://github.com/opencloud-eu/reva/releases/tag/v2.33.2) - 2025-06-17
 
 ### ❤️ Thanks to all contributors! ❤️
 
-@rhafer
+@aduffeck, @rhafer
+
+### 🐛 Bug Fixes
+
+- Fix handling of webdav write locks [[#233](https://github.com/opencloud-eu/reva/pull/233)]
 
 ### 📦️ Dependencies
 
