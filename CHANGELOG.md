@@ -1,10 +1,14 @@
 # Changelog
 
-## [2.33.2](https://github.com/opencloud-eu/reva/releases/tag/v2.33.2) - 2025-06-18
+## [2.34.0](https://github.com/opencloud-eu/reva/releases/tag/v2.34.0) - 2025-06-18
 
 ### ❤️ Thanks to all contributors! ❤️
 
-@aduffeck, @rhafer
+@aduffeck, @dragonchaser, @rhafer
+
+### ✨ Features
+
+- Add rudimentary metrics for posixfs [[#251](https://github.com/opencloud-eu/reva/pull/251)]
 
 ### 🐛 Bug Fixes
 
