@@ -8,6 +8,7 @@
 
 ### ✨ Features
 
+- Add pending tasks to metrics endpoint [[#252](https://github.com/opencloud-eu/reva/pull/252)]
 - Add rudimentary metrics for posixfs [[#251](https://github.com/opencloud-eu/reva/pull/251)]
 
 ### 🐛 Bug Fixes
