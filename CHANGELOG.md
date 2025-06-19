@@ -1,5 +1,29 @@
 # Changelog
 
+## [2.34.0](https://github.com/opencloud-eu/reva/releases/tag/v2.34.0) - 2025-06-19
+
+### ❤️ Thanks to all contributors! ❤️
+
+@aduffeck, @dragonchaser, @rhafer
+
+### ✨ Features
+
+- Add pending tasks to metrics endpoint [[#252](https://github.com/opencloud-eu/reva/pull/252)]
+- Add rudimentary metrics for posixfs [[#251](https://github.com/opencloud-eu/reva/pull/251)]
+
+### 🐛 Bug Fixes
+
+- Fix handling of webdav write locks [[#233](https://github.com/opencloud-eu/reva/pull/233)]
+
+### 📦️ Dependencies
+
+- Bump go.etcd.io/etcd/client/v3 from 3.6.0 to 3.6.1 [[#245](https://github.com/opencloud-eu/reva/pull/245)]
+- Bump github.com/go-sql-driver/mysql from 1.9.2 to 1.9.3 [[#249](https://github.com/opencloud-eu/reva/pull/249)]
+- Bump google.golang.org/grpc from 1.72.2 to 1.73.0 [[#243](https://github.com/opencloud-eu/reva/pull/243)]
+- Bump github.com/minio/minio-go/v7 from 7.0.92 to 7.0.93 [[#244](https://github.com/opencloud-eu/reva/pull/244)]
+- Bump github.com/cloudflare/circl from 1.3.7 to 1.6.1 in the go_modules group [[#239](https://github.com/opencloud-eu/reva/pull/239)]
+- Bump github.com/ceph/go-ceph from 0.33.0 to 0.34.0 [[#241](https://github.com/opencloud-eu/reva/pull/241)]
+
 ## [2.33.1](https://github.com/opencloud-eu/reva/releases/tag/v2.33.1) - 2025-06-10
 
 ### ❤️ Thanks to all contributors! ❤️
