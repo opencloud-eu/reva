@@ -17,6 +17,7 @@
 
 ### 📦️ Dependencies
 
+- Bump go.etcd.io/etcd/client/v3 from 3.6.0 to 3.6.1 [[#245](https://github.com/opencloud-eu/reva/pull/245)]
 - Bump github.com/go-sql-driver/mysql from 1.9.2 to 1.9.3 [[#249](https://github.com/opencloud-eu/reva/pull/249)]
 - Bump google.golang.org/grpc from 1.72.2 to 1.73.0 [[#243](https://github.com/opencloud-eu/reva/pull/243)]
 - Bump github.com/minio/minio-go/v7 from 7.0.92 to 7.0.93 [[#244](https://github.com/opencloud-eu/reva/pull/244)]
