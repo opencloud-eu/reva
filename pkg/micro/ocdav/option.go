@@ -401,3 +401,10 @@ func RegisterInterval(interval time.Duration) Option {
 		o.RegisterInterval = interval
 	}
 }
+
+// PreviewSupportedMimetypes provides a function to set the PreviewSupportedMimetypes option.
+func PreviewSupportedMimetypes(mts []string) Option {
+	return func(o *Options) {
+		o.config.PreviewSupportedMimetypes = mts
+	}
+}
