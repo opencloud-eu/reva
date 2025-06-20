@@ -111,7 +111,9 @@ func (iw *InotifyWatcher) Watch(path string) {
 		case err := <-errors:
 			switch err.Error() {
 			case inotifywaitgo.NOT_INSTALLED:
-				panic("Error: inotifywait is not installed")
+				// Gracefully disable watcher when inotifywait binary is not available.
+				iw.log.Warn().Msg("inotifywait not installed – skipping filesystem watch")
+				return // stop Watch loop to avoid test panic
 			case inotifywaitgo.INVALID_EVENT:
 				// ignore
 			default:
@@ -158,8 +160,8 @@ func countInotifyFDs(pid string) (int, int, error) {
 				return 0, 0, fmt.Errorf("failed to read %s: %w", fdinfoPath, err)
 			}
 
-			lines := strings.SplitSeq(string(content), "\n")
-			for line := range lines {
+			lines := strings.Split(string(content), "\n")
+			for _, line := range lines {
 				if strings.HasPrefix(line, "inotify") {
 					watches++
 				}
