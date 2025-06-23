@@ -1,6 +1,6 @@
 # Changelog
 
-## [2.34.0](https://github.com/opencloud-eu/reva/releases/tag/v2.34.0) - 2025-06-19
+## [2.34.0](https://github.com/opencloud-eu/reva/releases/tag/v2.34.0) - 2025-06-23
 
 ### ❤️ Thanks to all contributors! ❤️
 
@@ -17,6 +17,7 @@
 
 ### 📦️ Dependencies
 
+- Bump github.com/minio/minio-go/v7 from 7.0.93 to 7.0.94 [[#253](https://github.com/opencloud-eu/reva/pull/253)]
 - Bump go.etcd.io/etcd/client/v3 from 3.6.0 to 3.6.1 [[#245](https://github.com/opencloud-eu/reva/pull/245)]
 - Bump github.com/go-sql-driver/mysql from 1.9.2 to 1.9.3 [[#249](https://github.com/opencloud-eu/reva/pull/249)]
 - Bump google.golang.org/grpc from 1.72.2 to 1.73.0 [[#243](https://github.com/opencloud-eu/reva/pull/243)]
