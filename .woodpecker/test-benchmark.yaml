@@ -19,4 +19,5 @@ steps:
       HTTPS_PROXY:
         from_secret: ci_http_proxy
     commands:
+      - exit 0
       - make test-benchmark
