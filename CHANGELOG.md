@@ -13,6 +13,7 @@
 
 ### 🐛 Bug Fixes
 
+- Use the parent to find the space id of items to be assimilated [[#255](https://github.com/opencloud-eu/reva/pull/255)]
 - Do not try to read attributes from nodes with empty internal paths [[#257](https://github.com/opencloud-eu/reva/pull/257)]
 - Fix handling of webdav write locks [[#233](https://github.com/opencloud-eu/reva/pull/233)]
 
