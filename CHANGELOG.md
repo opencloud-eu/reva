@@ -1,6 +1,6 @@
 # Changelog
 
-## [2.34.0](https://github.com/opencloud-eu/reva/releases/tag/v2.34.0) - 2025-06-25
+## [2.34.0](https://github.com/opencloud-eu/reva/releases/tag/v2.34.0) - 2025-06-26
 
 ### ❤️ Thanks to all contributors! ❤️
 
@@ -13,6 +13,7 @@
 
 ### 🐛 Bug Fixes
 
+- Do not try to read attributes from nodes with empty internal paths [[#257](https://github.com/opencloud-eu/reva/pull/257)]
 - Fix handling of webdav write locks [[#233](https://github.com/opencloud-eu/reva/pull/233)]
 
 ### 📦️ Dependencies
