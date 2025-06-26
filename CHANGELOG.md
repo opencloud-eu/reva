@@ -19,6 +19,7 @@
 
 ### 📦️ Dependencies
 
+- Bump go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc from 0.61.0 to 0.62.0 [[#259](https://github.com/opencloud-eu/reva/pull/259)]
 - Bump github.com/go-chi/chi/v5 from 5.2.1 to 5.2.2 in the go_modules group [[#254](https://github.com/opencloud-eu/reva/pull/254)]
 - Bump github.com/minio/minio-go/v7 from 7.0.93 to 7.0.94 [[#253](https://github.com/opencloud-eu/reva/pull/253)]
 - Bump go.etcd.io/etcd/client/v3 from 3.6.0 to 3.6.1 [[#245](https://github.com/opencloud-eu/reva/pull/245)]
