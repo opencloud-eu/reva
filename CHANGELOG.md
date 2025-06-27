@@ -19,6 +19,7 @@
 
 ### 📦️ Dependencies
 
+- Bump go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc from 1.36.0 to 1.37.0 [[#263](https://github.com/opencloud-eu/reva/pull/263)]
 - Bump github.com/nats-io/nats-server/v2 from 2.11.4 to 2.11.5 [[#262](https://github.com/opencloud-eu/reva/pull/262)]
 - Bump go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc from 0.61.0 to 0.62.0 [[#259](https://github.com/opencloud-eu/reva/pull/259)]
 - Bump github.com/go-chi/chi/v5 from 5.2.1 to 5.2.2 in the go_modules group [[#254](https://github.com/opencloud-eu/reva/pull/254)]
