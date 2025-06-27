@@ -8,12 +8,9 @@
 
 ### ✨ Features
 
+- feat: indicate if file has preview [[#214](https://github.com/opencloud-eu/reva/pull/214)]
 - Add pending tasks to metrics endpoint [[#252](https://github.com/opencloud-eu/reva/pull/252)]
 - Add rudimentary metrics for posixfs [[#251](https://github.com/opencloud-eu/reva/pull/251)]
-
-### 📈 Enhancement
-
-- feat: indicate if file has preview [[#214](https://github.com/opencloud-eu/reva/pull/214)]
 
 ### 🐛 Bug Fixes
 
