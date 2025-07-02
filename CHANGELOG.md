@@ -1,9 +1,10 @@
 # Changelog
 
-## [2.34.1](https://github.com/opencloud-eu/reva/releases/tag/v2.34.1) - 2025-07-01
+## [2.34.1](https://github.com/opencloud-eu/reva/releases/tag/v2.34.1) - 2025-07-02
 
 ### 📦️ Dependencies
 
+- Bump github.com/nats-io/nats-server/v2 from 2.11.5 to 2.11.6 [[#267](https://github.com/opencloud-eu/reva/pull/267)]
 - Bump github.com/pkg/xattr from 0.4.11 to 0.4.12 [[#265](https://github.com/opencloud-eu/reva/pull/265)]
 
 ## [2.34.0](https://github.com/opencloud-eu/reva/releases/tag/v2.34.0) - 2025-06-27
