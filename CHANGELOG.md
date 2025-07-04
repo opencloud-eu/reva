@@ -1,6 +1,10 @@
 # Changelog
 
-## [2.34.1](https://github.com/opencloud-eu/reva/releases/tag/v2.34.1) - 2025-07-03
+## [2.34.1](https://github.com/opencloud-eu/reva/releases/tag/v2.34.1) - 2025-07-04
+
+### ❤️ Thanks to all contributors! ❤️
+
+@dragonchaser
 
 ### 📦️ Dependencies
 
