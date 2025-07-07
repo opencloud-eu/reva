@@ -1096,12 +1096,12 @@ func (n *Node) ReadUserPermissions(ctx context.Context, u *userpb.User) (ap *pro
 			continue
 		}
 
-		if isGrantExpired(g) {
-			continue
-		}
-
 		switch {
 		case err == nil:
+			if isGrantExpired(g) {
+				continue
+			}
+
 			// If all permissions are set to false we have a deny grant
 			if grants.PermissionsEqual(g.Permissions, &provider.ResourcePermissions{}) {
 				return NoPermissions(), true, nil
