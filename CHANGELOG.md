@@ -1,6 +1,6 @@
 # Changelog
 
-## [2.34.1](https://github.com/opencloud-eu/reva/releases/tag/v2.34.1) - 2025-07-04
+## [2.34.1](https://github.com/opencloud-eu/reva/releases/tag/v2.34.1) - 2025-07-10
 
 ### ❤️ Thanks to all contributors! ❤️
 
@@ -8,6 +8,7 @@
 
 ### 📦️ Dependencies
 
+- Bump golang.org/x/sync from 0.15.0 to 0.16.0 [[#274](https://github.com/opencloud-eu/reva/pull/274)]
 - Bump github.com/go-playground/validator/v10 from 10.26.0 to 10.27.0 [[#269](https://github.com/opencloud-eu/reva/pull/269)]
 - Bump github.com/nats-io/nats-server/v2 from 2.11.5 to 2.11.6 [[#267](https://github.com/opencloud-eu/reva/pull/267)]
 - Bump github.com/pkg/xattr from 0.4.11 to 0.4.12 [[#265](https://github.com/opencloud-eu/reva/pull/265)]
