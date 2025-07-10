@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.29.4](https://github.com/opencloud-eu/reva/releases/tag/v2.29.4) - 2025-07-10
+
+### ❤️ Thanks to all contributors! ❤️
+
+@ScharfViktor
+
+
+
 ## [2.29.3](https://github.com/opencloud-eu/reva/releases/tag/v2.29.3) - 2025-05-02
 
 ### ❤️ Thanks to all contributors! ❤️
