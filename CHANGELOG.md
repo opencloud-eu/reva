@@ -4,7 +4,11 @@
 
 ### ❤️ Thanks to all contributors! ❤️
 
-@dragonchaser
+@aduffeck, @dragonchaser
+
+### 🐛 Bug Fixes
+
+- Fix read permissions crash [[#272](https://github.com/opencloud-eu/reva/pull/272)]
 
 ### 📦️ Dependencies
 
