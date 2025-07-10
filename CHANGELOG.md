@@ -8,6 +8,7 @@
 
 ### 📦️ Dependencies
 
+- Bump golang.org/x/sys from 0.33.0 to 0.34.0 [[#275](https://github.com/opencloud-eu/reva/pull/275)]
 - Bump golang.org/x/sync from 0.15.0 to 0.16.0 [[#274](https://github.com/opencloud-eu/reva/pull/274)]
 - Bump github.com/go-playground/validator/v10 from 10.26.0 to 10.27.0 [[#269](https://github.com/opencloud-eu/reva/pull/269)]
 - Bump github.com/nats-io/nats-server/v2 from 2.11.5 to 2.11.6 [[#267](https://github.com/opencloud-eu/reva/pull/267)]
