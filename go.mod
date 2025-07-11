@@ -96,7 +96,7 @@ require (
 	golang.org/x/oauth2 v0.30.0
 	golang.org/x/sync v0.16.0
 	golang.org/x/sys v0.34.0
-	golang.org/x/term v0.32.0
+	golang.org/x/term v0.33.0
 	golang.org/x/text v0.26.0
 	google.golang.org/genproto v0.0.0-20250303144028-a0af3efb3deb
 	google.golang.org/grpc v1.73.0
