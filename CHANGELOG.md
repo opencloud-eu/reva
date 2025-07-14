@@ -1,6 +1,6 @@
 # Changelog
 
-## [2.34.1](https://github.com/opencloud-eu/reva/releases/tag/v2.34.1) - 2025-07-10
+## [2.34.1](https://github.com/opencloud-eu/reva/releases/tag/v2.34.1) - 2025-07-14
 
 ### ❤️ Thanks to all contributors! ❤️
 
@@ -12,6 +12,7 @@
 
 ### 📦️ Dependencies
 
+- Bump golang.org/x/crypto from 0.39.0 to 0.40.0 [[#278](https://github.com/opencloud-eu/reva/pull/278)]
 - Bump golang.org/x/sys from 0.33.0 to 0.34.0 [[#275](https://github.com/opencloud-eu/reva/pull/275)]
 - Bump golang.org/x/sync from 0.15.0 to 0.16.0 [[#274](https://github.com/opencloud-eu/reva/pull/274)]
 - Bump github.com/go-playground/validator/v10 from 10.26.0 to 10.27.0 [[#269](https://github.com/opencloud-eu/reva/pull/269)]
