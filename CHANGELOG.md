@@ -1,10 +1,14 @@
 # Changelog
 
-## [2.34.1](https://github.com/opencloud-eu/reva/releases/tag/v2.34.1) - 2025-07-15
+## [2.35.0](https://github.com/opencloud-eu/reva/releases/tag/v2.35.0) - 2025-07-15
 
 ### ❤️ Thanks to all contributors! ❤️
 
 @aduffeck, @dragonchaser, @individual-it, @rhafer
+
+### 📈 Enhancement
+
+- Add a raw package for directly consuming nats events [[#270](https://github.com/opencloud-eu/reva/pull/270)]
 
 ### 🐛 Bug Fixes
 
