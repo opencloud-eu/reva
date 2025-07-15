@@ -1,6 +1,6 @@
 # Changelog
 
-## [2.34.1](https://github.com/opencloud-eu/reva/releases/tag/v2.34.1) - 2025-07-14
+## [2.34.1](https://github.com/opencloud-eu/reva/releases/tag/v2.34.1) - 2025-07-15
 
 ### ❤️ Thanks to all contributors! ❤️
 
@@ -12,6 +12,7 @@
 
 ### 📦️ Dependencies
 
+- Bump go.etcd.io/etcd/client/v3 from 3.6.1 to 3.6.2 [[#281](https://github.com/opencloud-eu/reva/pull/281)]
 - Bump golang.org/x/crypto from 0.39.0 to 0.40.0 [[#278](https://github.com/opencloud-eu/reva/pull/278)]
 - Bump golang.org/x/sys from 0.33.0 to 0.34.0 [[#275](https://github.com/opencloud-eu/reva/pull/275)]
 - Bump golang.org/x/sync from 0.15.0 to 0.16.0 [[#274](https://github.com/opencloud-eu/reva/pull/274)]
