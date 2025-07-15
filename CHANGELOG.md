@@ -9,6 +9,7 @@
 ### 📈 Enhancement
 
 - Add a raw package for directly consuming nats events [[#270](https://github.com/opencloud-eu/reva/pull/270)]
+- Set 'oc:downloadURL' WebDAV property for "normal" files [[#271](https://github.com/opencloud-eu/reva/pull/271)]
 
 ### 🐛 Bug Fixes
 
