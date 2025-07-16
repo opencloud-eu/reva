@@ -17,6 +17,7 @@
 
 ### 📦️ Dependencies
 
+- Bump github.com/golang-jwt/jwt/v5 from 5.2.2 to 5.2.3 [[#283](https://github.com/opencloud-eu/reva/pull/283)]
 - Bump go.etcd.io/etcd/client/v3 from 3.6.1 to 3.6.2 [[#281](https://github.com/opencloud-eu/reva/pull/281)]
 - Bump golang.org/x/crypto from 0.39.0 to 0.40.0 [[#278](https://github.com/opencloud-eu/reva/pull/278)]
 - Bump golang.org/x/sys from 0.33.0 to 0.34.0 [[#275](https://github.com/opencloud-eu/reva/pull/275)]
