@@ -6,14 +6,15 @@
 
 @aduffeck, @dragonchaser, @individual-it, @rhafer
 
+### 🐛 Bug Fixes
+
+- log middleware: Implement Unwrap() method [[#285](https://github.com/opencloud-eu/reva/pull/285)]
+- Fix read permissions crash [[#272](https://github.com/opencloud-eu/reva/pull/272)]
+
 ### 📈 Enhancement
 
 - Add a raw package for directly consuming nats events [[#270](https://github.com/opencloud-eu/reva/pull/270)]
 - Set 'oc:downloadURL' WebDAV property for "normal" files [[#271](https://github.com/opencloud-eu/reva/pull/271)]
-
-### 🐛 Bug Fixes
-
-- Fix read permissions crash [[#272](https://github.com/opencloud-eu/reva/pull/272)]
 
 ### 📦️ Dependencies
 
