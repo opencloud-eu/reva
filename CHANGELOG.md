@@ -1,6 +1,6 @@
 # Changelog
 
-## [2.35.0](https://github.com/opencloud-eu/reva/releases/tag/v2.35.0) - 2025-07-17
+## [2.35.0](https://github.com/opencloud-eu/reva/releases/tag/v2.35.0) - 2025-07-18
 
 ### ❤️ Thanks to all contributors! ❤️
 
@@ -8,6 +8,7 @@
 
 ### 🐛 Bug Fixes
 
+- Do not leave .trashinfo files behind when restoring items [[#289](https://github.com/opencloud-eu/reva/pull/289)]
 - log middleware: Implement Unwrap() method [[#285](https://github.com/opencloud-eu/reva/pull/285)]
 - Fix read permissions crash [[#272](https://github.com/opencloud-eu/reva/pull/272)]
 
