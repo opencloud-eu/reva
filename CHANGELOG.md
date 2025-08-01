@@ -1,5 +1,15 @@
 # Changelog
 
+## [2.35.1](https://github.com/opencloud-eu/reva/releases/tag/v2.35.1) - 2025-08-01
+
+### ❤️ Thanks to all contributors! ❤️
+
+@aduffeck
+
+### 🐛 Bug Fixes
+
+- Only scan dirty directories when recursing [[#292](https://github.com/opencloud-eu/reva/pull/292)]
+
 ## [2.35.0](https://github.com/opencloud-eu/reva/releases/tag/v2.35.0) - 2025-07-21
 
 ### ❤️ Thanks to all contributors! ❤️
