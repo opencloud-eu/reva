@@ -1,6 +1,6 @@
 # Changelog
 
-## [2.35.1](https://github.com/opencloud-eu/reva/releases/tag/v2.35.1) - 2025-08-01
+## [2.35.1](https://github.com/opencloud-eu/reva/releases/tag/v2.35.1) - 2025-08-05
 
 ### ❤️ Thanks to all contributors! ❤️
 
@@ -8,6 +8,7 @@
 
 ### 🐛 Bug Fixes
 
+- Do not assimilate irregular files [[#294](https://github.com/opencloud-eu/reva/pull/294)]
 - Only scan dirty directories when recursing [[#292](https://github.com/opencloud-eu/reva/pull/292)]
 
 ## [2.35.0](https://github.com/opencloud-eu/reva/releases/tag/v2.35.0) - 2025-07-21
