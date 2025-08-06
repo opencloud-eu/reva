@@ -1,6 +1,6 @@
 # Changelog
 
-## [2.36.0](https://github.com/opencloud-eu/reva/releases/tag/v2.36.0) - 2025-08-05
+## [2.36.0](https://github.com/opencloud-eu/reva/releases/tag/v2.36.0) - 2025-08-06
 
 ### ❤️ Thanks to all contributors! ❤️
 
@@ -9,6 +9,10 @@
 ### ✨ Features
 
 - add tenant check for shares [[#295](https://github.com/opencloud-eu/reva/pull/295)]
+
+### 📈 Enhancement
+
+- Filter users by tenant id [[#297](https://github.com/opencloud-eu/reva/pull/297)]
 
 ### 🐛 Bug Fixes
 
