@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.36.1](https://github.com/opencloud-eu/reva/releases/tag/v2.36.1) - 2025-08-12
+
+### 📦️ Dependencies
+
+- Bump github.com/minio/minio-go/v7 from 7.0.94 to 7.0.95 [[#290](https://github.com/opencloud-eu/reva/pull/290)]
+
 ## [2.36.0](https://github.com/opencloud-eu/reva/releases/tag/v2.36.0) - 2025-08-11
 
 ### ❤️ Thanks to all contributors! ❤️
