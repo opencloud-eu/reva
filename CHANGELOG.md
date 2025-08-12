@@ -4,6 +4,8 @@
 
 ### 📦️ Dependencies
 
+- Bump go.etcd.io/etcd/client/v3 from 3.6.2 to 3.6.4 [[#300](https://github.com/opencloud-eu/reva/pull/300)]
+- Bump github.com/onsi/gomega from 1.37.0 to 1.38.0 [[#291](https://github.com/opencloud-eu/reva/pull/291)]
 - Bump github.com/minio/minio-go/v7 from 7.0.94 to 7.0.95 [[#290](https://github.com/opencloud-eu/reva/pull/290)]
 
 ## [2.36.0](https://github.com/opencloud-eu/reva/releases/tag/v2.36.0) - 2025-08-11
