@@ -2,6 +2,10 @@
 
 ## [2.36.1](https://github.com/opencloud-eu/reva/releases/tag/v2.36.1) - 2025-08-14
 
+### ❤️ Thanks to all contributors! ❤️
+
+@aduffeck
+
 ### 📦️ Dependencies
 
 - Bump golang.org/x/crypto from 0.40.0 to 0.41.0 [[#303](https://github.com/opencloud-eu/reva/pull/303)]
