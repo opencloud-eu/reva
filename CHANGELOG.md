@@ -6,6 +6,10 @@
 
 @aduffeck, @individual-it
 
+### 🐛 Bug Fixes
+
+- Only send TrashbinPurged if there is no key [[#305](https://github.com/opencloud-eu/reva/pull/305)]
+
 ### 📦️ Dependencies
 
 - Bump google.golang.org/protobuf from 1.36.6 to 1.36.7 [[#301](https://github.com/opencloud-eu/reva/pull/301)]
