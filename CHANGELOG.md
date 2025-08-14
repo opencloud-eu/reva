@@ -8,6 +8,7 @@
 
 ### 📦️ Dependencies
 
+- Bump google.golang.org/protobuf from 1.36.6 to 1.36.7 [[#301](https://github.com/opencloud-eu/reva/pull/301)]
 - Bump golang.org/x/crypto from 0.40.0 to 0.41.0 [[#303](https://github.com/opencloud-eu/reva/pull/303)]
 - Bump github.com/nats-io/nats.go from 1.43.0 to 1.44.0 [[#302](https://github.com/opencloud-eu/reva/pull/302)]
 - Bump go.etcd.io/etcd/client/v3 from 3.6.2 to 3.6.4 [[#300](https://github.com/opencloud-eu/reva/pull/300)]
