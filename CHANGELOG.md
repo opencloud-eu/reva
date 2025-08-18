@@ -1,6 +1,6 @@
 # Changelog
 
-## [2.36.1](https://github.com/opencloud-eu/reva/releases/tag/v2.36.1) - 2025-08-14
+## [2.36.1](https://github.com/opencloud-eu/reva/releases/tag/v2.36.1) - 2025-08-18
 
 ### ❤️ Thanks to all contributors! ❤️
 
@@ -12,6 +12,7 @@
 
 ### 📦️ Dependencies
 
+- Bump github.com/ceph/go-ceph from 0.34.0 to 0.35.0 [[#307](https://github.com/opencloud-eu/reva/pull/307)]
 - Bump google.golang.org/protobuf from 1.36.6 to 1.36.7 [[#301](https://github.com/opencloud-eu/reva/pull/301)]
 - Bump golang.org/x/crypto from 0.40.0 to 0.41.0 [[#303](https://github.com/opencloud-eu/reva/pull/303)]
 - Bump github.com/nats-io/nats.go from 1.43.0 to 1.44.0 [[#302](https://github.com/opencloud-eu/reva/pull/302)]
