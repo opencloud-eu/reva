@@ -8,6 +8,7 @@
 
 ### 🐛 Bug Fixes
 
+- fix(posixfs): Ignore Events for Spaceroots [[#310](https://github.com/opencloud-eu/reva/pull/310)]
 - Only send TrashbinPurged if there is no key [[#305](https://github.com/opencloud-eu/reva/pull/305)]
 
 ### 📦️ Dependencies
