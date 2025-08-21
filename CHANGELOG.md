@@ -12,6 +12,7 @@
 
 ### 📦️ Dependencies
 
+- Bump github.com/mattn/go-sqlite3 from 1.14.28 to 1.14.32 [[#314](https://github.com/opencloud-eu/reva/pull/314)]
 - Bump github.com/emvi/iso-639-1 from 1.1.0 to 1.1.1 [[#313](https://github.com/opencloud-eu/reva/pull/313)]
 - Bump github.com/golang-jwt/jwt/v5 from 5.2.3 to 5.3.0 [[#312](https://github.com/opencloud-eu/reva/pull/312)]
 - Bump github.com/onsi/ginkgo/v2 from 2.23.4 to 2.24.0 [[#311](https://github.com/opencloud-eu/reva/pull/311)]
