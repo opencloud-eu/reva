@@ -1,6 +1,6 @@
 # Changelog
 
-## [2.36.1](https://github.com/opencloud-eu/reva/releases/tag/v2.36.1) - 2025-08-21
+## [2.36.1](https://github.com/opencloud-eu/reva/releases/tag/v2.36.1) - 2025-08-25
 
 ### ❤️ Thanks to all contributors! ❤️
 
@@ -13,6 +13,7 @@
 
 ### 📦️ Dependencies
 
+- Bump google.golang.org/grpc from 1.74.0 to 1.75.0 [[#315](https://github.com/opencloud-eu/reva/pull/315)]
 - Bump github.com/mattn/go-sqlite3 from 1.14.28 to 1.14.32 [[#314](https://github.com/opencloud-eu/reva/pull/314)]
 - Bump github.com/emvi/iso-639-1 from 1.1.0 to 1.1.1 [[#313](https://github.com/opencloud-eu/reva/pull/313)]
 - Bump github.com/golang-jwt/jwt/v5 from 5.2.3 to 5.3.0 [[#312](https://github.com/opencloud-eu/reva/pull/312)]
