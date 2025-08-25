@@ -1,5 +1,32 @@
 # Changelog
 
+## [2.36.1](https://github.com/opencloud-eu/reva/releases/tag/v2.36.1) - 2025-08-25
+
+### ❤️ Thanks to all contributors! ❤️
+
+@aduffeck, @individual-it, @rhafer
+
+### 🐛 Bug Fixes
+
+- fix(posixfs): Ignore Events for Spaceroots [[#310](https://github.com/opencloud-eu/reva/pull/310)]
+- Only send TrashbinPurged if there is no key [[#305](https://github.com/opencloud-eu/reva/pull/305)]
+
+### 📦️ Dependencies
+
+- Bump github.com/nats-io/nats.go from 1.44.0 to 1.45.0 [[#316](https://github.com/opencloud-eu/reva/pull/316)]
+- Bump google.golang.org/grpc from 1.74.0 to 1.75.0 [[#315](https://github.com/opencloud-eu/reva/pull/315)]
+- Bump github.com/mattn/go-sqlite3 from 1.14.28 to 1.14.32 [[#314](https://github.com/opencloud-eu/reva/pull/314)]
+- Bump github.com/emvi/iso-639-1 from 1.1.0 to 1.1.1 [[#313](https://github.com/opencloud-eu/reva/pull/313)]
+- Bump github.com/golang-jwt/jwt/v5 from 5.2.3 to 5.3.0 [[#312](https://github.com/opencloud-eu/reva/pull/312)]
+- Bump github.com/onsi/ginkgo/v2 from 2.23.4 to 2.24.0 [[#311](https://github.com/opencloud-eu/reva/pull/311)]
+- Bump github.com/ceph/go-ceph from 0.34.0 to 0.35.0 [[#307](https://github.com/opencloud-eu/reva/pull/307)]
+- Bump google.golang.org/protobuf from 1.36.6 to 1.36.7 [[#301](https://github.com/opencloud-eu/reva/pull/301)]
+- Bump golang.org/x/crypto from 0.40.0 to 0.41.0 [[#303](https://github.com/opencloud-eu/reva/pull/303)]
+- Bump github.com/nats-io/nats.go from 1.43.0 to 1.44.0 [[#302](https://github.com/opencloud-eu/reva/pull/302)]
+- Bump go.etcd.io/etcd/client/v3 from 3.6.2 to 3.6.4 [[#300](https://github.com/opencloud-eu/reva/pull/300)]
+- Bump github.com/onsi/gomega from 1.37.0 to 1.38.0 [[#291](https://github.com/opencloud-eu/reva/pull/291)]
+- Bump github.com/minio/minio-go/v7 from 7.0.94 to 7.0.95 [[#290](https://github.com/opencloud-eu/reva/pull/290)]
+
 ## [2.36.0](https://github.com/opencloud-eu/reva/releases/tag/v2.36.0) - 2025-08-11
 
 ### ❤️ Thanks to all contributors! ❤️
