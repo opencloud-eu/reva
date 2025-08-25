@@ -13,6 +13,7 @@
 
 ### 📦️ Dependencies
 
+- Bump github.com/nats-io/nats.go from 1.44.0 to 1.45.0 [[#316](https://github.com/opencloud-eu/reva/pull/316)]
 - Bump google.golang.org/grpc from 1.74.0 to 1.75.0 [[#315](https://github.com/opencloud-eu/reva/pull/315)]
 - Bump github.com/mattn/go-sqlite3 from 1.14.28 to 1.14.32 [[#314](https://github.com/opencloud-eu/reva/pull/314)]
 - Bump github.com/emvi/iso-639-1 from 1.1.0 to 1.1.1 [[#313](https://github.com/opencloud-eu/reva/pull/313)]
