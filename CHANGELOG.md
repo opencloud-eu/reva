@@ -1,10 +1,14 @@
 # Changelog
 
-## [2.36.1](https://github.com/opencloud-eu/reva/releases/tag/v2.36.1) - 2025-08-27
+## [2.37.0](https://github.com/opencloud-eu/reva/releases/tag/v2.37.0) - 2025-08-27
 
 ### ❤️ Thanks to all contributors! ❤️
 
-@aduffeck, @individual-it, @rhafer
+@aduffeck, @dragonchaser, @individual-it, @rhafer
+
+### ✨ Features
+
+- add UserSoftDelete events [[#317](https://github.com/opencloud-eu/reva/pull/317)]
 
 ### 🐛 Bug Fixes
 
