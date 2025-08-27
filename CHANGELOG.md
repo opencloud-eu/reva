@@ -17,6 +17,7 @@
 
 ### 📦️ Dependencies
 
+- Bump github.com/prometheus/client_golang from 1.22.0 to 1.23.0 [[#320](https://github.com/opencloud-eu/reva/pull/320)]
 - Bump google.golang.org/protobuf from 1.36.7 to 1.36.8 [[#319](https://github.com/opencloud-eu/reva/pull/319)]
 - Bump github.com/coreos/go-oidc/v3 from 3.14.1 to 3.15.0 [[#318](https://github.com/opencloud-eu/reva/pull/318)]
 - Bump github.com/nats-io/nats.go from 1.44.0 to 1.45.0 [[#316](https://github.com/opencloud-eu/reva/pull/316)]
