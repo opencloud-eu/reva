@@ -17,6 +17,7 @@
 
 ### 📦️ Dependencies
 
+- Bump github.com/onsi/gomega from 1.38.0 to 1.38.2 [[#325](https://github.com/opencloud-eu/reva/pull/325)]
 - Bump github.com/segmentio/kafka-go from 0.4.48 to 0.4.49 [[#323](https://github.com/opencloud-eu/reva/pull/323)]
 - Bump github.com/hashicorp/go-plugin from 1.6.3 to 1.7.0 [[#321](https://github.com/opencloud-eu/reva/pull/321)]
 - Bump github.com/prometheus/client_golang from 1.22.0 to 1.23.0 [[#320](https://github.com/opencloud-eu/reva/pull/320)]
