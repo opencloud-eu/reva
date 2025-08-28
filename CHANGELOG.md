@@ -1,6 +1,6 @@
 # Changelog
 
-## [2.37.0](https://github.com/opencloud-eu/reva/releases/tag/v2.37.0) - 2025-08-27
+## [2.37.0](https://github.com/opencloud-eu/reva/releases/tag/v2.37.0) - 2025-08-28
 
 ### ❤️ Thanks to all contributors! ❤️
 
@@ -17,6 +17,7 @@
 
 ### 📦️ Dependencies
 
+- Bump github.com/segmentio/kafka-go from 0.4.48 to 0.4.49 [[#323](https://github.com/opencloud-eu/reva/pull/323)]
 - Bump github.com/hashicorp/go-plugin from 1.6.3 to 1.7.0 [[#321](https://github.com/opencloud-eu/reva/pull/321)]
 - Bump github.com/prometheus/client_golang from 1.22.0 to 1.23.0 [[#320](https://github.com/opencloud-eu/reva/pull/320)]
 - Bump google.golang.org/protobuf from 1.36.7 to 1.36.8 [[#319](https://github.com/opencloud-eu/reva/pull/319)]
