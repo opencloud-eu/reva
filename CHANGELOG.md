@@ -1,6 +1,6 @@
 # Changelog
 
-## [2.37.0](https://github.com/opencloud-eu/reva/releases/tag/v2.37.0) - 2025-08-29
+## [2.37.0](https://github.com/opencloud-eu/reva/releases/tag/v2.37.0) - 2025-09-01
 
 ### ❤️ Thanks to all contributors! ❤️
 
@@ -17,6 +17,7 @@
 
 ### 📦️ Dependencies
 
+- Bump github.com/onsi/ginkgo/v2 from 2.25.1 to 2.25.2 [[#327](https://github.com/opencloud-eu/reva/pull/327)]
 - Bump github.com/onsi/gomega from 1.38.0 to 1.38.2 [[#325](https://github.com/opencloud-eu/reva/pull/325)]
 - Bump github.com/segmentio/kafka-go from 0.4.48 to 0.4.49 [[#323](https://github.com/opencloud-eu/reva/pull/323)]
 - Bump github.com/hashicorp/go-plugin from 1.6.3 to 1.7.0 [[#321](https://github.com/opencloud-eu/reva/pull/321)]
