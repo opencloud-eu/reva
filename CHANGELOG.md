@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.37.1](https://github.com/opencloud-eu/reva/releases/tag/v2.37.1) - 2025-09-02
+
+### 📦️ Dependencies
+
+- Bump github.com/beevik/etree from 1.5.1 to 1.6.0 [[#328](https://github.com/opencloud-eu/reva/pull/328)]
+
 ## [2.37.0](https://github.com/opencloud-eu/reva/releases/tag/v2.37.0) - 2025-09-01
 
 ### ❤️ Thanks to all contributors! ❤️
