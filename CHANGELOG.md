@@ -1,6 +1,14 @@
 # Changelog
 
-## [2.37.1](https://github.com/opencloud-eu/reva/releases/tag/v2.37.1) - 2025-09-02
+## [2.38.0](https://github.com/opencloud-eu/reva/releases/tag/v2.38.0) - 2025-09-03
+
+### ❤️ Thanks to all contributors! ❤️
+
+@rhafer
+
+### 📈 Enhancement
+
+- feat: tracing instrumentation of for users and groups services [[#330](https://github.com/opencloud-eu/reva/pull/330)]
 
 ### 📦️ Dependencies
 
