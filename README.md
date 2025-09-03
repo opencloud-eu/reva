@@ -8,11 +8,7 @@ REVA is an interoperability platform. It connects storage, sync and share platfo
 
 ## Installation
 
-Head to [Documentation](https://reva.link) for documentation or [download](https://github.com/opencloud-eu/reva/releases) to get the latest available release.
-
-## Documentation & Support
-
-Read the [getting started guide](https://reva.link/docs/getting-started/) and the other feature guides.
+[Download](https://github.com/opencloud-eu/reva/releases) to get the latest available release.
 
 ## Build and run it yourself
 
@@ -37,17 +33,15 @@ $ cmd/revad/revad -dev-dir examples/storage-references
 
 ```
 
-You can also read the [build from sources guide](https://reva.link/docs/getting-started/build-reva/) and the [setup tutorial](https://github.com/opencloud-eu/reva/blob/main/docs/content/en/docs/tutorials/setup-tutorial.md).
-
 ## Run tests
 
 Reva's codebase continuously undergoes testing at various levels.
 
 To understand which tests exist, you can have a look at the [Makefile](https://github.com/opencloud-eu/reva/blob/main/Makefile).
 
-The tests run by CERN's instance of [Drone CI/CD](https://docs.drone.io/) are defined in the [.drone.star](https://github.com/opencloud-eu/reva/blob/main/.drone.star) file.
+The tests run by OpenCloud's instance of [Woodpecker CI/CD](https://woodpecker-ci.org/) are defined in the [.woodpecker](https://github.com/opencloud-eu/reva/tree/main/.woodpecker) folder.
 
-NB: The [tests/oc-integration-tests/drone](https://github.com/opencloud-eu/reva/tree/main/tests/oc-integration-tests/drone) and [tests/oc-integration-tests/local](https://github.com/opencloud-eu/reva/tree/main/tests/oc-integration-tests/local) folders contain the configuration fixtures that are used to start up the Reva instance to test (on drone CI/CD or on your local system, respectively), for both these acceptance tests ("ownCloud legacy integration tests") and the Litmus tests.
+NB: The [tests/oc-integration-tests/ci](https://github.com/opencloud-eu/reva/tree/main/tests/oc-integration-tests/ci) and [tests/oc-integration-tests/local](https://github.com/opencloud-eu/reva/tree/main/tests/oc-integration-tests/local) folders contain the configuration fixtures that are used to start up the Reva instance to test (on CI/CD or on your local system, respectively), for both these acceptance tests ("ownCloud legacy integration tests") and the Litmus tests.
 
 ### Unit tests
 
@@ -130,10 +124,6 @@ The 1.x versions are developed in the [https://github.com/cs3org/reva](https://g
 ### 2.x versions
 
 The `main` branch of this repository is used to develop the next version of this project. The edge branch is based on a new concept named "Spaces" and a new set of the CS3APIs are being implemented, making it **not compatible** with `main` branch. Releases from `main` are tagged as _2.x.x_ versions following [semver](https://semver.org/).
-
-## Plugin development
-
-Checkout the [Tutorials](https://reva.link/docs/tutorials/).
 
 ## License
 
