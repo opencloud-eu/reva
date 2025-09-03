@@ -6,6 +6,13 @@
 
 @individual-it, @rhafer
 
+### 📚 Documentation
+
+- delete outdated run instructions [[#334](https://github.com/opencloud-eu/reva/pull/334)]
+- update obsolete branch name and delete version schema [[#333](https://github.com/opencloud-eu/reva/pull/333)]
+- fix references to drone [[#332](https://github.com/opencloud-eu/reva/pull/332)]
+- delete wrong references to the docs [[#331](https://github.com/opencloud-eu/reva/pull/331)]
+
 ### 📈 Enhancement
 
 - feat: tracing instrumentation of for users and groups services [[#330](https://github.com/opencloud-eu/reva/pull/330)]
