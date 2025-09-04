@@ -19,6 +19,7 @@
 
 ### 📦️ Dependencies
 
+- Bump github.com/stretchr/testify from 1.10.0 to 1.11.1 [[#338](https://github.com/opencloud-eu/reva/pull/338)]
 - Bump go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc from 1.37.0 to 1.38.0 [[#336](https://github.com/opencloud-eu/reva/pull/336)]
 - Bump github.com/beevik/etree from 1.5.1 to 1.6.0 [[#328](https://github.com/opencloud-eu/reva/pull/328)]
 
