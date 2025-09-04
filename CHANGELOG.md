@@ -1,6 +1,6 @@
 # Changelog
 
-## [2.38.0](https://github.com/opencloud-eu/reva/releases/tag/v2.38.0) - 2025-09-03
+## [2.38.0](https://github.com/opencloud-eu/reva/releases/tag/v2.38.0) - 2025-09-04
 
 ### ❤️ Thanks to all contributors! ❤️
 
@@ -19,6 +19,7 @@
 
 ### 📦️ Dependencies
 
+- Bump go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc from 1.37.0 to 1.38.0 [[#336](https://github.com/opencloud-eu/reva/pull/336)]
 - Bump github.com/beevik/etree from 1.5.1 to 1.6.0 [[#328](https://github.com/opencloud-eu/reva/pull/328)]
 
 ## [2.37.0](https://github.com/opencloud-eu/reva/releases/tag/v2.37.0) - 2025-09-01
