@@ -1,5 +1,28 @@
 # Changelog
 
+## [2.38.0](https://github.com/opencloud-eu/reva/releases/tag/v2.38.0) - 2025-09-04
+
+### ❤️ Thanks to all contributors! ❤️
+
+@individual-it, @rhafer
+
+### 📚 Documentation
+
+- delete outdated run instructions [[#334](https://github.com/opencloud-eu/reva/pull/334)]
+- update obsolete branch name and delete version schema [[#333](https://github.com/opencloud-eu/reva/pull/333)]
+- fix references to drone [[#332](https://github.com/opencloud-eu/reva/pull/332)]
+- delete wrong references to the docs [[#331](https://github.com/opencloud-eu/reva/pull/331)]
+
+### 📈 Enhancement
+
+- feat: tracing instrumentation of for users and groups services [[#330](https://github.com/opencloud-eu/reva/pull/330)]
+
+### 📦️ Dependencies
+
+- Bump github.com/stretchr/testify from 1.10.0 to 1.11.1 [[#338](https://github.com/opencloud-eu/reva/pull/338)]
+- Bump go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc from 1.37.0 to 1.38.0 [[#336](https://github.com/opencloud-eu/reva/pull/336)]
+- Bump github.com/beevik/etree from 1.5.1 to 1.6.0 [[#328](https://github.com/opencloud-eu/reva/pull/328)]
+
 ## [2.37.0](https://github.com/opencloud-eu/reva/releases/tag/v2.37.0) - 2025-09-01
 
 ### ❤️ Thanks to all contributors! ❤️
