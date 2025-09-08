@@ -1,6 +1,6 @@
 # Changelog
 
-## [2.38.0](https://github.com/opencloud-eu/reva/releases/tag/v2.38.0) - 2025-09-04
+## [2.38.0](https://github.com/opencloud-eu/reva/releases/tag/v2.38.0) - 2025-09-08
 
 ### ❤️ Thanks to all contributors! ❤️
 
@@ -19,6 +19,7 @@
 
 ### 📦️ Dependencies
 
+- Bump github.com/nats-io/nats-server/v2 from 2.11.6 to 2.11.8 [[#340](https://github.com/opencloud-eu/reva/pull/340)]
 - Bump github.com/stretchr/testify from 1.10.0 to 1.11.1 [[#338](https://github.com/opencloud-eu/reva/pull/338)]
 - Bump go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc from 1.37.0 to 1.38.0 [[#336](https://github.com/opencloud-eu/reva/pull/336)]
 - Bump github.com/beevik/etree from 1.5.1 to 1.6.0 [[#328](https://github.com/opencloud-eu/reva/pull/328)]
