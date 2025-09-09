@@ -1,10 +1,15 @@
 # Changelog
 
-## [2.38.0](https://github.com/opencloud-eu/reva/releases/tag/v2.38.0) - 2025-09-08
+## [2.38.0](https://github.com/opencloud-eu/reva/releases/tag/v2.38.0) - 2025-09-09
 
 ### ❤️ Thanks to all contributors! ❤️
 
 @individual-it, @rhafer
+
+### 📈 Enhancement
+
+- users: Multi-Tenancy enhancements [[#339](https://github.com/opencloud-eu/reva/pull/339)]
+- feat: tracing instrumentation of for users and groups services [[#330](https://github.com/opencloud-eu/reva/pull/330)]
 
 ### 📚 Documentation
 
@@ -12,10 +17,6 @@
 - update obsolete branch name and delete version schema [[#333](https://github.com/opencloud-eu/reva/pull/333)]
 - fix references to drone [[#332](https://github.com/opencloud-eu/reva/pull/332)]
 - delete wrong references to the docs [[#331](https://github.com/opencloud-eu/reva/pull/331)]
-
-### 📈 Enhancement
-
-- feat: tracing instrumentation of for users and groups services [[#330](https://github.com/opencloud-eu/reva/pull/330)]
 
 ### 📦️ Dependencies
 
