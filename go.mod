@@ -73,7 +73,7 @@ require (
 	github.com/sercand/kuberesolver/v5 v5.1.1
 	github.com/sethvargo/go-diceware v0.5.0
 	github.com/sethvargo/go-password v0.3.1
-	github.com/shamaton/msgpack/v2 v2.2.3
+	github.com/shamaton/msgpack/v2 v2.3.1
 	github.com/shirou/gopsutil v3.21.11+incompatible
 	github.com/stretchr/testify v1.11.1
 	github.com/studio-b12/gowebdav v0.9.0
@@ -93,10 +93,10 @@ require (
 	golang.org/x/crypto v0.41.0
 	golang.org/x/exp v0.0.0-20250210185358-939b2ce775ac
 	golang.org/x/oauth2 v0.30.0
-	golang.org/x/sync v0.16.0
+	golang.org/x/sync v0.17.0
 	golang.org/x/sys v0.35.0
 	golang.org/x/term v0.34.0
-	golang.org/x/text v0.28.0
+	golang.org/x/text v0.29.0
 	google.golang.org/genproto v0.0.0-20250303144028-a0af3efb3deb
 	google.golang.org/grpc v1.75.0
 	google.golang.org/protobuf v1.36.8
