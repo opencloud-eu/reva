@@ -20,6 +20,8 @@
 
 ### 📦️ Dependencies
 
+- Bump github.com/shamaton/msgpack/v2 from 2.2.3 to 2.3.1 [[#342](https://github.com/opencloud-eu/reva/pull/342)]
+- Bump golang.org/x/text from 0.28.0 to 0.29.0 [[#341](https://github.com/opencloud-eu/reva/pull/341)]
 - Bump github.com/nats-io/nats-server/v2 from 2.11.6 to 2.11.8 [[#340](https://github.com/opencloud-eu/reva/pull/340)]
 - Bump github.com/stretchr/testify from 1.10.0 to 1.11.1 [[#338](https://github.com/opencloud-eu/reva/pull/338)]
 - Bump go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc from 1.37.0 to 1.38.0 [[#336](https://github.com/opencloud-eu/reva/pull/336)]
