@@ -1,6 +1,6 @@
 # Changelog
 
-## [2.38.0](https://github.com/opencloud-eu/reva/releases/tag/v2.38.0) - 2025-09-09
+## [2.38.0](https://github.com/opencloud-eu/reva/releases/tag/v2.38.0) - 2025-09-10
 
 ### ❤️ Thanks to all contributors! ❤️
 
@@ -20,6 +20,7 @@
 
 ### 📦️ Dependencies
 
+- Bump github.com/nats-io/nats-server/v2 from 2.11.8 to 2.11.9 [[#343](https://github.com/opencloud-eu/reva/pull/343)]
 - Bump github.com/shamaton/msgpack/v2 from 2.2.3 to 2.3.1 [[#342](https://github.com/opencloud-eu/reva/pull/342)]
 - Bump golang.org/x/text from 0.28.0 to 0.29.0 [[#341](https://github.com/opencloud-eu/reva/pull/341)]
 - Bump github.com/nats-io/nats-server/v2 from 2.11.6 to 2.11.8 [[#340](https://github.com/opencloud-eu/reva/pull/340)]
