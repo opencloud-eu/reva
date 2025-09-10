@@ -20,6 +20,7 @@
 
 ### 📦️ Dependencies
 
+- Bump go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc from 0.62.0 to 0.63.0 [[#344](https://github.com/opencloud-eu/reva/pull/344)]
 - Bump github.com/nats-io/nats-server/v2 from 2.11.8 to 2.11.9 [[#343](https://github.com/opencloud-eu/reva/pull/343)]
 - Bump github.com/shamaton/msgpack/v2 from 2.2.3 to 2.3.1 [[#342](https://github.com/opencloud-eu/reva/pull/342)]
 - Bump golang.org/x/text from 0.28.0 to 0.29.0 [[#341](https://github.com/opencloud-eu/reva/pull/341)]
