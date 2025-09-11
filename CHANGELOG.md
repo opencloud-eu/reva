@@ -1,10 +1,14 @@
 # Changelog
 
-## [2.38.0](https://github.com/opencloud-eu/reva/releases/tag/v2.38.0) - 2025-09-10
+## [2.38.0](https://github.com/opencloud-eu/reva/releases/tag/v2.38.0) - 2025-09-11
 
 ### ❤️ Thanks to all contributors! ❤️
 
-@individual-it, @rhafer
+@butonic, @individual-it, @rhafer
+
+### 🐛 Bug Fixes
+
+- Fix graceful shutdown [[#326](https://github.com/opencloud-eu/reva/pull/326)]
 
 ### 📈 Enhancement
 
