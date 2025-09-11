@@ -24,6 +24,8 @@
 
 ### 📦️ Dependencies
 
+- Bump golang.org/x/term from 0.34.0 to 0.35.0 [[#347](https://github.com/opencloud-eu/reva/pull/347)]
+- Bump golang.org/x/oauth2 from 0.30.0 to 0.31.0 [[#346](https://github.com/opencloud-eu/reva/pull/346)]
 - Bump go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc from 0.62.0 to 0.63.0 [[#344](https://github.com/opencloud-eu/reva/pull/344)]
 - Bump github.com/nats-io/nats-server/v2 from 2.11.8 to 2.11.9 [[#343](https://github.com/opencloud-eu/reva/pull/343)]
 - Bump github.com/shamaton/msgpack/v2 from 2.2.3 to 2.3.1 [[#342](https://github.com/opencloud-eu/reva/pull/342)]
