@@ -1,10 +1,10 @@
 # Changelog
 
-## [2.38.0](https://github.com/opencloud-eu/reva/releases/tag/v2.38.0) - 2025-09-11
+## [2.38.0](https://github.com/opencloud-eu/reva/releases/tag/v2.38.0) - 2025-09-16
 
 ### ❤️ Thanks to all contributors! ❤️
 
-@butonic, @individual-it, @rhafer
+@butonic, @individual-it, @prashant-gurung899, @rhafer
 
 ### 🐛 Bug Fixes
 
