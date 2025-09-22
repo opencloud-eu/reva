@@ -4,9 +4,11 @@
 
 ### ❤️ Thanks to all contributors! ❤️
 
-@rhafer
+@micbar, @rhafer
 
+### 🐛 Bug Fixes
 
+- fix: make MacOS Finder happy [[#354](https://github.com/opencloud-eu/reva/pull/354)]
 
 ## [2.38.0](https://github.com/opencloud-eu/reva/releases/tag/v2.38.0) - 2025-09-18
 
