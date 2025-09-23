@@ -1,6 +1,6 @@
 # Changelog
 
-## [2.38.1](https://github.com/opencloud-eu/reva/releases/tag/v2.38.1) - 2025-09-22
+## [2.38.1](https://github.com/opencloud-eu/reva/releases/tag/v2.38.1) - 2025-09-23
 
 ### ❤️ Thanks to all contributors! ❤️
 
@@ -9,6 +9,10 @@
 ### 🐛 Bug Fixes
 
 - fix: make MacOS Finder happy [[#354](https://github.com/opencloud-eu/reva/pull/354)]
+
+### 📦️ Dependencies
+
+- Bump github.com/onsi/ginkgo/v2 from 2.25.2 to 2.25.3 [[#348](https://github.com/opencloud-eu/reva/pull/348)]
 
 ## [2.38.0](https://github.com/opencloud-eu/reva/releases/tag/v2.38.0) - 2025-09-18
 
