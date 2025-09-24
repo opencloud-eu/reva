@@ -1,17 +1,19 @@
 # Changelog
 
-## [2.38.1](https://github.com/opencloud-eu/reva/releases/tag/v2.38.1) - 2025-09-23
+## [2.38.1](https://github.com/opencloud-eu/reva/releases/tag/v2.38.1) - 2025-09-24
 
 ### ❤️ Thanks to all contributors! ❤️
 
-@micbar, @rhafer
+@cheneyveron, @micbar, @rhafer
 
 ### 🐛 Bug Fixes
 
+- fix: Use hash if filename too long during assimilate [[#352](https://github.com/opencloud-eu/reva/pull/352)]
 - fix: make MacOS Finder happy [[#354](https://github.com/opencloud-eu/reva/pull/354)]
 
 ### 📦️ Dependencies
 
+- Bump google.golang.org/protobuf from 1.36.8 to 1.36.9 [[#355](https://github.com/opencloud-eu/reva/pull/355)]
 - Bump github.com/prometheus/client_golang from 1.23.0 to 1.23.2 [[#349](https://github.com/opencloud-eu/reva/pull/349)]
 - Bump github.com/onsi/ginkgo/v2 from 2.25.2 to 2.25.3 [[#348](https://github.com/opencloud-eu/reva/pull/348)]
 
