@@ -13,6 +13,7 @@
 
 ### 📦️ Dependencies
 
+- Bump github.com/nats-io/nats.go from 1.45.0 to 1.46.0 [[#356](https://github.com/opencloud-eu/reva/pull/356)]
 - Bump google.golang.org/protobuf from 1.36.8 to 1.36.9 [[#355](https://github.com/opencloud-eu/reva/pull/355)]
 - Bump github.com/prometheus/client_golang from 1.23.0 to 1.23.2 [[#349](https://github.com/opencloud-eu/reva/pull/349)]
 - Bump github.com/onsi/ginkgo/v2 from 2.25.2 to 2.25.3 [[#348](https://github.com/opencloud-eu/reva/pull/348)]
