@@ -1,10 +1,14 @@
 # Changelog
 
-## [2.38.1](https://github.com/opencloud-eu/reva/releases/tag/v2.38.1) - 2025-09-24
+## [2.39.0](https://github.com/opencloud-eu/reva/releases/tag/v2.39.0) - 2025-09-24
 
 ### ❤️ Thanks to all contributors! ❤️
 
-@cheneyveron, @micbar, @rhafer
+@AlexAndBear, @cheneyveron, @micbar, @rhafer
+
+### 📈 Enhancement
+
+- chore: add CheckForUpdates capability [[#357](https://github.com/opencloud-eu/reva/pull/357)]
 
 ### 🐛 Bug Fixes
 
