@@ -1,6 +1,6 @@
 # Changelog
 
-## [2.39.0](https://github.com/opencloud-eu/reva/releases/tag/v2.39.0) - 2025-09-24
+## [2.39.0](https://github.com/opencloud-eu/reva/releases/tag/v2.39.0) - 2025-09-25
 
 ### ❤️ Thanks to all contributors! ❤️
 
@@ -17,6 +17,7 @@
 
 ### 📦️ Dependencies
 
+- Bump google.golang.org/grpc from 1.75.0 to 1.75.1 [[#359](https://github.com/opencloud-eu/reva/pull/359)]
 - Bump github.com/nats-io/nats.go from 1.45.0 to 1.46.0 [[#356](https://github.com/opencloud-eu/reva/pull/356)]
 - Bump google.golang.org/protobuf from 1.36.8 to 1.36.9 [[#355](https://github.com/opencloud-eu/reva/pull/355)]
 - Bump github.com/prometheus/client_golang from 1.23.0 to 1.23.2 [[#349](https://github.com/opencloud-eu/reva/pull/349)]
