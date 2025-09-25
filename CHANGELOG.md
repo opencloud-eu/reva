@@ -17,6 +17,7 @@
 
 ### 📦️ Dependencies
 
+- Bump github.com/go-chi/chi/v5 from 5.2.2 to 5.2.3 [[#358](https://github.com/opencloud-eu/reva/pull/358)]
 - Bump google.golang.org/grpc from 1.75.0 to 1.75.1 [[#359](https://github.com/opencloud-eu/reva/pull/359)]
 - Bump github.com/nats-io/nats.go from 1.45.0 to 1.46.0 [[#356](https://github.com/opencloud-eu/reva/pull/356)]
 - Bump google.golang.org/protobuf from 1.36.8 to 1.36.9 [[#355](https://github.com/opencloud-eu/reva/pull/355)]
