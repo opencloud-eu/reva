@@ -1,6 +1,6 @@
 # Changelog
 
-## [2.39.0](https://github.com/opencloud-eu/reva/releases/tag/v2.39.0) - 2025-09-25
+## [2.39.0](https://github.com/opencloud-eu/reva/releases/tag/v2.39.0) - 2025-09-29
 
 ### ❤️ Thanks to all contributors! ❤️
 
@@ -17,6 +17,7 @@
 
 ### 📦️ Dependencies
 
+- Bump go.etcd.io/etcd/client/v3 from 3.6.4 to 3.6.5 [[#362](https://github.com/opencloud-eu/reva/pull/362)]
 - Bump github.com/go-chi/chi/v5 from 5.2.2 to 5.2.3 [[#358](https://github.com/opencloud-eu/reva/pull/358)]
 - Bump google.golang.org/grpc from 1.75.0 to 1.75.1 [[#359](https://github.com/opencloud-eu/reva/pull/359)]
 - Bump github.com/nats-io/nats.go from 1.45.0 to 1.46.0 [[#356](https://github.com/opencloud-eu/reva/pull/356)]
