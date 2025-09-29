@@ -17,6 +17,7 @@
 
 ### 📦️ Dependencies
 
+- Bump golang.org/x/crypto from 0.41.0 to 0.42.0 [[#361](https://github.com/opencloud-eu/reva/pull/361)]
 - Bump go.etcd.io/etcd/client/v3 from 3.6.4 to 3.6.5 [[#362](https://github.com/opencloud-eu/reva/pull/362)]
 - Bump github.com/go-chi/chi/v5 from 5.2.2 to 5.2.3 [[#358](https://github.com/opencloud-eu/reva/pull/358)]
 - Bump google.golang.org/grpc from 1.75.0 to 1.75.1 [[#359](https://github.com/opencloud-eu/reva/pull/359)]
