@@ -1,6 +1,6 @@
 # Changelog
 
-## [2.39.0](https://github.com/opencloud-eu/reva/releases/tag/v2.39.0) - 2025-09-30
+## [2.39.0](https://github.com/opencloud-eu/reva/releases/tag/v2.39.0) - 2025-10-01
 
 ### ❤️ Thanks to all contributors! ❤️
 
@@ -17,6 +17,7 @@
 
 ### 📦️ Dependencies
 
+- chore(deps): bump github.com/nats-io/nats.go from 1.46.0 to 1.46.1 [[#366](https://github.com/opencloud-eu/reva/pull/366)]
 - Bump github.com/nats-io/nats-server/v2 from 2.11.9 to 2.12.0 [[#365](https://github.com/opencloud-eu/reva/pull/365)]
 - Bump golang.org/x/crypto from 0.41.0 to 0.42.0 [[#361](https://github.com/opencloud-eu/reva/pull/361)]
 - Bump go.etcd.io/etcd/client/v3 from 3.6.4 to 3.6.5 [[#362](https://github.com/opencloud-eu/reva/pull/362)]
