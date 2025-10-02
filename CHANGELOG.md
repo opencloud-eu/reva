@@ -6,6 +6,10 @@
 
 @AlexAndBear, @aduffeck, @cheneyveron, @micbar, @rhafer
 
+### ✨ Features
+
+- feat(multi-tenancy): Introduce global config flag [[#360](https://github.com/opencloud-eu/reva/pull/360)]
+
 ### 🐛 Bug Fixes
 
 - Support multiple lockfile paths while posixfs transitions to new scheme [[#363](https://github.com/opencloud-eu/reva/pull/363)]
