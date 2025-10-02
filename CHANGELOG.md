@@ -22,6 +22,7 @@
 
 ### 📦️ Dependencies
 
+- chore(deps): bump github.com/go-ldap/ldap/v3 from 3.4.11 to 3.4.12 [[#367](https://github.com/opencloud-eu/reva/pull/367)]
 - chore(deps): bump github.com/nats-io/nats.go from 1.46.0 to 1.46.1 [[#366](https://github.com/opencloud-eu/reva/pull/366)]
 - Bump github.com/nats-io/nats-server/v2 from 2.11.9 to 2.12.0 [[#365](https://github.com/opencloud-eu/reva/pull/365)]
 - Bump golang.org/x/crypto from 0.41.0 to 0.42.0 [[#361](https://github.com/opencloud-eu/reva/pull/361)]
