@@ -1,19 +1,20 @@
 # Changelog
 
-## [2.39.0](https://github.com/opencloud-eu/reva/releases/tag/v2.39.0) - 2025-10-01
+## [2.39.0](https://github.com/opencloud-eu/reva/releases/tag/v2.39.0) - 2025-10-02
 
 ### ❤️ Thanks to all contributors! ❤️
 
-@AlexAndBear, @cheneyveron, @micbar, @rhafer
+@AlexAndBear, @aduffeck, @cheneyveron, @micbar, @rhafer
+
+### 🐛 Bug Fixes
+
+- Support multiple lockfile paths while posixfs transitions to new scheme [[#363](https://github.com/opencloud-eu/reva/pull/363)]
+- fix: Use hash if filename too long during assimilate [[#352](https://github.com/opencloud-eu/reva/pull/352)]
+- fix: make MacOS Finder happy [[#354](https://github.com/opencloud-eu/reva/pull/354)]
 
 ### 📈 Enhancement
 
 - chore: add CheckForUpdates capability [[#357](https://github.com/opencloud-eu/reva/pull/357)]
-
-### 🐛 Bug Fixes
-
-- fix: Use hash if filename too long during assimilate [[#352](https://github.com/opencloud-eu/reva/pull/352)]
-- fix: make MacOS Finder happy [[#354](https://github.com/opencloud-eu/reva/pull/354)]
 
 ### 📦️ Dependencies
 
