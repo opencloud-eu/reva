@@ -22,6 +22,7 @@
 
 ### 📦️ Dependencies
 
+- chore(deps): bump github.com/onsi/ginkgo/v2 from 2.25.3 to 2.26.0 [[#369](https://github.com/opencloud-eu/reva/pull/369)]
 - chore(deps): bump google.golang.org/protobuf from 1.36.9 to 1.36.10 [[#368](https://github.com/opencloud-eu/reva/pull/368)]
 - chore(deps): bump github.com/go-ldap/ldap/v3 from 3.4.11 to 3.4.12 [[#367](https://github.com/opencloud-eu/reva/pull/367)]
 - chore(deps): bump github.com/nats-io/nats.go from 1.46.0 to 1.46.1 [[#366](https://github.com/opencloud-eu/reva/pull/366)]
