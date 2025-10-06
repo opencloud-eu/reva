@@ -1,6 +1,6 @@
 # Changelog
 
-## [2.39.0](https://github.com/opencloud-eu/reva/releases/tag/v2.39.0) - 2025-10-02
+## [2.39.0](https://github.com/opencloud-eu/reva/releases/tag/v2.39.0) - 2025-10-06
 
 ### ❤️ Thanks to all contributors! ❤️
 
@@ -22,6 +22,7 @@
 
 ### 📦️ Dependencies
 
+- chore(deps): bump google.golang.org/protobuf from 1.36.9 to 1.36.10 [[#368](https://github.com/opencloud-eu/reva/pull/368)]
 - chore(deps): bump github.com/go-ldap/ldap/v3 from 3.4.11 to 3.4.12 [[#367](https://github.com/opencloud-eu/reva/pull/367)]
 - chore(deps): bump github.com/nats-io/nats.go from 1.46.0 to 1.46.1 [[#366](https://github.com/opencloud-eu/reva/pull/366)]
 - Bump github.com/nats-io/nats-server/v2 from 2.11.9 to 2.12.0 [[#365](https://github.com/opencloud-eu/reva/pull/365)]
