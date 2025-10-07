@@ -1,6 +1,6 @@
 # Changelog
 
-## [2.39.0](https://github.com/opencloud-eu/reva/releases/tag/v2.39.0) - 2025-10-06
+## [2.39.0](https://github.com/opencloud-eu/reva/releases/tag/v2.39.0) - 2025-10-07
 
 ### ❤️ Thanks to all contributors! ❤️
 
@@ -22,6 +22,7 @@
 
 ### 📦️ Dependencies
 
+- chore(deps): bump github.com/go-playground/validator/v10 from 10.27.0 to 10.28.0 [[#370](https://github.com/opencloud-eu/reva/pull/370)]
 - chore(deps): bump github.com/onsi/ginkgo/v2 from 2.25.3 to 2.26.0 [[#369](https://github.com/opencloud-eu/reva/pull/369)]
 - chore(deps): bump google.golang.org/protobuf from 1.36.9 to 1.36.10 [[#368](https://github.com/opencloud-eu/reva/pull/368)]
 - chore(deps): bump github.com/go-ldap/ldap/v3 from 3.4.11 to 3.4.12 [[#367](https://github.com/opencloud-eu/reva/pull/367)]
