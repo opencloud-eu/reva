@@ -1,6 +1,6 @@
 # Changelog
 
-## [2.39.0](https://github.com/opencloud-eu/reva/releases/tag/v2.39.0) - 2025-10-08
+## [2.39.0](https://github.com/opencloud-eu/reva/releases/tag/v2.39.0) - 2025-10-09
 
 ### ❤️ Thanks to all contributors! ❤️
 
@@ -12,6 +12,7 @@
 
 ### 🐛 Bug Fixes
 
+- Allow users service to work without groups in LDAP [[#374](https://github.com/opencloud-eu/reva/pull/374)]
 - Support multiple lockfile paths while posixfs transitions to new scheme [[#363](https://github.com/opencloud-eu/reva/pull/363)]
 - fix: Use hash if filename too long during assimilate [[#352](https://github.com/opencloud-eu/reva/pull/352)]
 - fix: make MacOS Finder happy [[#354](https://github.com/opencloud-eu/reva/pull/354)]
