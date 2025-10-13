@@ -412,6 +412,10 @@ func (s *svc) handleOpen(openMode int) http.HandlerFunc {
 		if templateID != "" {
 			openReq.Opaque = utils.AppendPlainToOpaque(openReq.Opaque, "template", templateID)
 		}
+		cssVariables := r.Form.Get("css_variables")
+		if cssVariables != "" {
+			openReq.Opaque = utils.AppendPlainToOpaque(openReq.Opaque, "cssVariables", cssVariables)
+		}
 		openRes, err := client.OpenInApp(ctx, &openReq)
 		if err != nil {
 			writeError(w, r, appErrorServerError,
