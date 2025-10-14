@@ -61,7 +61,7 @@ type Capabilities struct {
 	Search         *CapabilitiesSearch         `json:"search,omitempty" xml:"search,omitempty" mapstructure:"search"`
 	Theme          *CapabilitiesTheme          `json:"theme,omitempty" xml:"theme,omitempty" mapstructure:"theme"`
 	Notifications  *CapabilitiesNotifications  `json:"notifications,omitempty" xml:"notifications,omitempty"`
-	Grpupware      *CapabilitiesGroupware      `json:"groupware,omitempty" xml:"groupware,omitempty" mapstructure:"groupware"`
+	Groupware      *CapabilitiesGroupware      `json:"groupware,omitempty" xml:"groupware,omitempty" mapstructure:"groupware"`
 }
 
 // CapabilitiesSearch holds the search capabilities
