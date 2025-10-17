@@ -47,7 +47,37 @@ type Protocol interface {
 type WebDAV struct {
 	SharedSecret string   `json:"sharedSecret" validate:"required"`
 	Permissions  []string `json:"permissions" validate:"required,dive,required,oneof=read write share"`
-	URL          string   `json:"url" validate:"required"`
+	URI          string   `json:"uri" validate:"required"`
+}
+
+// UnmarshalJSON implements custom JSON unmarshalling for backwards compatibility.
+// It supports both "url" (legacy) and "uri" (new) field names.
+func (w *WebDAV) UnmarshalJSON(data []byte) error {
+	// Define a temporary struct with both url and uri fields
+	type rawWebDAV struct {
+		SharedSecret string   `json:"sharedSecret"`
+		Permissions  []string `json:"permissions"`
+		URL          string   `json:"url"`
+		URI          string   `json:"uri"`
+	}
+
+	var raw rawWebDAV
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+
+	// Map the fields to the WebDAV struct
+	w.SharedSecret = raw.SharedSecret
+	w.Permissions = raw.Permissions
+
+	// Use URI if present, otherwise fallback to URL
+	if raw.URI != "" {
+		w.URI = raw.URI
+	} else {
+		w.URI = raw.URL
+	}
+
+	return nil
 }
 
 // ToOCMProtocol convert the protocol to a ocm Protocol struct.
@@ -76,7 +106,7 @@ func (w *WebDAV) ToOCMProtocol() *ocm.Protocol {
 		}
 	}
 
-	return ocmshare.NewWebDAVProtocol(w.URL, w.SharedSecret, perms)
+	return ocmshare.NewWebDAVProtocol(w.URI, w.SharedSecret, perms)
 }
 
 // Webapp contains the parameters for the Webapp protocol.
