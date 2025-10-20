@@ -1,6 +1,6 @@
 # Changelog
 
-## [2.39.1](https://github.com/opencloud-eu/reva/releases/tag/v2.39.1) - 2025-10-14
+## [2.39.1](https://github.com/opencloud-eu/reva/releases/tag/v2.39.1) - 2025-10-20
 
 ### ❤️ Thanks to all contributors! ❤️
 
