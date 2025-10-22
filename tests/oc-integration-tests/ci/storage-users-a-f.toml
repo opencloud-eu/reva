@@ -9,6 +9,9 @@ jwt_secret = "Pive-Fumkiu4"
 gatewaysvc = "localhost:19000"
 
 [log]
+level = "error"
+
+[log]
 #level = "warn"
 #mode = "json"
 
