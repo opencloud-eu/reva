@@ -40,13 +40,13 @@ func TestTrashbin_RestoreRecycleItem(t *testing.T) {
 
 	t.Run("restoring resources updates crucial extended attributes", func(t *testing.T) {
 		// first call to get the id
-		backend.EXPECT().IdentifyPath(mock.Anything, mock.Anything).RunAndReturn(func(context.Context, string) (string, string, string, time.Time, error) {
-			return "", "id", "", time.Time{}, nil
+		backend.EXPECT().IdentifyPath(mock.Anything, mock.Anything).RunAndReturn(func(context.Context, string) (string, string, time.Time, error) {
+			return "", "id", time.Time{}, nil
 		}).Once()
 
 		// first call to get the parentID
-		backend.EXPECT().IdentifyPath(mock.Anything, mock.Anything).RunAndReturn(func(context.Context, string) (string, string, string, time.Time, error) {
-			return "", "parentID", "", time.Time{}, nil
+		backend.EXPECT().IdentifyPath(mock.Anything, mock.Anything).RunAndReturn(func(context.Context, string) (string, string, time.Time, error) {
+			return "", "parentID", time.Time{}, nil
 		}).Once()
 
 		backend.EXPECT().SetMultiple(mock.Anything, mock.Anything, mock.Anything, mock.Anything).RunAndReturn(func(_ context.Context, _ metadata.MetadataNode, m map[string][]byte, _ bool) error {
@@ -71,12 +71,12 @@ func TestTrashbin_RestoreRecycleItem(t *testing.T) {
 		assert.Equal(t, errLink.Err, syscall.ENOENT)
 		assert.Equal(t, errLink.New, itemReference.Path)
 
-		backend.EXPECT().IdentifyPath(mock.Anything, mock.Anything).RunAndReturn(func(context.Context, string) (string, string, string, time.Time, error) {
-			return "", "id", "", time.Time{}, nil
+		backend.EXPECT().IdentifyPath(mock.Anything, mock.Anything).RunAndReturn(func(context.Context, string) (string, string, time.Time, error) {
+			return "", "id", time.Time{}, nil
 		}).Once()
 
-		backend.EXPECT().IdentifyPath(mock.Anything, mock.Anything).RunAndReturn(func(context.Context, string) (string, string, string, time.Time, error) {
-			return "", "parentID", "", time.Time{}, nil
+		backend.EXPECT().IdentifyPath(mock.Anything, mock.Anything).RunAndReturn(func(context.Context, string) (string, string, time.Time, error) {
+			return "", "parentID", time.Time{}, nil
 		}).Once()
 
 		backend.EXPECT().SetMultiple(mock.Anything, mock.Anything, mock.Anything, mock.Anything).RunAndReturn(func(_ context.Context, _ metadata.MetadataNode, m map[string][]byte, _ bool) error {

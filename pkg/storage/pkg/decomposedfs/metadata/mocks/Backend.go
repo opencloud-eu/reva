@@ -281,7 +281,7 @@ func (_c *Backend_GetInt64_Call) RunAndReturn(run func(context.Context, metadata
 }
 
 // IdentifyPath provides a mock function with given fields: ctx, path
-func (_m *Backend) IdentifyPath(ctx context.Context, path string) (string, string, string, time.Time, error) {
+func (_m *Backend) IdentifyPath(ctx context.Context, path string) (string, string, time.Time, error) {
 	ret := _m.Called(ctx, path)
 
 	if len(ret) == 0 {
@@ -290,10 +290,9 @@ func (_m *Backend) IdentifyPath(ctx context.Context, path string) (string, strin
 
 	var r0 string
 	var r1 string
-	var r2 string
-	var r3 time.Time
-	var r4 error
-	if rf, ok := ret.Get(0).(func(context.Context, string) (string, string, string, time.Time, error)); ok {
+	var r2 time.Time
+	var r3 error
+	if rf, ok := ret.Get(0).(func(context.Context, string) (string, string, time.Time, error)); ok {
 		return rf(ctx, path)
 	}
 	if rf, ok := ret.Get(0).(func(context.Context, string) string); ok {
@@ -308,25 +307,19 @@ func (_m *Backend) IdentifyPath(ctx context.Context, path string) (string, strin
 		r1 = ret.Get(1).(string)
 	}
 
-	if rf, ok := ret.Get(2).(func(context.Context, string) string); ok {
+	if rf, ok := ret.Get(2).(func(context.Context, string) time.Time); ok {
 		r2 = rf(ctx, path)
 	} else {
-		r2 = ret.Get(2).(string)
+		r2 = ret.Get(2).(time.Time)
 	}
 
-	if rf, ok := ret.Get(3).(func(context.Context, string) time.Time); ok {
+	if rf, ok := ret.Get(3).(func(context.Context, string) error); ok {
 		r3 = rf(ctx, path)
 	} else {
-		r3 = ret.Get(3).(time.Time)
+		r3 = ret.Error(3)
 	}
 
-	if rf, ok := ret.Get(4).(func(context.Context, string) error); ok {
-		r4 = rf(ctx, path)
-	} else {
-		r4 = ret.Error(4)
-	}
-
-	return r0, r1, r2, r3, r4
+	return r0, r1, r2, r3
 }
 
 // Backend_IdentifyPath_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'IdentifyPath'
@@ -348,12 +341,12 @@ func (_c *Backend_IdentifyPath_Call) Run(run func(ctx context.Context, path stri
 	return _c
 }
 
-func (_c *Backend_IdentifyPath_Call) Return(_a0 string, _a1 string, _a2 string, _a3 time.Time, _a4 error) *Backend_IdentifyPath_Call {
-	_c.Call.Return(_a0, _a1, _a2, _a3, _a4)
+func (_c *Backend_IdentifyPath_Call) Return(_a0 string, _a1 string, _a2 time.Time, _a3 error) *Backend_IdentifyPath_Call {
+	_c.Call.Return(_a0, _a1, _a2, _a3)
 	return _c
 }
 
-func (_c *Backend_IdentifyPath_Call) RunAndReturn(run func(context.Context, string) (string, string, string, time.Time, error)) *Backend_IdentifyPath_Call {
+func (_c *Backend_IdentifyPath_Call) RunAndReturn(run func(context.Context, string) (string, string, time.Time, error)) *Backend_IdentifyPath_Call {
 	_c.Call.Return(run)
 	return _c
 }
