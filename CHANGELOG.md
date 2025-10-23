@@ -4,7 +4,7 @@
 
 ### ❤️ Thanks to all contributors! ❤️
 
-@AlexAndBear, @MahdiBaghbani
+@AlexAndBear, @MahdiBaghbani, @fschade
 
 ### 📦️ Dependencies
 
