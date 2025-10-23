@@ -8,6 +8,7 @@
 
 ### 📦️ Dependencies
 
+- chore(deps): bump golang.org/x/term from 0.35.0 to 0.36.0 [[#375](https://github.com/opencloud-eu/reva/pull/375)]
 - chore(deps): bump google.golang.org/grpc from 1.75.1 to 1.76.0 [[#373](https://github.com/opencloud-eu/reva/pull/373)]
 
 ## [2.39.0](https://github.com/opencloud-eu/reva/releases/tag/v2.39.0) - 2025-10-13
