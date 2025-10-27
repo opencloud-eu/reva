@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.39.2](https://github.com/opencloud-eu/reva/releases/tag/v2.39.2) - 2025-10-27
+
+### 📦️ Dependencies
+
+- chore(deps): bump github.com/gofrs/flock from 0.12.1 to 0.13.0 [[#390](https://github.com/opencloud-eu/reva/pull/390)]
+
 ## [2.39.1](https://github.com/opencloud-eu/reva/releases/tag/v2.39.1) - 2025-10-27
 
 ### ❤️ Thanks to all contributors! ❤️
