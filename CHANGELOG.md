@@ -2,6 +2,10 @@
 
 ## [2.39.2](https://github.com/opencloud-eu/reva/releases/tag/v2.39.2) - 2025-10-28
 
+### ❤️ Thanks to all contributors! ❤️
+
+@micbar
+
 ### 📦️ Dependencies
 
 - chore(deps): bump github.com/nats-io/nats.go from 1.46.1 to 1.47.0 [[#395](https://github.com/opencloud-eu/reva/pull/395)]
