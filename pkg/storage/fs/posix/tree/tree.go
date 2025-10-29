@@ -38,9 +38,11 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+
 	"github.com/opencloud-eu/reva/v2/pkg/appctx"
 	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
 	"github.com/opencloud-eu/reva/v2/pkg/events"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/blobstore"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/lookup"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/options"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/trashbin"
@@ -649,6 +651,10 @@ func (t *Tree) createDirNode(ctx context.Context, n *node.Node) (err error) {
 	return n.SetXattrsWithContext(ctx, attributes, false)
 }
 
+func (t *Tree) isTemporary(path string) bool {
+	return path == blobstore.TMPDir
+}
+
 func (t *Tree) isIgnored(path string) bool {
 	return isLockFile(path) || isTrash(path) || t.isUpload(path) || t.isInternal(path)
 }
@@ -664,7 +670,7 @@ func (t *Tree) isIndex(path string) bool {
 func (t *Tree) isInternal(path string) bool {
 	return path == t.options.Root ||
 		path == filepath.Join(t.options.Root, "users") ||
-		t.isIndex(path) || strings.Contains(path, lookup.MetadataDir)
+		t.isIndex(path) || strings.Contains(path, lookup.MetadataDir) || t.isTemporary(path)
 }
 
 func isLockFile(path string) bool {
