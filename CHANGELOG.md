@@ -1,5 +1,16 @@
 # Changelog
 
+## [2.29.5](https://github.com/opencloud-eu/reva/releases/tag/v2.29.5) - 2025-10-29
+
+### ❤️ Thanks to all contributors! ❤️
+
+@ScharfViktor, @fschade
+
+### 🐛 Bug Fixes
+
+- fix(posixfs): make blobstore uploads atomic [[#399](https://github.com/opencloud-eu/reva/pull/399)]
+- fix(posixfs): trash-bin restore collision handling [[#398](https://github.com/opencloud-eu/reva/pull/398)]
+
 ## [2.29.4](https://github.com/opencloud-eu/reva/releases/tag/v2.29.4) - 2025-07-10
 
 ### ❤️ Thanks to all contributors! ❤️
