@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.39.2](https://github.com/opencloud-eu/reva/releases/tag/v2.39.2) - 2025-10-30
+
+### ❤️ Thanks to all contributors! ❤️
+
+@micbar, @rhafer
+
+### 📦️ Dependencies
+
+- chore(deps): bump github.com/shamaton/msgpack/v2 from 2.3.1 to 2.4.0 [[#396](https://github.com/opencloud-eu/reva/pull/396)]
+- chore(deps): bump github.com/nats-io/nats.go from 1.46.1 to 1.47.0 [[#395](https://github.com/opencloud-eu/reva/pull/395)]
+- chore(deps): bump github.com/gofrs/flock from 0.12.1 to 0.13.0 [[#390](https://github.com/opencloud-eu/reva/pull/390)]
+
 ## [2.39.1](https://github.com/opencloud-eu/reva/releases/tag/v2.39.1) - 2025-10-27
 
 ### ❤️ Thanks to all contributors! ❤️
