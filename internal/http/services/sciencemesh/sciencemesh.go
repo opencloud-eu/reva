@@ -60,13 +60,15 @@ func (s *svc) Close() error {
 }
 
 type config struct {
-	Prefix           string       `mapstructure:"prefix"`
-	GatewaySvc       string       `mapstructure:"gatewaysvc"         validate:"required"`
-	ProviderDomain   string       `mapstructure:"provider_domain"    validate:"required"`
-	MeshDirectoryURL string       `mapstructure:"mesh_directory_url"`
-	OCMMountPoint    string       `mapstructure:"ocm_mount_point"`
-	FederationsFile  string       `mapstructure:"federations_file"`
-	Events           EventOptions `mapstructure:"events"`
+	Prefix            string       `mapstructure:"prefix"`
+	GatewaySvc        string       `mapstructure:"gatewaysvc"         validate:"required"`
+	ProviderDomain    string       `mapstructure:"provider_domain"    validate:"required"`
+	MeshDirectoryURL  string       `mapstructure:"mesh_directory_url"`
+	OCMMountPoint     string       `mapstructure:"ocm_mount_point"`
+	FederationsFile   string       `mapstructure:"federations_file"`
+	OCMClientTimeout  int          `mapstructure:"ocm_client_timeout"`
+	OCMClientInsecure bool         `mapstructure:"ocm_client_insecure"`
+	Events            EventOptions `mapstructure:"events"`
 }
 
 // EventOptions are the configurable options for events
@@ -89,6 +91,9 @@ func (c *config) ApplyDefaults() {
 	}
 	if c.FederationsFile == "" {
 		c.FederationsFile = "/etc/revad/federations.json"
+	}
+	if c.OCMClientTimeout == 0 {
+		c.OCMClientTimeout = 10
 	}
 
 	c.GatewaySvc = sharedconf.GetGatewaySVC(c.GatewaySvc)
