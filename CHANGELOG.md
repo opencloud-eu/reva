@@ -8,6 +8,7 @@
 
 ### 📦️ Dependencies
 
+- chore(deps): bump github.com/onsi/ginkgo/v2 from 2.26.0 to 2.27.2 [[#402](https://github.com/opencloud-eu/reva/pull/402)]
 - chore(deps): bump golang.org/x/crypto from 0.42.0 to 0.43.0 [[#401](https://github.com/opencloud-eu/reva/pull/401)]
 - chore(deps): bump github.com/shamaton/msgpack/v2 from 2.3.1 to 2.4.0 [[#396](https://github.com/opencloud-eu/reva/pull/396)]
 - chore(deps): bump github.com/nats-io/nats.go from 1.46.1 to 1.47.0 [[#395](https://github.com/opencloud-eu/reva/pull/395)]
