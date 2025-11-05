@@ -1,6 +1,6 @@
 # Changelog
 
-## [2.39.2](https://github.com/opencloud-eu/reva/releases/tag/v2.39.2) - 2025-11-04
+## [2.39.2](https://github.com/opencloud-eu/reva/releases/tag/v2.39.2) - 2025-11-05
 
 ### ❤️ Thanks to all contributors! ❤️
 
@@ -8,6 +8,7 @@
 
 ### 📦️ Dependencies
 
+- chore(deps): bump github.com/gomodule/redigo from 1.9.2 to 1.9.3 [[#405](https://github.com/opencloud-eu/reva/pull/405)]
 - chore(deps): bump github.com/onsi/ginkgo/v2 from 2.26.0 to 2.27.2 [[#402](https://github.com/opencloud-eu/reva/pull/402)]
 - chore(deps): bump golang.org/x/crypto from 0.42.0 to 0.43.0 [[#401](https://github.com/opencloud-eu/reva/pull/401)]
 - chore(deps): bump github.com/shamaton/msgpack/v2 from 2.3.1 to 2.4.0 [[#396](https://github.com/opencloud-eu/reva/pull/396)]
