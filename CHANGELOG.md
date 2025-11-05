@@ -8,6 +8,7 @@
 
 ### 📦️ Dependencies
 
+- chore(deps): bump github.com/ceph/go-ceph from 0.35.0 to 0.36.0 [[#404](https://github.com/opencloud-eu/reva/pull/404)]
 - chore(deps): bump github.com/gomodule/redigo from 1.9.2 to 1.9.3 [[#405](https://github.com/opencloud-eu/reva/pull/405)]
 - chore(deps): bump github.com/onsi/ginkgo/v2 from 2.26.0 to 2.27.2 [[#402](https://github.com/opencloud-eu/reva/pull/402)]
 - chore(deps): bump golang.org/x/crypto from 0.42.0 to 0.43.0 [[#401](https://github.com/opencloud-eu/reva/pull/401)]
