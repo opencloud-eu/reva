@@ -1,6 +1,6 @@
 # Changelog
 
-## [2.39.2](https://github.com/opencloud-eu/reva/releases/tag/v2.39.2) - 2025-11-05
+## [2.39.2](https://github.com/opencloud-eu/reva/releases/tag/v2.39.2) - 2025-11-06
 
 ### ❤️ Thanks to all contributors! ❤️
 
@@ -8,6 +8,7 @@
 
 ### 📦️ Dependencies
 
+- chore(deps): bump github.com/minio/minio-go/v7 from 7.0.95 to 7.0.97 [[#407](https://github.com/opencloud-eu/reva/pull/407)]
 - chore(deps): bump github.com/ceph/go-ceph from 0.35.0 to 0.36.0 [[#404](https://github.com/opencloud-eu/reva/pull/404)]
 - chore(deps): bump github.com/gomodule/redigo from 1.9.2 to 1.9.3 [[#405](https://github.com/opencloud-eu/reva/pull/405)]
 - chore(deps): bump github.com/onsi/ginkgo/v2 from 2.26.0 to 2.27.2 [[#402](https://github.com/opencloud-eu/reva/pull/402)]
