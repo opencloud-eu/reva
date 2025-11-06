@@ -6,6 +6,10 @@
 
 @micbar, @rhafer
 
+### 🐛 Bug Fixes
+
+- fix: isTemporary() check for absolute paths [[#406](https://github.com/opencloud-eu/reva/pull/406)]
+
 ### 📦️ Dependencies
 
 - chore(deps): bump github.com/minio/minio-go/v7 from 7.0.95 to 7.0.97 [[#407](https://github.com/opencloud-eu/reva/pull/407)]
