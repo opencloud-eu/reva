@@ -467,6 +467,9 @@ func (b HybridBackend) Purge(ctx context.Context, n MetadataNode) error {
 		}
 	}
 
+	// delete the metadata lockfile
+	_ = os.Remove(b.LockfilePath(n))
+
 	return b.metaCache.RemoveMetadata(b.cacheKey(n))
 }
 

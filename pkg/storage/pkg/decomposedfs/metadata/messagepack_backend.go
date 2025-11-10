@@ -284,6 +284,10 @@ func (b MessagePackBackend) Purge(_ context.Context, n MetadataNode) error {
 	if err := b.metaCache.RemoveMetadata(b.cacheKey(n)); err != nil {
 		return err
 	}
+
+	// delete the metadata lockfile
+	_ = os.Remove(b.LockfilePath(n))
+
 	return os.Remove(b.MetadataPath(n))
 }
 
