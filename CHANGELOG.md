@@ -1,6 +1,6 @@
 # Changelog
 
-## [2.39.2](https://github.com/opencloud-eu/reva/releases/tag/v2.39.2) - 2025-11-06
+## [2.39.2](https://github.com/opencloud-eu/reva/releases/tag/v2.39.2) - 2025-11-10
 
 ### ❤️ Thanks to all contributors! ❤️
 
@@ -12,6 +12,7 @@
 
 ### 📦️ Dependencies
 
+- chore(deps): bump github.com/nats-io/nats-server/v2 from 2.12.0 to 2.12.1 [[#409](https://github.com/opencloud-eu/reva/pull/409)]
 - chore(deps): bump github.com/prometheus/alertmanager from 0.28.1 to 0.29.0 [[#408](https://github.com/opencloud-eu/reva/pull/408)]
 - chore(deps): bump github.com/minio/minio-go/v7 from 7.0.95 to 7.0.97 [[#407](https://github.com/opencloud-eu/reva/pull/407)]
 - chore(deps): bump github.com/ceph/go-ceph from 0.35.0 to 0.36.0 [[#404](https://github.com/opencloud-eu/reva/pull/404)]
