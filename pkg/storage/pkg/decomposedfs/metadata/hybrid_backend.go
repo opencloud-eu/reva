@@ -517,11 +517,8 @@ func (b HybridBackend) Lock(n MetadataNode) (UnlockFunc, error) {
 		}
 	}
 	return func() error {
-		err := mlock.Close()
-		if err != nil {
-			return err
-		}
-		return os.Remove(metaLockPath)
+		// Warning: do not remove the lockfile or we may lock the same file more than once, https://github.com/opencloud-eu/opencloud/issues/1793
+		return mlock.Close()
 	}, nil
 }
 
