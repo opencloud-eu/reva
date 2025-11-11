@@ -400,6 +400,38 @@ func (store DecomposedFsStore) updateExistingNode(ctx context.Context, session *
 		if err := os.Chtimes(versionPath, oldNodeMtime, oldNodeMtime); err != nil {
 			return unlock, errtypes.InternalError(fmt.Sprintf("failed to change mtime of version node: %s", err))
 		}
+
+		// If another upload on the same Node is currently being processed. That upload's blob now needs to be written
+		// to the revision node we just created.
+		if old.IsProcessing(ctx) {
+			// get the other upload's session and update its nodeid
+			processingID, err := old.ProcessingID(ctx)
+			switch {
+			case err != nil:
+				appctx.GetLogger(ctx).Error().Err(err).Msg("failed to get processing id of existing node")
+				return unlock, errtypes.InternalError(fmt.Sprintf("failed to get processing id of existing node: %s", err))
+			case processingID == "":
+				// processingID can be empty (e.g. when the node was marked processing manually, as e.g. for the GDPR export)
+				// this is fine and we can just return here
+				return unlock, nil
+			}
+			sessionInProgress, err := store.Get(ctx, processingID)
+			switch {
+			case errors.Is(err, tusd.ErrNotFound):
+				appctx.GetLogger(ctx).Error().Err(err).Str("uploadid", processingID).Msg("upload session of existing node not found")
+				return unlock, nil
+			case err != nil:
+				appctx.GetLogger(ctx).Error().Err(err).Str("uploadid", processingID).Msg("failed to get upload session of existing node")
+				return unlock, errtypes.InternalError(fmt.Sprintf("failed to get upload session of existing node: %s", err))
+			}
+			// Update the sessions node id to point to the created version node
+			sessionInProgress.SetStorageValue("NodeId", versionID)
+			err = sessionInProgress.Persist(ctx)
+			if err != nil {
+				appctx.GetLogger(ctx).Error().Err(err).Str("uploadid", processingID).Msg("failed to persists updated upload session")
+				return unlock, errtypes.InternalError(fmt.Sprintf("failed to persist upload session: %s", err))
+			}
+		}
 	}
 
 	session.info.MetaData["sizeDiff"] = strconv.FormatInt((int64(fsize) - old.Blobsize), 10)
