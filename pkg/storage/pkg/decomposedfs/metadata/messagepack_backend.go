@@ -285,8 +285,14 @@ func (b MessagePackBackend) Purge(_ context.Context, n MetadataNode) error {
 		return err
 	}
 
-	// delete the metadata lockfile
-	_ = os.Remove(b.LockfilePath(n))
+	internalPath := n.InternalPath()
+	// for trash files always use the path without the timestamp
+	parts := strings.SplitN(n.GetID(), ".T.", 2)
+	if len(parts) > 1 {
+		internalPath = strings.TrimSuffix(internalPath, ".T."+parts[1])
+	}
+
+	_ = os.Remove(internalPath + ".mlock")
 
 	return os.Remove(b.MetadataPath(n))
 }
