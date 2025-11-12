@@ -4,10 +4,11 @@
 
 ### ❤️ Thanks to all contributors! ❤️
 
-@butonic, @micbar, @rhafer
+@JammingBen, @butonic, @micbar, @rhafer
 
 ### 🐛 Bug Fixes
 
+- fix: signed URLs containing a hash [[#415](https://github.com/opencloud-eu/reva/pull/415)]
 - fix metadata locking [[#411](https://github.com/opencloud-eu/reva/pull/411)]
 - fix: isTemporary() check for absolute paths [[#406](https://github.com/opencloud-eu/reva/pull/406)]
 
