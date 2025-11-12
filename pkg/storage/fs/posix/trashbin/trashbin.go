@@ -510,10 +510,6 @@ func (tb *Trashbin) EmptyRecycle(ctx context.Context, spaceID string) error {
 
 	// Enqueue all trash items
 	for _, entry := range entries {
-		if !entry.IsDir() {
-			continue
-		}
-
 		name := entry.Name()
 		if !strings.HasSuffix(name, ".trashitem") {
 			continue
