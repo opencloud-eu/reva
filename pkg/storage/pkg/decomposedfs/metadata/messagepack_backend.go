@@ -284,6 +284,16 @@ func (b MessagePackBackend) Purge(_ context.Context, n MetadataNode) error {
 	if err := b.metaCache.RemoveMetadata(b.cacheKey(n)); err != nil {
 		return err
 	}
+
+	internalPath := n.InternalPath()
+	// for trash files always use the path without the timestamp
+	parts := strings.SplitN(n.GetID(), ".T.", 2)
+	if len(parts) > 1 {
+		internalPath = strings.TrimSuffix(internalPath, ".T."+parts[1])
+	}
+
+	_ = os.Remove(internalPath + ".mlock")
+
 	return os.Remove(b.MetadataPath(n))
 }
 
@@ -319,11 +329,8 @@ func (b MessagePackBackend) Lock(n MetadataNode) (UnlockFunc, error) {
 		return nil, err
 	}
 	return func() error {
-		err := mlock.Close()
-		if err != nil {
-			return err
-		}
-		return os.Remove(metaLockPath)
+		// Warning: do not remove the lockfile or we may lock the same file more than once, https://github.com/opencloud-eu/opencloud/issues/1793
+		return mlock.Close()
 	}, nil
 }
 
