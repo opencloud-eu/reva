@@ -13,6 +13,7 @@
 
 ### 📦️ Dependencies
 
+- chore(deps): bump golang.org/x/sync from 0.17.0 to 0.18.0 [[#413](https://github.com/opencloud-eu/reva/pull/413)]
 - chore(deps): bump github.com/nats-io/nats-server/v2 from 2.12.0 to 2.12.1 [[#409](https://github.com/opencloud-eu/reva/pull/409)]
 - chore(deps): bump github.com/prometheus/alertmanager from 0.28.1 to 0.29.0 [[#408](https://github.com/opencloud-eu/reva/pull/408)]
 - chore(deps): bump github.com/minio/minio-go/v7 from 7.0.95 to 7.0.97 [[#407](https://github.com/opencloud-eu/reva/pull/407)]
