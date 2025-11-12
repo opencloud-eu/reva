@@ -1,13 +1,14 @@
 # Changelog
 
-## [2.39.2](https://github.com/opencloud-eu/reva/releases/tag/v2.39.2) - 2025-11-10
+## [2.39.2](https://github.com/opencloud-eu/reva/releases/tag/v2.39.2) - 2025-11-12
 
 ### ❤️ Thanks to all contributors! ❤️
 
-@micbar, @rhafer
+@butonic, @micbar, @rhafer
 
 ### 🐛 Bug Fixes
 
+- fix metadata locking [[#411](https://github.com/opencloud-eu/reva/pull/411)]
 - fix: isTemporary() check for absolute paths [[#406](https://github.com/opencloud-eu/reva/pull/406)]
 
 ### 📦️ Dependencies
