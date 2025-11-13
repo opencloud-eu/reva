@@ -4,7 +4,11 @@
 
 ### ❤️ Thanks to all contributors! ❤️
 
-@butonic
+@butonic, @dragonchaser
+
+### 🐛 Bug Fixes
+
+- Prevent space admin from listing other tennants spaces [[#412](https://github.com/opencloud-eu/reva/pull/412)]
 
 ### 📦️ Dependencies
 
