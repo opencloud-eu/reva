@@ -455,6 +455,36 @@ func (tb *Trashbin) PurgeRecycleItem(ctx context.Context, spaceID, key, relative
 						if err := os.Remove(it.path); err != nil && !os.IsNotExist(err) {
 							tb.log.Error().Err(err).Str("path", it.path).Msg("Failed to delete file")
 						}
+
+						// delete revisions
+						globPattern := tb.lu.InternalPath(spaceID, id+node.RevisionIDDelimiter) + "*"
+						revs, err := filepath.Glob(globPattern)
+						if err != nil {
+							tb.log.Error().Err(err).Str("path", globPattern).Msg("glob failed badly")
+						}
+						for _, rev := range revs {
+							if tb.lu.MetadataBackend().IsMetaFile(rev) {
+								continue
+							}
+
+							if err := os.Remove(rev); err != nil {
+								tb.log.Error().Err(err).Str("revision", rev).Msg("error removing revision file")
+							}
+
+							// delete the metadata mlock file
+							parts := strings.SplitN(filepath.Base(rev), node.RevisionIDDelimiter, 2)
+							if len(parts) != 2 {
+								tb.log.Error().Str("path", rev).Msg("could not split revision")
+								continue
+							}
+							revId := id + node.RevisionIDDelimiter + parts[1]
+							mlockFile := tb.lu.MetadataBackend().LockfilePath(&trashNode{spaceID: spaceID, id: revId})
+							if err := os.Remove(mlockFile); err != nil {
+								tb.log.Error().Err(err).Str("path", mlockFile).Msg("error removing metadata mlock file")
+							}
+
+						}
+
 					}
 				}
 			}
