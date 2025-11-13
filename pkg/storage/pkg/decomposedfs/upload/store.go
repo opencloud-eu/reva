@@ -22,6 +22,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	iofs "io/fs"
 	"os"
 	"path/filepath"
@@ -110,7 +111,7 @@ func (store DecomposedFsStore) List(ctx context.Context) ([]*DecomposedFsSession
 
 	for _, info := range infoFiles {
 		id := strings.TrimSuffix(filepath.Base(info), filepath.Ext(info))
-		progress, err := store.Get(ctx, id)
+		progress, err := store.Get(ctx, id, false)
 		if err != nil {
 			appctx.GetLogger(ctx).Error().Interface("path", info).Msg("Decomposedfs: could not getUploadSession")
 			continue
@@ -121,8 +122,9 @@ func (store DecomposedFsStore) List(ctx context.Context) ([]*DecomposedFsSession
 	return uploads, nil
 }
 
-// Get returns the upload session for the given upload id
-func (store DecomposedFsStore) Get(ctx context.Context, id string) (*DecomposedFsSession, error) {
+// Get returns the upload session for the given upload id, if locked it true the underlying session file is locked for writing
+// the lock needs to be released by calling session.Unlock()
+func (store DecomposedFsStore) Get(ctx context.Context, id string, locked bool) (*DecomposedFsSession, error) {
 	sessionPath := sessionPath(store.root, id)
 	match := _idRegexp.FindStringSubmatch(sessionPath)
 	if len(match) < 2 {
@@ -133,7 +135,7 @@ func (store DecomposedFsStore) Get(ctx context.Context, id string) (*DecomposedF
 		store: store,
 		info:  tusd.FileInfo{},
 	}
-	data, err := os.ReadFile(sessionPath)
+	f, err := lockedfile.OpenFile(sessionPath, os.O_RDWR, 0600)
 	if err != nil {
 		// handle stale NFS file handles that can occur when the file is deleted betwenn the ATTR and FOPEN call of os.ReadFile
 		if pathErr, ok := err.(*os.PathError); ok && pathErr.Err == syscall.ESTALE {
@@ -146,8 +148,20 @@ func (store DecomposedFsStore) Get(ctx context.Context, id string) (*DecomposedF
 		}
 		return nil, err
 	}
+	if !locked {
+		defer func() {
+			_ = f.Close()
+		}()
+	} else {
+		session.lockedFileHandle = f
+	}
 
-	if err := json.Unmarshal(data, &session.info); err != nil {
+	data, err := io.ReadAll(f)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read upload info: %w", err)
+	}
+
+	if err = json.Unmarshal(data, &session.info); err != nil {
 		return nil, err
 	}
 
@@ -248,6 +262,8 @@ func (store DecomposedFsStore) CreateNodeForUpload(ctx context.Context, session 
 		unlock, err = store.tp.InitNewNode(ctx, n, uint64(session.Size()))
 		if err != nil {
 			appctx.GetLogger(ctx).Error().Str("path", n.InternalPath()).Err(err).Msg("failed to init new node")
+			_ = unlock()
+			return nil, err
 		}
 		session.info.MetaData["sizeDiff"] = strconv.FormatInt(session.Size(), 10)
 	}
@@ -415,7 +431,12 @@ func (store DecomposedFsStore) updateExistingNode(ctx context.Context, session *
 				// this is fine and we can just return here
 				return unlock, nil
 			}
-			sessionInProgress, err := store.Get(ctx, processingID)
+			sessionInProgress, err := store.Get(ctx, processingID, true)
+			defer func() {
+				if sessionInProgress != nil {
+					_ = sessionInProgress.Unlock()
+				}
+			}()
 			switch {
 			case errors.Is(err, tusd.ErrNotFound):
 				appctx.GetLogger(ctx).Error().Err(err).Str("uploadid", processingID).Msg("upload session of existing node not found")

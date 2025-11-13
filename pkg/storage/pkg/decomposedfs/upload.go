@@ -374,7 +374,7 @@ func (fs *Decomposedfs) GetUpload(ctx context.Context, id string) (tusd.Upload, 
 	var ul tusd.Upload
 	var err error
 	_ = fs.um.RunInBaseScope(func() error {
-		ul, err = fs.sessionStore.Get(ctx, id)
+		ul, err = fs.sessionStore.Get(ctx, id, false)
 		return nil
 	})
 	return ul, err
@@ -384,7 +384,7 @@ func (fs *Decomposedfs) GetUpload(ctx context.Context, id string) (tusd.Upload, 
 func (fs *Decomposedfs) ListUploadSessions(ctx context.Context, filter storage.UploadSessionFilter) ([]storage.UploadSession, error) {
 	var sessions []*upload.DecomposedFsSession
 	if filter.ID != nil && *filter.ID != "" {
-		session, err := fs.sessionStore.Get(ctx, *filter.ID)
+		session, err := fs.sessionStore.Get(ctx, *filter.ID, false)
 		if err != nil {
 			return nil, err
 		}

@@ -289,6 +289,8 @@ func (session *DecomposedFsSession) Finalize(ctx context.Context) (err error) {
 	ctx, span := tracer.Start(session.Context(ctx), "Finalize")
 	defer span.End()
 
+	// The node should already be locked by the caller (PostProcessing()) so no need
+	// to lock it here.
 	revisionNode := node.New(session.SpaceID(), session.NodeID(), "", "", session.Size(), session.ID(),
 		provider.ResourceType_RESOURCE_TYPE_FILE, session.SpaceOwner(), session.store.lu)
 
@@ -302,13 +304,6 @@ func (session *DecomposedFsSession) Finalize(ctx context.Context) (err error) {
 	default:
 		revisionNode.SpaceRoot = spaceRoot
 	}
-
-	// lock the node before writing the blob
-	unlock, err := session.store.lu.MetadataBackend().Lock(revisionNode)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = unlock() }()
 
 	// upload the data to the blobstore
 	_, subspan := tracer.Start(ctx, "WriteBlob")

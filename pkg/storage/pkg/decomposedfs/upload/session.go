@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/google/renameio/v2"
+	"github.com/rogpeppe/go-internal/lockedfile"
 	tusd "github.com/tus/tusd/v2/pkg/handler"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -43,7 +44,8 @@ import (
 type DecomposedFsSession struct {
 	store DecomposedFsStore
 	// for now, we keep the json files in the uploads folder
-	info tusd.FileInfo
+	info             tusd.FileInfo
+	lockedFileHandle *lockedfile.File
 }
 
 // Context returns a context with the user, logger and lockid used when initiating the upload session
@@ -114,6 +116,14 @@ func (session *DecomposedFsSession) Persist(ctx context.Context) error {
 		return err
 	}
 	return renameio.WriteFile(sessionPath, d, 0600)
+}
+
+// Unlock releases the lock on the upload session info file
+func (session *DecomposedFsSession) Unlock() error {
+	if session.lockedFileHandle != nil {
+		return session.lockedFileHandle.Close()
+	}
+	return nil
 }
 
 // ToFileInfo returns tus compatible FileInfo so the tus handler can access the upload offset
