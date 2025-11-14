@@ -2,7 +2,7 @@
 
 This will require some PHP-related tools to run, for instance on Ubuntu you will need `apt install -y php-xml php-curl composer`.
 
-1. [Build reva](https://github.com/cs3org/reva/tree/edge?tab=readme-ov-file#build)
+1. [Build reva](https://github.com/opencloud-eu/reva/tree/main?tab=readme-ov-file#build)
 
 2. Start the reva server (with decomposed storage driver)
 
