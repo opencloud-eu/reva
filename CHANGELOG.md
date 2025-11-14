@@ -1,5 +1,23 @@
 # Changelog
 
+## [2.39.3](https://github.com/opencloud-eu/reva/releases/tag/v2.39.3) - 2025-11-14
+
+### ❤️ Thanks to all contributors! ❤️
+
+@ScharfViktor, @butonic, @dragonchaser
+
+### 📚 Documentation
+
+- change link it testing docs [[#420](https://github.com/opencloud-eu/reva/pull/420)]
+
+### 🐛 Bug Fixes
+
+- Prevent space admin from listing other tennants spaces [[#412](https://github.com/opencloud-eu/reva/pull/412)]
+
+### 📦️ Dependencies
+
+- chore(deps): bump golang.org/x/sys from 0.37.0 to 0.38.0 [[#410](https://github.com/opencloud-eu/reva/pull/410)]
+
 ## [2.39.2](https://github.com/opencloud-eu/reva/releases/tag/v2.39.2) - 2025-11-12
 
 ### ❤️ Thanks to all contributors! ❤️
