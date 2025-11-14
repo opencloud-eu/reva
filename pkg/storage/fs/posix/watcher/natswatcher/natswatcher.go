@@ -1,4 +1,4 @@
-package tree
+package natswatcher
 
 import (
 	"context"
@@ -12,74 +12,66 @@ import (
 	"github.com/cenkalti/backoff"
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/options"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/watcher"
 	"github.com/rs/zerolog"
 	"github.com/vmihailenco/msgpack/v5"
 )
 
-// Config is the configuration needed for a NATS event stream.
-type Config struct {
-	Endpoint             string        `mapstructure:"address"`
-	Cluster              string        `mapstructure:"clusterID"`
-	TLSInsecure          bool          `mapstructure:"tls-insecure"`
-	TLSRootCACertificate string        `mapstructure:"tls-root-ca-cert"`
-	EnableTLS            bool          `mapstructure:"enable-tls"`
-	AuthUsername         string        `mapstructure:"username"`
-	AuthPassword         string        `mapstructure:"password"`
-	MaxAckPending        int           `mapstructure:"max-ack-pending"`
-	AckWait              time.Duration `mapstructure:"ack-wait"`
-}
-
 // natsEvent represents the event encoded in MessagePack.
 // we abbreviate the the properties to save some space
 type natsEvent struct {
-	Event           string `msgpack:"e"`
-	Path            string `msgpack:"p,omitempty"`
-	DestinationPath string `msgpack:"d,omitempty"`
-	BytesWritten    int64  `msgpack:"b,omitempty"`
-	Type            string `msgpack:"t,omitempty"`
+	Event  string `msgpack:"e"`
+	Path   string `msgpack:"p,omitempty"`
+	ToPath string `msgpack:"t,omitempty"`
+	IsDir  bool   `msgpack:"d,omitempty"`
 }
 
 // NatsWatcher consumes filesystem-style events from NATS JetStream.
 type NatsWatcher struct {
-	tree      *Tree
+	ctx       context.Context
+	tree      Scannable
 	log       *zerolog.Logger
 	watchRoot string
-	config    Config
-	group     string
+	config    options.NatsWatcherConfig
+}
+
+type Scannable interface {
+	Scan(path string, action watcher.EventAction, isDir bool) error
 }
 
 // NewNatsWatcher creates a new NATS watcher.
-func NewNatsWatcher(tree *Tree, cfg Config, group string, log *zerolog.Logger) (*NatsWatcher, error) {
+func New(ctx context.Context, tree Scannable, cfg options.NatsWatcherConfig, watchRoot string, log *zerolog.Logger) (*NatsWatcher, error) {
 	return &NatsWatcher{
+		ctx:       ctx,
 		tree:      tree,
 		log:       log,
-		watchRoot: tree.options.WatchRoot,
+		watchRoot: watchRoot,
 		config:    cfg,
-		group:     group,
 	}, nil
 }
 
 // Watch starts consuming events from a NATS JetStream subject
-func (w *NatsWatcher) Watch(ctx context.Context, streamName, subject string) error {
-	w.log.Info().Str("stream", streamName).Str("subject", subject).Msg("starting NATS watcher with auto-reconnect")
+func (w *NatsWatcher) Watch(path string) {
+	w.log.Info().Str("stream", w.config.Stream).Msg("starting NATS watcher with auto-reconnect")
 
 	for {
 		select {
-		case <-ctx.Done():
-			w.log.Info().Msg("context cancelled, stopping NATS watcher")
-			return ctx.Err()
+		case <-w.ctx.Done():
+			w.log.Debug().Msg("context cancelled, stopping NATS watcher")
+			return
 		default:
 		}
 
 		// Try to connect with exponential backoff
-		nc, js, err := w.connectWithBackoff(ctx)
+		nc, js, err := w.connectWithBackoff()
 		if err != nil {
 			w.log.Error().Err(err).Msg("failed to establish NATS connection after retries")
 			time.Sleep(5 * time.Second)
 			continue
 		}
 
-		if err := w.consume(ctx, js, streamName, subject); err != nil {
+		if err := w.consume(js); err != nil {
 			w.log.Error().Err(err).Msg("NATS consumer exited with error, reconnecting")
 		}
 
@@ -90,7 +82,7 @@ func (w *NatsWatcher) Watch(ctx context.Context, streamName, subject string) err
 }
 
 // connectWithBackoff repeatedly attempts to connect to NATS JetStream with exponential backoff.
-func (w *NatsWatcher) connectWithBackoff(ctx context.Context) (*nats.Conn, jetstream.JetStream, error) {
+func (w *NatsWatcher) connectWithBackoff() (*nats.Conn, jetstream.JetStream, error) {
 	var nc *nats.Conn
 	var js jetstream.JetStream
 
@@ -101,8 +93,8 @@ func (w *NatsWatcher) connectWithBackoff(ctx context.Context) (*nats.Conn, jetst
 
 	connect := func() error {
 		select {
-		case <-ctx.Done():
-			return backoff.Permanent(ctx.Err())
+		case <-w.ctx.Done():
+			return backoff.Permanent(w.ctx.Err())
 		default:
 		}
 
@@ -124,33 +116,30 @@ func (w *NatsWatcher) connectWithBackoff(ctx context.Context) (*nats.Conn, jetst
 		return nil
 	}
 
-	if err := backoff.Retry(connect, backoff.WithContext(b, ctx)); err != nil {
+	if err := backoff.Retry(connect, backoff.WithContext(b, w.ctx)); err != nil {
 		return nil, nil, err
 	}
 	return nc, js, nil
 }
 
 // consume subscribes to JetStream and handles messages.
-func (w *NatsWatcher) consume(ctx context.Context, js jetstream.JetStream, streamName, subject string) error {
-	stream, err := js.Stream(ctx, streamName)
+func (w *NatsWatcher) consume(js jetstream.JetStream) error {
+	stream, err := js.Stream(w.ctx, w.config.Stream)
 	if err != nil {
 		return fmt.Errorf("failed to get stream: %w", err)
 	}
 
-	consumer, err := stream.CreateOrUpdateConsumer(ctx, jetstream.ConsumerConfig{
-		Durable:       w.group,
+	consumer, err := stream.CreateOrUpdateConsumer(w.ctx, jetstream.ConsumerConfig{
+		Durable:       w.config.Durable,
 		AckPolicy:     jetstream.AckExplicitPolicy,
 		MaxAckPending: w.config.MaxAckPending,
 		AckWait:       w.config.AckWait,
-		FilterSubject: subject,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to create consumer: %w", err)
 	}
-
 	w.log.Info().
-		Str("stream", streamName).
-		Str("subject", subject).
+		Str("stream", w.config.Stream).
 		Msg("started consuming from JetStream")
 
 	_, err = consumer.Consume(func(msg jetstream.Msg) {
@@ -173,8 +162,8 @@ func (w *NatsWatcher) consume(ctx context.Context, js jetstream.JetStream, strea
 		return fmt.Errorf("consumer error: %w", err)
 	}
 
-	<-ctx.Done()
-	return ctx.Err()
+	<-w.ctx.Done()
+	return w.ctx.Err()
 }
 
 // connect establishes a single NATS connection with optional TLS and auth.
@@ -198,7 +187,7 @@ func (w *NatsWatcher) connect() (*nats.Conn, error) {
 		}
 	}
 
-	opts := []nats.Option{nats.Name("opencloud-posixfs-nats")}
+	opts := []nats.Option{nats.Name("opencloud-posixfs-natswatcher")}
 	if tlsConf != nil {
 		opts = append(opts, nats.Secure(tlsConf))
 	}
@@ -215,29 +204,28 @@ func (w *NatsWatcher) handleEvent(ev natsEvent) {
 	// Determine the relevant path
 	path := filepath.Join(w.watchRoot, ev.Path)
 
-	isDir := ev.Type == "dir"
-
 	switch ev.Event {
 	case "CREATE":
-		err = w.tree.Scan(path, ActionCreate, isDir)
+		err = w.tree.Scan(path, watcher.ActionCreate, ev.IsDir)
 	case "MOVED_TO":
-		err = w.tree.Scan(path, ActionMove, isDir)
+		err = w.tree.Scan(path, watcher.ActionMove, ev.IsDir)
 	case "MOVE_FROM":
-		err = w.tree.Scan(path, ActionMoveFrom, isDir)
+		err = w.tree.Scan(path, watcher.ActionMoveFrom, ev.IsDir)
 	case "MOVE": // support event with source and target path
-		dst := filepath.Join(w.watchRoot, ev.DestinationPath)
-		if dst == "" {
-			w.log.Warn().Interface("event", ev).Msg("MOVE event missing destination path")
-			return
-		}
-		err = w.tree.Scan(path, ActionMoveFrom, isDir)
+		err = w.tree.Scan(path, watcher.ActionMoveFrom, ev.IsDir)
 		if err == nil {
-			err = w.tree.Scan(dst, ActionMove, isDir)
+			w.log.Error().Err(err).Interface("event", ev).Msg("error processing event")
+		}
+		tgt := filepath.Join(w.watchRoot, ev.ToPath)
+		if tgt == "" {
+			w.log.Warn().Interface("event", ev).Msg("MOVE event missing target path")
+		} else {
+			err = w.tree.Scan(tgt, watcher.ActionMove, ev.IsDir)
 		}
 	case "CLOSE_WRITE":
-		err = w.tree.Scan(path, ActionUpdate, isDir)
+		err = w.tree.Scan(path, watcher.ActionUpdate, ev.IsDir)
 	case "DELETE":
-		err = w.tree.Scan(path, ActionDelete, isDir)
+		err = w.tree.Scan(path, watcher.ActionDelete, ev.IsDir)
 	default:
 		w.log.Warn().Str("event", ev.Event).Msg("unhandled event type")
 	}
