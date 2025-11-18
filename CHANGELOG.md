@@ -16,6 +16,7 @@
 
 ### 📦️ Dependencies
 
+- chore(deps): bump github.com/google/renameio/v2 from 2.0.0 to 2.0.1 [[#422](https://github.com/opencloud-eu/reva/pull/422)]
 - chore(deps): bump golang.org/x/sys from 0.37.0 to 0.38.0 [[#410](https://github.com/opencloud-eu/reva/pull/410)]
 
 ## [2.39.2](https://github.com/opencloud-eu/reva/releases/tag/v2.39.2) - 2025-11-12
