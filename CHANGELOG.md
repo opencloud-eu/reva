@@ -17,6 +17,7 @@
 
 ### 📦️ Dependencies
 
+- chore(deps): bump golang.org/x/oauth2 from 0.32.0 to 0.33.0 [[#417](https://github.com/opencloud-eu/reva/pull/417)]
 - chore(deps): bump golang.org/x/crypto from 0.43.0 to 0.44.0 [[#423](https://github.com/opencloud-eu/reva/pull/423)]
 - chore(deps): bump github.com/google/renameio/v2 from 2.0.0 to 2.0.1 [[#422](https://github.com/opencloud-eu/reva/pull/422)]
 - chore(deps): bump golang.org/x/sys from 0.37.0 to 0.38.0 [[#410](https://github.com/opencloud-eu/reva/pull/410)]
