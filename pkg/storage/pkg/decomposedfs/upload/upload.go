@@ -392,7 +392,13 @@ func (session *DecomposedFsSession) Cleanup(revertNodeMetadata, cleanBin, cleanI
 				}
 
 				// restore the revision
-				if err := session.store.tp.RestoreRevision(ctx, revisionNode, n); err != nil {
+				mtime, err := revisionNode.GetMTime(ctx)
+				if err != nil {
+					sublog.Error().Err(err).Str("versionID", versionID).Msg("getting mtime of revision node failed")
+					mtime = time.Now()
+				}
+
+				if err := session.store.tp.RestoreRevision(ctx, revisionNode, n, mtime); err != nil {
 					sublog.Error().Err(err).Str("versionID", versionID).Msg("restoring revision node failed")
 				}
 
