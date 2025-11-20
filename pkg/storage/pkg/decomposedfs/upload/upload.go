@@ -371,35 +371,45 @@ func (session *DecomposedFsSession) removeNode(ctx context.Context) {
 // cleanup cleans up after the upload is finished
 func (session *DecomposedFsSession) Cleanup(revertNodeMetadata, cleanBin, cleanInfo bool) {
 	ctx := session.Context(context.Background())
+	sublog := session.store.log.With().Str("cleanup sessionid", session.ID()).Bool("revertNodeMetadata", revertNodeMetadata).Bool("cleanBin", cleanBin).
+		Bool("cleanInfo", cleanInfo).Logger()
 
 	if revertNodeMetadata {
 		n, err := session.Node(ctx)
 		if err != nil {
-			appctx.GetLogger(ctx).Error().Err(err).Str("sessionid", session.ID()).Msg("reading node for session failed")
+			sublog.Error().Err(err).Msg("reading node for session failed")
 		} else {
 			if session.NodeExists() && session.info.MetaData["versionID"] != "" {
 				versionID := session.info.MetaData["versionID"]
-				revisionNode := node.NewBaseNode(n.SpaceID, versionID, session.store.lu)
+				sublog.Debug().Str("nodepath", n.InternalPath()).Str("versionID", versionID).Msg("restoring revision")
+				revisionNode, err := node.ReadNode(ctx, session.store.lu, session.SpaceID(), versionID, false, n.SpaceRoot, false)
+				if err != nil {
+					sublog.Error().Err(err).Str("versionID", versionID).Msg("reading revision node failed")
+				}
 
-				if err := session.store.lu.CopyMetadata(ctx, revisionNode, n, func(attributeName string, value []byte) (newValue []byte, copy bool) {
-					return value, strings.HasPrefix(attributeName, prefixes.ChecksumPrefix) ||
-						attributeName == prefixes.TypeAttr ||
-						attributeName == prefixes.BlobIDAttr ||
-						attributeName == prefixes.BlobsizeAttr ||
-						attributeName == prefixes.MTimeAttr
-				}, true); err != nil {
-					appctx.GetLogger(ctx).Info().Str("version", versionID).Str("nodepath", n.InternalPath()).Err(err).Msg("renaming version node failed")
+				if !revisionNode.Exists {
+					sublog.Error().Str("versionID", versionID).Msg("revision node does not exist")
+				}
+
+				// restore the revision
+				mtime, err := revisionNode.GetMTime(ctx)
+				if err != nil {
+					sublog.Error().Err(err).Str("versionID", versionID).Msg("getting mtime of revision node failed")
+					mtime = time.Now()
+				}
+
+				if err := session.store.tp.RestoreRevision(ctx, revisionNode, n, mtime); err != nil {
+					sublog.Error().Err(err).Str("versionID", versionID).Msg("restoring revision node failed")
 				}
 
 				if err := os.RemoveAll(revisionNode.InternalPath()); err != nil {
-					appctx.GetLogger(ctx).Info().Str("version", versionID).Str("nodepath", n.InternalPath()).Err(err).Msg("error removing version")
+					sublog.Error().Err(err).Str("revisionpath", revisionNode.InternalPath()).Msg("removing restored revision file failed")
 				}
-
 			} else {
 				// if no other upload session is in progress (processing id != session id) or has finished (processing id == "")
 				latestSession, err := n.ProcessingID(ctx)
 				if err != nil {
-					appctx.GetLogger(ctx).Error().Err(err).Str("spaceid", n.SpaceID).Str("nodeid", n.ID).Str("uploadid", session.ID()).Msg("reading processingid for session failed")
+					sublog.Error().Err(err).Str("spaceid", n.SpaceID).Str("nodeid", n.ID).Str("uploadid", session.ID()).Msg("reading processingid for session failed")
 				}
 				if latestSession == session.ID() {
 					// actually delete the node
