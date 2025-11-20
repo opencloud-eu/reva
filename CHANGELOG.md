@@ -6,13 +6,14 @@
 
 @ScharfViktor, @butonic, @dragonchaser, @dragotin, @rhafer
 
+### 🐛 Bug Fixes
+
+- fix: restore revision after negative post-processing outcome [[#424](https://github.com/opencloud-eu/reva/pull/424)]
+- Prevent space admin from listing other tennants spaces [[#412](https://github.com/opencloud-eu/reva/pull/412)]
+
 ### 📚 Documentation
 
 - change link it testing docs [[#420](https://github.com/opencloud-eu/reva/pull/420)]
-
-### 🐛 Bug Fixes
-
-- Prevent space admin from listing other tennants spaces [[#412](https://github.com/opencloud-eu/reva/pull/412)]
 
 ### 📦️ Dependencies
 
