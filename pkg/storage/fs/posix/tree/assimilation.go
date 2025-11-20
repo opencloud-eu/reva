@@ -772,6 +772,15 @@ assimilate:
 		return nil, nil, errors.Wrap(err, "failed to set attributes")
 	}
 
+	// clear the status attribute if it was set before, if there was any upload to this file in progress
+	// it needs notice that this file was changes meanwhile.
+	if _, ok := previousAttribs[prefixes.StatusPrefix]; ok {
+		err = t.lookup.MetadataBackend().Remove(context.Background(), bn, prefixes.StatusPrefix, false)
+		if err != nil {
+			return nil, nil, errors.Wrap(err, "failed to clear status attribute")
+		}
+
+	}
 	if err := t.lookup.CacheID(context.Background(), spaceID, id, path); err != nil {
 		t.log.Error().Err(err).Str("spaceID", spaceID).Str("id", id).Str("path", path).Msg("could not cache id")
 	}
