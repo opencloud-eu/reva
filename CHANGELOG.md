@@ -1,10 +1,14 @@
 # Changelog
 
-## [2.39.3](https://github.com/opencloud-eu/reva/releases/tag/v2.39.3) - 2025-11-20
+## [2.40.0](https://github.com/opencloud-eu/reva/releases/tag/v2.40.0) - 2025-11-21
 
 ### ❤️ Thanks to all contributors! ❤️
 
-@ScharfViktor, @butonic, @dragonchaser, @dragotin, @rhafer
+@AlexAndBear, @ScharfViktor, @butonic, @dragonchaser, @dragotin, @rhafer
+
+### ✨ Features
+
+- feat: introduce SupportRadicale capability [[#428](https://github.com/opencloud-eu/reva/pull/428)]
 
 ### 🐛 Bug Fixes
 
