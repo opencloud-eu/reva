@@ -29,8 +29,7 @@ func LocalUserFederatedID(id *userpb.UserId, domain string) *userpb.UserId {
 }
 
 // DecodeRemoteUserFederatedID decodes opaque id into remote user's federated id by
-// 1. decoding the base64 encoded opaque id
-// 2. splitting the opaque id at the last @ to get the opaque id and the domain
+// splitting the opaque id at the last @ to get the opaque id and the domain
 func DecodeRemoteUserFederatedID(id *userpb.UserId) *userpb.UserId {
 	remoteId := &userpb.UserId{
 		Type:     userpb.UserType_USER_TYPE_PRIMARY,
