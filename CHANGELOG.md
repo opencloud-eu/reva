@@ -1,5 +1,31 @@
 # Changelog
 
+## [2.40.0](https://github.com/opencloud-eu/reva/releases/tag/v2.40.0) - 2025-11-21
+
+### ❤️ Thanks to all contributors! ❤️
+
+@AlexAndBear, @ScharfViktor, @butonic, @dragonchaser, @dragotin, @rhafer
+
+### ✨ Features
+
+- feat: introduce SupportRadicale capability [[#428](https://github.com/opencloud-eu/reva/pull/428)]
+
+### 🐛 Bug Fixes
+
+- fix: restore revision after negative post-processing outcome [[#424](https://github.com/opencloud-eu/reva/pull/424)]
+- Prevent space admin from listing other tennants spaces [[#412](https://github.com/opencloud-eu/reva/pull/412)]
+
+### 📚 Documentation
+
+- change link it testing docs [[#420](https://github.com/opencloud-eu/reva/pull/420)]
+
+### 📦️ Dependencies
+
+- chore(deps): bump golang.org/x/oauth2 from 0.32.0 to 0.33.0 [[#417](https://github.com/opencloud-eu/reva/pull/417)]
+- chore(deps): bump golang.org/x/crypto from 0.43.0 to 0.44.0 [[#423](https://github.com/opencloud-eu/reva/pull/423)]
+- chore(deps): bump github.com/google/renameio/v2 from 2.0.0 to 2.0.1 [[#422](https://github.com/opencloud-eu/reva/pull/422)]
+- chore(deps): bump golang.org/x/sys from 0.37.0 to 0.38.0 [[#410](https://github.com/opencloud-eu/reva/pull/410)]
+
 ## [2.39.2](https://github.com/opencloud-eu/reva/releases/tag/v2.39.2) - 2025-11-12
 
 ### ❤️ Thanks to all contributors! ❤️
