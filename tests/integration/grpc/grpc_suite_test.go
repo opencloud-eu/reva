@@ -260,6 +260,11 @@ func startRevads(configs []RevadConfig, variables map[string]string) (map[string
 				if err != nil {
 					return errors.Wrap(err, "Could not kill revad")
 				}
+
+				// Wait for the process to actually terminate and reap it
+				// This prevents zombie processes
+				_ = cmd.Wait()
+
 				_ = waitForPort(ownAddress, "close")
 				if keepLogs {
 					fmt.Println("Test failed, keeping root", tmpRoot, "around for debugging")
