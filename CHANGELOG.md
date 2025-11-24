@@ -8,6 +8,7 @@
 
 ### 🐛 Bug Fixes
 
+- fix(posixfs): Only copy user.oc xattrs in blobstore.Upload [[#430](https://github.com/opencloud-eu/reva/pull/430)]
 - fix: restore revision after negative post-processing outcome [[#424](https://github.com/opencloud-eu/reva/pull/424)]
 - Prevent space admin from listing other tennants spaces [[#412](https://github.com/opencloud-eu/reva/pull/412)]
 
