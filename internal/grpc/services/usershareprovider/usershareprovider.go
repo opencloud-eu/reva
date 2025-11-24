@@ -364,7 +364,8 @@ func HasGrantPermissions(p *provider.ResourcePermissions) bool {
 }
 
 // spaceRootHasRemainingManager returns true if the given resource has at least one share
-// (excluding the share with excludeShareOpaqueID) that grants both AddGrant and RemoveGrant.
+// (excluding the share with excludeShareOpaqueID) that grants both AddGrant and RemoveGrant
+// and does not expire.
 func (s *service) spaceRootHasRemainingManager(ctx context.Context, resourceID *provider.ResourceId, excludeShareOpaqueID string) (bool, error) {
 	shares, err := s.sm.ListShares(ctx, []*collaboration.Filter{
 		{
@@ -380,7 +381,9 @@ func (s *service) spaceRootHasRemainingManager(ctx context.Context, resourceID *
 			continue
 		}
 		perms := s.GetPermissions().GetPermissions()
-		if perms.GetAddGrant() && perms.GetRemoveGrant() {
+		// Expirable shares won't be computed because the space needs
+		// at least one permanent space manager.
+		if perms.GetAddGrant() && perms.GetRemoveGrant() && s.GetExpiration() == nil {
 			return true, nil
 		}
 	}
