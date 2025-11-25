@@ -55,6 +55,7 @@ type Options struct {
 	TracingEnabled              bool
 	TracingInsecure             bool
 	TracingEndpoint             string
+	TracingExporter             string
 	TracingTransportCredentials credentials.TransportCredentials
 
 	TraceProvider trace.TracerProvider
@@ -264,9 +265,10 @@ func WithTracingInsecure() Option {
 }
 
 // WithTracingExporter option
-// Deprecated: unused
 func WithTracingExporter(exporter string) Option {
-	return func(o *Options) {}
+	return func(o *Options) {
+		o.TracingExporter = exporter
+	}
 }
 
 // WithTracingTransportCredentials option

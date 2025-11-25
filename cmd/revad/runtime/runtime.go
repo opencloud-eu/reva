@@ -149,24 +149,21 @@ func initServers(mainConf map[string]interface{}, log *zerolog.Logger, tp trace.
 }
 
 func initTracing(conf *coreConf) trace.TracerProvider {
-	if conf.TracingEnabled {
-		opts := []rtrace.Option{
-			rtrace.WithExporter(conf.TracingExporter),
-			rtrace.WithEndpoint(conf.TracingEndpoint),
-			rtrace.WithCollector(conf.TracingCollector),
-			rtrace.WithServiceName(conf.TracingServiceName),
-		}
-		if conf.TracingEnabled {
-			opts = append(opts, rtrace.WithEnabled())
-		}
-		if conf.TracingInsecure {
-			opts = append(opts, rtrace.WithInsecure())
-		}
-		tp := rtrace.NewTracerProvider(opts...)
-		rtrace.SetDefaultTracerProvider(tp)
-		return tp
+	opts := []rtrace.Option{
+		rtrace.WithExporter(conf.TracingExporter),
+		rtrace.WithEndpoint(conf.TracingEndpoint),
+		rtrace.WithCollector(conf.TracingCollector),
+		rtrace.WithServiceName(conf.TracingServiceName),
 	}
-	return rtrace.DefaultProvider()
+	if conf.TracingEnabled {
+		opts = append(opts, rtrace.WithEnabled())
+	}
+	if conf.TracingInsecure {
+		opts = append(opts, rtrace.WithInsecure())
+	}
+	tp := rtrace.NewTracerProvider(opts...)
+	rtrace.SetDefaultTracerProvider(tp)
+	return tp
 }
 
 func initCPUCount(conf *coreConf, log *zerolog.Logger) {
