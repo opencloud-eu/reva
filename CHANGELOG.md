@@ -1,5 +1,31 @@
 # Changelog
 
+## [2.39.3](https://github.com/opencloud-eu/reva/releases/tag/v2.39.3) - 2025-11-25
+
+### ❤️ Thanks to all contributors! ❤️
+
+@AlexAndBear, @ScharfViktor, @butonic, @dragonchaser, @dragotin, @rhafer
+
+### 🐛 Bug Fixes
+
+- handle objectguid endianness [[#431](https://github.com/opencloud-eu/reva/pull/431)]
+- reap children [[#432](https://github.com/opencloud-eu/reva/pull/432)]
+- fix(posixfs): Only copy user.oc xattrs in blobstore.Upload [[#430](https://github.com/opencloud-eu/reva/pull/430)]
+- fix: restore revision after negative post-processing outcome [[#424](https://github.com/opencloud-eu/reva/pull/424)]
+- Prevent space admin from listing other tennants spaces [[#412](https://github.com/opencloud-eu/reva/pull/412)]
+
+### 📚 Documentation
+
+- change link it testing docs [[#420](https://github.com/opencloud-eu/reva/pull/420)]
+
+### 📦️ Dependencies
+
+- chore(deps): bump github.com/coreos/go-oidc/v3 from 3.16.0 to 3.17.0 [[#429](https://github.com/opencloud-eu/reva/pull/429)]
+- chore(deps): bump golang.org/x/oauth2 from 0.32.0 to 0.33.0 [[#417](https://github.com/opencloud-eu/reva/pull/417)]
+- chore(deps): bump golang.org/x/crypto from 0.43.0 to 0.44.0 [[#423](https://github.com/opencloud-eu/reva/pull/423)]
+- chore(deps): bump github.com/google/renameio/v2 from 2.0.0 to 2.0.1 [[#422](https://github.com/opencloud-eu/reva/pull/422)]
+- chore(deps): bump golang.org/x/sys from 0.37.0 to 0.38.0 [[#410](https://github.com/opencloud-eu/reva/pull/410)]
+
 ## [2.39.2](https://github.com/opencloud-eu/reva/releases/tag/v2.39.2) - 2025-11-12
 
 ### ❤️ Thanks to all contributors! ❤️
