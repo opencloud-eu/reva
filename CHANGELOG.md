@@ -1,6 +1,6 @@
 # Changelog
 
-## [2.39.3](https://github.com/opencloud-eu/reva/releases/tag/v2.39.3) - 2025-11-24
+## [2.39.3](https://github.com/opencloud-eu/reva/releases/tag/v2.39.3) - 2025-11-25
 
 ### ❤️ Thanks to all contributors! ❤️
 
@@ -8,6 +8,7 @@
 
 ### 🐛 Bug Fixes
 
+- reap children [[#432](https://github.com/opencloud-eu/reva/pull/432)]
 - fix(posixfs): Only copy user.oc xattrs in blobstore.Upload [[#430](https://github.com/opencloud-eu/reva/pull/430)]
 - fix: restore revision after negative post-processing outcome [[#424](https://github.com/opencloud-eu/reva/pull/424)]
 - Prevent space admin from listing other tennants spaces [[#412](https://github.com/opencloud-eu/reva/pull/412)]
