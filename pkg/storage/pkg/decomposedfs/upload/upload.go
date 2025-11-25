@@ -328,7 +328,7 @@ func (session *DecomposedFsSession) Finalize(ctx context.Context) (err error) {
 		// There should be a revision node (created by the other upload that finished before us), read it and upload our blob there.
 		existingRevisionNode, err := node.ReadNode(ctx, session.store.lu, session.SpaceID(), versionID, false, spaceRoot, false)
 		if err != nil || !existingRevisionNode.Exists {
-			// The revision node does has not been created. Like because the file on disk was modified externally and re-assilimated (watchfs == true)
+			// The revision node has not been created. Likely because the file on disk was modified externally and re-assilimated (watchfs == true)
 			// Let's create the revision node now and upload the blob to it.
 			revisionNode, err = session.createRevisionNodeForUpload(ctx, revisionNode, session.MTime().UTC().Format(time.RFC3339Nano), lockedNode)
 			if err != nil {
