@@ -8,6 +8,7 @@
 
 ### 🐛 Bug Fixes
 
+- handle objectguid endianness [[#431](https://github.com/opencloud-eu/reva/pull/431)]
 - reap children [[#432](https://github.com/opencloud-eu/reva/pull/432)]
 - fix(posixfs): Only copy user.oc xattrs in blobstore.Upload [[#430](https://github.com/opencloud-eu/reva/pull/430)]
 - fix: restore revision after negative post-processing outcome [[#424](https://github.com/opencloud-eu/reva/pull/424)]
