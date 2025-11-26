@@ -198,6 +198,7 @@ var _ = Describe("Async file uploads", Ordered, func() {
 		bs.On("Upload", mock.AnythingOfType("*node.Node"), mock.AnythingOfType("string"), mock.Anything).
 			Return(nil).
 			Run(func(args mock.Arguments) {
+				defer GinkgoRecover()
 				n := args.Get(0).(*node.Node)
 				data, err := os.ReadFile(args.Get(1).(string))
 				Expect(err).ToNot(HaveOccurred())
