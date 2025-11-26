@@ -21,7 +21,6 @@ package grpc_test
 import (
 	"bytes"
 	"context"
-	"encoding/base64"
 	"io"
 	"net/http"
 	"path/filepath"
@@ -127,7 +126,7 @@ var _ = Describe("ocm share", func() {
 		federatedEinsteinID = &userpb.UserId{
 			Type:     userpb.UserType_USER_TYPE_FEDERATED,
 			Idp:      "cernbox.cern.ch",
-			OpaqueId: base64.URLEncoding.EncodeToString([]byte("4c510ada-c86b-4815-8820-42cdf82c3d51@https://cernbox.cern.ch")),
+			OpaqueId: "4c510ada-c86b-4815-8820-42cdf82c3d51",
 		}
 		marie = &userpb.User{
 			Id: &userpb.UserId{
@@ -142,7 +141,7 @@ var _ = Describe("ocm share", func() {
 		federatedMarieID = &userpb.UserId{
 			Type:     userpb.UserType_USER_TYPE_FEDERATED,
 			Idp:      "cesnet.cz",
-			OpaqueId: base64.URLEncoding.EncodeToString([]byte("f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c@https://cesnet.cz")),
+			OpaqueId: "f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c",
 		}
 	)
 
@@ -215,7 +214,7 @@ var _ = Describe("ocm share", func() {
 			Expect(invRes.UserId.Type).To(Equal(userpb.UserType_USER_TYPE_FEDERATED))
 			// Federated users use the OCM provider id which MUST NOT contain the protocol
 			Expect(invRes.UserId.Idp).To(Equal("cernbox.cern.ch"))
-			// The OpaqueId is the base64 encoded user id and the provider id to provent collisions with other users on the graph API
+			// The OpaqueId is the base64 encoded user id and the provider id to prevent collisions with other users on the graph API
 			Expect(invRes.UserId.OpaqueId).To(Equal(federatedEinsteinID.OpaqueId))
 		})
 
