@@ -230,6 +230,12 @@ func getIDAndMeshProvider(user string) (id, provider string, err error) {
 	if last == -1 {
 		return "", "", errors.New("not in the form <id>@<provider>")
 	}
+	if len(user[:last]) == 0 {
+		return "", "", errors.New("empty id")
+	}
+	if len(user[last+1:]) == 0 {
+		return "", "", errors.New("empty provider")
+	}
 	return user[:last], user[last+1:], nil
 }
 
