@@ -11,6 +11,10 @@
 - more objectguid endianess swapping [[#435](https://github.com/opencloud-eu/reva/pull/435)]
 - fix(watchfs): upload to a revision if a file was touched during postprocessing [[#426](https://github.com/opencloud-eu/reva/pull/426)]
 
+### 📦️ Dependencies
+
+- chore(deps): bump golang.org/x/crypto from 0.43.0 to 0.45.0 in the go_modules group across 1 directory [[#425](https://github.com/opencloud-eu/reva/pull/425)]
+
 ## [2.39.3](https://github.com/opencloud-eu/reva/releases/tag/v2.39.3) - 2025-11-25
 
 ### ❤️ Thanks to all contributors! ❤️
