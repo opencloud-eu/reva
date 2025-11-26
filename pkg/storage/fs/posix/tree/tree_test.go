@@ -202,6 +202,13 @@ var _ = Describe("Tree", func() {
 					g.Expect(n.Blobsize).To(Equal(int64(0)))
 					oldChecksum, _ = n.Xattr(env.Ctx, prefixes.ChecksumPrefix+"adler32")
 					g.Expect(oldChecksum).ToNot(BeEmpty())
+
+					root, err := env.Lookup.NodeFromResource(env.Ctx, &provider.Reference{
+						ResourceId: env.SpaceRootRes,
+						Path:       subtree,
+					})
+					g.Expect(err).ToNot(HaveOccurred())
+					g.Expect(root.GetTreeSize(env.Ctx)).To(Equal(uint64(0)))
 				}).ProbeEvery(200 * time.Millisecond).Should(Succeed())
 
 				// Change file content
@@ -219,12 +226,18 @@ var _ = Describe("Tree", func() {
 					g.Expect(n.Blobsize).To(Equal(int64(11)))
 					checksum, _ := n.Xattr(env.Ctx, prefixes.ChecksumPrefix+"adler32")
 					g.Expect(checksum).ToNot(Equal(oldChecksum))
+
+					root, err := env.Lookup.NodeFromResource(env.Ctx, &provider.Reference{
+						ResourceId: env.SpaceRootRes,
+						Path:       subtree,
+					})
+					g.Expect(err).ToNot(HaveOccurred())
+					g.Expect(root.GetTreeSize(env.Ctx)).To(Equal(uint64(11)))
 				}).Should(Succeed())
 			})
 
 			It("handles deleted files", func() {
-				_, err := os.Create(root + "/deleted.txt")
-				Expect(err).ToNot(HaveOccurred())
+				Expect(os.WriteFile(root+"/deleted.txt", []byte("hello world"), 0600)).To(Succeed())
 
 				Eventually(func(g Gomega) {
 					n, err := env.Lookup.NodeFromResource(env.Ctx, &provider.Reference{
@@ -235,6 +248,13 @@ var _ = Describe("Tree", func() {
 					g.Expect(n).ToNot(BeNil())
 					g.Expect(n.Type(env.Ctx)).To(Equal(provider.ResourceType_RESOURCE_TYPE_FILE))
 					g.Expect(n.ID).ToNot(BeEmpty())
+
+					root, err := env.Lookup.NodeFromResource(env.Ctx, &provider.Reference{
+						ResourceId: env.SpaceRootRes,
+						Path:       subtree,
+					})
+					g.Expect(err).ToNot(HaveOccurred())
+					g.Expect(root.GetTreeSize(env.Ctx)).To(Equal(uint64(11)))
 				}).Should(Succeed())
 
 				Expect(os.Remove(root + "/deleted.txt")).To(Succeed())
@@ -246,6 +266,13 @@ var _ = Describe("Tree", func() {
 					})
 					g.Expect(err).ToNot(HaveOccurred())
 					g.Expect(n.Exists).To(BeFalse())
+
+					root, err := env.Lookup.NodeFromResource(env.Ctx, &provider.Reference{
+						ResourceId: env.SpaceRootRes,
+						Path:       subtree,
+					})
+					g.Expect(err).ToNot(HaveOccurred())
+					g.Expect(root.GetTreeSize(env.Ctx)).To(Equal(uint64(0)))
 				}).Should(Succeed())
 			})
 
