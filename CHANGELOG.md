@@ -4,10 +4,11 @@
 
 ### ❤️ Thanks to all contributors! ❤️
 
-@rhafer
+@butonic, @rhafer
 
 ### 🐛 Bug Fixes
 
+- more objectguid endianess swapping [[#435](https://github.com/opencloud-eu/reva/pull/435)]
 - fix(watchfs): upload to a revision if a file was touched during postprocessing [[#426](https://github.com/opencloud-eu/reva/pull/426)]
 
 ## [2.39.3](https://github.com/opencloud-eu/reva/releases/tag/v2.39.3) - 2025-11-25
