@@ -328,6 +328,10 @@ func (t *Tree) HandleFileDelete(path string, sendSSE bool) error {
 		t.log.Error().Err(err).Str("path", path).Msg("could not purge metadata")
 	}
 
+	if err = t.setDirty(filepath.Dir(path), true); err != nil {
+		t.log.Error().Err(err).Str("path", path).Msg("could not set dirty flag")
+	}
+
 	if !sendSSE {
 		return nil
 	}
