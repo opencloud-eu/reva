@@ -1,10 +1,14 @@
 # Changelog
 
-## [2.39.4](https://github.com/opencloud-eu/reva/releases/tag/v2.39.4) - 2025-11-26
+## [2.40.0](https://github.com/opencloud-eu/reva/releases/tag/v2.40.0) - 2025-11-26
 
 ### ❤️ Thanks to all contributors! ❤️
 
 @aduffeck, @butonic, @dragonchaser, @rhafer
+
+### 📈 Enhancement
+
+- add ConsumerOptions [[#205](https://github.com/opencloud-eu/reva/pull/205)]
 
 ### 🐛 Bug Fixes
 
