@@ -18,6 +18,7 @@
 
 ### 📦️ Dependencies
 
+- chore(deps): bump go.etcd.io/etcd/client/v3 from 3.6.5 to 3.6.6 [[#441](https://github.com/opencloud-eu/reva/pull/441)]
 - chore(deps): bump github.com/nats-io/nats-server/v2 from 2.12.1 to 2.12.2 [[#440](https://github.com/opencloud-eu/reva/pull/440)]
 - chore(deps): bump google.golang.org/grpc from 1.76.0 to 1.77.0 [[#433](https://github.com/opencloud-eu/reva/pull/433)]
 - chore(deps): bump golang.org/x/crypto from 0.43.0 to 0.45.0 in the go_modules group across 1 directory [[#425](https://github.com/opencloud-eu/reva/pull/425)]
