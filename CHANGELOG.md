@@ -1,6 +1,6 @@
 # Changelog
 
-## [2.40.0](https://github.com/opencloud-eu/reva/releases/tag/v2.40.0) - 2025-11-26
+## [2.40.0](https://github.com/opencloud-eu/reva/releases/tag/v2.40.0) - 2025-11-27
 
 ### ❤️ Thanks to all contributors! ❤️
 
@@ -12,6 +12,7 @@
 
 ### 🐛 Bug Fixes
 
+- fix(ocm): OCM Specification Compliance [[#434](https://github.com/opencloud-eu/reva/pull/434)]
 - more objectguid endianess swapping [[#435](https://github.com/opencloud-eu/reva/pull/435)]
 - fix(watchfs): upload to a revision if a file was touched during postprocessing [[#426](https://github.com/opencloud-eu/reva/pull/426)]
 
