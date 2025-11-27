@@ -1,5 +1,29 @@
 # Changelog
 
+## [2.40.0](https://github.com/opencloud-eu/reva/releases/tag/v2.40.0) - 2025-11-27
+
+### ❤️ Thanks to all contributors! ❤️
+
+@MahdiBaghbani, @aduffeck, @butonic, @dragonchaser, @rhafer
+
+### 📈 Enhancement
+
+- feat(ocm): add wayf specific /discover and /federations endpoints to sciencemesh package [[#393](https://github.com/opencloud-eu/reva/pull/393)]
+- add ConsumerOptions [[#205](https://github.com/opencloud-eu/reva/pull/205)]
+
+### 🐛 Bug Fixes
+
+- fix(ocm): OCM Specification Compliance [[#434](https://github.com/opencloud-eu/reva/pull/434)]
+- more objectguid endianess swapping [[#435](https://github.com/opencloud-eu/reva/pull/435)]
+- fix(watchfs): upload to a revision if a file was touched during postprocessing [[#426](https://github.com/opencloud-eu/reva/pull/426)]
+
+### 📦️ Dependencies
+
+- chore(deps): bump go.etcd.io/etcd/client/v3 from 3.6.5 to 3.6.6 [[#441](https://github.com/opencloud-eu/reva/pull/441)]
+- chore(deps): bump github.com/nats-io/nats-server/v2 from 2.12.1 to 2.12.2 [[#440](https://github.com/opencloud-eu/reva/pull/440)]
+- chore(deps): bump google.golang.org/grpc from 1.76.0 to 1.77.0 [[#433](https://github.com/opencloud-eu/reva/pull/433)]
+- chore(deps): bump golang.org/x/crypto from 0.43.0 to 0.45.0 in the go_modules group across 1 directory [[#425](https://github.com/opencloud-eu/reva/pull/425)]
+
 ## [2.39.3](https://github.com/opencloud-eu/reva/releases/tag/v2.39.3) - 2025-11-25
 
 ### ❤️ Thanks to all contributors! ❤️
