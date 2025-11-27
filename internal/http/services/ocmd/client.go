@@ -94,6 +94,12 @@ func (c *OCMClient) discover(ctx context.Context, url string) ([]byte, error) {
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := c.client.Do(req)
+	defer func() {
+		if resp != nil && resp.Body != nil {
+			_ = resp.Body.Close()
+		}
+	}()
+
 	if err != nil {
 		return nil, errors.Wrap(err, "error doing OCM discovery request")
 	}
