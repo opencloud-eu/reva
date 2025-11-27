@@ -4,10 +4,11 @@
 
 ### ❤️ Thanks to all contributors! ❤️
 
-@aduffeck, @butonic, @dragonchaser, @rhafer
+@MahdiBaghbani, @aduffeck, @butonic, @dragonchaser, @rhafer
 
 ### 📈 Enhancement
 
+- feat(ocm): add wayf specific /discover and /federations endpoints to sciencemesh package [[#393](https://github.com/opencloud-eu/reva/pull/393)]
 - add ConsumerOptions [[#205](https://github.com/opencloud-eu/reva/pull/205)]
 
 ### 🐛 Bug Fixes
