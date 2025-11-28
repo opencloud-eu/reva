@@ -21,8 +21,10 @@ func LocalUserFederatedID(id *userpb.UserId, domain string) *userpb.UserId {
 		OpaqueId: id.OpaqueId,
 	}
 
-	if id.Idp != "" && domain != "" && id.Idp != domain {
-		u.OpaqueId = id.OpaqueId + "@" + id.Idp
+	if domain != "" && id.Idp != domain {
+		if id.Idp != "" {
+			u.OpaqueId = id.OpaqueId + "@" + id.Idp
+		}
 		u.Idp = domain
 	}
 	return u
