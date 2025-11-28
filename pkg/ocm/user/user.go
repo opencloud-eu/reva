@@ -17,13 +17,13 @@ func LocalUserFederatedID(id *userpb.UserId, domain string) *userpb.UserId {
 	}
 	u := &userpb.UserId{
 		Type:     userpb.UserType_USER_TYPE_FEDERATED,
-		Idp:      id.Idp,
-		OpaqueId: id.OpaqueId,
+		Idp:      id.GetIdp(),
+		OpaqueId: id.GetOpaqueId(),
 	}
 
-	if domain != "" && id.Idp != domain {
-		if id.Idp != "" {
-			u.OpaqueId = id.OpaqueId + "@" + id.Idp
+	if domain != "" && id.GetIdp() != domain {
+		if id.GetIdp() != "" {
+			u.OpaqueId = id.GetOpaqueId() + "@" + id.GetIdp()
 		}
 		u.Idp = domain
 	}
