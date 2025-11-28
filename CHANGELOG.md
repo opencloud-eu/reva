@@ -6,7 +6,10 @@
 
 @butonic, @rhafer
 
+### 🐛 Bug Fixes
 
+- ocm fixes [[#444](https://github.com/opencloud-eu/reva/pull/444)]
+- fix(ocm): Fix userids sent, when accepting an ocm invite [[#442](https://github.com/opencloud-eu/reva/pull/442)]
 
 ## [2.40.0](https://github.com/opencloud-eu/reva/releases/tag/v2.40.0) - 2025-11-27
 
