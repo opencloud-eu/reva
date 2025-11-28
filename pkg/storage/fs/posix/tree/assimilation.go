@@ -675,6 +675,7 @@ assimilate:
 	}
 
 	var n *node.Node
+	sizeDiff := int64(0)
 	if fi.IsDir() {
 		// The Space's name attribute might not match the directory name. Use the name as
 		// it was set before. Also the space root doesn't have a 'type' attribute
@@ -712,12 +713,11 @@ assimilate:
 		n.SpaceRoot = &node.Node{BaseNode: node.BaseNode{SpaceID: spaceID, ID: spaceID}}
 
 		prevBlobSize, err := previousAttribs.Int64(prefixes.BlobsizeAttr)
-		if err == nil && prevBlobSize != fi.Size() {
-			// file size changed, trigger propagation of tree size changes
-			err = t.Propagate(context.Background(), n, fi.Size()-prevBlobSize)
-			if err != nil {
-				t.log.Error().Err(err).Str("path", path).Msg("could not propagate tree size changes")
-			}
+		if err != nil || prevBlobSize < 0 {
+			prevBlobSize = 0
+		}
+		if prevBlobSize != fi.Size() {
+			sizeDiff = fi.Size() - prevBlobSize
 		}
 	}
 	attributes.SetTime(prefixes.MTimeAttr, fi.ModTime())
@@ -775,7 +775,7 @@ assimilate:
 		}()
 	}
 
-	err = t.Propagate(context.Background(), n, 0)
+	err = t.Propagate(context.Background(), n, sizeDiff)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "failed to propagate")
 	}

@@ -2,16 +2,12 @@ package tree_test
 
 import (
 	"crypto/rand"
-	"log"
 	"os"
 	"os/exec"
-	"strings"
 	"time"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	helpers "github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/testhelpers"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata/prefixes"
-	"github.com/shirou/gopsutil/process"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -34,49 +30,7 @@ func generateRandomString(length int) (string, error) {
 	return string(randomBytes), nil
 }
 
-var (
-	env *helpers.TestEnv
-
-	root string
-)
-
-var _ = SynchronizedBeforeSuite(func() {
-	var err error
-	env, err = helpers.NewTestEnv(map[string]interface{}{"watch_fs": true})
-	Expect(err).ToNot(HaveOccurred())
-
-	Eventually(func() bool {
-		// Get all running processes
-		processes, err := process.Processes()
-		if err != nil {
-			panic("could not get processes: " + err.Error())
-		}
-
-		// Search for the process named "inotifywait"
-		for _, p := range processes {
-			name, err := p.Name()
-			if err != nil {
-				log.Println(err)
-				continue
-			}
-
-			if strings.Contains(name, "inotifywait") {
-				// Give it some time to setup the watches
-				time.Sleep(2 * time.Second)
-				return true
-			}
-		}
-		return false
-	}).Should(BeTrue())
-}, func() {})
-
-var _ = SynchronizedAfterSuite(func() {}, func() {
-	if env != nil {
-		env.Cleanup()
-	}
-})
-
-var _ = Describe("Tree", func() {
+var _ = Describe("Watching tree", func() {
 	var (
 		subtree string
 	)

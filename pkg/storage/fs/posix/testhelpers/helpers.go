@@ -129,7 +129,7 @@ func NewTestEnv(config map[string]interface{}) (*TestEnv, error) {
 		"personalspacepath_template": "users/{{.User.Username}}",
 		"generalspacepath_template":  "projects/{{.SpaceId}}",
 		"watch_fs":                   false,
-		"scan_fs":                    true,
+		"scan_fs":                    false,
 	}
 	// make it possible to override single config values
 	maps.Copy(defaultConfig, config)

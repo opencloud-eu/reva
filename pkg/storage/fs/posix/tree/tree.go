@@ -500,7 +500,15 @@ func (t *Tree) ListFolder(ctx context.Context, n *node.Node) ([]*node.Node, erro
 				_, nodeID, err := t.lookup.IDsForPath(ctx, path)
 				if err != nil {
 					t.log.Error().Err(err).Str("path", path).Msg("failed to get ids for entry")
-					continue
+					// we don't know about this node yet for some reason, assimilate it on the fly
+					err = t.assimilate(scanItem{Path: path})
+					if err != nil {
+						continue
+					}
+					_, nodeID, err = t.lookup.IDsForPath(ctx, path)
+					if err != nil || nodeID == "" {
+						continue
+					}
 				}
 
 				child, err := node.ReadNode(ctx, t.lookup, n.SpaceID, nodeID, false, n.SpaceRoot, true)
