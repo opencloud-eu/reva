@@ -39,6 +39,7 @@ import (
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/opencloud-eu/reva/v2/pkg/events"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/watcher"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata/prefixes"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/node"
@@ -53,16 +54,6 @@ type ScanDebouncer struct {
 
 	mutex sync.Mutex
 }
-
-type EventAction int
-
-const (
-	ActionCreate EventAction = iota
-	ActionUpdate
-	ActionMove
-	ActionDelete
-	ActionMoveFrom
-)
 
 type queueItem struct {
 	item  scanItem
@@ -190,10 +181,10 @@ func (t *Tree) workScanQueue() {
 }
 
 // Scan scans the given path and updates the id chache
-func (t *Tree) Scan(path string, action EventAction, isDir bool) error {
+func (t *Tree) Scan(path string, action watcher.EventAction, isDir bool) error {
 	// cases:
 	switch action {
-	case ActionCreate:
+	case watcher.ActionCreate:
 		t.log.Debug().Str("path", path).Bool("isDir", isDir).Msg("scanning path (ActionCreate)")
 		if !isDir {
 			// 1. New file (could be emitted as part of a new directory)
@@ -225,7 +216,7 @@ func (t *Tree) Scan(path string, action EventAction, isDir bool) error {
 			})
 		}
 
-	case ActionUpdate:
+	case watcher.ActionUpdate:
 		t.log.Debug().Str("path", path).Bool("isDir", isDir).Msg("scanning path (ActionUpdate)")
 		// 3. Updated file
 		//   -> update file unless parent directory is being rescanned
@@ -241,7 +232,7 @@ func (t *Tree) Scan(path string, action EventAction, isDir bool) error {
 			AssimilationCounter.WithLabelValues(_labelDir, _labelUpdated).Inc()
 		}
 
-	case ActionMove:
+	case watcher.ActionMove:
 		t.log.Debug().Str("path", path).Bool("isDir", isDir).Msg("scanning path (ActionMove)")
 		// 4. Moved file
 		//   -> update file
@@ -258,7 +249,7 @@ func (t *Tree) Scan(path string, action EventAction, isDir bool) error {
 			AssimilationCounter.WithLabelValues(_labelDir, _labelMoved).Inc()
 		}
 
-	case ActionMoveFrom:
+	case watcher.ActionMoveFrom:
 		t.log.Debug().Str("path", path).Bool("isDir", isDir).Msg("scanning path (ActionMoveFrom)")
 		// 6. file/directory moved out of the watched directory
 		//   -> remove from caches
@@ -279,7 +270,7 @@ func (t *Tree) Scan(path string, action EventAction, isDir bool) error {
 
 		// We do not do metrics here because this has been handled in `ActionMove`
 
-	case ActionDelete:
+	case watcher.ActionDelete:
 		t.log.Debug().Str("path", path).Bool("isDir", isDir).Msg("handling deleted item")
 
 		// 7. Deleted file or directory
