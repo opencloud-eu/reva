@@ -426,6 +426,15 @@ func (t *Tree) assimilate(item scanItem) error {
 		}
 	}
 
+	fi, err := os.Lstat(item.Path)
+	if err != nil {
+		return err
+	}
+	if !fi.IsDir() && !fi.Mode().IsRegular() {
+		t.log.Trace().Str("path", item.Path).Msg("skipping non-regular file")
+		return nil
+	}
+
 	if id != "" {
 		// the file has an id set, we already know it from the past
 
@@ -451,17 +460,7 @@ func (t *Tree) assimilate(item scanItem) error {
 
 		// compare metadata mtime with actual mtime. if it matches AND the path hasn't changed (move operation)
 		// we can skip the assimilation because the file was handled by us
-		fi, err := os.Lstat(item.Path)
-		if err != nil {
-			return err
-		}
-
 		if previousPath == item.Path && mtime.Equal(fi.ModTime()) {
-			return nil
-		}
-
-		if !fi.IsDir() && !fi.Mode().IsRegular() {
-			t.log.Trace().Str("path", item.Path).Msg("skipping non-regular file")
 			return nil
 		}
 
@@ -724,32 +723,35 @@ assimilate:
 
 	n.SpaceRoot = &node.Node{BaseNode: node.BaseNode{SpaceID: spaceID, ID: spaceID}}
 
-	if t.options.EnableFSRevisions {
+	if !fi.IsDir() && t.options.EnableFSRevisions {
 		go func() {
 			// Copy the previous current version to a revision
 			currentNode := node.NewBaseNode(n.SpaceID, n.ID+node.CurrentIDDelimiter, t.lookup)
 			currentPath := currentNode.InternalPath()
 			stat, err := os.Stat(currentPath)
-			if err != nil {
-				t.log.Error().Err(err).Str("path", path).Str("currentPath", currentPath).Msg("could not stat current path")
-				return
-			}
-			revisionPath := t.lookup.VersionPath(n.SpaceID, n.ID, stat.ModTime().UTC().Format(time.RFC3339Nano))
+			if err == nil {
+				revisionPath := t.lookup.VersionPath(n.SpaceID, n.ID, stat.ModTime().UTC().Format(time.RFC3339Nano))
 
-			err = os.Rename(currentPath, revisionPath)
-			if err != nil {
-				t.log.Error().Err(err).Str("path", path).Str("revisionPath", revisionPath).Msg("could not create revision")
-				return
+				err = os.Rename(currentPath, revisionPath)
+				if err != nil {
+					t.log.Error().Err(err).Str("path", path).Str("revisionPath", revisionPath).Msg("could not create revision")
+					return
+				}
 			}
 
 			// Copy the new version to the current version
+			if err := os.MkdirAll(filepath.Dir(currentPath), 0700); err != nil {
+				t.log.Error().Err(err).Str("path", path).Str("currentPath", currentPath).Msg("could not create base path for current file")
+				return
+			}
+
 			w, err := os.OpenFile(currentPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0600)
 			if err != nil {
 				t.log.Error().Err(err).Str("path", path).Str("currentPath", currentPath).Msg("could not open current path for writing")
 				return
 			}
 			defer w.Close()
-			r, err := os.OpenFile(n.InternalPath(), os.O_RDONLY, 0600)
+			r, err := os.OpenFile(path, os.O_RDONLY, 0600)
 			if err != nil {
 				t.log.Error().Err(err).Str("path", path).Msg("could not open file for reading")
 				return
