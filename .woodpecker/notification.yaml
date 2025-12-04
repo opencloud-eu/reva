@@ -3,6 +3,8 @@ variables:
   - &qa_repo 'https://github.com/opencloud-eu/qa.git'
   - &qa_repo_branch 'main'
   - &current_repo_id '4'
+  - &ci_woodpecker_url
+    from_secret: oc_ci_url
 
 depends_on: [api-integration-test-on-decomposed, api-integration-test-on-decomposedS3, api-integration-test-on-posixfs, cs3api-validator-decomposed, test, test-benchmark, test-integration]
 runs_on: [ success, failure ]
@@ -29,7 +31,7 @@ steps:
         from_secret: opencloud-notifications-user-password
       QA_REPO: *qa_repo
       QA_REPO_BRANCH: *qa_repo_branch
-      CI_WOODPECKER_URL: https://ci.opencloud.eu/
+      CI_WOODPECKER_URL: *ci_woodpecker_url
       CI_REPO_ID: *current_repo_id
       CI_WOODPECKER_TOKEN: no-auth-needed-on-this-repo
 
