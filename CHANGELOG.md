@@ -6,13 +6,14 @@
 
 @aduffeck, @anon-pradip, @butonic, @prashant-gurung899
 
+### 📈 Enhancement
+
+- Write mtime from filesystem to metadata to preven re-assimilation [[#457](https://github.com/opencloud-eu/reva/pull/457)]
+- introduce Natswatcher [[#449](https://github.com/opencloud-eu/reva/pull/449)]
+
 ### 🐛 Bug Fixes
 
 - Do not log EOF as error, it is expected behavior when reading empty dirs [[#454](https://github.com/opencloud-eu/reva/pull/454)]
-
-### 📈 Enhancement
-
-- introduce Natswatcher [[#449](https://github.com/opencloud-eu/reva/pull/449)]
 
 ## [2.40.1](https://github.com/opencloud-eu/reva/releases/tag/v2.40.1) - 2025-11-28
 
