@@ -499,14 +499,16 @@ func (t *Tree) ListFolder(ctx context.Context, n *node.Node) ([]*node.Node, erro
 
 				_, nodeID, err := t.lookup.IDsForPath(ctx, path)
 				if err != nil {
-					t.log.Error().Err(err).Str("path", path).Msg("failed to get ids for entry")
 					// we don't know about this node yet for some reason, assimilate it on the fly
+					t.log.Info().Err(err).Str("path", path).Msg("encountered unknown entity while listing the directory. Assimilate.")
 					err = t.assimilate(scanItem{Path: path})
 					if err != nil {
+						t.log.Error().Err(err).Str("path", path).Msg("failed to assimilate node")
 						continue
 					}
 					_, nodeID, err = t.lookup.IDsForPath(ctx, path)
 					if err != nil || nodeID == "" {
+						t.log.Error().Err(err).Str("path", path).Msg("still could not resolve node after assimilation")
 						continue
 					}
 				}
