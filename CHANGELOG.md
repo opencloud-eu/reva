@@ -1,12 +1,14 @@
 # Changelog
 
-## [2.40.2](https://github.com/opencloud-eu/reva/releases/tag/v2.40.2) - 2025-12-15
+## [2.41.0](https://github.com/opencloud-eu/reva/releases/tag/v2.41.0) - 2025-12-15
 
 ### ❤️ Thanks to all contributors! ❤️
 
-@aduffeck, @anon-pradip, @prashant-gurung899
+@aduffeck, @anon-pradip, @butonic, @prashant-gurung899
 
+### 📈 Enhancement
 
+- introduce Natswatcher [[#449](https://github.com/opencloud-eu/reva/pull/449)]
 
 ## [2.40.1](https://github.com/opencloud-eu/reva/releases/tag/v2.40.1) - 2025-11-28
 
