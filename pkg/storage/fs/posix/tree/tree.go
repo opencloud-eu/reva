@@ -47,6 +47,7 @@ import (
 	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/lookup"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/options"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/trashbin"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/watcher/natswatcher"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata/prefixes"
@@ -144,6 +145,11 @@ func New(lu node.PathLookup, bs node.Blobstore, um usermapper.Mapper, trashbin *
 			}
 		case "cephfs":
 			t.watcher, err = NewCephfsWatcher(t, strings.Split(o.WatchNotificationBrokers, ","), log)
+			if err != nil {
+				return nil, err
+			}
+		case "natswatcher":
+			t.watcher, err = natswatcher.New(context.TODO(), t, o.NatsWatcher, o.WatchRoot, log)
 			if err != nil {
 				return nil, err
 			}
