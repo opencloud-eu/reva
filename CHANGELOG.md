@@ -6,6 +6,10 @@
 
 @aduffeck, @anon-pradip, @butonic, @prashant-gurung899
 
+### 🐛 Bug Fixes
+
+- Do not log EOF as error, it is expected behavior when reading empty dirs [[#454](https://github.com/opencloud-eu/reva/pull/454)]
+
 ### 📈 Enhancement
 
 - introduce Natswatcher [[#449](https://github.com/opencloud-eu/reva/pull/449)]
