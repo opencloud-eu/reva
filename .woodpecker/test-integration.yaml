@@ -25,7 +25,7 @@ steps:
       S3_ENDPOINT: "https://s3.ci.opencloud.eu"
     commands:
       - mc alias set s3 $S3_ENDPOINT $AWS_ACCESS_KEY_ID $AWS_SECRET_ACCESS_KEY
-      - mc cp -a s3/$S3_BUCKET/opencloud-eu/reva/$CI_COMMIT_SHA-$CI_PIPELINE_NUMBER-revad $CI_WORKSPACE/cmd/revad/revad
+      - mc cp -a s3/$S3_BUCKET/${CI_REPO}/$CI_COMMIT_SHA-$CI_PIPELINE_NUMBER-revad $CI_WORKSPACE/cmd/revad/revad
   test-integration:
     image: *golang_image
     environment:
