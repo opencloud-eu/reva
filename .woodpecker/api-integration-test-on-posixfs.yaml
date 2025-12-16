@@ -86,7 +86,7 @@ steps:
       BEHAT_FILTER_TAGS: "~@skip&&~@skipOnReva&&~@env-config"
       DIVIDE_INTO_NUM_PARTS: "4"
       RUN_PART: "${RUN_PART}"
-      EXPECTED_FAILURES_FILE: "/woodpecker/src/github.com/opencloud-eu/reva/tests/acceptance/expected-failures-on-POSIX-storage.md"
+      EXPECTED_FAILURES_FILE: "/woodpecker/src/github.com/${CI_REPO}/tests/acceptance/expected-failures-on-POSIX-storage.md"
       ACCEPTANCE_TEST_TYPE: "core-api"
 
 services:

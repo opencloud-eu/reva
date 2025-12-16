@@ -31,7 +31,7 @@ steps:
       S3_ENDPOINT: "https://s3.ci.opencloud.eu"
     commands:
       - mc alias set s3 $S3_ENDPOINT $AWS_ACCESS_KEY_ID $AWS_SECRET_ACCESS_KEY
-      - mc cp -a s3/$S3_BUCKET/opencloud-eu/reva/$CI_COMMIT_SHA-$CI_PIPELINE_NUMBER-revad $CI_WORKSPACE/cmd/revad/revad
+      - mc cp -a s3/$S3_BUCKET/${CI_REPO}/$CI_COMMIT_SHA-$CI_PIPELINE_NUMBER-revad $CI_WORKSPACE/cmd/revad/revad
   wait_for_ldap:
     image: *woodpecker_wait_plugin_image
     settings:
@@ -85,7 +85,7 @@ steps:
       BEHAT_FILTER_TAGS: "~@skip&&~@skipOnReva&&~@env-config"
       DIVIDE_INTO_NUM_PARTS: "4"
       RUN_PART: "${RUN_PART}"
-      EXPECTED_FAILURES_FILE: "/woodpecker/src/github.com/opencloud-eu/reva/tests/acceptance/expected-failures-on-DECOMPOSEDS3-storage.md"
+      EXPECTED_FAILURES_FILE: "/woodpecker/src/github.com/${CI_REPO}/tests/acceptance/expected-failures-on-DECOMPOSEDS3-storage.md"
       ACCEPTANCE_TEST_TYPE: "core-api"
 
 services:
