@@ -60,7 +60,7 @@ type queueItem struct {
 	timer *time.Timer
 }
 
-const dirtyFlag = "user.oc.dirty"
+const dirtyFlag = prefixes.OcPrefix + "dirty"
 
 type assimilationNode struct {
 	path    string
