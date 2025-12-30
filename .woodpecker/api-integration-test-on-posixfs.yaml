@@ -88,6 +88,13 @@ steps:
       RUN_PART: "${RUN_PART}"
       EXPECTED_FAILURES_FILE: "/woodpecker/src/github.com/${CI_REPO}/tests/acceptance/expected-failures-on-POSIX-storage.md"
       ACCEPTANCE_TEST_TYPE: "core-api"
+  requests-log:
+    image: *alpine_image
+    when:
+      - status: [ failure ]
+    commands:
+      - cd opencloud
+      - cat tests/acceptance/logs/failed.log
 
 services:
   ldap:
