@@ -1,11 +1,9 @@
----
-
 when:
   event: push
   branch: ${CI_REPO_DEFAULT_BRANCH}
 
 steps:
-  release-helper:
+  - name: release-helper
     image: woodpeckerci/plugin-ready-release-go:latest
     settings:
       git_email: devops@opencloud.eu
