@@ -1,9 +1,10 @@
----
 variables:
   - &golang_image 'docker.io/golang:1.24'
 
 when:
-  - event: [ push , manual ]
+  - event:
+      - push
+      - manual
     branch: ${CI_REPO_DEFAULT_BRANCH}
   - event: cron
   - event: pull_request
@@ -14,7 +15,7 @@ workspace:
   base: /go # use the go home dir as workspace to share go packages, see https://woodpecker-ci.org/docs/usage/workflow-syntax#workspace
 
 steps:
-  test-benchmark:
+  - name: test-benchmark
     image: *golang_image
     environment:
       HTTP_PROXY:
