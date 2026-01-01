@@ -1,5 +1,18 @@
 # Changelog
 
+## [2.41.1](https://github.com/opencloud-eu/reva/releases/tag/v2.41.1) - 2026-01-01
+
+### ❤️ Thanks to all contributors! ❤️
+
+@aduffeck, @fschade, @rhafer, @saw-jan
+
+### 📦️ Dependencies
+
+- chore(deps): bump golang.org/x/sys from 0.38.0 to 0.39.0 [[#467](https://github.com/opencloud-eu/reva/pull/467)]
+- chore(deps): bump go.etcd.io/etcd/client/v3 from 3.6.6 to 3.6.7 [[#464](https://github.com/opencloud-eu/reva/pull/464)]
+- chore(deps): bump golang.org/x/sync from 0.18.0 to 0.19.0 [[#453](https://github.com/opencloud-eu/reva/pull/453)]
+- chore(deps): bump go.opentelemetry.io/otel/trace from 1.38.0 to 1.39.0 [[#452](https://github.com/opencloud-eu/reva/pull/452)]
+
 ## [2.41.0](https://github.com/opencloud-eu/reva/releases/tag/v2.41.0) - 2025-12-15
 
 ### ❤️ Thanks to all contributors! ❤️
