@@ -12,6 +12,7 @@
 
 ### 📦️ Dependencies
 
+- chore(deps): bump github.com/go-playground/validator/v10 from 10.28.0 to 10.30.0 [[#469](https://github.com/opencloud-eu/reva/pull/469)]
 - chore(deps): bump github.com/prometheus/alertmanager from 0.29.0 to 0.30.0 [[#468](https://github.com/opencloud-eu/reva/pull/468)]
 - chore(deps): bump golang.org/x/sys from 0.38.0 to 0.39.0 [[#467](https://github.com/opencloud-eu/reva/pull/467)]
 - chore(deps): bump go.etcd.io/etcd/client/v3 from 3.6.6 to 3.6.7 [[#464](https://github.com/opencloud-eu/reva/pull/464)]
