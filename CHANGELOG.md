@@ -1,10 +1,14 @@
 # Changelog
 
-## [2.41.1](https://github.com/opencloud-eu/reva/releases/tag/v2.41.1) - 2026-01-01
+## [2.41.1](https://github.com/opencloud-eu/reva/releases/tag/v2.41.1) - 2026-01-05
 
 ### ❤️ Thanks to all contributors! ❤️
 
-@aduffeck, @fschade, @rhafer, @saw-jan
+@aduffeck, @butonic, @fschade, @rhafer, @saw-jan
+
+### 🐛 Bug Fixes
+
+- log correct line in tus log wrapper [[#460](https://github.com/opencloud-eu/reva/pull/460)]
 
 ### 📦️ Dependencies
 
