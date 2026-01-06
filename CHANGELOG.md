@@ -16,6 +16,7 @@
 
 ### 📦️ Dependencies
 
+- chore(deps): bump github.com/nats-io/nats-server/v2 from 2.12.2 to 2.12.3 [[#479](https://github.com/opencloud-eu/reva/pull/479)]
 - chore(deps): bump go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc from 1.38.0 to 1.39.0 [[#476](https://github.com/opencloud-eu/reva/pull/476)]
 - chore(deps): bump github.com/ceph/go-ceph from 0.36.0 to 0.37.0 [[#475](https://github.com/opencloud-eu/reva/pull/475)]
 - chore(deps): bump go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc from 0.63.0 to 0.64.0 [[#474](https://github.com/opencloud-eu/reva/pull/474)]
