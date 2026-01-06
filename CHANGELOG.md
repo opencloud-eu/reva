@@ -12,6 +12,7 @@
 
 ### 📦️ Dependencies
 
+- chore(deps): bump go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc from 0.63.0 to 0.64.0 [[#474](https://github.com/opencloud-eu/reva/pull/474)]
 - chore(deps): bump github.com/mattn/go-sqlite3 from 1.14.32 to 1.14.33 [[#473](https://github.com/opencloud-eu/reva/pull/473)]
 - chore(deps): bump github.com/go-playground/validator/v10 from 10.28.0 to 10.30.0 [[#469](https://github.com/opencloud-eu/reva/pull/469)]
 - chore(deps): bump github.com/prometheus/alertmanager from 0.29.0 to 0.30.0 [[#468](https://github.com/opencloud-eu/reva/pull/468)]
