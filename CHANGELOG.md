@@ -1,6 +1,6 @@
 # Changelog
 
-## [2.41.1](https://github.com/opencloud-eu/reva/releases/tag/v2.41.1) - 2026-01-05
+## [2.41.1](https://github.com/opencloud-eu/reva/releases/tag/v2.41.1) - 2026-01-06
 
 ### ❤️ Thanks to all contributors! ❤️
 
@@ -12,6 +12,7 @@
 
 ### 📦️ Dependencies
 
+- chore(deps): bump github.com/mattn/go-sqlite3 from 1.14.32 to 1.14.33 [[#473](https://github.com/opencloud-eu/reva/pull/473)]
 - chore(deps): bump github.com/go-playground/validator/v10 from 10.28.0 to 10.30.0 [[#469](https://github.com/opencloud-eu/reva/pull/469)]
 - chore(deps): bump github.com/prometheus/alertmanager from 0.29.0 to 0.30.0 [[#468](https://github.com/opencloud-eu/reva/pull/468)]
 - chore(deps): bump golang.org/x/sys from 0.38.0 to 0.39.0 [[#467](https://github.com/opencloud-eu/reva/pull/467)]
