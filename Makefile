@@ -31,7 +31,7 @@ $(GOLANGCI_LINT):
 
 .PHONY: check-changelog
 lint: $(GOLANGCI_LINT)
-	$(GOLANGCI_LINT) run --timeout 300s
+	$(GOLANGCI_LINT) run --timeout 450s
 
 .PHONY: lint-fix
 lint-fix: $(GOLANGCI_LINT)
