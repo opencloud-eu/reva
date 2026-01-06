@@ -1,10 +1,14 @@
 # Changelog
 
-## [2.41.1](https://github.com/opencloud-eu/reva/releases/tag/v2.41.1) - 2026-01-06
+## [2.42.0](https://github.com/opencloud-eu/reva/releases/tag/v2.42.0) - 2026-01-06
 
 ### ❤️ Thanks to all contributors! ❤️
 
 @aduffeck, @butonic, @fschade, @rhafer, @saw-jan
+
+### 📈 Enhancement
+
+- add tls support for nats connections [[#466](https://github.com/opencloud-eu/reva/pull/466)]
 
 ### 🐛 Bug Fixes
 
