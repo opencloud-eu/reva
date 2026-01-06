@@ -16,6 +16,7 @@
 
 ### 📦️ Dependencies
 
+- chore(deps): bump golang.org/x/oauth2 from 0.33.0 to 0.34.0 [[#478](https://github.com/opencloud-eu/reva/pull/478)]
 - chore(deps): bump github.com/nats-io/nats-server/v2 from 2.12.2 to 2.12.3 [[#479](https://github.com/opencloud-eu/reva/pull/479)]
 - chore(deps): bump go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc from 1.38.0 to 1.39.0 [[#476](https://github.com/opencloud-eu/reva/pull/476)]
 - chore(deps): bump github.com/ceph/go-ceph from 0.36.0 to 0.37.0 [[#475](https://github.com/opencloud-eu/reva/pull/475)]
