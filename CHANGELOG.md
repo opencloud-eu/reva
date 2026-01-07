@@ -1,6 +1,6 @@
 # Changelog
 
-## [2.42.0](https://github.com/opencloud-eu/reva/releases/tag/v2.42.0) - 2026-01-06
+## [2.42.0](https://github.com/opencloud-eu/reva/releases/tag/v2.42.0) - 2026-01-07
 
 ### ❤️ Thanks to all contributors! ❤️
 
@@ -16,6 +16,7 @@
 
 ### 📦️ Dependencies
 
+- chore(deps): bump google.golang.org/protobuf from 1.36.10 to 1.36.11 [[#481](https://github.com/opencloud-eu/reva/pull/481)]
 - chore(deps): bump golang.org/x/oauth2 from 0.33.0 to 0.34.0 [[#478](https://github.com/opencloud-eu/reva/pull/478)]
 - chore(deps): bump github.com/nats-io/nats-server/v2 from 2.12.2 to 2.12.3 [[#479](https://github.com/opencloud-eu/reva/pull/479)]
 - chore(deps): bump go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc from 1.38.0 to 1.39.0 [[#476](https://github.com/opencloud-eu/reva/pull/476)]
