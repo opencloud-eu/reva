@@ -16,6 +16,7 @@
 
 ### 📦️ Dependencies
 
+- chore(deps): bump github.com/onsi/gomega from 1.38.2 to 1.38.3 [[#483](https://github.com/opencloud-eu/reva/pull/483)]
 - chore(deps): bump google.golang.org/grpc from 1.77.0 to 1.78.0 [[#480](https://github.com/opencloud-eu/reva/pull/480)]
 - chore(deps): bump google.golang.org/protobuf from 1.36.10 to 1.36.11 [[#481](https://github.com/opencloud-eu/reva/pull/481)]
 - chore(deps): bump golang.org/x/oauth2 from 0.33.0 to 0.34.0 [[#478](https://github.com/opencloud-eu/reva/pull/478)]
