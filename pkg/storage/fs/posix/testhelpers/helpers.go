@@ -130,6 +130,7 @@ func NewTestEnv(config map[string]interface{}) (*TestEnv, error) {
 		"generalspacepath_template":  "projects/{{.SpaceId}}",
 		"watch_fs":                   false,
 		"scan_fs":                    false,
+		"max_concurrency":            1,
 	}
 	// make it possible to override single config values
 	maps.Copy(defaultConfig, config)
