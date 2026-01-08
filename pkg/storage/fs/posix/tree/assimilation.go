@@ -196,14 +196,18 @@ func (t *Tree) Scan(path string, action watcher.EventAction, isDir bool) error {
 			//   -> scan parent directory recursively to update tree size and catch nodes that weren't covered by an event
 			AssimilationCounter.WithLabelValues(_labelFile, _labelAdded).Inc()
 			if !t.scanDebouncer.Pending(filepath.Dir(path)) {
+				t.log.Debug().Str("path", path).Msg("debouncing 'ActionCreate (!isDir)")
 				t.scanDebouncer.Debounce(scanItem{
 					Path:    path,
 					Trigger: "ActionCreate (!isDir)",
 				})
+			} else {
+				t.log.Debug().Str("path", path).Msg("skipping as parent is pending")
 			}
 			if err := t.setDirty(filepath.Dir(path), true); err != nil {
 				t.log.Error().Err(err).Str("path", path).Bool("isDir", isDir).Msg("failed to mark directory as dirty")
 			}
+			t.log.Debug().Str("path", path).Msg("debouncing 'ActionCreate (!isDir parent)'")
 			t.scanDebouncer.Debounce(scanItem{
 				Path:    filepath.Dir(path),
 				Recurse: true,
@@ -216,6 +220,7 @@ func (t *Tree) Scan(path string, action watcher.EventAction, isDir bool) error {
 				t.log.Error().Err(err).Str("path", path).Bool("isDir", isDir).Msg("failed to mark directory as dirty")
 			}
 			AssimilationCounter.WithLabelValues(_labelDir, _labelAdded).Inc()
+			t.log.Debug().Str("path", path).Msg("debouncing 'ActionCreate (isDir)'")
 			t.scanDebouncer.Debounce(scanItem{
 				Path:    path,
 				Recurse: true,
