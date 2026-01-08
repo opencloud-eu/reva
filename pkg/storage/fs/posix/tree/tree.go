@@ -77,6 +77,7 @@ type Watcher interface {
 type scanItem struct {
 	Path    string
 	Recurse bool
+	Trigger string
 }
 
 // Tree manages a hierarchical tree
