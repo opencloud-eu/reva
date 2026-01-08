@@ -1,6 +1,6 @@
 # Changelog
 
-## [2.42.0](https://github.com/opencloud-eu/reva/releases/tag/v2.42.0) - 2026-01-07
+## [2.42.0](https://github.com/opencloud-eu/reva/releases/tag/v2.42.0) - 2026-01-08
 
 ### ❤️ Thanks to all contributors! ❤️
 
@@ -16,6 +16,8 @@
 
 ### 📦️ Dependencies
 
+- chore(deps): bump github.com/nats-io/nats.go from 1.47.0 to 1.48.0 [[#485](https://github.com/opencloud-eu/reva/pull/485)]
+- chore(deps): bump github.com/BurntSushi/toml from 1.5.0 to 1.6.0 [[#484](https://github.com/opencloud-eu/reva/pull/484)]
 - chore(deps): bump github.com/onsi/gomega from 1.38.2 to 1.38.3 [[#483](https://github.com/opencloud-eu/reva/pull/483)]
 - chore(deps): bump google.golang.org/grpc from 1.77.0 to 1.78.0 [[#480](https://github.com/opencloud-eu/reva/pull/480)]
 - chore(deps): bump google.golang.org/protobuf from 1.36.10 to 1.36.11 [[#481](https://github.com/opencloud-eu/reva/pull/481)]
