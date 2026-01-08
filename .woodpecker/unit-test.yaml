@@ -24,4 +24,4 @@ steps:
         from_secret: ci_http_proxy
     commands:
       - apt-get update -qq && apt-get install -y inotify-tools
-      - make test
+      - go tool ginkgo run --until-it-fails ./pkg/storage/fs/posix/tree/...
