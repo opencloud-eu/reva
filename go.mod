@@ -58,7 +58,7 @@ require (
 	github.com/nats-io/nats-server/v2 v2.12.3
 	github.com/nats-io/nats.go v1.48.0
 	github.com/onsi/ginkgo v1.16.5
-	github.com/onsi/ginkgo/v2 v2.27.2
+	github.com/onsi/ginkgo/v2 v2.27.3
 	github.com/onsi/gomega v1.38.3
 	github.com/opencloud-eu/opencloud v1.1.0
 	github.com/pablodz/inotifywaitgo v0.0.9
@@ -266,6 +266,7 @@ replace github.com/studio-b12/gowebdav => github.com/kobergj/gowebdav v0.0.0-202
 exclude github.com/mattn/go-sqlite3 v2.0.3+incompatible
 
 tool (
+	github.com/onsi/ginkgo/v2/ginkgo
 	github.com/vektra/mockery/v2
 	golang.org/x/tools/cmd/goimports
 )
