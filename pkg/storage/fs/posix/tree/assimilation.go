@@ -583,8 +583,14 @@ func (t *Tree) assimilate(item scanItem) error {
 		}
 
 		// assimilate new file
-		newId := uuid.New().String()
-		fi, attrs, err := t.updateFile(item.Path, newId, spaceID, nil)
+		assimilationNode.nodeId = uuid.New().String()
+		// re-lock with the new node ID
+		unlockNew, err := t.lookup.MetadataBackend().Lock(assimilationNode)
+		if err != nil {
+			return err
+		}
+		defer func() { _ = unlockNew() }()
+		fi, attrs, err := t.updateFile(item.Path, assimilationNode.nodeId, spaceID, nil)
 		if err != nil {
 			return err
 		}
@@ -602,7 +608,7 @@ func (t *Tree) assimilate(item scanItem) error {
 			ResourceId: &provider.ResourceId{
 				StorageId: t.options.MountID,
 				SpaceId:   spaceID,
-				OpaqueId:  newId,
+				OpaqueId:  assimilationNode.nodeId,
 			},
 		}
 		if fi.IsDir() {
@@ -929,7 +935,7 @@ func (t *Tree) WarmupIDCache(root string, assimilate, onlyDirty bool) error {
 					// this id clashes with an existing id -> re-assimilate
 					_, err := os.Stat(previousPath)
 					if err == nil {
-						_ = t.assimilate(scanItem{Path: path, Trigger: "warmup id cache - id clash"})
+						_ = t.assimilate(scanItem{Path: path, Trigger: "warmup id cache - id clash, previous path: " + previousPath})
 					}
 				}
 				if err := t.lookup.CacheID(context.Background(), spaceID, id, path); err != nil {
