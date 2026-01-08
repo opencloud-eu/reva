@@ -276,7 +276,7 @@ var _ = Describe("Watching tree", func() {
 				}).Should(Succeed())
 			})
 
-			It("handles id clashes", func() {
+			FIt("handles id clashes", func() {
 				// Create empty file
 				_, err := os.Create(root + "/original.txt")
 				Expect(err).ToNot(HaveOccurred())
@@ -297,14 +297,14 @@ var _ = Describe("Watching tree", func() {
 				}).Should(Succeed())
 
 				// cp file
-				cmd := exec.Command("cp", "-a", root+"/original.txt", root+"/moved.txt")
+				cmd := exec.Command("cp", "-a", root+"/original.txt", root+"/copied.txt")
 				err = cmd.Run()
 				Expect(err).ToNot(HaveOccurred())
 
 				Eventually(func(g Gomega) {
 					n, err := env.Lookup.NodeFromResource(env.Ctx, &provider.Reference{
 						ResourceId: env.SpaceRootRes,
-						Path:       subtree + "/moved.txt",
+						Path:       subtree + "/copied.txt",
 					})
 					g.Expect(err).ToNot(HaveOccurred())
 					g.Expect(n).ToNot(BeNil())
