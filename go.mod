@@ -266,6 +266,7 @@ replace github.com/studio-b12/gowebdav => github.com/kobergj/gowebdav v0.0.0-202
 exclude github.com/mattn/go-sqlite3 v2.0.3+incompatible
 
 tool (
+	github.com/onsi/ginkgo/v2/ginkgo
 	github.com/vektra/mockery/v2
 	golang.org/x/tools/cmd/goimports
 )
