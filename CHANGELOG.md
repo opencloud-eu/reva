@@ -16,6 +16,7 @@
 
 ### 📦️ Dependencies
 
+- chore(deps): bump github.com/onsi/ginkgo/v2 from 2.27.2 to 2.27.3 [[#486](https://github.com/opencloud-eu/reva/pull/486)]
 - chore(deps): bump github.com/nats-io/nats.go from 1.47.0 to 1.48.0 [[#485](https://github.com/opencloud-eu/reva/pull/485)]
 - chore(deps): bump github.com/BurntSushi/toml from 1.5.0 to 1.6.0 [[#484](https://github.com/opencloud-eu/reva/pull/484)]
 - chore(deps): bump github.com/onsi/gomega from 1.38.2 to 1.38.3 [[#483](https://github.com/opencloud-eu/reva/pull/483)]
