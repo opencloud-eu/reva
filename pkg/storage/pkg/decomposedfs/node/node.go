@@ -351,7 +351,7 @@ func (n *Node) SpaceOwnerOrManager(ctx context.Context) *userpb.UserId {
 }
 
 // ReadNode creates a new instance from an id and checks if it exists
-func ReadNode(ctx context.Context, lu PathLookup, spaceID, nodeID string, canListDisabledSpace bool, spaceRoot *Node, skipParentCheck bool) (*Node, error) {
+func ReadNode(ctx context.Context, lu PathLookup, spaceID, nodeID, internalPath string, canListDisabledSpace bool, spaceRoot *Node, skipParentCheck bool) (*Node, error) {
 	ctx, span := tracer.Start(ctx, "ReadNode")
 	defer span.End()
 	var err error
@@ -417,6 +417,9 @@ func ReadNode(ctx context.Context, lu PathLookup, spaceID, nodeID string, canLis
 			ID:      nodeID,
 		},
 		SpaceRoot: spaceRoot,
+	}
+	if internalPath != "" {
+		n.internalPath = internalPath
 	}
 
 	// append back revision to nodeid, even when returning a not existing node
@@ -507,7 +510,7 @@ func (n *Node) Child(ctx context.Context, name string) (*Node, error) {
 		return nil, err
 	}
 
-	readNode, err := ReadNode(ctx, n.lu, spaceID, nodeID, false, n.SpaceRoot, true)
+	readNode, err := ReadNode(ctx, n.lu, spaceID, nodeID, filepath.Join(n.internalPath, name), false, n.SpaceRoot, true)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not read child node")
 	}
