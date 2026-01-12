@@ -274,8 +274,8 @@ func (lu *Lookup) InternalPath(spaceID, nodeID string) string {
 }
 
 // LockfilePaths returns the paths(s) to the lockfile of the node
-func (lu *Lookup) LockfilePaths(spaceID, nodeID string) []string {
-	return []string{lu.InternalPath(spaceID, nodeID) + ".lock"}
+func (lu *Lookup) LockfilePaths(n *node.Node) []string {
+	return []string{n.InternalPath() + ".lock"}
 }
 
 // VersionPath returns the internal path for a version of a node

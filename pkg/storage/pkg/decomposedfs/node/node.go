@@ -29,6 +29,7 @@ import (
 	"hash/adler32"
 	"io"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -158,7 +159,7 @@ type PathLookup interface {
 	InternalRoot() string
 	InternalSpaceRoot(spaceID string) string
 	InternalPath(spaceID, nodeID string) string
-	LockfilePaths(spaceID, nodeID string) []string
+	LockfilePaths(n *Node) []string
 	VersionPath(spaceID, nodeID, version string) string
 	Path(ctx context.Context, n *Node, hasPermission PermissionFunc) (path string, err error)
 	MetadataBackend() metadata.Backend
@@ -653,7 +654,7 @@ func (n *Node) ParentPath() string {
 // path to use for new locks.
 // In the future only one path should remain at which point the function can return a single string.
 func (n *Node) LockFilePaths() []string {
-	return n.lu.LockfilePaths(n.SpaceID, n.ID)
+	return n.lu.LockfilePaths(n)
 }
 
 // CalculateEtag returns a hash of fileid + tmtime (or mtime)
