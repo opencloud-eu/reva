@@ -16,6 +16,7 @@
 
 ### 📦️ Dependencies
 
+- chore(deps): bump golang.org/x/sys from 0.39.0 to 0.40.0 [[#488](https://github.com/opencloud-eu/reva/pull/488)]
 - chore(deps): bump github.com/onsi/gomega from 1.38.3 to 1.39.0 [[#489](https://github.com/opencloud-eu/reva/pull/489)]
 - chore(deps): bump github.com/onsi/ginkgo/v2 from 2.27.2 to 2.27.3 [[#486](https://github.com/opencloud-eu/reva/pull/486)]
 - chore(deps): bump github.com/nats-io/nats.go from 1.47.0 to 1.48.0 [[#485](https://github.com/opencloud-eu/reva/pull/485)]
