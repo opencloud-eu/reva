@@ -21,12 +21,15 @@ package helpers
 import (
 	"context"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
+	"github.com/shirou/gopsutil/process"
 	"github.com/stretchr/testify/mock"
 	"google.golang.org/grpc"
 
@@ -228,6 +231,44 @@ func NewTestEnv(config map[string]interface{}) (*TestEnv, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	// If needed, wait until inotifywait is running and has setup the watches
+	foundInotify := false
+	if o.WatchFS {
+		for range 15 {
+			// Get all running processes
+			processes, err := process.Processes()
+			if err != nil {
+				panic("could not get processes: " + err.Error())
+			}
+
+			// Search for the process named "inotifywait"
+			for _, p := range processes {
+				name, err := p.Name()
+				if err != nil {
+					log.Println(err)
+					continue
+				}
+
+				if strings.Contains(name, "inotifywait") {
+					// Give it some time to setup the watches
+					logger.Debug().Msg("waiting for inotifywait to settle...")
+					time.Sleep(2 * time.Second)
+					foundInotify = true
+					break
+				}
+			}
+			if foundInotify {
+				break
+			}
+			logger.Debug().Msg("waiting for inotifywait to start...")
+			time.Sleep(1 * time.Second)
+		}
+	}
+	if o.WatchFS && !foundInotify {
+		return nil, fmt.Errorf("inotifywait process not found but watch_fs is enabled")
+	}
+
 	aspects := aspects.Aspects{
 		Lookup:      lu,
 		Tree:        tree,
@@ -242,6 +283,7 @@ func NewTestEnv(config map[string]interface{}) (*TestEnv, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	ctx := ruser.ContextSetUser(context.Background(), owner)
 
 	tmpFs, _ := fs.(*decomposedfs.Decomposedfs)
