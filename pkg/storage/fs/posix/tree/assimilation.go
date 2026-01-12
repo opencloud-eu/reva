@@ -909,17 +909,24 @@ func (t *Tree) WarmupIDCache(root string, assimilate, onlyDirty bool) error {
 			}
 
 			if id != "" {
-				// Check if the item on the previous still exists. In this case it might have been a copy with extended attributes -> set new ID
+				// Check if the item on the previous path still exists. In this case it might have been a copy with extended attributes -> set new ID
+				isCopy := false
 				previousPath, ok := t.lookup.GetCachedID(context.Background(), spaceID, id)
 				if ok && previousPath != path {
-					// this id clashes with an existing id -> re-assimilate
 					_, err := os.Stat(previousPath)
 					if err == nil {
-						_ = t.assimilate(scanItem{Path: path})
+						// previous path (using the same id) still exists -> this is a copy
+						isCopy = true
 					}
 				}
-				if err := t.lookup.CacheID(context.Background(), spaceID, id, path); err != nil {
-					t.log.Error().Err(err).Str("spaceID", spaceID).Str("id", id).Str("path", path).Msg("could not cache id")
+				if isCopy {
+					// copy detected -> re-assimilate
+					_ = t.assimilate(scanItem{Path: path})
+				} else {
+					// update cached id with new path
+					if err := t.lookup.CacheID(context.Background(), spaceID, id, path); err != nil {
+						t.log.Error().Err(err).Str("spaceID", spaceID).Str("id", id).Str("path", path).Msg("could not cache id")
+					}
 				}
 			}
 		} else if assimilate {
