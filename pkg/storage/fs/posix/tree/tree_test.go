@@ -30,7 +30,7 @@ func generateRandomString(length int) (string, error) {
 	return string(randomBytes), nil
 }
 
-var _ = Describe("Watching tree", func() {
+var _ = FDescribe("Watching tree", func() {
 	var (
 		subtree string
 	)
@@ -276,7 +276,7 @@ var _ = Describe("Watching tree", func() {
 				}).Should(Succeed())
 			})
 
-			FIt("handles id clashes", func() {
+			It("handles id clashes", func() {
 				// Create empty file
 				_, err := os.Create(root + "/original.txt")
 				Expect(err).ToNot(HaveOccurred())
