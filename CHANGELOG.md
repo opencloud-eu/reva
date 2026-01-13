@@ -6,13 +6,14 @@
 
 @aduffeck, @butonic, @fschade, @rhafer, @saw-jan
 
+### 🐛 Bug Fixes
+
+- fix(watchfs): Don't cache old id if a copy is detected [[#491](https://github.com/opencloud-eu/reva/pull/491)]
+- log correct line in tus log wrapper [[#460](https://github.com/opencloud-eu/reva/pull/460)]
+
 ### 📈 Enhancement
 
 - add tls support for nats connections [[#466](https://github.com/opencloud-eu/reva/pull/466)]
-
-### 🐛 Bug Fixes
-
-- log correct line in tus log wrapper [[#460](https://github.com/opencloud-eu/reva/pull/460)]
 
 ### 📦️ Dependencies
 
