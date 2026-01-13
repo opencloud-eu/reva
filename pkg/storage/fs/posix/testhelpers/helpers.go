@@ -219,7 +219,7 @@ func NewTestEnv(config map[string]interface{}) (*TestEnv, error) {
 		},
 	)
 
-	logger := zerolog.New(os.Stderr).With().Logger()
+	logger := zerolog.New(os.Stderr).With().Timestamp().Logger()
 
 	bs := &nodemocks.Blobstore{}
 	p := permissions.NewPermissions(pmock, permissionsSelector)
@@ -255,6 +255,7 @@ func NewTestEnv(config map[string]interface{}) (*TestEnv, error) {
 					logger.Debug().Msg("waiting for inotifywait to settle...")
 					time.Sleep(2 * time.Second)
 					foundInotify = true
+					logger.Debug().Msg("waiting for inotifywait completed")
 					break
 				}
 			}
