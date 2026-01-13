@@ -52,7 +52,7 @@ var _ = FDescribe("Watching tree", func() {
 			})
 			g.Expect(err).ToNot(HaveOccurred())
 			g.Expect(n.Exists).To(BeTrue())
-		}).Should(Succeed())
+		}).ProbeEvery(200 * time.Millisecond).Should(Succeed())
 	})
 
 	Describe("assimilation", func() {
