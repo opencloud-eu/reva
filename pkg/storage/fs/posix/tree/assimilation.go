@@ -103,10 +103,12 @@ func (d *ScanDebouncer) Debounce(item scanItem) {
 
 	path := item.Path
 	recurse := item.Recurse
+	trigger := item.Trigger
 	if i, ok := d.pending.Load(item.Path); ok {
 		AssimilationPendingTasks.Dec()
 		queueItem := i.(*queueItem)
 		recurse = recurse || queueItem.item.Recurse
+		trigger = queueItem.item.Trigger + "; " + trigger
 		queueItem.timer.Stop()
 	}
 
@@ -132,6 +134,7 @@ func (d *ScanDebouncer) Debounce(item scanItem) {
 			d.f(scanItem{
 				Path:    path,
 				Recurse: recurse,
+				Trigger: trigger,
 			})
 		}),
 	})
@@ -193,16 +196,22 @@ func (t *Tree) Scan(path string, action watcher.EventAction, isDir bool) error {
 			//   -> scan parent directory recursively to update tree size and catch nodes that weren't covered by an event
 			AssimilationCounter.WithLabelValues(_labelFile, _labelAdded).Inc()
 			if !t.scanDebouncer.Pending(filepath.Dir(path)) {
+				t.log.Debug().Str("path", path).Msg("debouncing 'ActionCreate (!isDir)")
 				t.scanDebouncer.Debounce(scanItem{
-					Path: path,
+					Path:    path,
+					Trigger: "ActionCreate (!isDir)",
 				})
+			} else {
+				t.log.Debug().Str("path", path).Msg("skipping as parent is pending")
 			}
 			if err := t.setDirty(filepath.Dir(path), true); err != nil {
 				t.log.Error().Err(err).Str("path", path).Bool("isDir", isDir).Msg("failed to mark directory as dirty")
 			}
+			t.log.Debug().Str("path", path).Msg("debouncing 'ActionCreate (!isDir parent)'")
 			t.scanDebouncer.Debounce(scanItem{
 				Path:    filepath.Dir(path),
 				Recurse: true,
+				Trigger: "ActionCreate (!isDir Parent)",
 			})
 		} else {
 			// 2. New directory
@@ -211,9 +220,11 @@ func (t *Tree) Scan(path string, action watcher.EventAction, isDir bool) error {
 				t.log.Error().Err(err).Str("path", path).Bool("isDir", isDir).Msg("failed to mark directory as dirty")
 			}
 			AssimilationCounter.WithLabelValues(_labelDir, _labelAdded).Inc()
+			t.log.Debug().Str("path", path).Msg("debouncing 'ActionCreate (isDir)'")
 			t.scanDebouncer.Debounce(scanItem{
 				Path:    path,
 				Recurse: true,
+				Trigger: "ActionCreate (isDir)",
 			})
 		}
 
@@ -223,7 +234,8 @@ func (t *Tree) Scan(path string, action watcher.EventAction, isDir bool) error {
 		//   -> update file unless parent directory is being rescanned
 		if !t.scanDebouncer.InProgress(filepath.Dir(path)) {
 			t.scanDebouncer.Debounce(scanItem{
-				Path: path,
+				Path:    path,
+				Trigger: "ActionUpdate",
 			})
 		}
 
@@ -242,6 +254,7 @@ func (t *Tree) Scan(path string, action watcher.EventAction, isDir bool) error {
 		t.scanDebouncer.Debounce(scanItem{
 			Path:    path,
 			Recurse: isDir,
+			Trigger: "ActionMove",
 		})
 
 		if !isDir {
@@ -285,6 +298,7 @@ func (t *Tree) Scan(path string, action watcher.EventAction, isDir bool) error {
 		t.scanDebouncer.Debounce(scanItem{
 			Path:    filepath.Dir(path),
 			Recurse: true,
+			Trigger: "ActionDelete (parent)",
 		})
 
 		if !isDir {
@@ -407,7 +421,7 @@ func (t *Tree) generateTempNodeId(path string) string {
 }
 
 func (t *Tree) assimilate(item scanItem) error {
-	t.log.Debug().Str("path", item.Path).Bool("recurse", item.Recurse).Msg("assimilate")
+	t.log.Debug().Str("path", item.Path).Bool("recurse", item.Recurse).Str("Trigger", item.Trigger).Msg("assimilate")
 	var err error
 
 	spaceID, id, parentID, mtime, err := t.lookup.MetadataBackend().IdentifyPath(context.Background(), item.Path)
@@ -476,7 +490,7 @@ func (t *Tree) assimilate(item scanItem) error {
 					t.log.Error().Err(err).Str("path", item.Path).Msg("could not purge metadata")
 				}
 				go func() {
-					if err := t.assimilate(scanItem{Path: item.Path}); err != nil {
+					if err := t.assimilate(scanItem{Path: item.Path, Trigger: "assimilate ID clash"}); err != nil {
 						t.log.Error().Err(err).Str("path", item.Path).Msg("could not re-assimilate")
 					}
 				}()
@@ -639,7 +653,7 @@ assimilate:
 			}
 
 			// assimilate parent first
-			err = t.assimilate(scanItem{Path: filepath.Dir(path)})
+			err = t.assimilate(scanItem{Path: filepath.Dir(path), Trigger: "assimilate updateFile() parent"})
 			if err != nil {
 				return nil, nil, err
 			}
@@ -910,20 +924,28 @@ func (t *Tree) WarmupIDCache(root string, assimilate, onlyDirty bool) error {
 
 			if id != "" {
 				// Check if the item on the previous still exists. In this case it might have been a copy with extended attributes -> set new ID
+				isCopy := false
 				previousPath, ok := t.lookup.GetCachedID(context.Background(), spaceID, id)
 				if ok && previousPath != path {
-					// this id clashes with an existing id -> re-assimilate
 					_, err := os.Stat(previousPath)
 					if err == nil {
-						_ = t.assimilate(scanItem{Path: path})
+						// previous path still exists -> this is a copy
+						isCopy = true
 					}
 				}
-				if err := t.lookup.CacheID(context.Background(), spaceID, id, path); err != nil {
-					t.log.Error().Err(err).Str("spaceID", spaceID).Str("id", id).Str("path", path).Msg("could not cache id")
+				if isCopy {
+					// copy detected -> re-assimilate
+					_ = t.assimilate(scanItem{Path: path, Trigger: "warmup id cache - id clash, previous path: " + previousPath})
+				} else {
+					// update cache with new path
+					t.log.Debug().Str("path", path).Str("id", id).Msg("caching id")
+					if err := t.lookup.CacheID(context.Background(), spaceID, id, path); err != nil {
+						t.log.Error().Err(err).Str("spaceID", spaceID).Str("id", id).Str("path", path).Msg("could not cache id")
+					}
 				}
 			}
 		} else if assimilate {
-			if err := t.assimilate(scanItem{Path: path}); err != nil {
+			if err := t.assimilate(scanItem{Path: path, Trigger: "warmup id cache"}); err != nil {
 				t.log.Error().Err(err).Str("path", path).Msg("could not assimilate item")
 			}
 		}

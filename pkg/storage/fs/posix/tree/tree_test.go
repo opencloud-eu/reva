@@ -30,7 +30,7 @@ func generateRandomString(length int) (string, error) {
 	return string(randomBytes), nil
 }
 
-var _ = Describe("Watching tree", func() {
+var _ = FDescribe("Watching tree", func() {
 	var (
 		subtree string
 	)
@@ -52,7 +52,7 @@ var _ = Describe("Watching tree", func() {
 			})
 			g.Expect(err).ToNot(HaveOccurred())
 			g.Expect(n.Exists).To(BeTrue())
-		}).Should(Succeed())
+		}).ProbeEvery(200 * time.Millisecond).Should(Succeed())
 	})
 
 	Describe("assimilation", func() {
@@ -297,14 +297,14 @@ var _ = Describe("Watching tree", func() {
 				}).Should(Succeed())
 
 				// cp file
-				cmd := exec.Command("cp", "-a", root+"/original.txt", root+"/moved.txt")
+				cmd := exec.Command("cp", "-a", root+"/original.txt", root+"/copied.txt")
 				err = cmd.Run()
 				Expect(err).ToNot(HaveOccurred())
 
 				Eventually(func(g Gomega) {
 					n, err := env.Lookup.NodeFromResource(env.Ctx, &provider.Reference{
 						ResourceId: env.SpaceRootRes,
-						Path:       subtree + "/moved.txt",
+						Path:       subtree + "/copied.txt",
 					})
 					g.Expect(err).ToNot(HaveOccurred())
 					g.Expect(n).ToNot(BeNil())

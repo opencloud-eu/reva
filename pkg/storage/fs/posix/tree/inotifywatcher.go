@@ -61,7 +61,11 @@ func (iw *InotifyWatcher) Watch(path string) {
 	}
 
 	// create a slog logger to be passed to the settings of inotifywatcher to log into
-	logger := slog.New(slogzerolog.Option{Level: slog.LevelDebug, Logger: iw.log}.NewZerologHandler())
+	logger := slog.New(
+		slogzerolog.Option{
+			Level:  slogzerolog.ZeroLogLeveler{Logger: iw.log},
+			Logger: iw.log,
+		}.NewZerologHandler())
 
 	events := make(chan inotifywaitgo.FileEvent)
 	errors := make(chan error)
