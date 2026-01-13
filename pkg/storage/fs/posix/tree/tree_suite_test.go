@@ -2,6 +2,7 @@ package tree_test
 
 import (
 	"testing"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -18,8 +19,9 @@ var (
 var _ = SynchronizedBeforeSuite(func() {
 	var err error
 	env, err = helpers.NewTestEnv(map[string]any{
-		"watch_fs": true,
-		"scan_fs":  true,
+		"watch_fs":                true,
+		"scan_fs":                 true,
+		"inotify_stats_frequency": 1 * time.Second,
 	})
 	Expect(err).ToNot(HaveOccurred())
 
