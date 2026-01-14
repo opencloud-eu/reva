@@ -1,6 +1,6 @@
 # Changelog
 
-## [2.42.0](https://github.com/opencloud-eu/reva/releases/tag/v2.42.0) - 2026-01-13
+## [2.42.0](https://github.com/opencloud-eu/reva/releases/tag/v2.42.0) - 2026-01-14
 
 ### ❤️ Thanks to all contributors! ❤️
 
@@ -8,6 +8,7 @@
 
 ### 🐛 Bug Fixes
 
+- Reduce CPU and memory usage [[#490](https://github.com/opencloud-eu/reva/pull/490)]
 - fix(watchfs): Don't cache old id if a copy is detected [[#491](https://github.com/opencloud-eu/reva/pull/491)]
 - log correct line in tus log wrapper [[#460](https://github.com/opencloud-eu/reva/pull/460)]
 
