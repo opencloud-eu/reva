@@ -360,7 +360,7 @@ func (t *Tree) getNodeForPath(path string) (*node.Node, error) {
 		return nil, err
 	}
 
-	return node.ReadNode(context.Background(), t.lookup, spaceID, nodeID, false, nil, false)
+	return node.ReadNode(context.Background(), t.lookup, spaceID, nodeID, path, false, nil, false)
 }
 
 func (t *Tree) findSpaceId(path string) (string, error) {
@@ -950,7 +950,7 @@ func (t *Tree) WarmupIDCache(root string, assimilate, onlyDirty bool) error {
 			t.log.Error().Err(err).Str("path", dir).Msg("could not get ids for path")
 			continue
 		}
-		n, err := node.ReadNode(context.Background(), t.lookup, spaceID, id, true, nil, false)
+		n, err := node.ReadNode(context.Background(), t.lookup, spaceID, id, dir, true, nil, false)
 		if err != nil {
 			t.log.Error().Err(err).Str("path", dir).Msg("could not read directory node")
 			continue
