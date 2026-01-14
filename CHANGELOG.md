@@ -18,6 +18,7 @@
 
 ### 📦️ Dependencies
 
+- chore(deps): bump golang.org/x/crypto from 0.46.0 to 0.47.0 [[#494](https://github.com/opencloud-eu/reva/pull/494)]
 - chore(deps): bump golang.org/x/term from 0.38.0 to 0.39.0 [[#492](https://github.com/opencloud-eu/reva/pull/492)]
 - chore(deps): bump github.com/onsi/ginkgo/v2 from 2.27.3 to 2.27.5 [[#493](https://github.com/opencloud-eu/reva/pull/493)]
 - chore(deps): bump golang.org/x/sys from 0.39.0 to 0.40.0 [[#488](https://github.com/opencloud-eu/reva/pull/488)]
