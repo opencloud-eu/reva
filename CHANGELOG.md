@@ -18,6 +18,7 @@
 
 ### 📦️ Dependencies
 
+- chore(deps): bump github.com/minio/minio-go/v7 from 7.0.97 to 7.0.98 [[#498](https://github.com/opencloud-eu/reva/pull/498)]
 - chore(deps): bump github.com/go-chi/chi/v5 from 5.2.3 to 5.2.4 [[#496](https://github.com/opencloud-eu/reva/pull/496)]
 - chore(deps): bump golang.org/x/crypto from 0.46.0 to 0.47.0 [[#494](https://github.com/opencloud-eu/reva/pull/494)]
 - chore(deps): bump golang.org/x/term from 0.38.0 to 0.39.0 [[#492](https://github.com/opencloud-eu/reva/pull/492)]
