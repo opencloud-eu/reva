@@ -1,6 +1,6 @@
 # Changelog
 
-## [2.42.0](https://github.com/opencloud-eu/reva/releases/tag/v2.42.0) - 2026-01-19
+## [2.42.0](https://github.com/opencloud-eu/reva/releases/tag/v2.42.0) - 2026-01-20
 
 ### ❤️ Thanks to all contributors! ❤️
 
@@ -18,6 +18,7 @@
 
 ### 📦️ Dependencies
 
+- chore(deps): bump github.com/segmentio/kafka-go from 0.4.49 to 0.4.50 [[#500](https://github.com/opencloud-eu/reva/pull/500)]
 - chore(deps): bump github.com/prometheus/alertmanager from 0.30.0 to 0.30.1 [[#499](https://github.com/opencloud-eu/reva/pull/499)]
 - chore(deps): bump github.com/minio/minio-go/v7 from 7.0.97 to 7.0.98 [[#498](https://github.com/opencloud-eu/reva/pull/498)]
 - chore(deps): bump github.com/go-chi/chi/v5 from 5.2.3 to 5.2.4 [[#496](https://github.com/opencloud-eu/reva/pull/496)]
