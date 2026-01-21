@@ -4,7 +4,7 @@ variables:
 
 when:
   - event: [ push , manual ]
-    branch: ${CI_REPO_DEFAULT_BRANCH}
+    branch: stable-2.40
   - event: [ pull_request, cron ]
 
 workspace:

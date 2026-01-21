@@ -2,7 +2,7 @@
 
 when:
   event: push
-  branch: ${CI_REPO_DEFAULT_BRANCH}
+  branch: stable-2.40
 
 steps:
   release-helper:

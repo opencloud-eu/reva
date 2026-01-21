@@ -21,7 +21,7 @@ var _ = Describe("Lookup", func() {
 
 	BeforeEach(func() {
 		var err error
-		env, err = helpers.NewTestEnv(map[string]any{})
+		env, err = helpers.NewTestEnv(map[string]interface{}{"watch_fs": false})
 		Expect(err).ToNot(HaveOccurred())
 
 		mockCache = mocks.NewIDCache(GinkgoT())
