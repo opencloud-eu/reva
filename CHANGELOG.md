@@ -8,9 +8,11 @@
 
 ### 🐛 Bug Fixes
 
+- Handle files still being processed during download/copy [[#507](https://github.com/opencloud-eu/reva/pull/507)]
 - Reduce CPU and memory usage [[#490](https://github.com/opencloud-eu/reva/pull/490)]
 - fix(watchfs): Don't cache old id if a copy is detected [[#491](https://github.com/opencloud-eu/reva/pull/491)]
 - log correct line in tus log wrapper [[#460](https://github.com/opencloud-eu/reva/pull/460)]
+- skip assimilations if root is reached [[#463](https://github.com/opencloud-eu/reva/pull/463)]
 
 ### 📈 Enhancement
 
