@@ -1,5 +1,53 @@
 # Changelog
 
+## [2.42.0](https://github.com/opencloud-eu/reva/releases/tag/v2.42.0) - 2026-01-26
+
+### ❤️ Thanks to all contributors! ❤️
+
+@aduffeck, @butonic, @fschade, @rhafer, @saw-jan
+
+### 🐛 Bug Fixes
+
+- Handle files still being processed during download/copy [[#507](https://github.com/opencloud-eu/reva/pull/507)]
+- Reduce CPU and memory usage [[#490](https://github.com/opencloud-eu/reva/pull/490)]
+- fix(watchfs): Don't cache old id if a copy is detected [[#491](https://github.com/opencloud-eu/reva/pull/491)]
+- log correct line in tus log wrapper [[#460](https://github.com/opencloud-eu/reva/pull/460)]
+- skip assimilations if root is reached [[#463](https://github.com/opencloud-eu/reva/pull/463)]
+
+### 📈 Enhancement
+
+- add tls support for nats connections [[#466](https://github.com/opencloud-eu/reva/pull/466)]
+
+### 📦️ Dependencies
+
+- chore(deps): bump github.com/segmentio/kafka-go from 0.4.49 to 0.4.50 [[#500](https://github.com/opencloud-eu/reva/pull/500)]
+- chore(deps): bump github.com/prometheus/alertmanager from 0.30.0 to 0.30.1 [[#499](https://github.com/opencloud-eu/reva/pull/499)]
+- chore(deps): bump github.com/minio/minio-go/v7 from 7.0.97 to 7.0.98 [[#498](https://github.com/opencloud-eu/reva/pull/498)]
+- chore(deps): bump github.com/go-chi/chi/v5 from 5.2.3 to 5.2.4 [[#496](https://github.com/opencloud-eu/reva/pull/496)]
+- chore(deps): bump golang.org/x/crypto from 0.46.0 to 0.47.0 [[#494](https://github.com/opencloud-eu/reva/pull/494)]
+- chore(deps): bump golang.org/x/term from 0.38.0 to 0.39.0 [[#492](https://github.com/opencloud-eu/reva/pull/492)]
+- chore(deps): bump github.com/onsi/ginkgo/v2 from 2.27.3 to 2.27.5 [[#493](https://github.com/opencloud-eu/reva/pull/493)]
+- chore(deps): bump golang.org/x/sys from 0.39.0 to 0.40.0 [[#488](https://github.com/opencloud-eu/reva/pull/488)]
+- chore(deps): bump github.com/onsi/gomega from 1.38.3 to 1.39.0 [[#489](https://github.com/opencloud-eu/reva/pull/489)]
+- chore(deps): bump github.com/onsi/ginkgo/v2 from 2.27.2 to 2.27.3 [[#486](https://github.com/opencloud-eu/reva/pull/486)]
+- chore(deps): bump github.com/nats-io/nats.go from 1.47.0 to 1.48.0 [[#485](https://github.com/opencloud-eu/reva/pull/485)]
+- chore(deps): bump github.com/BurntSushi/toml from 1.5.0 to 1.6.0 [[#484](https://github.com/opencloud-eu/reva/pull/484)]
+- chore(deps): bump github.com/onsi/gomega from 1.38.2 to 1.38.3 [[#483](https://github.com/opencloud-eu/reva/pull/483)]
+- chore(deps): bump google.golang.org/grpc from 1.77.0 to 1.78.0 [[#480](https://github.com/opencloud-eu/reva/pull/480)]
+- chore(deps): bump google.golang.org/protobuf from 1.36.10 to 1.36.11 [[#481](https://github.com/opencloud-eu/reva/pull/481)]
+- chore(deps): bump golang.org/x/oauth2 from 0.33.0 to 0.34.0 [[#478](https://github.com/opencloud-eu/reva/pull/478)]
+- chore(deps): bump github.com/nats-io/nats-server/v2 from 2.12.2 to 2.12.3 [[#479](https://github.com/opencloud-eu/reva/pull/479)]
+- chore(deps): bump go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc from 1.38.0 to 1.39.0 [[#476](https://github.com/opencloud-eu/reva/pull/476)]
+- chore(deps): bump github.com/ceph/go-ceph from 0.36.0 to 0.37.0 [[#475](https://github.com/opencloud-eu/reva/pull/475)]
+- chore(deps): bump go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc from 0.63.0 to 0.64.0 [[#474](https://github.com/opencloud-eu/reva/pull/474)]
+- chore(deps): bump github.com/mattn/go-sqlite3 from 1.14.32 to 1.14.33 [[#473](https://github.com/opencloud-eu/reva/pull/473)]
+- chore(deps): bump github.com/go-playground/validator/v10 from 10.28.0 to 10.30.0 [[#469](https://github.com/opencloud-eu/reva/pull/469)]
+- chore(deps): bump github.com/prometheus/alertmanager from 0.29.0 to 0.30.0 [[#468](https://github.com/opencloud-eu/reva/pull/468)]
+- chore(deps): bump golang.org/x/sys from 0.38.0 to 0.39.0 [[#467](https://github.com/opencloud-eu/reva/pull/467)]
+- chore(deps): bump go.etcd.io/etcd/client/v3 from 3.6.6 to 3.6.7 [[#464](https://github.com/opencloud-eu/reva/pull/464)]
+- chore(deps): bump golang.org/x/sync from 0.18.0 to 0.19.0 [[#453](https://github.com/opencloud-eu/reva/pull/453)]
+- chore(deps): bump go.opentelemetry.io/otel/trace from 1.38.0 to 1.39.0 [[#452](https://github.com/opencloud-eu/reva/pull/452)]
+
 ## [2.41.0](https://github.com/opencloud-eu/reva/releases/tag/v2.41.0) - 2025-12-15
 
 ### ❤️ Thanks to all contributors! ❤️
