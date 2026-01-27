@@ -75,11 +75,6 @@ func expandAndVerifyScope(ctx context.Context, req interface{}, tokenScope map[s
 					return nil
 				}
 
-			case strings.HasPrefix(k, "share"):
-				if err = resolveUserShare(ctx, ref, tokenScope[k], client, mgr); err == nil {
-					return nil
-				}
-
 			case strings.HasPrefix(k, "lightweight"):
 				if err = resolveLightweightScope(ctx, ref, tokenScope[k], user, client, mgr); err == nil {
 					return nil
@@ -232,16 +227,6 @@ func checkRelativeReference(ctx context.Context, requested *provider.Reference, 
 	key := storagespace.FormatResourceID(sharedResourceID) + scopeDelimiter + getRefKey(requested)
 	_ = scopeExpansionCache.SetWithExpire(key, nil, scopeCacheExpiration*time.Second)
 	return nil
-}
-
-func resolveUserShare(ctx context.Context, ref *provider.Reference, scope *authpb.Scope, client gateway.GatewayAPIClient, mgr token.Manager) error {
-	var share collaboration.Share
-	err := utils.UnmarshalJSONToProtoV1(scope.Resource.Value, &share)
-	if err != nil {
-		return err
-	}
-
-	return checkCacheForNestedResource(ctx, ref, share.ResourceId, client, mgr)
 }
 
 func checkCacheForNestedResource(ctx context.Context, ref *provider.Reference, resource *provider.ResourceId, client gateway.GatewayAPIClient, mgr token.Manager) error {
