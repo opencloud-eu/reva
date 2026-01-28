@@ -152,7 +152,10 @@ func natsConfig(log logger.Logger, ctx context.Context, opts []microstore.Option
 		opts = append(opts, natsjs.DefaultMemory())
 	}
 
-	ttl, _ := ctx.Value(ttlContextKey{}).(time.Duration)
+	ttl := time.Duration(0)
+	if d, ok := ctx.Value(ttlContextKey{}).(time.Duration); ok {
+		ttl = d
+	}
 
 	// preparing natsOptions before the switch to reuse the same code
 	natsOptions := nats.GetDefaultOptions()
