@@ -1,5 +1,15 @@
 # Changelog
 
+## [2.42.1](https://github.com/opencloud-eu/reva/releases/tag/v2.42.1) - 2026-01-28
+
+### ❤️ Thanks to all contributors! ❤️
+
+@aduffeck
+
+### 🐛 Bug Fixes
+
+- Apply changed TTL settings to existing buckets [[#509](https://github.com/opencloud-eu/reva/pull/509)]
+
 ## [2.42.0](https://github.com/opencloud-eu/reva/releases/tag/v2.42.0) - 2026-01-26
 
 ### ❤️ Thanks to all contributors! ❤️
