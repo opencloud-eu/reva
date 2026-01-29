@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.42.2](https://github.com/opencloud-eu/reva/releases/tag/v2.42.2) - 2026-01-29
+
+### 📦️ Dependencies
+
+- chore(deps): bump github.com/nats-io/nats-server/v2 from 2.12.3 to 2.12.4 [[#508](https://github.com/opencloud-eu/reva/pull/508)]
+
 ## [2.42.1](https://github.com/opencloud-eu/reva/releases/tag/v2.42.1) - 2026-01-28
 
 ### ❤️ Thanks to all contributors! ❤️
