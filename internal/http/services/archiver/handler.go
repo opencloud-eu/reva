@@ -23,6 +23,8 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
+	"path"
 	"time"
 
 	"regexp"
@@ -30,15 +32,18 @@ import (
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/go-chi/chi/v5"
 
 	"github.com/gdexlab/go-render/render"
 	"github.com/mitchellh/mapstructure"
 	"github.com/opencloud-eu/reva/v2/internal/http/services/archiver/manager"
+	ctxpkg "github.com/opencloud-eu/reva/v2/pkg/ctx"
 	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
 	"github.com/opencloud-eu/reva/v2/pkg/rgrpc/todo/pool"
 	"github.com/opencloud-eu/reva/v2/pkg/rhttp"
 	"github.com/opencloud-eu/reva/v2/pkg/rhttp/global"
 	"github.com/opencloud-eu/reva/v2/pkg/sharedconf"
+	"github.com/opencloud-eu/reva/v2/pkg/signedurl"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/downloader"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/walker"
 	"github.com/opencloud-eu/reva/v2/pkg/storagespace"
@@ -47,24 +52,28 @@ import (
 
 type svc struct {
 	config          *Config
+	router          *chi.Mux
 	gatewaySelector pool.Selectable[gateway.GatewayAPIClient]
 	log             *zerolog.Logger
 	walker          walker.Walker
 	downloader      downloader.Downloader
+	urlSigner       signedurl.Signer
 
 	allowedFolders []*regexp.Regexp
 }
 
 // Config holds the config options that need to be passed down to all ocdav handlers
 type Config struct {
-	Prefix         string   `mapstructure:"prefix"`
-	GatewaySvc     string   `mapstructure:"gatewaysvc"`
-	Timeout        int64    `mapstructure:"timeout"`
-	Insecure       bool     `mapstructure:"insecure"`
-	Name           string   `mapstructure:"name"`
-	MaxNumFiles    int64    `mapstructure:"max_num_files"`
-	MaxSize        int64    `mapstructure:"max_size"`
-	AllowedFolders []string `mapstructure:"allowed_folders"`
+	PublicURL        string   `mapstructure:"public_url"`
+	Prefix           string   `mapstructure:"prefix"`
+	GatewaySvc       string   `mapstructure:"gatewaysvc"`
+	Timeout          int64    `mapstructure:"timeout"`
+	Insecure         bool     `mapstructure:"insecure"`
+	Name             string   `mapstructure:"name"`
+	MaxNumFiles      int64    `mapstructure:"max_num_files"`
+	MaxSize          int64    `mapstructure:"max_size"`
+	AllowedFolders   []string `mapstructure:"allowed_folders"`
+	URLSigningSecret string   `mapstructure:"url_signing_secret"`
 }
 
 func init() {
@@ -96,14 +105,27 @@ func New(conf map[string]interface{}, log *zerolog.Logger) (global.Service, erro
 		allowedFolderRegex = append(allowedFolderRegex, regex)
 	}
 
-	return &svc{
+	signer, err := signedurl.NewJWTSignedURL(signedurl.WithSecret(c.URLSigningSecret))
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize URL signer: %w", err)
+	}
+
+	svc := &svc{
 		config:          c,
 		gatewaySelector: gatewaySelector,
 		downloader:      downloader.NewDownloader(gatewaySelector, rhttp.Insecure(c.Insecure), rhttp.Timeout(time.Duration(c.Timeout*int64(time.Second)))),
 		walker:          walker.NewWalker(gatewaySelector),
 		log:             log,
 		allowedFolders:  allowedFolderRegex,
-	}, nil
+		urlSigner:       signer,
+	}
+	router := chi.NewRouter()
+	router.Route("/", func(r chi.Router) {
+		r.Get("/v2", svc.signedRedirect)
+		r.Get("/", svc.createArchive)
+	})
+	svc.router = router
+	return svc, nil
 }
 
 func (c *Config) init() {
@@ -218,66 +240,106 @@ func (s *svc) writeHTTPError(rw http.ResponseWriter, err error) {
 }
 
 func (s *svc) Handler() http.Handler {
-	return http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
-		// get the paths and/or the resources id from the query
-		ctx := r.Context()
-		v := r.URL.Query()
+	return s.router
+}
 
-		paths, ok := v["path"]
-		if !ok {
-			paths = []string{}
+func (s *svc) signedRedirect(rw http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	u, ok := ctxpkg.ContextGetUser(ctx)
+	if !ok {
+		s.log.Error().Msg("could not get user from context for download URL signing")
+		s.writeHTTPError(rw, errtypes.InternalError("could not get user from context"))
+		return
+	}
+
+	urlToSign, err := url.Parse(s.config.PublicURL)
+	if err != nil {
+		s.log.Error().Err(err).Msg("could not parse public URL for archiver")
+		s.writeHTTPError(rw, errtypes.InternalError("could not parse public URL"))
+		return
+	}
+
+	urlToSign.Path = path.Join(urlToSign.Path, s.config.Prefix)
+	query := r.URL.Query()
+	// only keep path, id and output-format query params, we don't want stuff like `public-token`
+	// from public links to be part of the signed URL
+	for key, _ := range query {
+		if key != "path " && key != "id" && key != "output-format" {
+			query.Del(key)
 		}
-		ids, ok := v["id"]
-		if !ok {
-			ids = []string{}
-		}
-		format := v.Get("output-format")
-		if format == "" {
-			format = "zip"
-		}
+	}
 
-		resources, err := s.getResources(ctx, paths, ids)
-		if err != nil {
-			s.writeHTTPError(rw, err)
-			return
-		}
+	urlToSign.RawQuery = query.Encode()
+	signedURL, err := s.urlSigner.Sign(urlToSign.String(), u.Id.OpaqueId, 30*time.Minute)
+	if err != nil {
+		s.log.Error().Err(err).Msg("could not sign URL")
+		s.writeHTTPError(rw, errtypes.InternalError("could not sign URL"))
+		return
+	}
+	// Set content type to nil to keep http.Redirect from sending a HTML body
+	rw.Header().Set("Content-Type", "none")
+	http.Redirect(rw, r, signedURL, http.StatusSeeOther)
+}
 
-		arch, err := manager.NewArchiver(resources, s.walker, s.downloader, manager.Config{
-			MaxNumFiles: s.config.MaxNumFiles,
-			MaxSize:     s.config.MaxSize,
-		})
-		if err != nil {
-			s.writeHTTPError(rw, err)
-			return
-		}
+func (s *svc) createArchive(rw http.ResponseWriter, r *http.Request) {
+	// get the paths and/or the resources id from the query
+	ctx := r.Context()
+	v := r.URL.Query()
 
-		archName := s.config.Name
-		if format == "tar" {
-			archName += ".tar"
-		} else {
-			archName += ".zip"
-		}
+	paths, ok := v["path"]
+	if !ok {
+		paths = []string{}
+	}
+	ids, ok := v["id"]
+	if !ok {
+		ids = []string{}
+	}
+	format := v.Get("output-format")
+	if format == "" {
+		format = "zip"
+	}
 
-		s.log.Debug().Msg("Requested the following resources to archive: " + render.Render(resources))
+	resources, err := s.getResources(ctx, paths, ids)
+	if err != nil {
+		s.writeHTTPError(rw, err)
+		return
+	}
 
-		rw.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", archName))
-		rw.Header().Set("Content-Transfer-Encoding", "binary")
-
-		// create the archive
-		var closeArchive func()
-		if format == "tar" {
-			closeArchive, err = arch.CreateTar(ctx, rw)
-		} else {
-			closeArchive, err = arch.CreateZip(ctx, rw)
-		}
-		defer closeArchive()
-
-		if err != nil {
-			s.writeHTTPError(rw, err)
-			return
-		}
-
+	arch, err := manager.NewArchiver(resources, s.walker, s.downloader, manager.Config{
+		MaxNumFiles: s.config.MaxNumFiles,
+		MaxSize:     s.config.MaxSize,
 	})
+	if err != nil {
+		s.writeHTTPError(rw, err)
+		return
+	}
+
+	archName := s.config.Name
+	if format == "tar" {
+		archName += ".tar"
+	} else {
+		archName += ".zip"
+	}
+
+	s.log.Debug().Msg("Requested the following resources to archive: " + render.Render(resources))
+
+	rw.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", archName))
+	rw.Header().Set("Content-Transfer-Encoding", "binary")
+
+	// create the archive
+	var closeArchive func()
+	if format == "tar" {
+		closeArchive, err = arch.CreateTar(ctx, rw)
+	} else {
+		closeArchive, err = arch.CreateZip(ctx, rw)
+	}
+	defer closeArchive()
+
+	if err != nil {
+		s.writeHTTPError(rw, err)
+		return
+	}
+
 }
 
 func (s *svc) Prefix() string {
