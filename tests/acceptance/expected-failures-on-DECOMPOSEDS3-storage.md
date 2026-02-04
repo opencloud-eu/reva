@@ -142,13 +142,6 @@ _The below features have been added after I last categorized them. AFAICT they a
 -   [coreApiWebdavUploadTUS/checksums.feature:244](https://github.com/opencloud-eu/opencloud/blob/main/tests/acceptance/features/coreApiWebdavUploadTUS/checksums.feature#L244)
 -   [coreApiWebdavUploadTUS/checksums.feature:245](https://github.com/opencloud-eu/opencloud/blob/main/tests/acceptance/features/coreApiWebdavUploadTUS/checksums.feature#L245)
 
-
-#### [Renaming resource to banned name is allowed in spaces webdav](https://github.com/owncloud/ocis/issues/3099)
--   [coreApiWebdavMove/moveFolder.feature:36](https://github.com/opencloud-eu/opencloud/blob/main/tests/acceptance/features/coreApiWebdavMove/moveFolder.feature#L36)
--   [coreApiWebdavMove/moveFolder.feature:50](https://github.com/opencloud-eu/opencloud/blob/main/tests/acceptance/features/coreApiWebdavMove/moveFolder.feature#L50)
--   [coreApiWebdavMove/moveFolder.feature:64](https://github.com/opencloud-eu/opencloud/blob/main/tests/acceptance/features/coreApiWebdavMove/moveFolder.feature#L64)
--   [coreApiWebdavMove/moveFile.feature:143](https://github.com/opencloud-eu/opencloud/blob/main/tests/acceptance/features/coreApiWebdavMove/moveFile.feature#L143)
-
 #### [REPORT method on spaces returns an incorrect d:href response](https://github.com/owncloud/ocis/issues/3111)
 -   [coreApiFavorites/favorites.feature:146](https://github.com/opencloud-eu/opencloud/blob/main/tests/acceptance/features/coreApiFavorites/favorites.feature#L146)
 -   [coreApiFavorites/favorites.feature:147](https://github.com/opencloud-eu/opencloud/blob/main/tests/acceptance/features/coreApiFavorites/favorites.feature#L147)

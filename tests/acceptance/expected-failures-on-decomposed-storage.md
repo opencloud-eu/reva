@@ -147,13 +147,6 @@ _The below features have been added after I last categorized them. AFAICT they a
 -   [coreApiWebdavUploadTUS/checksums.feature:244](https://github.com/opencloud-eu/opencloud/blob/main/tests/acceptance/features/coreApiWebdavUploadTUS/checksums.feature#L244)
 -   [coreApiWebdavUploadTUS/checksums.feature:245](https://github.com/opencloud-eu/opencloud/blob/main/tests/acceptance/features/coreApiWebdavUploadTUS/checksums.feature#L245)
 
-
-#### [Renaming resource to banned name is allowed in spaces webdav](https://github.com/owncloud/ocis/issues/3099)
--   [coreApiWebdavMove/moveFolder.feature:36](https://github.com/opencloud-eu/opencloud/blob/main/tests/acceptance/features/coreApiWebdavMove/moveFolder.feature#L36)
--   [coreApiWebdavMove/moveFolder.feature:50](https://github.com/opencloud-eu/opencloud/blob/main/tests/acceptance/features/coreApiWebdavMove/moveFolder.feature#L50)
-- [coreApiWebdavMove/moveFolder.feature:64](https://github.com/opencloud-eu/opencloud/blob/main/tests/acceptance/features/coreApiWebdavMove/moveFolder.feature#L64)
--   [coreApiWebdavMove/moveFile.feature:102](https://github.com/opencloud-eu/opencloud/blob/main/tests/acceptance/features/coreApiWebdavMove/moveFile.feature#L102)
-
 #### [REPORT method on spaces returns an incorrect d:href response](https://github.com/owncloud/ocis/issues/3111)
 -   [coreApiFavorites/favorites.feature:145](https://github.com/opencloud-eu/opencloud/blob/main/tests/acceptance/features/coreApiFavorites/favorites.feature#L145)
 -   [coreApiFavorites/favorites.feature:175](https://github.com/opencloud-eu/opencloud/blob/main/tests/acceptance/features/coreApiFavorites/favorites.feature#L175)
@@ -167,7 +160,7 @@ _The below features have been added after I last categorized them. AFAICT they a
 
 ### [MOVE a file into same folder with same name returns 404 instead of 403](https://github.com/owncloud/ocis/issues/1976)
 
-- [coreApiWebdavMove/moveFile.feature:143](https://github.com/opencloud-eu/opencloud/blob/main/tests/acceptance/features/coreApiWebdavMove/moveFile.feature#L143)
+-   [coreApiWebdavMove/moveFile.feature:102](https://github.com/opencloud-eu/opencloud/blob/main/tests/acceptance/features/coreApiWebdavMove/moveFile.feature#L102)
 - [coreApiWebdavMove/moveFolder.feature:217](https://github.com/opencloud-eu/opencloud/blob/main/tests/acceptance/features/coreApiWebdavMove/moveFolder.feature#L217)
 - [coreApiWebdavMove/moveFolder.feature:218](https://github.com/opencloud-eu/opencloud/blob/main/tests/acceptance/features/coreApiWebdavMove/moveFolder.feature#L218)
 - [coreApiWebdavMove/moveFolder.feature:219](https://github.com/opencloud-eu/opencloud/blob/main/tests/acceptance/features/coreApiWebdavMove/moveFolder.feature#L219)
