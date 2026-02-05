@@ -1,5 +1,22 @@
 # Changelog
 
+## [2.42.2](https://github.com/opencloud-eu/reva/releases/tag/v2.42.2) - 2026-02-05
+
+### ❤️ Thanks to all contributors! ❤️
+
+@ScharfViktor, @aduffeck, @rhafer
+
+### 🔒 Security
+
+- Public scope fix [[#519](https://github.com/opencloud-eu/reva/pull/519)]
+
+### 📦️ Dependencies
+
+- chore(deps): bump github.com/onsi/gomega from 1.39.0 to 1.39.1 [[#517](https://github.com/opencloud-eu/reva/pull/517)]
+- chore(deps): bump go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc from 1.39.0 to 1.40.0 [[#516](https://github.com/opencloud-eu/reva/pull/516)]
+- chore(deps): bump github.com/golang-jwt/jwt/v5 from 5.3.0 to 5.3.1 [[#512](https://github.com/opencloud-eu/reva/pull/512)]
+- chore(deps): bump github.com/nats-io/nats-server/v2 from 2.12.3 to 2.12.4 [[#508](https://github.com/opencloud-eu/reva/pull/508)]
+
 ## [2.42.1](https://github.com/opencloud-eu/reva/releases/tag/v2.42.1) - 2026-01-28
 
 ### ❤️ Thanks to all contributors! ❤️
