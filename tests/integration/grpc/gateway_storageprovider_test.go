@@ -59,10 +59,19 @@ var _ = Describe("gateway", func() {
 
 		ctx           context.Context
 		serviceClient gateway.GatewayAPIClient
-		user          = &userpb.User{
+		// user          = &userpb.User{
+		// 	Id: &userpb.UserId{
+		// 		Idp:      "0.0.0.0:39000",
+		// 		OpaqueId: "f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c",
+		// 		Type:     userpb.UserType_USER_TYPE_PRIMARY,
+		// 	},
+		// 	Username: "einstein",
+		// }
+		user = &userpb.User{
 			Id: &userpb.UserId{
-				Idp:      "0.0.0.0:39000",
-				OpaqueId: "f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c",
+				Idp:      "http://localhost:20080",
+				OpaqueId: "4c510ada-c86b-4815-8820-42cdf82c3d51",
+				TenantId: "c239389d-c249-499d-ae80-07558429769a",
 				Type:     userpb.UserType_USER_TYPE_PRIMARY,
 			},
 			Username: "einstein",
@@ -370,7 +379,9 @@ var _ = Describe("gateway", func() {
 				{Name: "users", Config: "userprovider-json.toml"},
 				{Name: "storage", Config: "storageprovider-decomposed.toml"},
 				{Name: "storage2", Config: "storageprovider-decomposed.toml"},
+				{Name: "storage_publiclink", Config: "storage-publiclink.toml"},
 				{Name: "permissions", Config: "permissions-opencloud-ci.toml"},
+				{Name: "shares", Config: "shares.toml"},
 			}
 		})
 
