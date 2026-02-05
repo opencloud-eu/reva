@@ -1,0 +1,18 @@
+[shared]
+jwt_secret = "secret"
+
+[log]
+level = "debug"
+
+[grpc]
+address = "{{grpc_address}}"
+
+[grpc.services.applicationauth]
+driver = "jsoncs3"
+
+[grpc.services.applicationauth.drivers.jsoncs3]
+provider_addr = "{{storage_system_grpc_address}}"
+service_user_id = "service-user-id"
+service_user_idp = "internal"
+machine_auth_apikey = "secret"
+utime_update_interval_seconds = -1

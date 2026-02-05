@@ -37,10 +37,11 @@ func init() {
 }
 
 type manager struct {
-	sync.RWMutex // for lazy initialization
-	mds          metadata.Storage
-	generator    PasswordGenerator
-	initialized  bool
+	sync.RWMutex        // for lazy initialization
+	mds                 metadata.Storage
+	generator           PasswordGenerator
+	uTimeUpdateInterval time.Duration
+	initialized         bool
 }
 
 type config struct {
@@ -50,6 +51,9 @@ type config struct {
 	MachineAuthAPIKey string         `mapstructure:"machine_auth_apikey"`
 	Generator         string         `mapstructure:"password_generator"`
 	GeneratorConfig   map[string]any `mapstructure:"generator_config"`
+	// Time interval in seconds to update the UTime of a token when calling GetAppPassword. Default is 5 min.
+	// For testing set this -1 to disable automatic updates.
+	UTimeUpdateInterval int `mapstructure:"utime_update_interval_seconds"`
 }
 
 type updaterFunc func(map[string]*apppb.AppPassword) (map[string]*apppb.AppPassword, error)
@@ -83,6 +87,16 @@ func New(m map[string]any) (appauth.Manager, error) {
 		c.Generator = "diceware"
 	}
 
+	var updateInterval time.Duration
+	switch c.UTimeUpdateInterval {
+	case -1:
+		updateInterval = 0
+	case 0:
+		updateInterval = 5 * time.Minute
+	default:
+		updateInterval = time.Duration(c.UTimeUpdateInterval) * time.Second
+	}
+
 	var pwgen PasswordGenerator
 	var err error
 	switch c.Generator {
@@ -103,13 +117,14 @@ func New(m map[string]any) (appauth.Manager, error) {
 		return nil, err
 	}
 
-	return NewWithOptions(cs3, pwgen)
+	return NewWithOptions(cs3, pwgen, updateInterval)
 }
 
-func NewWithOptions(mds metadata.Storage, generator PasswordGenerator) (*manager, error) {
+func NewWithOptions(mds metadata.Storage, generator PasswordGenerator, uTimeUpdateInterval time.Duration) (*manager, error) {
 	return &manager{
-		mds:       mds,
-		generator: generator,
+		mds:                 mds,
+		generator:           generator,
+		uTimeUpdateInterval: uTimeUpdateInterval,
 	}, nil
 }
 
@@ -297,8 +312,8 @@ func (m *manager) GetAppPassword(ctx context.Context, user *userpb.UserId, secre
 				matchedID = id
 				// password not expired
 				// Updating the Utime will cause an Upload for every single GetAppPassword request. We are limiting this to one
-				// update per 5 minutes otherwise this backend will become unusable.
-				if time.Since(utils.TSToTime(pw.Utime)) > 5*time.Minute {
+				// update per 'uTimeUpdateInterval' (default 5 min) otherwise this backend will become unusable.
+				if time.Since(utils.TSToTime(pw.Utime)) > m.uTimeUpdateInterval {
 					a[id].Utime = utils.TSNow()
 					return a, nil
 				}
