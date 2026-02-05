@@ -1,5 +1,15 @@
 # Changelog
 
+## [2.42.3](https://github.com/opencloud-eu/reva/releases/tag/v2.42.3) - 2026-02-05
+
+### ❤️ Thanks to all contributors! ❤️
+
+@rhafer
+
+### 🔒 Security
+
+- fix(authscope): Fix parent check [[#521](https://github.com/opencloud-eu/reva/pull/521)]
+
 ## [2.42.2](https://github.com/opencloud-eu/reva/releases/tag/v2.42.2) - 2026-02-05
 
 ### ❤️ Thanks to all contributors! ❤️
