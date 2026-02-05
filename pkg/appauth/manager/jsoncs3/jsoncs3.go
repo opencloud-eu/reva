@@ -116,20 +116,24 @@ func NewWithOptions(mds metadata.Storage, generator PasswordGenerator) (*manager
 // GenerateAppPassword creates a password with specified scope to be used by
 // third-party applications.
 func (m *manager) GenerateAppPassword(ctx context.Context, scope map[string]*authpb.Scope, label string, expiration *typespb.Timestamp) (*apppb.AppPassword, error) {
+	logger := appctx.GetLogger(ctx)
 	ctx, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "GenerateAppPassword")
 	defer span.End()
 	if err := m.initialize(ctx); err != nil {
+		logger.Error().Err(err).Msg("initializing appauth manager failed")
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
 		return nil, err
 	}
 	token, err := m.generator.GeneratePassword()
 	if err != nil {
+		logger.Debug().Err(err).Msg("error generating new password")
 		return nil, errors.Wrap(err, "error creating new token")
 	}
 
 	tokenHashed, err := argon2id.CreateHash(token, argon2id.DefaultParams)
 	if err != nil {
+		logger.Debug().Err(err).Msg("error generating password hash")
 		return nil, errors.Wrap(err, "error creating new token")
 	}
 
@@ -137,6 +141,7 @@ func (m *manager) GenerateAppPassword(ctx context.Context, scope map[string]*aut
 	if user, ok := ctxpkg.ContextGetUser(ctx); ok {
 		userID = user.GetId()
 	} else {
+		logger.Debug().Err(err).Msg("no user in context")
 		return nil, errtypes.BadRequest("no user in context")
 	}
 
@@ -162,6 +167,7 @@ func (m *manager) GenerateAppPassword(ctx context.Context, scope map[string]*aut
 	})
 
 	if err != nil {
+		logger.Debug().Err(err).Msg("failed to store new app password")
 		return nil, err
 	}
 
@@ -317,6 +323,7 @@ func (m *manager) GetAppPassword(ctx context.Context, user *userpb.UserId, secre
 
 func (m *manager) initialize(ctx context.Context) error {
 	_, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "initialize")
+	logger := appctx.GetLogger(ctx)
 	defer span.End()
 	if m.initialized {
 		span.SetStatus(codes.Ok, "already initialized")
@@ -332,6 +339,7 @@ func (m *manager) initialize(ctx context.Context) error {
 	}
 
 	ctx = context.Background()
+	ctx = appctx.WithLogger(ctx, logger)
 	err := m.mds.Init(ctx, "jsoncs3-appauth-data")
 	if err != nil {
 		span.RecordError(err)
