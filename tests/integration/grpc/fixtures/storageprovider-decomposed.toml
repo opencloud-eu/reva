@@ -1,3 +1,7 @@
+[shared]
+jwt_secret = "changemeplease"
+gatewaysvc = "{{gateway_address}}"
+
 [grpc]
 address = "{{grpc_address}}"
 
