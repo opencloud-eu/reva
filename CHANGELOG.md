@@ -1,10 +1,14 @@
 # Changelog
 
-## [2.42.2](https://github.com/opencloud-eu/reva/releases/tag/v2.42.2) - 2026-02-04
+## [2.42.2](https://github.com/opencloud-eu/reva/releases/tag/v2.42.2) - 2026-02-05
 
 ### ❤️ Thanks to all contributors! ❤️
 
-@ScharfViktor, @aduffeck
+@ScharfViktor, @aduffeck, @rhafer
+
+### 🔒 Security
+
+- Public scope fix [[#519](https://github.com/opencloud-eu/reva/pull/519)]
 
 ### 📦️ Dependencies
 
