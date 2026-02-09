@@ -2,6 +2,14 @@
 
 ## [2.42.4](https://github.com/opencloud-eu/reva/releases/tag/v2.42.4) - 2026-02-09
 
+### ❤️ Thanks to all contributors! ❤️
+
+@aduffeck
+
+### 🐛 Bug Fixes
+
+- Consistently verify names when creating/moving files/dirs [[#514](https://github.com/opencloud-eu/reva/pull/514)]
+
 ### 📦️ Dependencies
 
 - chore(deps): bump github.com/samber/slog-zerolog/v2 from 2.9.0 to 2.9.1 [[#518](https://github.com/opencloud-eu/reva/pull/518)]
