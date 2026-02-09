@@ -84,12 +84,6 @@ _ocdav: api compatibility, return correct status code_
 -   [coreApiAuth/webDavLOCKAuth.feature:46](https://github.com/opencloud-eu/opencloud/blob/main/tests/acceptance/features/coreApiAuth/webDavLOCKAuth.feature#L46) Scenario: send LOCK requests to another user's webDav endpoints as normal user
 -   [coreApiAuth/webDavLOCKAuth.feature:58](https://github.com/opencloud-eu/opencloud/blob/main/tests/acceptance/features/coreApiAuth/webDavLOCKAuth.feature#L58) Scenario: send LOCK requests to another user's webDav endpoints as normal user using the spaces WebDAV API
 
-#### [Using double slash in URL to access a folder gives 501 and other status codes](https://github.com/owncloud/ocis/issues/1667)
--   [coreApiAuth/webDavSpecialURLs.feature:123](https://github.com/opencloud-eu/opencloud/blob/main/tests/acceptance/features/coreApiAuth/webDavSpecialURLs.feature#L123)
--   [coreApiAuth/webDavSpecialURLs.feature:134](https://github.com/opencloud-eu/opencloud/blob/main/tests/acceptance/features/coreApiAuth/webDavSpecialURLs.feature#L134)
--   [coreApiAuth/webDavSpecialURLs.feature:165](https://github.com/opencloud-eu/opencloud/blob/main/tests/acceptance/features/coreApiAuth/webDavSpecialURLs.feature#L165)
--   [coreApiAuth/webDavSpecialURLs.feature:176](https://github.com/opencloud-eu/opencloud/blob/main/tests/acceptance/features/coreApiAuth/webDavSpecialURLs.feature#L176)
-
 #### [Difference in response content of status.php and default capabilities](https://github.com/owncloud/ocis/issues/1286)
 -   [coreApiCapabilities/capabilitiesWithNormalUser.feature:13](https://github.com/opencloud-eu/opencloud/blob/main/tests/acceptance/features/coreApiCapabilities/capabilitiesWithNormalUser.feature#L13) Scenario: getting default capabilities with normal user
 
@@ -148,13 +142,6 @@ _The below features have been added after I last categorized them. AFAICT they a
 -   [coreApiWebdavUploadTUS/checksums.feature:244](https://github.com/opencloud-eu/opencloud/blob/main/tests/acceptance/features/coreApiWebdavUploadTUS/checksums.feature#L244)
 -   [coreApiWebdavUploadTUS/checksums.feature:245](https://github.com/opencloud-eu/opencloud/blob/main/tests/acceptance/features/coreApiWebdavUploadTUS/checksums.feature#L245)
 
-
-#### [Renaming resource to banned name is allowed in spaces webdav](https://github.com/owncloud/ocis/issues/3099)
--   [coreApiWebdavMove1/moveFolder.feature:36](https://github.com/opencloud-eu/opencloud/blob/main/tests/acceptance/features/coreApiWebdavMove1/moveFolder.feature#L36)
--   [coreApiWebdavMove1/moveFolder.feature:50](https://github.com/opencloud-eu/opencloud/blob/main/tests/acceptance/features/coreApiWebdavMove1/moveFolder.feature#L50)
-- [coreApiWebdavMove1/moveFolder.feature:64](https://github.com/opencloud-eu/opencloud/blob/main/tests/acceptance/features/coreApiWebdavMove1/moveFolder.feature#L64)
--   [coreApiWebdavMove2/moveFile.feature:143](https://github.com/opencloud-eu/opencloud/blob/main/tests/acceptance/features/coreApiWebdavMove2/moveFile.feature#L143)
-
 #### [REPORT method on spaces returns an incorrect d:href response](https://github.com/owncloud/ocis/issues/3111)
 -   [coreApiFavorites/favorites.feature:189](https://github.com/opencloud-eu/opencloud/blob/main/tests/acceptance/features/coreApiFavorites/favorites.feature#L189)
 -   [coreApiFavorites/favorites.feature:190](https://github.com/opencloud-eu/opencloud/blob/main/tests/acceptance/features/coreApiFavorites/favorites.feature#L190)
@@ -169,12 +156,12 @@ _The below features have been added after I last categorized them. AFAICT they a
 
 ### [MOVE a file into same folder with same name returns 404 instead of 403](https://github.com/owncloud/ocis/issues/1976)
 
-- [coreApiWebdavMove2/moveFile.feature:100](https://github.com/opencloud-eu/opencloud/blob/main/tests/acceptance/features/coreApiWebdavMove2/moveFile.feature#L100)
-- [coreApiWebdavMove2/moveFile.feature:101](https://github.com/opencloud-eu/opencloud/blob/main/tests/acceptance/features/coreApiWebdavMove2/moveFile.feature#L101)
-- [coreApiWebdavMove2/moveFile.feature:102](https://github.com/opencloud-eu/opencloud/blob/main/tests/acceptance/features/coreApiWebdavMove2/moveFile.feature#L102)
-- [coreApiWebdavMove1/moveFolder.feature:217](https://github.com/opencloud-eu/opencloud/blob/main/tests/acceptance/features/coreApiWebdavMove1/moveFolder.feature#L217)
-- [coreApiWebdavMove1/moveFolder.feature:218](https://github.com/opencloud-eu/opencloud/blob/main/tests/acceptance/features/coreApiWebdavMove1/moveFolder.feature#L218)
-- [coreApiWebdavMove1/moveFolder.feature:219](https://github.com/opencloud-eu/opencloud/blob/main/tests/acceptance/features/coreApiWebdavMove1/moveFolder.feature#L219)
+- [coreApiWebdavMove/moveFile.feature:100](https://github.com/opencloud-eu/opencloud/blob/main/tests/acceptance/features/coreApiWebdavMove/moveFile.feature#L100)
+- [coreApiWebdavMove/moveFile.feature:101](https://github.com/opencloud-eu/opencloud/blob/main/tests/acceptance/features/coreApiWebdavMove/moveFile.feature#L101)
+- [coreApiWebdavMove/moveFile.feature:102](https://github.com/opencloud-eu/opencloud/blob/main/tests/acceptance/features/coreApiWebdavMove/moveFile.feature#L102)
+- [coreApiWebdavMove/moveFolder.feature:217](https://github.com/opencloud-eu/opencloud/blob/main/tests/acceptance/features/coreApiWebdavMove/moveFolder.feature#L217)
+- [coreApiWebdavMove/moveFolder.feature:218](https://github.com/opencloud-eu/opencloud/blob/main/tests/acceptance/features/coreApiWebdavMove/moveFolder.feature#L218)
+- [coreApiWebdavMove/moveFolder.feature:219](https://github.com/opencloud-eu/opencloud/blob/main/tests/acceptance/features/coreApiWebdavMove/moveFolder.feature#L219)
 
 ### [COPY file/folder to same name is possible (but 500 code error for folder with spaces path)](https://github.com/owncloud/ocis/issues/8711)
 
