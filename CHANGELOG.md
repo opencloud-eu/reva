@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.42.4](https://github.com/opencloud-eu/reva/releases/tag/v2.42.4) - 2026-02-09
+
+### 📦️ Dependencies
+
+- chore(deps): bump github.com/samber/slog-zerolog/v2 from 2.9.0 to 2.9.1 [[#518](https://github.com/opencloud-eu/reva/pull/518)]
+
 ## [2.42.3](https://github.com/opencloud-eu/reva/releases/tag/v2.42.3) - 2026-02-05
 
 ### ❤️ Thanks to all contributors! ❤️
