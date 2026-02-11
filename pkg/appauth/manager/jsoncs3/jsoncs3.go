@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math/rand"
 	"strings"
 	"sync"
 	"time"
@@ -366,6 +367,7 @@ func (m *manager) initialize(ctx context.Context) error {
 }
 
 func (m *manager) updateWithRetry(ctx context.Context, retries int, createIfNotFound bool, userid *userpb.UserId, updater updaterFunc) error {
+	log := appctx.GetLogger(ctx)
 	_, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "initialize")
 	defer span.End()
 
@@ -378,6 +380,12 @@ func (m *manager) updateWithRetry(ctx context.Context, retries int, createIfNotF
 
 	// retry for the specified number of times, then error out
 	for i := 0; i < retries && retry; i++ {
+		if i > 0 {
+			// if we're retrying, wait a bit before the next try
+			jitter := time.Duration(rand.Int63n(int64(100 * time.Millisecond)))
+			time.Sleep(jitter + 100*time.Millisecond)
+		}
+
 		etag, userAppPasswords, err = m.getUserAppPasswords(ctx, userid)
 		switch err.(type) {
 		case nil:
@@ -386,11 +394,18 @@ func (m *manager) updateWithRetry(ctx context.Context, retries int, createIfNotF
 			if createIfNotFound {
 				userAppPasswords = map[string]*apppb.AppPassword{}
 			} else {
+				log.Debug().Err(err).Msg("getUserAppPasswords failed (not found)")
 				span.RecordError(err)
 				span.SetStatus(codes.Error, "downloading app tokens failed")
 				return err
 			}
+		case errtypes.TooEarly:
+			// Ideally this should never happen as we disable asynchronous uploads for the metadata storage.
+			log.Debug().Err(err).Int("try", i).Msg("getUserAppPasswords failed (too early, retrying)")
+			retry = true
+			continue
 		default:
+			log.Debug().Err(err).Msg("getUserAppPasswords failed")
 			span.RecordError(err)
 			span.SetStatus(codes.Error, "downloading app tokens failed")
 			return err
@@ -450,7 +465,7 @@ func (m *manager) updateUserAppPassword(ctx context.Context, userid *userpb.User
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
-		log.Debug().Err(err).Msg("persisting provider cache failed")
+		log.Debug().Err(err).Msg("failed to upload AppPasswword")
 		return err
 	}
 	return nil
