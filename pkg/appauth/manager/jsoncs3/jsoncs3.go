@@ -405,17 +405,20 @@ func (m *manager) updateWithRetry(ctx context.Context, retries int, createIfNotF
 		switch err.(type) {
 		case nil:
 			retry = false
-		case errtypes.PreconditionFailed:
+		case errtypes.Aborted:
+			log.Debug().Err(err).Int("attempt", i).Msg("updateUserAppPassword failed (retrying)")
 			retry = true
 		default:
+			log.Debug().Err(err).Int("attempt", i).Msg("updateUserAppPassword failed (not retrying)")
 			span.RecordError(err)
 			span.SetStatus(codes.Error, err.Error())
 			return err
 		}
 	}
 	if retry {
+		log.Debug().Err(err).Msg("updateUserAppPassword failed")
 		span.RecordError(err)
-		span.SetStatus(codes.Error, "updating app tokens failed")
+		span.SetStatus(codes.Error, "updating app token failed")
 		return err
 	}
 	return nil
