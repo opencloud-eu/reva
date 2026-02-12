@@ -365,7 +365,7 @@ func (s *Service) InitiateFileUpload(ctx context.Context, req *provider.Initiate
 	if ifMatch != "" {
 		if !validateIfMatch(ifMatch, sRes.GetInfo()) {
 			return &provider.InitiateFileUploadResponse{
-				Status: status.NewFailedPrecondition(ctx, errors.New("etag mismatch"), "etag mismatch"),
+				Status: status.NewAborted(ctx, errors.New("etag mismatch"), "etag mismatch"),
 			}, nil
 		}
 		metadata["if-match"] = ifMatch
@@ -375,7 +375,7 @@ func (s *Service) InitiateFileUpload(ctx context.Context, req *provider.Initiate
 		metadata["if-unmodified-since"] = utils.TSToTime(ifUnmodifiedSince).Format(time.RFC3339Nano)
 		if !validateIfUnmodifiedSince(ifUnmodifiedSince, sRes.GetInfo()) {
 			return &provider.InitiateFileUploadResponse{
-				Status: status.NewFailedPrecondition(ctx, errors.New("resource has been modified"), "resource has been modified"),
+				Status: status.NewAborted(ctx, errors.New("resource has been modified"), "resource has been modified"),
 			}, nil
 		}
 	}

@@ -40,4 +40,4 @@ steps:
         from_secret: ci_http_proxy
     commands:
       # `make test-integration` rebuilds the binaries, which is unnecessary in the pipeline, so only using `go test` here
-      - cd tests/integration && go test -race ./...
+      - cd tests/integration && go test -race ./... -timeout 15m

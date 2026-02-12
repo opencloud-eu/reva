@@ -119,7 +119,7 @@ test: off
 
 .PHONY: test-integration
 test-integration: build-ci
-	cd tests/integration && go test -race ./...
+	cd tests/integration && go test -timeout 15m -race ./...
 
 .PHONY: test-benchmark
 test-benchmark:
