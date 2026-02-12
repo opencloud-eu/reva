@@ -538,9 +538,38 @@ func (t *Tree) assimilate(item scanItem) error {
 				t.log.Error().Err(err).Str("spaceID", spaceID).Str("id", id).Str("path", item.Path).Msg("could not cache id")
 			}
 
-			_, _, err := t.updateFile(item.Path, id, spaceID, fi)
+			fi, attrs, err := t.updateFile(item.Path, id, spaceID, fi)
 			if err != nil {
 				return err
+			}
+
+			if !fi.IsDir() {
+				ref := &provider.Reference{
+					ResourceId: &provider.ResourceId{
+						StorageId: t.options.MountID,
+						SpaceId:   spaceID,
+						OpaqueId:  id,
+					},
+				}
+				parentResourceID := &provider.ResourceId{
+					StorageId: t.options.MountID,
+					SpaceId:   ref.ResourceId.SpaceId,
+					OpaqueId:  string(attrs[prefixes.ParentidAttr]),
+				}
+				if fi.Size() == 0 {
+					t.PublishEvent(events.FileTouched{
+						Ref:       ref,
+						ParentID:  parentResourceID,
+						Timestamp: utils.TSNow(),
+					})
+				} else {
+					t.PublishEvent(events.UploadReady{
+						FileRef:   ref,
+						ParentID:  parentResourceID,
+						Timestamp: utils.TSNow(),
+						IsVersion: true,
+					})
+				}
 			}
 		}
 	} else {
@@ -583,7 +612,6 @@ func (t *Tree) assimilate(item scanItem) error {
 				OpaqueId:  string(attrs[prefixes.ParentidAttr]),
 			}
 		}
-
 		ref := &provider.Reference{
 			ResourceId: &provider.ResourceId{
 				StorageId: t.options.MountID,
@@ -609,6 +637,7 @@ func (t *Tree) assimilate(item scanItem) error {
 					FileRef:   ref,
 					ParentID:  parentId,
 					Timestamp: utils.TSNow(),
+					IsVersion: false,
 				})
 			}
 		}
