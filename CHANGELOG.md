@@ -1,6 +1,6 @@
 # Changelog
 
-## [2.42.4](https://github.com/opencloud-eu/reva/releases/tag/v2.42.4) - 2026-02-11
+## [2.42.4](https://github.com/opencloud-eu/reva/releases/tag/v2.42.4) - 2026-02-12
 
 ### ❤️ Thanks to all contributors! ❤️
 
@@ -12,6 +12,7 @@
 
 ### 📦️ Dependencies
 
+- chore(deps): bump github.com/prometheus/alertmanager from 0.30.1 to 0.31.1 [[#529](https://github.com/opencloud-eu/reva/pull/529)]
 - chore(deps): bump go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc from 0.64.0 to 0.65.0 [[#528](https://github.com/opencloud-eu/reva/pull/528)]
 - chore(deps): bump github.com/go-git/go-git/v5 from 5.13.2 to 5.16.5 in the go_modules group across 1 directory [[#526](https://github.com/opencloud-eu/reva/pull/526)]
 - chore(deps): bump github.com/samber/slog-zerolog/v2 from 2.9.0 to 2.9.1 [[#518](https://github.com/opencloud-eu/reva/pull/518)]
