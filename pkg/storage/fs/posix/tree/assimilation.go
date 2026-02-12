@@ -333,8 +333,7 @@ func (t *Tree) HandleFileDelete(path string, sendSSE bool) error {
 		return err
 	}
 	t.PublishEvent(events.ItemTrashed{
-		Owner:     parentNode.Owner(),
-		Executant: parentNode.Owner(),
+		Owner: parentNode.Owner(),
 		Ref: &provider.Reference{
 			ResourceId: &provider.ResourceId{
 				StorageId: t.options.MountID,
