@@ -159,7 +159,7 @@ func New(lu node.PathLookup, bs node.Blobstore, um usermapper.Mapper, trashbin *
 				return nil, err
 			}
 		default:
-			t.watcher, err = NewInotifyWatcher(t, o, log)
+			t.watcher, err = NewWatcher(t, o, log)
 			if err != nil {
 				return nil, err
 			}
