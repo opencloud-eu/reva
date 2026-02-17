@@ -42,6 +42,7 @@ type manager struct {
 	mds                 metadata.Storage
 	generator           PasswordGenerator
 	uTimeUpdateInterval time.Duration
+	updateRetryCount    int
 	initialized         bool
 }
 
@@ -55,6 +56,7 @@ type config struct {
 	// Time interval in seconds to update the UTime of a token when calling GetAppPassword. Default is 5 min.
 	// For testing set this -1 to disable automatic updates.
 	UTimeUpdateInterval int `mapstructure:"utime_update_interval_seconds"`
+	UpdateRetryCount    int `mapstructure:"update_retry_count"`
 }
 
 type updaterFunc func(map[string]*apppb.AppPassword) (map[string]*apppb.AppPassword, error)
@@ -87,6 +89,9 @@ func New(m map[string]any) (appauth.Manager, error) {
 	if c.Generator == "" {
 		c.Generator = "diceware"
 	}
+	if c.UpdateRetryCount <= 0 {
+		c.UpdateRetryCount = 5
+	}
 
 	var updateInterval time.Duration
 	switch c.UTimeUpdateInterval {
@@ -118,14 +123,15 @@ func New(m map[string]any) (appauth.Manager, error) {
 		return nil, err
 	}
 
-	return NewWithOptions(cs3, pwgen, updateInterval)
+	return NewWithOptions(cs3, pwgen, updateInterval, c.UpdateRetryCount)
 }
 
-func NewWithOptions(mds metadata.Storage, generator PasswordGenerator, uTimeUpdateInterval time.Duration) (*manager, error) {
+func NewWithOptions(mds metadata.Storage, generator PasswordGenerator, uTimeUpdateInterval time.Duration, updateRetries int) (*manager, error) {
 	return &manager{
 		mds:                 mds,
 		generator:           generator,
 		uTimeUpdateInterval: uTimeUpdateInterval,
+		updateRetryCount:    updateRetries,
 	}, nil
 }
 
@@ -177,7 +183,7 @@ func (m *manager) GenerateAppPassword(ctx context.Context, scope map[string]*aut
 
 	id := uuid.New().String()
 
-	err = m.updateWithRetry(ctx, 5, true, userID, func(a map[string]*apppb.AppPassword) (map[string]*apppb.AppPassword, error) {
+	err = m.updateWithRetry(ctx, m.updateRetryCount, true, userID, func(a map[string]*apppb.AppPassword) (map[string]*apppb.AppPassword, error) {
 		a[id] = appPass
 		return a, nil
 	})
@@ -270,7 +276,7 @@ func (m *manager) InvalidateAppPassword(ctx context.Context, secretOrId string) 
 		return a, errtypes.NotFound("password not found")
 	}
 
-	err := m.updateWithRetry(ctx, 5, false, userID, updater)
+	err := m.updateWithRetry(ctx, m.updateRetryCount, false, userID, updater)
 	if err != nil {
 		log.Error().Err(err).Msg("getUserAppPasswords failed")
 		return errtypes.NotFound("password not found")
@@ -324,7 +330,7 @@ func (m *manager) GetAppPassword(ctx context.Context, user *userpb.UserId, secre
 		return nil, errtypes.NotFound("password not found")
 	}
 
-	err := m.updateWithRetry(ctx, 5, false, user, updater)
+	err := m.updateWithRetry(ctx, m.updateRetryCount, false, user, updater)
 	switch {
 	case err == nil:
 		fallthrough

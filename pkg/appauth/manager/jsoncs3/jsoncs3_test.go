@@ -69,7 +69,7 @@ var _ = Describe("Jsoncs3", func() {
 
 			md = mdMock.NewStorage(GinkgoT())
 			md.EXPECT().Init(mock.Anything, "jsoncs3-appauth-data").Return(nil).Once()
-			manager, err = jsoncs3.NewWithOptions(md, gen, 5*time.Minute)
+			manager, err = jsoncs3.NewWithOptions(md, gen, 5*time.Minute, 5)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(manager).ToNot(BeNil())
 
