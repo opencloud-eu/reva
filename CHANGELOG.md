@@ -4,7 +4,11 @@
 
 ### ❤️ Thanks to all contributors! ❤️
 
-@aduffeck
+@aduffeck, @rhafer
+
+### 🐛 Bug Fixes
+
+- Fix concurrent access to app tokens [[#527](https://github.com/opencloud-eu/reva/pull/527)]
 
 ### 📦️ Dependencies
 
