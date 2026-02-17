@@ -69,7 +69,7 @@ var _ = Describe("Jsoncs3", func() {
 
 			md = mdMock.NewStorage(GinkgoT())
 			md.EXPECT().Init(mock.Anything, "jsoncs3-appauth-data").Return(nil).Once()
-			manager, err = jsoncs3.NewWithOptions(md, gen)
+			manager, err = jsoncs3.NewWithOptions(md, gen, 5*time.Minute, 5)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(manager).ToNot(BeNil())
 
@@ -173,7 +173,7 @@ var _ = Describe("Jsoncs3", func() {
 							err := json.Unmarshal(req.Content, &uploadedPw)
 							return err == nil
 						}),
-					).Return(nil, errtypes.PreconditionFailed("etag mismatch")).Once()
+					).Return(nil, errtypes.Aborted("etag mismatch")).Once()
 					md.EXPECT().Upload(
 						mock.Anything,
 						mock.MatchedBy(func(req metadata.UploadRequest) bool {
@@ -213,7 +213,7 @@ var _ = Describe("Jsoncs3", func() {
 							err := json.Unmarshal(req.Content, &uploadedPw)
 							return err == nil
 						}),
-					).Return(nil, errtypes.PreconditionFailed("etag mismatch")).Times(5)
+					).Return(nil, errtypes.Aborted("etag mismatch")).Times(5)
 					apppw, err := manager.GenerateAppPassword(ctx, scopes, "testing", nil)
 					Expect(err).To(HaveOccurred())
 					Expect(len(uploadedPw)).To(Equal(2))

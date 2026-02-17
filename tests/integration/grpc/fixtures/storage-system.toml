@@ -1,0 +1,84 @@
+[shared]
+jwt_secret = "secret"
+#gatewaysvc = "cfg.Reva.Address"
+
+[log]
+level = "debug"
+
+[grpc]
+address = "{{storage_system_grpc_address}}"
+
+[grpc.services.gateway]
+authregistrysvc = "{{storage_system_grpc_address}}"
+storageregistrysvc = "{{storage_system_grpc_address}}"
+userprovidersvc = "{{storage_system_grpc_address}}"
+groupprovidersvc = "{{storage_system_grpc_address}}"
+permissionssvc = "{{storage_system_grpc_address}}"
+cache_store = "noop"
+cache_database = "system"
+disable_home_creation_on_login = true
+
+[grpc.services.userprovider]
+driver = "memory"
+[grpc.services.userprovider.drivers.memory]
+users = { "serviceuser"= { "id" = { "opaqueId"= "service-user-id", "idp" = "internal", "type" = 3 }, "username" = "serviceuser", "display_name"= "System User" } }
+
+[grpc.services.authregistry]
+driver = "static"
+
+[grpc.services.authregistry.drivers.static.rules]
+machine = "{{storage_system_grpc_address}}"
+
+[grpc.services.authprovider]
+auth_manager = "machine"
+
+[grpc.services.authprovider.auth_managers.machine]
+api_key = "secret"
+gateway_addr = "{{storage_system_grpc_address}}"
+
+[grpc.services.permissions]
+driver = "demo"
+
+[grpc.services.storageregistry]
+driver = "static"
+
+[grpc.services.storageregistry.drivers.static.rules]
+"/" = {address = "{{storage_system_grpc_address}}" }
+
+
+[grpc.services.storageprovider]
+driver = "decomposed"
+data_server_url = "http://{{storage_system_http_address}}/data"
+
+[grpc.services.storageprovider.drivers.decomposed]
+root = "{{root}}/storage"
+permissionssvc = "{{storage_system_grpc_address}}"
+disable_versioning = true
+
+[http]
+address = "{{storage_system_http_address}}"
+
+[http.services.dataprovider]
+prefix = "data"
+driver = "decomposed"
+
+[http.services.dataprovider.drivers.decomposed]
+root = "{{root}}/storage"
+permissionssvc = "{{storage_system_grpc_address}}"
+disable_versioning = true
+
+[http.services.dataprovider.data_txs.simple]
+cache_store ="noop"
+cache_database = "system"
+cache_table = "stat"
+
+[http.services.dataprovider.data_txs.tus]
+cache_store ="noop"
+cache_database = "system"
+cache_table = "stat"
+
+[http.services.dataprovider.data_txs.spaces]
+cache_store ="noop"
+cache_database = "system"
+cache_table = "stat"
+
