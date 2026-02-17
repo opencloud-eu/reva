@@ -16,3 +16,4 @@ service_user_id = "service-user-id"
 service_user_idp = "internal"
 machine_auth_apikey = "secret"
 utime_update_interval_seconds = -1
+update_retry_count = 25
