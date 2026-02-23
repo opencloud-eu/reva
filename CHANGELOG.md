@@ -1,6 +1,6 @@
 # Changelog
 
-## [2.42.5](https://github.com/opencloud-eu/reva/releases/tag/v2.42.5) - 2026-02-19
+## [2.42.5](https://github.com/opencloud-eu/reva/releases/tag/v2.42.5) - 2026-02-23
 
 ### ❤️ Thanks to all contributors! ❤️
 
@@ -12,6 +12,7 @@
 
 ### 📦️ Dependencies
 
+- chore(deps): bump filippo.io/edwards25519 from 1.1.0 to 1.1.1 in the go_modules group across 1 directory [[#534](https://github.com/opencloud-eu/reva/pull/534)]
 - chore(deps): bump golang.org/x/term from 0.39.0 to 0.40.0 [[#533](https://github.com/opencloud-eu/reva/pull/533)]
 - chore(deps): bump github.com/go-chi/chi/v5 from 5.2.4 to 5.2.5 [[#531](https://github.com/opencloud-eu/reva/pull/531)]
 
