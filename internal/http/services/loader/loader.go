@@ -28,7 +28,6 @@ import (
 	_ "github.com/opencloud-eu/reva/v2/internal/http/services/mentix"
 	_ "github.com/opencloud-eu/reva/v2/internal/http/services/metrics"
 	_ "github.com/opencloud-eu/reva/v2/internal/http/services/ocmd"
-	_ "github.com/opencloud-eu/reva/v2/internal/http/services/owncloud/ocdav"
 	_ "github.com/opencloud-eu/reva/v2/internal/http/services/owncloud/ocs"
 	_ "github.com/opencloud-eu/reva/v2/internal/http/services/preferences"
 	_ "github.com/opencloud-eu/reva/v2/internal/http/services/prometheus"
