@@ -415,6 +415,11 @@ func (fs *Decomposedfs) handlePostprocessingEvent(ctx context.Context, event eve
 					},
 					Path: utils.MakeRelativePath(filepath.Join(session.Dir(), session.Filename())),
 				},
+				ResourceID: &provider.ResourceId{
+					StorageId: session.ProviderID(),
+					SpaceId:   session.SpaceID(),
+					OpaqueId:  session.NodeID(),
+				},
 				ParentID:          parentId,
 				Timestamp:         utils.TimeToTS(now),
 				SpaceOwner:        n.SpaceOwnerOrManager(ctx),

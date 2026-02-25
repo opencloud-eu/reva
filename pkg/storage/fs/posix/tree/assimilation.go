@@ -601,10 +601,11 @@ func (t *Tree) assimilate(item scanItem) error {
 					})
 				} else {
 					t.PublishEvent(events.UploadReady{
-						FileRef:   ref,
-						ParentID:  parentResourceID,
-						Timestamp: utils.TSNow(),
-						IsVersion: true,
+						FileRef:    ref,
+						ParentID:   parentResourceID,
+						ResourceID: ref.ResourceId,
+						Timestamp:  utils.TSNow(),
+						IsVersion:  true,
 					})
 				}
 			}
@@ -671,10 +672,11 @@ func (t *Tree) assimilate(item scanItem) error {
 				})
 			} else {
 				t.PublishEvent(events.UploadReady{
-					FileRef:   ref,
-					ParentID:  parentId,
-					Timestamp: utils.TSNow(),
-					IsVersion: false,
+					FileRef:    ref,
+					ParentID:   parentId,
+					ResourceID: ref.ResourceId,
+					Timestamp:  utils.TSNow(),
+					IsVersion:  false,
 				})
 			}
 		}
