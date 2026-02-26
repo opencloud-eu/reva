@@ -1,5 +1,23 @@
 # Changelog
 
+## [2.42.5](https://github.com/opencloud-eu/reva/releases/tag/v2.42.5) - 2026-02-26
+
+### ❤️ Thanks to all contributors! ❤️
+
+@aduffeck, @rhafer
+
+### 🐛 Bug Fixes
+
+- Fix concurrent access to app tokens [[#527](https://github.com/opencloud-eu/reva/pull/527)]
+
+### 📦️ Dependencies
+
+- chore(deps): bump golang.org/x/oauth2 from 0.34.0 to 0.35.0 [[#537](https://github.com/opencloud-eu/reva/pull/537)]
+- chore(deps): bump github.com/cloudflare/circl from 1.6.1 to 1.6.3 in the go_modules group across 1 directory [[#538](https://github.com/opencloud-eu/reva/pull/538)]
+- chore(deps): bump filippo.io/edwards25519 from 1.1.0 to 1.1.1 in the go_modules group across 1 directory [[#534](https://github.com/opencloud-eu/reva/pull/534)]
+- chore(deps): bump golang.org/x/term from 0.39.0 to 0.40.0 [[#533](https://github.com/opencloud-eu/reva/pull/533)]
+- chore(deps): bump github.com/go-chi/chi/v5 from 5.2.4 to 5.2.5 [[#531](https://github.com/opencloud-eu/reva/pull/531)]
+
 ## [2.42.4](https://github.com/opencloud-eu/reva/releases/tag/v2.42.4) - 2026-02-12
 
 ### ❤️ Thanks to all contributors! ❤️
