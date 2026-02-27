@@ -76,10 +76,10 @@ var _ = PDescribe("gateway using a static registry and a shard setup", func() {
 
 	BeforeEach(func() {
 		dependencies = []RevadConfig{
-			{Name: "gateway", Config: "gateway-static.toml"},
-			{Name: "users", Config: "userprovider-json.toml"},
-			{Name: "storage", Config: "storageprovider-local.toml"},
-			{Name: "storage2", Config: "storageprovider-local.toml"},
+			{Name: "gateway", Config: GatewayStatic},
+			{Name: "users", Config: UserProviderJSON},
+			{Name: "storage", Config: StorageProviderLocal},
+			{Name: "storage2", Config: StorageProviderLocal},
 		}
 		redisAddress := os.Getenv("REDIS_ADDRESS")
 		if redisAddress == "" {

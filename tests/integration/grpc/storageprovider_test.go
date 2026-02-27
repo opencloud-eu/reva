@@ -744,16 +744,16 @@ var _ = Describe("storage providers", func() {
 	suite("nextcloud", []RevadConfig{
 		{
 			Name:   "storage",
-			Config: "storageprovider-nextcloud.toml",
+			Config: StorageProviderNextcloud,
 		},
 	})
 
 	suite("decomposed", []RevadConfig{
 		{
-			Name: "storage", Config: "storageprovider-decomposed.toml",
+			Name: "storage", Config: StorageProviderDecomposed,
 		},
 		{
-			Name: "permissions", Config: "permissions-opencloud-ci.toml",
+			Name: "permissions", Config: PermissionsOpenCloudCI,
 		},
 	})
 

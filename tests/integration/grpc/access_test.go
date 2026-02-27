@@ -51,12 +51,12 @@ import (
 var _ = Describe("Access to shared resources", func() {
 	var (
 		dependencies = []RevadConfig{
-			{Name: "gateway", Config: "gateway-single-storage.toml"},
-			{Name: "users", Config: "userprovider-json.toml"},
-			{Name: "storage", Config: "storageprovider-decomposed.toml"},
-			{Name: "storage_publiclink", Config: "storage-publiclink.toml"},
-			{Name: "permissions", Config: "permissions-opencloud-ci.toml"},
-			{Name: "shares", Config: "shares.toml"},
+			{Name: "gateway", Config: GatewaySingleStorage},
+			{Name: "users", Config: UserProviderJSON},
+			{Name: "storage", Config: StorageProviderDecomposed},
+			{Name: "storage_publiclink", Config: StoragePublicLink},
+			{Name: "permissions", Config: PermissionsOpenCloudCI},
+			{Name: "shares", Config: Shares},
 		}
 		variables = map[string]string{}
 		revads    = map[string]*Revad{}

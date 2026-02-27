@@ -104,19 +104,19 @@ var _ = Describe("gateway", func() {
 		dependencies = []RevadConfig{
 			{
 				Name:   "gateway",
-				Config: "gateway.toml"},
+				Config: Gateway},
 			{
 				Name:   "users",
-				Config: "userprovider-json.toml"},
+				Config: UserProviderJSON},
 			{
 				Name:   "storage",
-				Config: "storageprovider-decomposed.toml"},
+				Config: StorageProviderDecomposed},
 			{
 				Name:   "storage2",
-				Config: "storageprovider-decomposed.toml"},
+				Config: StorageProviderDecomposed},
 			{
 				Name:   "permissions",
-				Config: "permissions-opencloud-ci.toml"},
+				Config: PermissionsOpenCloudCI},
 		}
 	})
 
@@ -184,12 +184,12 @@ var _ = Describe("gateway", func() {
 
 		BeforeEach(func() {
 			dependencies = []RevadConfig{
-				{Name: "gateway", Config: "gateway-sharded.toml"},
-				{Name: "users", Config: "userprovider-json.toml"},
-				{Name: "homestorage", Config: "storageprovider-decomposed.toml"},
-				{Name: "storage", Config: "storageprovider-decomposed.toml"},
-				{Name: "storage2", Config: "storageprovider-decomposed.toml"},
-				{Name: "permissions", Config: "permissions-opencloud-ci.toml"},
+				{Name: "gateway", Config: GatewaySharded},
+				{Name: "users", Config: UserProviderJSON},
+				{Name: "homestorage", Config: StorageProviderDecomposed},
+				{Name: "storage", Config: StorageProviderDecomposed},
+				{Name: "storage2", Config: StorageProviderDecomposed},
+				{Name: "permissions", Config: PermissionsOpenCloudCI},
 			}
 		})
 
@@ -375,13 +375,13 @@ var _ = Describe("gateway", func() {
 
 		BeforeEach(func() {
 			dependencies = []RevadConfig{
-				{Name: "gateway", Config: "gateway.toml"},
-				{Name: "users", Config: "userprovider-json.toml"},
-				{Name: "storage", Config: "storageprovider-decomposed.toml"},
-				{Name: "storage2", Config: "storageprovider-decomposed.toml"},
-				{Name: "storage_publiclink", Config: "storage-publiclink.toml"},
-				{Name: "permissions", Config: "permissions-opencloud-ci.toml"},
-				{Name: "shares", Config: "shares.toml"},
+				{Name: "gateway", Config: Gateway},
+				{Name: "users", Config: UserProviderJSON},
+				{Name: "storage", Config: StorageProviderDecomposed},
+				{Name: "storage2", Config: StorageProviderDecomposed},
+				{Name: "storage_publiclink", Config: StoragePublicLink},
+				{Name: "permissions", Config: PermissionsOpenCloudCI},
+				{Name: "shares", Config: Shares},
 			}
 		})
 

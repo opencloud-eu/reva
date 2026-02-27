@@ -300,7 +300,7 @@ var _ = Describe("user providers", func() {
 			dependencies = []RevadConfig{
 				{
 					Name:   "users",
-					Config: "userprovider-json.toml",
+					Config: UserProviderJSON,
 				},
 			}
 			existingIdp = "http://localhost:20080"
@@ -316,7 +316,7 @@ var _ = Describe("user providers", func() {
 			dependencies = []RevadConfig{
 				{
 					Name:   "users",
-					Config: "userprovider-demo.toml",
+					Config: UserProviderDemo,
 				},
 			}
 			existingIdp = "http://localhost:9998"
@@ -336,7 +336,7 @@ var _ = Describe("user providers", func() {
 			dependencies = []RevadConfig{
 				{
 					Name:   "users",
-					Config: "userprovider-ldap.toml",
+					Config: UserProviderLDAP,
 				},
 			}
 			existingIdp = "http://localhost:20080"

@@ -83,10 +83,10 @@ var _ = Describe("storage providers", func() {
 
 		dependencies = []RevadConfig{
 			{
-				Name: "storage", Config: "storageprovider-multitenant.toml",
+				Name: "storage", Config: StorageProviderMultitenant,
 			},
 			{
-				Name: "permissions", Config: "permissions-opencloud-ci.toml",
+				Name: "permissions", Config: PermissionsOpenCloudCI,
 			},
 		}
 

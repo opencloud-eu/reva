@@ -23,7 +23,6 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"os/exec"
 	"path"
 	"path/filepath"
 	"strings"
@@ -32,7 +31,48 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/mitchellh/mapstructure"
+	"github.com/opencloud-eu/reva/v2/pkg/registry"
+	"github.com/opencloud-eu/reva/v2/pkg/rgrpc"
+	"github.com/opencloud-eu/reva/v2/pkg/rhttp"
+	"github.com/opencloud-eu/reva/v2/pkg/sharedconf"
+	rtrace "github.com/opencloud-eu/reva/v2/pkg/trace"
 	"github.com/pkg/errors"
+	"github.com/rs/zerolog"
+	"go.opentelemetry.io/otel/trace"
+	"go.yaml.in/yaml/v3"
+
+	// These are all the extensions points for REVA
+	_ "github.com/opencloud-eu/reva/v2/internal/grpc/interceptors/loader"
+	_ "github.com/opencloud-eu/reva/v2/internal/grpc/services/loader"
+	_ "github.com/opencloud-eu/reva/v2/internal/http/interceptors/auth/credential/loader"
+	_ "github.com/opencloud-eu/reva/v2/internal/http/interceptors/auth/token/loader"
+	_ "github.com/opencloud-eu/reva/v2/internal/http/interceptors/auth/tokenwriter/loader"
+	_ "github.com/opencloud-eu/reva/v2/internal/http/interceptors/loader"
+	_ "github.com/opencloud-eu/reva/v2/internal/http/services/loader"
+	_ "github.com/opencloud-eu/reva/v2/pkg/app/provider/loader"
+	_ "github.com/opencloud-eu/reva/v2/pkg/app/registry/loader"
+	_ "github.com/opencloud-eu/reva/v2/pkg/appauth/manager/loader"
+	_ "github.com/opencloud-eu/reva/v2/pkg/auth/manager/loader"
+	_ "github.com/opencloud-eu/reva/v2/pkg/auth/registry/loader"
+	_ "github.com/opencloud-eu/reva/v2/pkg/cbox/loader"
+	_ "github.com/opencloud-eu/reva/v2/pkg/datatx/manager/loader"
+	_ "github.com/opencloud-eu/reva/v2/pkg/group/manager/loader"
+	_ "github.com/opencloud-eu/reva/v2/pkg/metrics/driver/loader"
+	_ "github.com/opencloud-eu/reva/v2/pkg/ocm/invite/repository/loader"
+	_ "github.com/opencloud-eu/reva/v2/pkg/ocm/provider/authorizer/loader"
+	_ "github.com/opencloud-eu/reva/v2/pkg/ocm/share/repository/loader"
+	_ "github.com/opencloud-eu/reva/v2/pkg/permission/manager/loader"
+	_ "github.com/opencloud-eu/reva/v2/pkg/preferences/loader"
+	_ "github.com/opencloud-eu/reva/v2/pkg/publicshare/manager/loader"
+	_ "github.com/opencloud-eu/reva/v2/pkg/rhttp/datatx/manager/loader"
+	_ "github.com/opencloud-eu/reva/v2/pkg/share/cache/warmup/loader"
+	_ "github.com/opencloud-eu/reva/v2/pkg/share/manager/loader"
+	_ "github.com/opencloud-eu/reva/v2/pkg/storage/favorite/loader"
+	_ "github.com/opencloud-eu/reva/v2/pkg/storage/fs/loader"
+	_ "github.com/opencloud-eu/reva/v2/pkg/storage/registry/loader"
+	_ "github.com/opencloud-eu/reva/v2/pkg/token/manager/loader"
+	_ "github.com/opencloud-eu/reva/v2/pkg/user/manager/loader"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -52,11 +92,20 @@ type cleanupFunc func(bool) error
 
 // Revad represents a running revad process
 type Revad struct {
-	TmpRoot     string      // Temporary directory on disk. Will be cleaned up by the Cleanup func.
-	StorageRoot string      // Temporary directory used for the revad storage on disk. Will be cleaned up by the Cleanup func.
-	GrpcAddress string      // Address of the grpc service
-	ID          string      // ID of the grpc service
-	Cleanup     cleanupFunc // Function to kill the process and cleanup the temp. root. If the given parameter is true the files will be kept to make debugging failures easier.
+	TmpRoot     string          // Temporary directory on disk. Will be cleaned up by the Cleanup func.
+	StorageRoot string          // Temporary directory used for the revad storage on disk. Will be cleaned up by the Cleanup func.
+	GrpcAddress string          // Address of the grpc service
+	ID          string          // ID of the grpc service
+	Cleanup     cleanupFunc     // Function to kill the process and cleanup the temp. root. If the given parameter is true the files will be kept to make debugging failures easier.
+	Process     *InProcessRevad // The running in-process revad
+}
+
+type revadCoreConf struct {
+	MaxCPUs            string `mapstructure:"max_cpus"`
+	TracesExporter     string `mapstructure:"traces_exporter"`
+	TracingServiceName string `mapstructure:"tracing_service_name"`
+
+	GracefulShutdownTimeout int `mapstructure:"graceful_shutdown_timeout"`
 }
 
 type res struct{}
@@ -79,7 +128,7 @@ type File struct {
 
 type RevadConfig struct {
 	Name      string
-	Config    string
+	Config    map[string]any
 	Files     map[string]string
 	Resources map[string]Resource
 }
@@ -143,11 +192,11 @@ func startRevads(configs []RevadConfig, variables map[string]string) (map[string
 			return nil, errors.Wrapf(err, "Could not create tmpdir")
 		}
 
-		newCfgPath := path.Join(tmpRoot, "config.toml")
-		rawCfg, err := os.ReadFile(path.Join("fixtures", c.Config))
-		if err != nil {
-			return nil, errors.Wrapf(err, "Could not read config file")
-		}
+		// newCfgPath := path.Join(tmpRoot, "config.toml")
+		// rawCfg, err := os.ReadFile(path.Join("fixtures", c.Config))
+		// if err != nil {
+		// 	return nil, errors.Wrapf(err, "Could not read config file")
+		// }
 
 		for name, p := range c.Files {
 			rawFile, err := os.ReadFile(path.Join("fixtures", p))
@@ -199,45 +248,44 @@ func startRevads(configs []RevadConfig, variables map[string]string) (map[string
 			filesPath[name] = tmpResourcePath
 		}
 
-		cfg := string(rawCfg)
-		cfg = strings.ReplaceAll(cfg, "{{root}}", tmpRoot)
-		cfg = strings.ReplaceAll(cfg, "{{id}}", ownID)
-		cfg = strings.ReplaceAll(cfg, "{{grpc_address}}", ownAddress)
-		cfg = strings.ReplaceAll(cfg, "{{grpc_address+1}}", addresses[c.Name+"+1"])
-		cfg = strings.ReplaceAll(cfg, "{{grpc_address+2}}", addresses[c.Name+"+2"])
+		replacements := map[string]string{
+			"{{root}}":           tmpRoot,
+			"{{id}}":             ownID,
+			"{{grpc_address}}":   ownAddress,
+			"{{grpc_address+1}}": addresses[c.Name+"+1"],
+			"{{grpc_address+2}}": addresses[c.Name+"+2"],
+		}
+
 		for name, path := range filesPath {
-			cfg = strings.ReplaceAll(cfg, "{{file_"+name+"}}", path)
-			cfg = strings.ReplaceAll(cfg, "{{"+name+"}}", path)
+			replacements["{{file_"+name+"}}"] = path
+			replacements["{{"+name+"}}"] = path
 		}
 		for v, value := range variables {
-			cfg = strings.ReplaceAll(cfg, "{{"+v+"}}", value)
+			replacements["{{"+v+"}}"] = value
 		}
 		for name, address := range addresses {
-			cfg = strings.ReplaceAll(cfg, "{{"+name+"_address}}", address)
+			replacements["{{"+name+"_address}}"] = address
 		}
 		for name, id := range ids {
-			cfg = strings.ReplaceAll(cfg, "{{"+name+"_id}}", id)
+			replacements["{{"+name+"_id}}"] = id
 		}
 		for name, root := range roots {
-			cfg = strings.ReplaceAll(cfg, "{{"+name+"_root}}", root)
+			replacements["{{"+name+"_root}}"] = root
 		}
-		err = os.WriteFile(newCfgPath, []byte(cfg), 0600)
+
+		cfgMap := copyConfig(c.Config)
+		replacePlaceholders(cfgMap, replacements)
+
+		ymlConfig, err := yaml.Marshal(cfgMap)
+		if err != nil {
+			return nil, errors.Wrapf(err, "Could not marshal config to YAML")
+		}
+		err = os.WriteFile(filepath.Join(tmpRoot, "config.yml"), ymlConfig, 0600)
 		if err != nil {
 			return nil, errors.Wrapf(err, "Could not write config file")
 		}
 
-		// Run revad
-		cmd := exec.Command("../../../cmd/revad/revad", "-log", "debug", "-c", newCfgPath)
-
-		outfile, err := os.Create(path.Join(tmpRoot, c.Name+"-out.log"))
-		if err != nil {
-			panic(err)
-		}
-		defer outfile.Close()
-		cmd.Stdout = outfile
-		cmd.Stderr = outfile
-
-		err = cmd.Start()
+		proc, err := startRevaServicesInProcess(cfgMap, tmpRoot, "debug")
 		if err != nil {
 			return nil, errors.Wrapf(err, "Could not start revad")
 		}
@@ -255,17 +303,10 @@ func startRevads(configs []RevadConfig, variables map[string]string) (map[string
 			StorageRoot: path.Join(tmpRoot, "storage"),
 			GrpcAddress: ownAddress,
 			ID:          ownID,
+			Process:     proc,
 			Cleanup: func(keepLogs bool) error {
-				err := cmd.Process.Signal(os.Kill)
-				if err != nil {
-					return errors.Wrap(err, "Could not kill revad")
-				}
+				proc.Stop()
 
-				// Wait for the process to actually terminate and reap it
-				// This prevents zombie processes
-				_ = cmd.Wait()
-
-				_ = waitForPort(ownAddress, "close")
 				if keepLogs {
 					fmt.Println("Test failed, keeping root", tmpRoot, "around for debugging")
 				} else {
@@ -278,6 +319,142 @@ func startRevads(configs []RevadConfig, variables map[string]string) (map[string
 		revads[c.Name] = revad
 	}
 	return revads, nil
+}
+
+func isEnabled(key string, conf map[string]any) bool {
+	if a, ok := conf[key]; ok {
+		if b, ok := a.(map[string]any); ok {
+			if c, ok := b["services"]; ok {
+				if d, ok := c.(map[string]any); ok {
+					if len(d) > 0 {
+						return true
+					}
+				}
+			}
+		}
+	}
+	return false
+}
+
+type Server interface {
+	Network() string
+	Address() string
+	GracefulStop() error
+	Stop() error
+}
+
+type InProcessRevad struct {
+	Servers   map[string]Server
+	Listeners map[string]net.Listener
+}
+
+func (r *InProcessRevad) Stop() {
+	for _, s := range r.Servers {
+		_ = s.Stop()
+	}
+	for _, l := range r.Listeners {
+		_ = l.Close()
+	}
+}
+
+func startRevaServicesInProcess(mainConf map[string]any, tmpRoot, logLevel string) (*InProcessRevad, error) {
+	// reset shared config to not pollute config between tests. This is needed as we are running the revads in-process and the shared config is global.
+	sharedconf.ResetOnce()
+
+	if err := sharedconf.Decode(mainConf["shared"]); err != nil {
+		return nil, err
+	}
+
+	coreConf := &revadCoreConf{}
+	if err := mapstructure.Decode(mainConf["core"], coreConf); err != nil {
+		return nil, err
+	}
+
+	if coreConf.TracesExporter == "" {
+		coreConf.TracesExporter = "console"
+	}
+
+	logFile, err := os.Create(filepath.Join(tmpRoot, "revad.log"))
+	if err != nil {
+		return nil, err
+	}
+	zerolog.SetGlobalLevel(zerolog.TraceLevel)
+	log := zerolog.New(logFile)
+	log = log.Level(zerolog.DebugLevel)
+	if logLevel != "" {
+		lvl, err := zerolog.ParseLevel(logLevel)
+		if err == nil {
+			log = log.Level(lvl)
+		}
+	}
+
+	s, _ := json.MarshalIndent(mainConf, "", "	")
+	log.Info().Msg("Starting revad with config: " + string(s))
+
+	// We pass nil options to registry.Init as default
+	if err := registry.Init(nil); err != nil {
+		return nil, err
+	}
+
+	// init tracer
+	var tp trace.TracerProvider
+	if coreConf.TracesExporter != "none" && coreConf.TracesExporter != "" {
+		tp = rtrace.NewTracerProvider(coreConf.TracingServiceName, coreConf.TracesExporter)
+		rtrace.SetDefaultTracerProvider(tp)
+	} else {
+		tp = rtrace.DefaultProvider()
+	}
+
+	// init servers
+	servers := map[string]Server{}
+	if isEnabled("http", mainConf) {
+		sublog := log.With().Str("pkg", "rhttp").Logger()
+		s, err := rhttp.New(mainConf["http"], sublog, tp)
+		if err != nil {
+			return nil, err
+		}
+		servers["http"] = s
+	}
+
+	if isEnabled("grpc", mainConf) {
+		sublog := log.With().Str("pkg", "rgrpc").Logger()
+		s, err := rgrpc.NewServer(mainConf["grpc"], sublog, tp)
+		if err != nil {
+			return nil, err
+		}
+		servers["grpc"] = s
+	}
+
+	// init listeners
+	listeners := map[string]net.Listener{}
+	for k, s := range servers {
+		ln, err := net.Listen(s.Network(), s.Address())
+		if err != nil {
+			return nil, err
+		}
+		listeners[k] = ln
+	}
+
+	// start servers
+	if s, ok := servers["http"]; ok {
+		go func() {
+			if err := s.(*rhttp.Server).Start(listeners["http"]); err != nil {
+				log.Error().Err(err).Msg("error starting the http server")
+			}
+		}()
+	}
+	if s, ok := servers["grpc"]; ok {
+		go func() {
+			if err := s.(*rgrpc.Server).Start(listeners["grpc"]); err != nil {
+				log.Error().Err(err).Msg("error starting the grpc server")
+			}
+		}()
+	}
+
+	return &InProcessRevad{
+		Servers:   servers,
+		Listeners: listeners,
+	}, nil
 }
 
 func waitForPort(grpcAddress, expectedStatus string) error {
@@ -300,4 +477,40 @@ func waitForPort(grpcAddress, expectedStatus string) error {
 		timoutCounter++
 	}
 	return nil
+}
+
+func copyConfig(m map[string]any) map[string]any {
+	cp := make(map[string]any)
+	for k, v := range m {
+		if vm, ok := v.(map[string]any); ok {
+			cp[k] = copyConfig(vm)
+		} else {
+			cp[k] = v
+		}
+	}
+	return cp
+}
+
+func replacePlaceholders(m map[string]any, replacements map[string]string) {
+	for k, v := range m {
+		// replace keys
+		for place, val := range replacements {
+			newKey := strings.ReplaceAll(k, place, val)
+			if newKey != k {
+				delete(m, k)
+				m[newKey] = v
+				k = newKey
+			}
+		}
+
+		// replace values
+		if vm, ok := v.(map[string]any); ok {
+			replacePlaceholders(vm, replacements)
+		} else if s, ok := v.(string); ok {
+			for place, val := range replacements {
+				s = strings.ReplaceAll(s, place, val)
+			}
+			m[k] = s
+		}
+	}
 }

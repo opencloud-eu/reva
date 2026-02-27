@@ -151,7 +151,7 @@ var _ = Describe("ocm share", func() {
 		ctxEinstein = ctxWithAuthToken(tokenManager, einstein)
 		ctxMarie = ctxWithAuthToken(tokenManager, marie)
 		revads, err = startRevads([]RevadConfig{
-			{Name: "cernboxgw", Config: "ocm-share/ocm-server-cernbox-grpc.toml",
+			{Name: "cernboxgw", Config: OCMShareServerCernboxGRPC,
 				Files: map[string]string{
 					"providers": "ocm-providers.demo.json",
 				},
@@ -160,11 +160,11 @@ var _ = Describe("ocm share", func() {
 					"invite_token_file":      File{Content: "{}"},
 				},
 			},
-			{Name: "permissions", Config: "permissions-opencloud-ci.toml"},
-			{Name: "cernboxpublicstorage", Config: "ocm-share/cernbox-storageprovider-public.toml"},
-			{Name: "cernboxwebdav", Config: "ocm-share/cernbox-webdav-server.toml"},
-			{Name: "cernboxhttp", Config: "ocm-share/ocm-server-cernbox-http.toml"},
-			{Name: "cesnetgw", Config: "ocm-share/ocm-server-cesnet-grpc.toml",
+			{Name: "permissions", Config: PermissionsOpenCloudCI},
+			{Name: "cernboxpublicstorage", Config: StorageProviderPublic},
+			{Name: "cernboxwebdav", Config: WebDAVServerCernbox},
+			{Name: "cernboxhttp", Config: OCMShareServerCernboxHTTP},
+			{Name: "cesnetgw", Config: OCMShareServerCesnetGRPC,
 				Files: map[string]string{
 					"providers": "ocm-providers.demo.json",
 				},
@@ -173,9 +173,9 @@ var _ = Describe("ocm share", func() {
 					"invite_token_file":     File{Content: "{}"},
 				},
 			},
-			{Name: "cesnethttp", Config: "ocm-share/ocm-server-cesnet-http.toml"},
-			{Name: "cernboxocmsharesauth", Config: "ocm-share/ocm-cernbox-ocmshares-authprovider.toml"},
-			{Name: "cernboxmachineauth", Config: "ocm-share/cernbox-machine-authprovider.toml"},
+			{Name: "cesnethttp", Config: OCMShareServerCesnetHTTP},
+			{Name: "cernboxocmsharesauth", Config: AuthOCMShares},
+			{Name: "cernboxmachineauth", Config: AuthMachine},
 		}, variables)
 		Expect(err).ToNot(HaveOccurred())
 		cernboxgw, err = pool.GetGatewayServiceClient(revads["cernboxgw"].GrpcAddress)
