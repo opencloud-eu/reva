@@ -71,7 +71,7 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 
 // New returns a group manager implementation that connects to a LDAP server to provide group metadata.
 func New(m map[string]interface{}) (group.Manager, error) {
-	if sharedconf.Config().MultiTenantEnabled() {
+	if sharedconf.Config().MultiTenantEnabled {
 		return nil, errtypes.NotSupported("ldap group manager does not support multi-tenancy")
 	}
 

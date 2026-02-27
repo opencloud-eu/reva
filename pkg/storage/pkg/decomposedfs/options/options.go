@@ -151,7 +151,7 @@ func New(m map[string]interface{}) (*Options, error) {
 			return nil, err
 		}
 	} else {
-		sharedOpt := sharedconf.Config().GRPCClientOptions()
+		sharedOpt := sharedconf.Config().GRPCClientOptions
 		var err error
 
 		if o.PermTLSMode, err = pool.StringToTLSMode(sharedOpt.TLSMode); err != nil {

@@ -181,7 +181,7 @@ func (i *Identity) Setup() error {
 		return fmt.Errorf("invalid disable mechanism setting: %s", i.User.DisableMechanism)
 	}
 
-	if sharedconf.Config().MultiTenantEnabled() {
+	if sharedconf.Config().MultiTenantEnabled {
 		if i.User.Schema.TenantID == "" {
 			return fmt.Errorf("Invalid configuration: a 'tenantId' user schema attribute must be defined for multi-tenant setups")
 		}

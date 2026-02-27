@@ -38,7 +38,7 @@ type ClientOptions struct {
 
 func (o *ClientOptions) init() error {
 	// default to shared settings
-	sharedOpt := sharedconf.Config().GRPCClientOptions()
+	sharedOpt := sharedconf.Config().GRPCClientOptions
 	var err error
 
 	if o.tlsMode, err = StringToTLSMode(sharedOpt.TLSMode); err != nil {
