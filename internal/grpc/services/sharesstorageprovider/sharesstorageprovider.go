@@ -92,12 +92,12 @@ func NewDefault(m map[string]interface{}, _ *grpc.Server, _ *zerolog.Logger) (rg
 		return nil, err
 	}
 
-	gatewaySelector, err := pool.GatewaySelector(sharedconf.GetGatewaySVC(c.GatewayAddr))
+	gatewaySelector, err := pool.GatewaySelector(sharedconf.Config().GetGatewaySVC(c.GatewayAddr))
 	if err != nil {
 		return nil, err
 	}
 
-	sharingCollaborationSelector, err := pool.SharingCollaborationSelector(sharedconf.GetGatewaySVC(c.UserShareProviderEndpoint))
+	sharingCollaborationSelector, err := pool.SharingCollaborationSelector(sharedconf.Config().GetGatewaySVC(c.UserShareProviderEndpoint))
 	if err != nil {
 		return nil, errors.Wrap(err, "sharesstorageprovider: error getting UserShareProvider client")
 	}

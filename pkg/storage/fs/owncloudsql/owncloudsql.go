@@ -148,7 +148,7 @@ func (c *config) init(m map[string]interface{}) {
 	// ensure share folder always starts with slash
 	c.ShareFolder = filepath.Join("/", c.ShareFolder)
 
-	c.UserProviderEndpoint = sharedconf.GetGatewaySVC(c.UserProviderEndpoint)
+	c.UserProviderEndpoint = sharedconf.Config().GetGatewaySVC(c.UserProviderEndpoint)
 }
 
 // New returns an implementation to of the storage.FS interface that talk to

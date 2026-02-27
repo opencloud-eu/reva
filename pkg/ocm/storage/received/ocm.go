@@ -71,7 +71,7 @@ type config struct {
 }
 
 func (c *config) ApplyDefaults() {
-	c.GatewaySVC = sharedconf.GetGatewaySVC(c.GatewaySVC)
+	c.GatewaySVC = sharedconf.Config().GetGatewaySVC(c.GatewaySVC)
 }
 
 // BearerAuthenticator represents an authenticator that adds a Bearer token to the Authorization header of HTTP requests.

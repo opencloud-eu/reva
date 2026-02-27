@@ -93,7 +93,7 @@ func (c *config) ApplyDefaults() {
 		c.OCMClientTimeout = 10
 	}
 
-	c.GatewaySvc = sharedconf.GetGatewaySVC(c.GatewaySvc)
+	c.GatewaySvc = sharedconf.Config().GetGatewaySVC(c.GatewaySvc)
 }
 
 type svc struct {

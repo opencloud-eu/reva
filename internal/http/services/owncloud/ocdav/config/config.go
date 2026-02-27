@@ -50,7 +50,7 @@ type NameValidation struct {
 // Init initializes the configuration
 func (c *Config) Init() {
 	// note: default c.Prefix is an empty string
-	c.GatewaySvc = sharedconf.GetGatewaySVC(c.GatewaySvc)
+	c.GatewaySvc = sharedconf.Config().GetGatewaySVC(c.GatewaySvc)
 
 	if c.FavoriteStorageDriver == "" {
 		c.FavoriteStorageDriver = "memory"

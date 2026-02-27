@@ -75,7 +75,7 @@ func (c *config) ApplyDefaults() {
 		c.TokenExpiration = "24h"
 	}
 
-	c.GatewaySVC = sharedconf.GetGatewaySVC(c.GatewaySVC)
+	c.GatewaySVC = sharedconf.Config().GetGatewaySVC(c.GatewaySVC)
 }
 
 func (s *service) Register(ss *grpc.Server) {

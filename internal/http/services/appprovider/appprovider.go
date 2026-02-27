@@ -71,7 +71,7 @@ func (c *Config) init() {
 	if c.Prefix == "" {
 		c.Prefix = "app"
 	}
-	c.GatewaySvc = sharedconf.GetGatewaySVC(c.GatewaySvc)
+	c.GatewaySvc = sharedconf.Config().GetGatewaySVC(c.GatewaySvc)
 }
 
 type svc struct {

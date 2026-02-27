@@ -95,7 +95,7 @@ func New(m map[string]interface{}, unprotected []string, tp trace.TracerProvider
 		return nil, err
 	}
 
-	conf.GatewaySvc = sharedconf.GetGatewaySVC(conf.GatewaySvc)
+	conf.GatewaySvc = sharedconf.Config().GetGatewaySVC(conf.GatewaySvc)
 
 	// set defaults
 	if len(conf.TokenStrategyChain) == 0 {
@@ -313,7 +313,7 @@ func authenticateUser(w http.ResponseWriter, r *http.Request, conf *config, toke
 		return nil, err
 	}
 
-	if sharedconf.SkipUserGroupsInToken() {
+	if sharedconf.Config().SkipUserGroupsInToken() {
 		var groups []string
 		if groupsIf, err := userGroupsCache.Get(u.Id.OpaqueId); err == nil {
 			groups = groupsIf.([]string)
@@ -356,7 +356,7 @@ func ctxWithUserInfo(ctx context.Context, r *http.Request, user *userpb.User, to
 }
 
 func insertGroupsInUser(ctx context.Context, userGroupsCache gcache.Cache, client gateway.GatewayAPIClient, user *userpb.User) error {
-	if sharedconf.SkipUserGroupsInToken() {
+	if sharedconf.Config().SkipUserGroupsInToken() {
 		var groups []string
 		if groupsIf, err := userGroupsCache.Get(user.Id.OpaqueId); err == nil {
 			groups = groupsIf.([]string)

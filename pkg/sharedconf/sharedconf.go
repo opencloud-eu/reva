@@ -38,12 +38,16 @@ type ClientOptions struct {
 }
 
 type conf struct {
-	JWTSecret             string        `mapstructure:"jwt_secret"`
-	GatewaySVC            string        `mapstructure:"gatewaysvc"`
-	DataGateway           string        `mapstructure:"datagateway"`
-	SkipUserGroupsInToken bool          `mapstructure:"skip_user_groups_in_token"`
-	MultiTenantEnabled    bool          `mapstructure:"multi_tenant_enabled"`
-	GRPCClientOptions     ClientOptions `mapstructure:"grpc_client_options"`
+	jWTSecret             string        `mapstructure:"jwt_secret"`
+	gatewaySVC            string        `mapstructure:"gatewaysvc"`
+	dataGateway           string        `mapstructure:"datagateway"`
+	skipUserGroupsInToken bool          `mapstructure:"skip_user_groups_in_token"`
+	multiTenantEnabled    bool          `mapstructure:"multi_tenant_enabled"`
+	gRPCClientOptions     ClientOptions `mapstructure:"grpc_client_options"`
+}
+
+func Config() conf {
+	return *sharedConf
 }
 
 // Decode decodes the configuration.
@@ -55,24 +59,24 @@ func Decode(v interface{}) error {
 			return
 		}
 		// add some defaults
-		if sharedConf.GatewaySVC == "" {
-			sharedConf.GatewaySVC = "0.0.0.0:19000"
+		if sharedConf.gatewaySVC == "" {
+			sharedConf.gatewaySVC = "0.0.0.0:19000"
 		}
 
 		// this is the default address we use for the data gateway HTTP service
-		if sharedConf.DataGateway == "" {
+		if sharedConf.dataGateway == "" {
 			host, err := os.Hostname()
 			if err != nil || host == "" {
-				sharedConf.DataGateway = "http://0.0.0.0:19001/datagateway"
+				sharedConf.dataGateway = "http://0.0.0.0:19001/datagateway"
 			} else {
-				sharedConf.DataGateway = fmt.Sprintf("http://%s:19001/datagateway", host)
+				sharedConf.dataGateway = fmt.Sprintf("http://%s:19001/datagateway", host)
 			}
 		}
 
 		// TODO(labkode): would be cool to autogenerate one secret and print
 		// it on init time.
-		if sharedConf.JWTSecret == "" {
-			sharedConf.JWTSecret = "changemeplease"
+		if sharedConf.jWTSecret == "" {
+			sharedConf.jWTSecret = "changemeplease"
 		}
 	})
 
@@ -80,42 +84,42 @@ func Decode(v interface{}) error {
 }
 
 // GetJWTSecret returns the package level configured jwt secret if not overwritten.
-func GetJWTSecret(val string) string {
+func (c conf) GetJWTSecret(val string) string {
 	if val == "" {
-		return sharedConf.JWTSecret
+		return c.jWTSecret
 	}
 	return val
 }
 
 // GetGatewaySVC returns the package level configured gateway service if not overwritten.
-func GetGatewaySVC(val string) string {
+func (c conf) GetGatewaySVC(val string) string {
 	if val == "" {
-		return sharedConf.GatewaySVC
+		return c.gatewaySVC
 	}
 	return val
 }
 
 // GetDataGateway returns the package level data gateway endpoint if not overwritten.
-func GetDataGateway(val string) string {
+func (c conf) GetDataGateway(val string) string {
 	if val == "" {
-		return sharedConf.DataGateway
+		return c.dataGateway
 	}
 	return val
 }
 
 // SkipUserGroupsInToken returns whether to skip encoding user groups in the access tokens.
-func SkipUserGroupsInToken() bool {
-	return sharedConf.SkipUserGroupsInToken
+func (c conf) SkipUserGroupsInToken() bool {
+	return c.skipUserGroupsInToken
 }
 
 // MultiTenantEnabled returns whether this is a mulit-tenant enabled configuratio
-func MultiTenantEnabled() bool {
-	return sharedConf.MultiTenantEnabled
+func (c conf) MultiTenantEnabled() bool {
+	return c.multiTenantEnabled
 }
 
 // GRPCClientOptions returns the global grpc client options
-func GRPCClientOptions() ClientOptions {
-	return sharedConf.GRPCClientOptions
+func (c conf) GRPCClientOptions() ClientOptions {
+	return c.gRPCClientOptions
 }
 
 // this is used by the tests

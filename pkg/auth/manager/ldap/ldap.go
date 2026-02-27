@@ -98,7 +98,7 @@ func (am *mgr) Configure(m map[string]interface{}) error {
 	if err = c.LDAPIdentity.Setup(); err != nil {
 		return fmt.Errorf("error setting up Identity config: %w", err)
 	}
-	c.GatewaySvc = sharedconf.GetGatewaySVC(c.GatewaySvc)
+	c.GatewaySvc = sharedconf.Config().GetGatewaySVC(c.GatewaySvc)
 	am.c = c
 	return nil
 }

@@ -88,7 +88,7 @@ func NewMysql(m map[string]interface{}) (publicshare.Manager, error) {
 		return nil, err
 	}
 
-	userConverter := NewGatewayUserConverter(sharedconf.GetGatewaySVC(c.GatewayAddr))
+	userConverter := NewGatewayUserConverter(sharedconf.Config().GetGatewaySVC(c.GatewayAddr))
 
 	return New("mysql", db, *c, userConverter)
 }
@@ -365,7 +365,7 @@ func (m *mgr) ListPublicShares(ctx context.Context, u *user.User, filters []*lin
 	uid := u.Username
 	// FIXME instead of joining we may want to have to do a stat call ... if we want to store shares from other providers? or just Dump()? and be done with migration?
 	query := `SELECT
-				coalesce(uid_owner, '') as uid_owner, coalesce(uid_initiator, '') as uid_initiator, 
+				coalesce(uid_owner, '') as uid_owner, coalesce(uid_initiator, '') as uid_initiator,
 				coalesce(share_with, '') as share_with, coalesce(file_source, '') as file_source,
 				coalesce(item_type, '') as item_type, coalesce(token,'') as token,
 				coalesce(expiration, '') as expiration, coalesce(share_name, '') as share_name,

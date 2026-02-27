@@ -40,7 +40,7 @@ type config struct {
 func (c *config) init() {
 	if len(c.Rules) == 0 {
 		c.Rules = map[string]string{
-			"basic": sharedconf.GetGatewaySVC(""),
+			"basic": sharedconf.Config().GetGatewaySVC(""),
 		}
 	}
 }

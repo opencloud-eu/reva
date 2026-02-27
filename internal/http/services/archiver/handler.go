@@ -115,7 +115,7 @@ func (c *Config) init() {
 		c.Name = "download"
 	}
 
-	c.GatewaySvc = sharedconf.GetGatewaySVC(c.GatewaySvc)
+	c.GatewaySvc = sharedconf.Config().GetGatewaySVC(c.GatewaySvc)
 }
 
 func (s *svc) getResources(ctx context.Context, paths, ids []string) ([]*provider.ResourceId, error) {
