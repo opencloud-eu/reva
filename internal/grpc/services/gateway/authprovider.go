@@ -94,7 +94,7 @@ func (s *svc) Authenticate(ctx context.Context, req *gateway.AuthenticateRequest
 	}
 
 	u := proto.Clone(res.User).(*userpb.User)
-	if sharedconf.SkipUserGroupsInToken() {
+	if sharedconf.Config().SkipUserGroupsInToken {
 		u.Groups = []string{}
 	}
 
@@ -156,7 +156,7 @@ func (s *svc) WhoAmI(ctx context.Context, req *gateway.WhoAmIRequest) (*gateway.
 		}, nil
 	}
 
-	if sharedconf.SkipUserGroupsInToken() {
+	if sharedconf.Config().SkipUserGroupsInToken {
 		groupsRes, err := s.GetUserGroups(ctx, &userpb.GetUserGroupsRequest{UserId: u.Id})
 		if err != nil {
 			return nil, err

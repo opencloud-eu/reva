@@ -88,7 +88,7 @@ func (c *config) ApplyDefaults() {
 		c.WebappTemplate = "https://cernbox.cern.ch/external/sciencemesh/{{.Token}}{relative-path-to-shared-resource}"
 	}
 
-	c.GatewaySVC = sharedconf.GetGatewaySVC(c.GatewaySVC)
+	c.GatewaySVC = sharedconf.Config().GetGatewaySVC(c.GatewaySVC)
 }
 
 func (s *service) Register(ss *grpc.Server) {

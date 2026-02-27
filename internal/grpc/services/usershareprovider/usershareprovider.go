@@ -132,7 +132,7 @@ func NewDefault(m map[string]interface{}, ss *grpc.Server, _ *zerolog.Logger) (r
 		allowedPathsForShares = append(allowedPathsForShares, regex)
 	}
 
-	gatewaySelector, err := pool.GatewaySelector(sharedconf.GetGatewaySVC(c.GatewayAddr))
+	gatewaySelector, err := pool.GatewaySelector(sharedconf.Config().GetGatewaySVC(c.GatewayAddr))
 	if err != nil {
 		return nil, err
 	}

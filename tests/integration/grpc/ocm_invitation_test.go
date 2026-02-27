@@ -157,25 +157,25 @@ var _ = Describe("ocm invitation workflow", func() {
 			revads, err = startRevads([]RevadConfig{
 				{
 					Name:   "cernboxgw",
-					Config: "ocm-server-cernbox-grpc.toml",
+					Config: OCMServerCernboxGRPC,
 					Files: map[string]string{
 						"providers": "ocm-providers.demo.json",
 					},
 				},
 				{
 					Name:   "cernboxhttp",
-					Config: "ocm-server-cernbox-http.toml",
+					Config: OCMServerCernboxHTTP,
 				},
 				{
 					Name:   "cesnetgw",
-					Config: "ocm-server-cesnet-grpc.toml",
+					Config: OCMServerCesnetGRPC,
 					Files: map[string]string{
 						"providers": "ocm-providers.demo.json",
 					},
 				},
 				{
 					Name:   "cesnethttp",
-					Config: "ocm-server-cesnet-http.toml",
+					Config: OCMServerCesnetHTTP,
 				},
 			}, variables)
 			Expect(err).ToNot(HaveOccurred())

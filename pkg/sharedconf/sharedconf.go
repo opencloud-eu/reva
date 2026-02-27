@@ -46,6 +46,10 @@ type conf struct {
 	GRPCClientOptions     ClientOptions `mapstructure:"grpc_client_options"`
 }
 
+func Config() conf {
+	return *sharedConf
+}
+
 // Decode decodes the configuration.
 func Decode(v interface{}) error {
 	var err error
@@ -80,46 +84,31 @@ func Decode(v interface{}) error {
 }
 
 // GetJWTSecret returns the package level configured jwt secret if not overwritten.
-func GetJWTSecret(val string) string {
+func (c conf) GetJWTSecret(val string) string {
 	if val == "" {
-		return sharedConf.JWTSecret
+		return c.JWTSecret
 	}
 	return val
 }
 
 // GetGatewaySVC returns the package level configured gateway service if not overwritten.
-func GetGatewaySVC(val string) string {
+func (c conf) GetGatewaySVC(val string) string {
 	if val == "" {
-		return sharedConf.GatewaySVC
+		return c.GatewaySVC
 	}
 	return val
 }
 
 // GetDataGateway returns the package level data gateway endpoint if not overwritten.
-func GetDataGateway(val string) string {
+func (c conf) GetDataGateway(val string) string {
 	if val == "" {
-		return sharedConf.DataGateway
+		return c.DataGateway
 	}
 	return val
 }
 
-// SkipUserGroupsInToken returns whether to skip encoding user groups in the access tokens.
-func SkipUserGroupsInToken() bool {
-	return sharedConf.SkipUserGroupsInToken
-}
-
-// MultiTenantEnabled returns whether this is a mulit-tenant enabled configuratio
-func MultiTenantEnabled() bool {
-	return sharedConf.MultiTenantEnabled
-}
-
-// GRPCClientOptions returns the global grpc client options
-func GRPCClientOptions() ClientOptions {
-	return sharedConf.GRPCClientOptions
-}
-
 // this is used by the tests
-func resetOnce() {
+func ResetOnce() {
 	sharedConf = &conf{}
 	sharedConfOnce = sync.Once{}
 }

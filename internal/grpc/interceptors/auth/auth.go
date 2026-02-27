@@ -85,7 +85,7 @@ func NewUnary(m map[string]interface{}, unprotected []string, tp trace.TracerPro
 	if conf.TokenManager == "" {
 		conf.TokenManager = "jwt"
 	}
-	conf.GatewayAddr = sharedconf.GetGatewaySVC(conf.GatewayAddr)
+	conf.GatewayAddr = sharedconf.Config().GetGatewaySVC(conf.GatewayAddr)
 
 	if conf.UserGroupsCacheSize == 0 {
 		conf.UserGroupsCacheSize = 5000
@@ -150,7 +150,7 @@ func NewUnary(m map[string]interface{}, unprotected []string, tp trace.TracerPro
 			log.Warn().Err(err).Msg("access token is invalid")
 			return nil, status.Errorf(codes.PermissionDenied, "auth: core access token is invalid")
 		}
-		if sharedconf.MultiTenantEnabled() && u.GetId().GetType() != userpb.UserType_USER_TYPE_SERVICE && u.GetId().GetTenantId() == "" {
+		if sharedconf.Config().MultiTenantEnabled && u.GetId().GetType() != userpb.UserType_USER_TYPE_SERVICE && u.GetId().GetTenantId() == "" {
 			log.Warn().Msg("user has no tenant id, rejecting request")
 			return nil, status.Errorf(codes.PermissionDenied, "auth: user has no tenant id, rejecting request")
 		}
@@ -275,7 +275,7 @@ func dismantleToken(ctx context.Context, tkn string, req interface{}, mgr token.
 		return nil, nil, err
 	}
 
-	if sharedconf.SkipUserGroupsInToken() {
+	if sharedconf.Config().SkipUserGroupsInToken {
 		client, err := pool.GetGatewayServiceClient(gatewayAddr)
 		if err != nil {
 			return nil, nil, err

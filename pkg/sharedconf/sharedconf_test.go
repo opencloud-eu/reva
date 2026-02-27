@@ -33,12 +33,12 @@ func Test(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	got := GetJWTSecret("secret")
+	got := Config().GetJWTSecret("secret")
 	if got != "secret" {
 		t.Fatalf("expected %q got %q", "secret", got)
 	}
 
-	got = GetJWTSecret("")
+	got = Config().GetJWTSecret("")
 	if got != "changemeplease" {
 		t.Fatalf("expected %q got %q", "changemeplease", got)
 	}
@@ -47,18 +47,18 @@ func Test(t *testing.T) {
 		"jwt_secret": "dummy",
 	}
 
-	resetOnce()
+	ResetOnce()
 	err = Decode(conf)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	got = GetJWTSecret("secret")
+	got = Config().GetJWTSecret("secret")
 	if got != "secret" {
 		t.Fatalf("expected %q got %q", "secret", got)
 	}
 
-	got = GetJWTSecret("")
+	got = Config().GetJWTSecret("")
 	if got != "dummy" {
 		t.Fatalf("expected %q got %q", "dummy", got)
 	}

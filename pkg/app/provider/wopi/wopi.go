@@ -100,7 +100,7 @@ func New(m map[string]interface{}) (app.Provider, error) {
 	if c.IOPSecret == "" {
 		c.IOPSecret = os.Getenv("REVA_APPPROVIDER_IOPSECRET")
 	}
-	c.JWTSecret = sharedconf.GetJWTSecret(c.JWTSecret)
+	c.JWTSecret = sharedconf.Config().GetJWTSecret(c.JWTSecret)
 
 	appURLs, err := getAppURLs(c)
 	if err != nil {

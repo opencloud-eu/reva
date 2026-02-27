@@ -89,7 +89,7 @@ func (c *config) init() {
 		c.GIDClaim = "gid"
 	}
 
-	c.GatewaySvc = sharedconf.GetGatewaySVC(c.GatewaySvc)
+	c.GatewaySvc = sharedconf.Config().GetGatewaySVC(c.GatewaySvc)
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {

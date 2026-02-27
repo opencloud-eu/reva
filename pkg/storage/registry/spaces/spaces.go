@@ -99,7 +99,7 @@ func (c *config) init() {
 
 	if len(c.Providers) == 0 {
 		c.Providers = map[string]*Provider{
-			sharedconf.GetGatewaySVC(""): {
+			sharedconf.Config().GetGatewaySVC(""): {
 				Spaces: map[string]*spaceConfig{
 					"personal":   {MountPoint: "/users", PathTemplate: "/users/{{.Space.Owner.Id.OpaqueId}}"},
 					"project":    {MountPoint: "/projects", PathTemplate: "/projects/{{.Space.Name}}"},

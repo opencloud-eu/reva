@@ -40,7 +40,7 @@ type config struct {
 }
 
 func (c *config) ApplyDefaults() {
-	c.GatewaySvc = sharedconf.GetGatewaySVC(c.GatewaySvc)
+	c.GatewaySvc = sharedconf.Config().GetGatewaySVC(c.GatewaySvc)
 	if c.Prefix == "" {
 		c.Prefix = "ocm"
 	}

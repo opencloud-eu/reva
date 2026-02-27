@@ -43,7 +43,7 @@ type Options struct {
 }
 
 func (c *Options) fillDefaults() {
-	c.GatewaySvc = sharedconf.GetGatewaySVC(c.GatewaySvc)
+	c.GatewaySvc = sharedconf.Config().GetGatewaySVC(c.GatewaySvc)
 
 	if c.IndexPool == "" {
 		c.IndexPool = "path_index"

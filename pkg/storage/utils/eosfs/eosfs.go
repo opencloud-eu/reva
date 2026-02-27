@@ -147,7 +147,7 @@ func (c *Config) init() {
 		c.TokenExpiry = 3600
 	}
 
-	c.GatewaySvc = sharedconf.GetGatewaySVC(c.GatewaySvc)
+	c.GatewaySvc = sharedconf.Config().GetGatewaySVC(c.GatewaySvc)
 }
 
 type eosfs struct {

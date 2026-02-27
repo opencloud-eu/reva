@@ -246,7 +246,7 @@ var _ = Describe("group providers", func() {
 			dependencies = []RevadConfig{
 				{
 					Name:   "groups",
-					Config: "groupprovider-json.toml",
+					Config: GroupProviderJSON,
 				},
 			}
 			existingIdp = "http://localhost:20080"
@@ -266,7 +266,7 @@ var _ = Describe("group providers", func() {
 			dependencies = []RevadConfig{
 				{
 					Name:   "groups",
-					Config: "groupprovider-ldap.toml",
+					Config: GroupProviderLDAP,
 				},
 			}
 			existingIdp = "http://localhost:20080"

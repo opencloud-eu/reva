@@ -77,5 +77,5 @@ func (c *Config) Init() {
 		c.UserIdentifierCacheTTL = 60
 	}
 
-	c.GatewaySvc = sharedconf.GetGatewaySVC(c.GatewaySvc)
+	c.GatewaySvc = sharedconf.Config().GetGatewaySVC(c.GatewaySvc)
 }

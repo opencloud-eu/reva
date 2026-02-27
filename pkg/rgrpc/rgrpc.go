@@ -122,7 +122,7 @@ func (c *config) init() {
 	}
 
 	if c.Address == "" {
-		c.Address = sharedconf.GetGatewaySVC("0.0.0.0:19000")
+		c.Address = sharedconf.Config().GetGatewaySVC("0.0.0.0:19000")
 	}
 }
 

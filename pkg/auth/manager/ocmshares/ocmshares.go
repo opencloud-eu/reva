@@ -55,7 +55,7 @@ type config struct {
 }
 
 func (c *config) ApplyDefaults() {
-	c.GatewayAddr = sharedconf.GetGatewaySVC(c.GatewayAddr)
+	c.GatewayAddr = sharedconf.Config().GetGatewaySVC(c.GatewayAddr)
 }
 
 // New creates a new ocmshares authentication manager.

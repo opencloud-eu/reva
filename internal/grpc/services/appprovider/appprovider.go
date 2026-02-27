@@ -71,8 +71,8 @@ func (c *config) init() {
 	if c.RefreshTime < 1 {
 		c.RefreshTime = time.Second * 20
 	}
-	c.AppProviderURL = sharedconf.GetGatewaySVC(c.AppProviderURL)
-	c.GatewaySvc = sharedconf.GetGatewaySVC(c.GatewaySvc)
+	c.AppProviderURL = sharedconf.Config().GetGatewaySVC(c.AppProviderURL)
+	c.GatewaySvc = sharedconf.Config().GetGatewaySVC(c.GatewaySvc)
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {

@@ -122,7 +122,7 @@ func New(m map[string]interface{}) (*Options, error) {
 		return nil, err
 	}
 
-	o.GatewayAddr = sharedconf.GetGatewaySVC(o.GatewayAddr)
+	o.GatewayAddr = sharedconf.Config().GetGatewaySVC(o.GatewayAddr)
 
 	if o.MetadataBackend == "" {
 		o.MetadataBackend = "xattrs"
@@ -149,7 +149,7 @@ func New(m map[string]interface{}) (*Options, error) {
 			return nil, err
 		}
 	} else {
-		sharedOpt := sharedconf.GRPCClientOptions()
+		sharedOpt := sharedconf.Config().GRPCClientOptions
 		var err error
 
 		if o.PermTLSMode, err = pool.StringToTLSMode(sharedOpt.TLSMode); err != nil {

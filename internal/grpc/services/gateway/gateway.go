@@ -97,25 +97,25 @@ func (c *config) init() {
 
 	// if services address are not specified we used the shared conf
 	// for the gatewaysvc to have dev setups very quickly.
-	c.AuthRegistryEndpoint = sharedconf.GetGatewaySVC(c.AuthRegistryEndpoint)
-	c.ApplicationAuthEndpoint = sharedconf.GetGatewaySVC(c.ApplicationAuthEndpoint)
-	c.StorageRegistryEndpoint = sharedconf.GetGatewaySVC(c.StorageRegistryEndpoint)
-	c.AppRegistryEndpoint = sharedconf.GetGatewaySVC(c.AppRegistryEndpoint)
-	c.PreferencesEndpoint = sharedconf.GetGatewaySVC(c.PreferencesEndpoint)
-	c.UserShareProviderEndpoint = sharedconf.GetGatewaySVC(c.UserShareProviderEndpoint)
-	c.PublicShareProviderEndpoint = sharedconf.GetGatewaySVC(c.PublicShareProviderEndpoint)
-	c.OCMShareProviderEndpoint = sharedconf.GetGatewaySVC(c.OCMShareProviderEndpoint)
-	c.OCMInviteManagerEndpoint = sharedconf.GetGatewaySVC(c.OCMInviteManagerEndpoint)
-	c.OCMProviderAuthorizerEndpoint = sharedconf.GetGatewaySVC(c.OCMProviderAuthorizerEndpoint)
-	c.OCMCoreEndpoint = sharedconf.GetGatewaySVC(c.OCMCoreEndpoint)
-	c.UserProviderEndpoint = sharedconf.GetGatewaySVC(c.UserProviderEndpoint)
-	c.GroupProviderEndpoint = sharedconf.GetGatewaySVC(c.GroupProviderEndpoint)
-	c.DataTxEndpoint = sharedconf.GetGatewaySVC(c.DataTxEndpoint)
+	c.AuthRegistryEndpoint = sharedconf.Config().GetGatewaySVC(c.AuthRegistryEndpoint)
+	c.ApplicationAuthEndpoint = sharedconf.Config().GetGatewaySVC(c.ApplicationAuthEndpoint)
+	c.StorageRegistryEndpoint = sharedconf.Config().GetGatewaySVC(c.StorageRegistryEndpoint)
+	c.AppRegistryEndpoint = sharedconf.Config().GetGatewaySVC(c.AppRegistryEndpoint)
+	c.PreferencesEndpoint = sharedconf.Config().GetGatewaySVC(c.PreferencesEndpoint)
+	c.UserShareProviderEndpoint = sharedconf.Config().GetGatewaySVC(c.UserShareProviderEndpoint)
+	c.PublicShareProviderEndpoint = sharedconf.Config().GetGatewaySVC(c.PublicShareProviderEndpoint)
+	c.OCMShareProviderEndpoint = sharedconf.Config().GetGatewaySVC(c.OCMShareProviderEndpoint)
+	c.OCMInviteManagerEndpoint = sharedconf.Config().GetGatewaySVC(c.OCMInviteManagerEndpoint)
+	c.OCMProviderAuthorizerEndpoint = sharedconf.Config().GetGatewaySVC(c.OCMProviderAuthorizerEndpoint)
+	c.OCMCoreEndpoint = sharedconf.Config().GetGatewaySVC(c.OCMCoreEndpoint)
+	c.UserProviderEndpoint = sharedconf.Config().GetGatewaySVC(c.UserProviderEndpoint)
+	c.GroupProviderEndpoint = sharedconf.Config().GetGatewaySVC(c.GroupProviderEndpoint)
+	c.DataTxEndpoint = sharedconf.Config().GetGatewaySVC(c.DataTxEndpoint)
 
-	c.DataGatewayEndpoint = sharedconf.GetDataGateway(c.DataGatewayEndpoint)
+	c.DataGatewayEndpoint = sharedconf.Config().GetDataGateway(c.DataGatewayEndpoint)
 
 	// use shared secret if not set
-	c.TransferSharedSecret = sharedconf.GetJWTSecret(c.TransferSharedSecret)
+	c.TransferSharedSecret = sharedconf.Config().GetJWTSecret(c.TransferSharedSecret)
 
 	// lifetime for the transfer token (TUS upload)
 	if c.TransferExpires == 0 {

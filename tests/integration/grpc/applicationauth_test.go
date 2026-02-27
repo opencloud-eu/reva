@@ -83,18 +83,14 @@ var _ = Describe("applicationauth providers", func() {
 
 	Describe("the jsoncs3 appauth manager", func() {
 		BeforeEach(func() {
-			variables = map[string]string{
-				"storage_system_grpc_address": "localhost:19002",
-				"storage_system_http_address": "localhost:19003",
-			}
 			dependencies = []RevadConfig{
 				{
 					Name:   "applicationauth",
-					Config: "applicationauth-jsoncs3.toml",
+					Config: ApplicationAuthJSONCS3,
 				},
 				{
-					Name:   "storage-system",
-					Config: "storage-system.toml",
+					Name:   "storage_system",
+					Config: StorageSystem,
 				},
 			}
 		})

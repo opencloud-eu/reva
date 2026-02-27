@@ -67,7 +67,7 @@ type config struct {
 }
 
 func (c *config) ApplyDefaults() {
-	c.GatewaySvc = sharedconf.GetGatewaySVC(c.GatewaySvc)
+	c.GatewaySvc = sharedconf.Config().GetGatewaySVC(c.GatewaySvc)
 }
 
 // New creates a sql repository for ocm tokens and users.

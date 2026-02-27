@@ -81,7 +81,7 @@ func New(value map[string]interface{}) (token.Manager, error) {
 		c.tokenTimeLeeway = defaultLeeway
 	}
 
-	c.Secret = sharedconf.GetJWTSecret(c.Secret)
+	c.Secret = sharedconf.Config().GetJWTSecret(c.Secret)
 
 	if c.Secret == "" {
 		return nil, errors.New("jwt: secret for signing payloads is not defined in config")

@@ -73,7 +73,7 @@ func (c *config) init() {
 		c.Prefix = "datagateway"
 	}
 
-	c.TransferSharedSecret = sharedconf.GetJWTSecret(c.TransferSharedSecret)
+	c.TransferSharedSecret = sharedconf.Config().GetJWTSecret(c.TransferSharedSecret)
 }
 
 type svc struct {
