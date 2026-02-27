@@ -47,7 +47,7 @@ func Test(t *testing.T) {
 		"jwt_secret": "dummy",
 	}
 
-	resetOnce()
+	ResetOnce()
 	err = Decode(conf)
 	if err != nil {
 		t.Fatal(err)

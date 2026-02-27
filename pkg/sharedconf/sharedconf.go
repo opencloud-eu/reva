@@ -119,7 +119,7 @@ func GRPCClientOptions() ClientOptions {
 }
 
 // this is used by the tests
-func resetOnce() {
+func ResetOnce() {
 	sharedConf = &conf{}
 	sharedConfOnce = sync.Once{}
 }
