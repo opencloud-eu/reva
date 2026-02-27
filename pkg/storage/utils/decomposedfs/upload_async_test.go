@@ -92,6 +92,9 @@ var _ = Describe("Async file uploads", Ordered, func() {
 			ev, ok := (<-pub).(events.UploadReady)
 			Expect(ok).To(BeTrue())
 			Expect(ev.Failed).To(BeFalse())
+			Expect(ev.ResourceID).ToNot(BeNil())
+			Expect(ev.ResourceID.OpaqueId).ToNot(BeEmpty())
+			Expect(ev.ResourceID.OpaqueId).ToNot(Equal(ev.ResourceID.SpaceId), "ResourceID.OpaqueId should be the file node ID, not the space ID")
 		}
 
 		failPostprocessing = func(uploadID string, outcome events.PostprocessingOutcome) {
