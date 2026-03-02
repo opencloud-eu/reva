@@ -20,7 +20,6 @@ package decomposedfs
 
 import (
 	"context"
-	"fmt"
 	"path/filepath"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -32,7 +31,6 @@ import (
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata/prefixes"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/node"
 	"github.com/opencloud-eu/reva/v2/pkg/storagespace"
-	"github.com/opencloud-eu/reva/v2/pkg/utils"
 	"github.com/pkg/errors"
 )
 
@@ -187,7 +185,7 @@ func (fs *Decomposedfs) UnsetArbitraryMetadata(ctx context.Context, ref *provide
 				errs = append(errs, errors.Wrap(errtypes.UserRequired("userrequired"), "user has no id"))
 				continue
 			}
-			fa := fmt.Sprintf("%s:%s:%s@%s", prefixes.FavPrefix, utils.UserTypeToString(uid.GetType()), uid.GetOpaqueId(), uid.GetIdp())
+			fa := prefixes.FavoriteKey(uid)
 			if err := n.RemoveXattr(ctx, fa, true); err != nil {
 				if metadata.IsAttrUnset(err) {
 					continue // already gone, ignore

@@ -723,25 +723,9 @@ func (n *Node) SetEtag(ctx context.Context, val string) (err error) {
 }
 
 // SetFavorite sets the favorite for the current user
-// TODO we should not mess with the user here ... the favorites is now a user specific property for a file
-// that cannot be mapped to extended attributes without leaking who has marked a file as a favorite
-// it is a specific case of a tag, which is user individual as well
-// TODO there are different types of tags
-// 1. public that are managed by everyone
-// 2. private tags that are only visible to the user
-// 3. system tags that are only visible to the system
-// 4. group tags that are only visible to a group ...
-// urgh ... well this can be solved using different namespaces
-// 1. public = p:
-// 2. private = u:<uid>: for user specific
-// 3. system = s: for system
-// 4. group = g:<gid>:
-// 5. app? = a:<aid>: for apps?
-// obviously this only is secure when the u/s/g/a namespaces are not accessible by users in the filesystem
-// public tags can be mapped to extended attributes
 func (n *Node) SetFavorite(ctx context.Context, uid *userpb.UserId, val string) error {
 	// the favorite flag is specific to the user, so we need to incorporate the userid
-	fa := fmt.Sprintf("%s:%s:%s@%s", prefixes.FavPrefix, utils.UserTypeToString(uid.GetType()), uid.GetOpaqueId(), uid.GetIdp())
+	fa := prefixes.FavoriteKey(uid)
 	return n.SetXattrString(ctx, fa, val)
 }
 
@@ -857,7 +841,7 @@ func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissi
 		if u, ok := ctxpkg.ContextGetUser(ctx); ok {
 			// the favorite flag is specific to the user, so we need to incorporate the userid
 			if uid := u.GetId(); uid != nil {
-				fa := fmt.Sprintf("%s:%s:%s@%s", prefixes.FavPrefix, utils.UserTypeToString(uid.GetType()), uid.GetOpaqueId(), uid.GetIdp())
+				fa := prefixes.FavoriteKey(uid)
 				if val, err := n.XattrString(ctx, fa); err == nil {
 					sublog.Debug().
 						Str("favorite", fa).
