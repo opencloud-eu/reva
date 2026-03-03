@@ -1,6 +1,6 @@
 # Changelog
 
-## [2.42.5](https://github.com/opencloud-eu/reva/releases/tag/v2.42.5) - 2026-03-02
+## [2.42.5](https://github.com/opencloud-eu/reva/releases/tag/v2.42.5) - 2026-03-03
 
 ### ❤️ Thanks to all contributors! ❤️
 
@@ -12,6 +12,7 @@
 
 ### 📦️ Dependencies
 
+- chore(deps): bump google.golang.org/grpc from 1.78.0 to 1.79.1 [[#542](https://github.com/opencloud-eu/reva/pull/542)]
 - chore(deps): bump golang.org/x/crypto from 0.47.0 to 0.48.0 [[#539](https://github.com/opencloud-eu/reva/pull/539)]
 - chore(deps): bump golang.org/x/oauth2 from 0.34.0 to 0.35.0 [[#537](https://github.com/opencloud-eu/reva/pull/537)]
 - chore(deps): bump github.com/cloudflare/circl from 1.6.1 to 1.6.3 in the go_modules group across 1 directory [[#538](https://github.com/opencloud-eu/reva/pull/538)]
