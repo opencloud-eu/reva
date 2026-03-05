@@ -65,6 +65,7 @@ func init() {
 const (
 	LockdiscoveryKey = "lockdiscovery"
 	FavoriteKey      = "http://owncloud.org/ns/favorite"
+	AllFavoritesKey  = "allfavorites"
 	ShareTypesKey    = "http://owncloud.org/ns/share-types"
 	ChecksumsKey     = "http://owncloud.org/ns/checksums"
 	UserShareType    = "0"
@@ -729,6 +730,13 @@ func (n *Node) SetFavorite(ctx context.Context, uid *userpb.UserId, val string) 
 	return n.SetXattrString(ctx, fa, val)
 }
 
+// UnsetFavorite unsets the favorite for the current user
+func (n *Node) UnsetFavorite(ctx context.Context, uid *userpb.UserId) error {
+	// the favorite flag is specific to the user, so we need to incorporate the userid
+	fa := prefixes.FavoriteKey(uid)
+	return n.RemoveXattr(ctx, fa, true)
+}
+
 // IsDir returns true if the node is a directory
 func (n *Node) IsDir(ctx context.Context) bool {
 	attr, _ := n.XattrInt32(ctx, prefixes.TypeAttr)
@@ -837,7 +845,6 @@ func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissi
 
 	// read favorite flag for the current user
 	if _, ok := mdKeysMap[FavoriteKey]; returnAllMetadata || ok {
-		favorite := ""
 		if u, ok := ctxpkg.ContextGetUser(ctx); ok {
 			// the favorite flag is specific to the user, so we need to incorporate the userid
 			if uid := u.GetId(); uid != nil {
@@ -846,7 +853,7 @@ func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissi
 					sublog.Debug().
 						Str("favorite", fa).
 						Msg("found favorite flag")
-					favorite = val
+					metadata[FavoriteKey] = val
 				}
 			} else {
 				sublog.Error().Err(errtypes.UserRequired("userrequired")).Msg("user has no id")
@@ -854,7 +861,20 @@ func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissi
 		} else {
 			sublog.Error().Err(errtypes.UserRequired("userrequired")).Msg("error getting user from ctx")
 		}
-		metadata[FavoriteKey] = favorite
+	}
+	if _, ok := mdKeysMap[AllFavoritesKey]; returnAllMetadata || ok {
+		favorites := []string{}
+		attrs, err := n.Xattrs(ctx)
+		if err != nil {
+			sublog.Error().Err(err).Msg("error getting list of extended attributes")
+		} else {
+			for key, value := range attrs {
+				if string(value) == "1" && strings.HasPrefix(key, prefixes.FavPrefix) {
+					favorites = append(favorites, key[len(prefixes.FavPrefix):])
+				}
+			}
+			metadata[AllFavoritesKey] = strings.Join(favorites, ",")
+		}
 	}
 	// read locks
 	// FIXME move to fieldmask

@@ -1035,6 +1035,52 @@ func (fs *Decomposedfs) ListFolder(ctx context.Context, ref *provider.Reference,
 	return finfos, nil
 }
 
+// AddFavorite adds a favorite
+func (fs *Decomposedfs) AddFavorite(ctx context.Context, ref *provider.Reference, uid *user.UserId) error {
+	ctx, span := tracer.Start(ctx, "AddFavorite")
+	defer span.End()
+	n, err := fs.lu.NodeFromResource(ctx, ref)
+	if err != nil {
+		return err
+	}
+	if !n.Exists {
+		return errtypes.NotFound(filepath.Join(n.ParentID, n.Name))
+	}
+
+	rp, err := fs.p.AssemblePermissions(ctx, n)
+	if err != nil {
+		return err
+	}
+	if !rp.Stat {
+		return errtypes.PermissionDenied("stat")
+	}
+
+	return n.SetFavorite(ctx, uid, "1")
+}
+
+// RemoveFavorite removes a favorite
+func (fs *Decomposedfs) RemoveFavorite(ctx context.Context, ref *provider.Reference, uid *user.UserId) error {
+	ctx, span := tracer.Start(ctx, "RemoveFavorite")
+	defer span.End()
+	n, err := fs.lu.NodeFromResource(ctx, ref)
+	if err != nil {
+		return err
+	}
+	if !n.Exists {
+		return errtypes.NotFound(filepath.Join(n.ParentID, n.Name))
+	}
+
+	rp, err := fs.p.AssemblePermissions(ctx, n)
+	if err != nil {
+		return err
+	}
+	if !rp.Stat {
+		return errtypes.PermissionDenied("stat")
+	}
+
+	return n.UnsetFavorite(ctx, uid)
+}
+
 // Delete deletes the specified resource
 func (fs *Decomposedfs) Delete(ctx context.Context, ref *provider.Reference) (err error) {
 	ctx, span := tracer.Start(ctx, "Delete")
