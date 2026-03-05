@@ -1,6 +1,6 @@
 # Changelog
 
-## [2.42.5](https://github.com/opencloud-eu/reva/releases/tag/v2.42.5) - 2026-03-04
+## [2.42.5](https://github.com/opencloud-eu/reva/releases/tag/v2.42.5) - 2026-03-05
 
 ### ❤️ Thanks to all contributors! ❤️
 
@@ -12,6 +12,7 @@
 
 ### 📦️ Dependencies
 
+- chore(deps): bump github.com/mattn/go-sqlite3 from 1.14.33 to 1.14.34 [[#544](https://github.com/opencloud-eu/reva/pull/544)]
 - chore(deps): bump go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc from 1.40.0 to 1.41.0 [[#543](https://github.com/opencloud-eu/reva/pull/543)]
 - chore(deps): bump google.golang.org/grpc from 1.78.0 to 1.79.1 [[#542](https://github.com/opencloud-eu/reva/pull/542)]
 - chore(deps): bump golang.org/x/crypto from 0.47.0 to 0.48.0 [[#539](https://github.com/opencloud-eu/reva/pull/539)]
