@@ -1,39 +1,47 @@
-issues:
-  exclude-rules:
-    - path: internal/http/interceptors/log/log.go
-      text: "SA1019:"
-      linters:
-        - staticcheck
-    - path: pkg/utils/utils.go
-      text: "SA1019:"
-      linters:
-        - staticcheck
-    # Exclude scopelint for tests files because of https://github.com/kyoh86/scopelint/issues/4
-    - path: _test\.go
-      linters:
-        - scopelint
+version: "2"
 linters:
   enable:
     - bodyclose
-    - errcheck
-    - gosimple
-    - govet
-    - ineffassign
-    - staticcheck
-    - typecheck
-    - unused
-    #- depguard
-    - revive
-    - goimports
-    - unconvert
     - copyloopvar
-    - misspell
     - gocritic
+    - misspell
     - prealloc
-    #- gosec
-linters-settings:
-  revive:
-    ignore-generated-header: true
+    - revive
+    - unconvert
+  settings:
+    revive:
+      rules:
+        - name: unused-parameter
+          disabled: true
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
     rules:
-      - name: unused-parameter
-        disabled: true
+      - linters:
+          - staticcheck
+        path: internal/http/interceptors/log/log.go
+        text: 'SA1019:'
+      - linters:
+          - staticcheck
+        path: pkg/utils/utils.go
+        text: 'SA1019:'
+      - linters:
+          - scopelint
+        path: _test\.go
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
+formatters:
+  enable:
+    - goimports
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
