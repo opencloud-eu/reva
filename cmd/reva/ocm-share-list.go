@@ -82,7 +82,7 @@ func ocmShareListCommand() *command {
 			for _, s := range shareRes.Shares {
 				t.AppendRows([]table.Row{
 					{s.Id.OpaqueId, s.Owner.Idp, s.Owner.OpaqueId, s.ResourceId.String(),
-						s.Grantee.Type.String(), s.ShareType.String(), s.Grantee.GetUserId().Idp, s.Grantee.GetUserId().OpaqueId,
+						s.Grantee.Type.String(), s.ShareType.String(), s.Grantee.GetUserId().Idp, s.Grantee.GetUserId().OpaqueId, //nolint:SA1019 // we will update our ocm implementation later
 						time.Unix(int64(s.Ctime.Seconds), 0), time.Unix(int64(s.Mtime.Seconds), 0)},
 				})
 			}

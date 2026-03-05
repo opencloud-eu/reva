@@ -76,52 +76,6 @@ func TestUnmarshalProtocol(t *testing.T) {
 				},
 			},
 		},
-		{
-			raw: `{"name":"multi","options":{},"datatx":{"sharedSecret":"secret","srcUri":"http://example.org","size":10}}`,
-			expected: []Protocol{
-				&Datatx{
-					SharedSecret: "secret",
-					SourceURI:    "http://example.org",
-					Size:         10,
-				},
-			},
-		},
-		{
-			raw: `{"name":"multi","options":{},"webdav":{"sharedSecret":"secret","permissions":["read","write"],"url":"http://example.org"},"webapp":{"uriTemplate":"http://example.org/{test}"},"datatx":{"sharedSecret":"secret","srcUri":"http://example.org","size":10}}`,
-			expected: []Protocol{
-				&WebDAV{
-					SharedSecret: "secret",
-					Permissions:  []string{"read", "write"},
-					URI:          "http://example.org",
-				},
-				&Webapp{
-					URITemplate: "http://example.org/{test}",
-				},
-				&Datatx{
-					SharedSecret: "secret",
-					SourceURI:    "http://example.org",
-					Size:         10,
-				},
-			},
-		},
-		{
-			raw: `{"name":"multi","options":{},"webdav":{"sharedSecret":"secret","permissions":["read","write"],"uri":"http://example.org"},"webapp":{"uriTemplate":"http://example.org/{test}"},"datatx":{"sharedSecret":"secret","srcUri":"http://example.org","size":10}}`,
-			expected: []Protocol{
-				&WebDAV{
-					SharedSecret: "secret",
-					Permissions:  []string{"read", "write"},
-					URI:          "http://example.org",
-				},
-				&Webapp{
-					URITemplate: "http://example.org/{test}",
-				},
-				&Datatx{
-					SharedSecret: "secret",
-					SourceURI:    "http://example.org",
-					Size:         10,
-				},
-			},
-		},
 	}
 
 	for _, tt := range tests {
@@ -147,8 +101,6 @@ func protocolsToMap(p Protocols) map[string]Protocol {
 			m["webdav"] = prot
 		case *Webapp:
 			m["webapp"] = prot
-		case *Datatx:
-			m["datatx"] = prot
 		}
 	}
 	return m
@@ -204,24 +156,6 @@ func TestMarshalProtocol(t *testing.T) {
 		},
 		{
 			in: []Protocol{
-				&Datatx{
-					SharedSecret: "secret",
-					SourceURI:    "http://example.org/source",
-					Size:         10,
-				},
-			},
-			expected: map[string]any{
-				"name":    "multi",
-				"options": map[string]any{},
-				"datatx": map[string]any{
-					"sharedSecret": "secret",
-					"srcUri":       "http://example.org/source",
-					"size":         float64(10),
-				},
-			},
-		},
-		{
-			in: []Protocol{
 				&WebDAV{
 					SharedSecret: "secret",
 					Permissions:  []string{"read"},
@@ -230,11 +164,6 @@ func TestMarshalProtocol(t *testing.T) {
 				&Webapp{
 					URITemplate: "http://example.org",
 					ViewMode:    "read",
-				},
-				&Datatx{
-					SharedSecret: "secret",
-					SourceURI:    "http://example.org/source",
-					Size:         10,
 				},
 			},
 			expected: map[string]any{
@@ -248,11 +177,6 @@ func TestMarshalProtocol(t *testing.T) {
 				"webapp": map[string]any{
 					"uriTemplate": "http://example.org",
 					"viewMode":    "read",
-				},
-				"datatx": map[string]any{
-					"sharedSecret": "secret",
-					"srcUri":       "http://example.org/source",
-					"size":         float64(10),
 				},
 			},
 		},

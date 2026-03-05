@@ -343,8 +343,8 @@ func ReceivedOCMShare2ShareData(share *ocm.ReceivedShare, path string) (*ShareDa
 		ShareType:    ShareTypeFederatedCloudShare,
 		Path:         shareTarget,
 		FileTarget:   shareTarget,
-		MimeType:     mime.Detect(share.ResourceType == provider.ResourceType_RESOURCE_TYPE_CONTAINER, share.Name),
-		ItemType:     ResourceType(share.ResourceType).String(),
+		MimeType:     mime.Detect(share.ResourceType == provider.ResourceType_RESOURCE_TYPE_CONTAINER, share.Name), //nolint:SA1019 // we will update our ocm implementation later
+		ItemType:     ResourceType(share.ResourceType).String(),                                                    //nolint:SA1019 // we will update our ocm implementation later
 		ItemSource: storagespace.FormatResourceID(&provider.ResourceId{
 			StorageId: utils.OCMStorageProviderID,
 			SpaceId:   share.Id.OpaqueId,
