@@ -29,9 +29,10 @@ linters:
           - staticcheck
         path: pkg/utils/utils.go
         text: 'SA1019:'
-      - linters:
-          - scopelint
-        path: _test\.go
+      - path: tests/*
+        source: "."
+      - path: _test.go
+        source: "."
     paths:
       - third_party$
       - builtin$

@@ -87,11 +87,10 @@ func (m *Manager) GetUser(ctx context.Context, uid *userpb.UserId, skipFetchingG
 	}
 	for _, u := range m.users {
 		if (u.Id.GetOpaqueId() == uid.OpaqueId || u.Username == uid.OpaqueId) && (uid.Idp == "" || uid.Idp == u.Id.GetIdp()) {
-			user := *u
 			if skipFetchingGroups {
-				user.Groups = nil
+				u.Groups = nil
 			}
-			return &user, nil
+			return u, nil
 		}
 	}
 	return nil, nil
@@ -104,11 +103,10 @@ func (m *Manager) GetUserByClaim(ctx context.Context, claim, value, tenantID str
 	}
 	for _, u := range m.users {
 		if userClaim, err := extractClaim(u, claim); err == nil && value == userClaim {
-			user := *u
 			if skipFetchingGroups {
-				user.Groups = nil
+				u.Groups = nil
 			}
-			return &user, nil
+			return u, nil
 		}
 	}
 	return nil, errtypes.NotFound(value)
@@ -148,11 +146,10 @@ func (m *Manager) FindUsers(ctx context.Context, query, tenantID string, skipFet
 	users := []*userpb.User{}
 	for _, u := range m.users {
 		if userContains(u, query) {
-			user := *u
 			if skipFetchingGroups {
-				user.Groups = nil
+				u.Groups = nil
 			}
-			users = append(users, &user)
+			users = append(users, u)
 		}
 	}
 	return users, nil
