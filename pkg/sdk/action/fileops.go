@@ -24,7 +24,6 @@ import (
 	"strings"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	storage "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 
 	"github.com/opencloud-eu/reva/v2/pkg/sdk"
 	"github.com/opencloud-eu/reva/v2/pkg/sdk/common/net"
@@ -36,7 +35,7 @@ type FileOperationsAction struct {
 }
 
 // Stat queries the file information of the specified remote resource.
-func (action *FileOperationsAction) Stat(path string) (*storage.ResourceInfo, error) {
+func (action *FileOperationsAction) Stat(path string) (*provider.ResourceInfo, error) {
 	ref := &provider.Reference{Path: path}
 	req := &provider.StatRequest{Ref: ref}
 	res, err := action.session.Client().Stat(action.session.Context(), req)

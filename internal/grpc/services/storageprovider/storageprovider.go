@@ -517,7 +517,7 @@ func (s *Service) CreateStorageSpace(ctx context.Context, req *provider.CreateSt
 		case errtypes.NotSupported:
 			// if trying to create a user home fall back to CreateHome
 			if u, ok := ctxpkg.ContextGetUser(ctx); ok && req.Type == "personal" && utils.UserEqual(req.GetOwner().GetId(), u.GetId()) {
-				if err := s.Storage.CreateHome(ctx); err != nil {
+				if err := s.Storage.CreateHome(ctx); err != nil { //nolint:staticcheck // falling back to deprecated method if the new one is not supported by the driver
 					st = status.NewInternal(ctx, "error creating home")
 				} else {
 					st = status.NewOK(ctx)

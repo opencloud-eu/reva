@@ -635,7 +635,7 @@ var _ = Describe("PropfindWithDepthInfinity", func() {
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(res.Responses)).To(Equal(9))
 
-				paths := []string{}
+				paths := make([]string, 0, len(res.Responses))
 				for _, r := range res.Responses {
 					paths = append(paths, r.Href)
 				}

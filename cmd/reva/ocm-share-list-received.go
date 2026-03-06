@@ -61,7 +61,7 @@ func ocmShareListReceivedCommand() *command {
 					{s.Id.OpaqueId, s.Owner.Idp, s.Owner.OpaqueId, s.RemoteShareId,
 						s.Grantee.Type.String(), s.Grantee.GetUserId().Idp,
 						s.Grantee.GetUserId().OpaqueId, time.Unix(int64(s.Ctime.Seconds), 0),
-						time.Unix(int64(s.Mtime.Seconds), 0), s.State.String(), s.ShareType.String()},
+						time.Unix(int64(s.Mtime.Seconds), 0), s.State.String(), s.ShareType.String()}, //nolint:staticcheck // we will update our ocm implementation later
 				})
 			}
 			t.Render()

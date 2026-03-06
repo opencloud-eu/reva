@@ -237,6 +237,7 @@ func WithTracesExporter(exporter string) Option {
 }
 
 // WithTracingExporter option
+//
 // Deprecated: unused
 func WithTracingExporter(exporter string) Option {
 	return func(o *Options) {}
