@@ -19,9 +19,6 @@ packages:
     github.com/opencloud-eu/reva/v2/pkg/share:
         interfaces:
             Manager:
-    github.com/opencloud-eu/reva/v2/pkg/share/manager/owncloudsql:
-        interfaces:
-            UserConverter:
     github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/permissions:
         interfaces:
             PermissionsChecker:
