@@ -4,11 +4,13 @@
 
 ### ❤️ Thanks to all contributors! ❤️
 
-@aduffeck, @rhafer
+@aduffeck, @micbar, @rhafer
 
 ### 🐛 Bug Fixes
 
+- fix: copy mtime [[#535](https://github.com/opencloud-eu/reva/pull/535)]
 - Fix concurrent access to app tokens [[#527](https://github.com/opencloud-eu/reva/pull/527)]
+- Fix missing events when changing files on disk with watch_fs enabled [[#530](https://github.com/opencloud-eu/reva/pull/530)]
 
 ### 📦️ Dependencies
 
