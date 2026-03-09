@@ -104,7 +104,7 @@ func calculateHash(randomString string, flags int, salt string) hashpkg.Hash {
 	hash := md5.New()
 	_, _ = hash.Write([]byte(randomString))
 	_, _ = hash.Write([]byte(salt))
-	_, _ = hash.Write([]byte(fmt.Sprintf("%04x", flags)))
+	_, _ = fmt.Fprintf(hash, "%04x", flags)
 	return hash
 }
 

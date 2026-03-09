@@ -459,8 +459,7 @@ var _ = Describe("PublicShareProvider", func() {
 				Quicklink:   true,
 				Description: "Quicklink",
 			}
-			var links = []*link.PublicShare{}
-			links = append(links, existingLink)
+			links := []*link.PublicShare{existingLink}
 
 			// confirm that list public shares is called with the correct filters
 			manager.

@@ -217,7 +217,16 @@ var _ = Describe("group providers", func() {
 
 	var assertFindGroupsResponses = func() {
 		It("finds groups by displayname", func() {
-			res, err := serviceClient.FindGroups(ctx, &grouppb.FindGroupsRequest{Filter: "Physics Lovers"})
+			res, err := serviceClient.FindGroups(ctx, &grouppb.FindGroupsRequest{
+				Filters: []*grouppb.Filter{
+					&grouppb.Filter{
+						Type: grouppb.Filter_TYPE_QUERY,
+						Term: &grouppb.Filter_Query{
+							Query: "Physics Lovers",
+						},
+					},
+				},
+			})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(len(res.Groups)).To(Equal(1))
 			group := res.Groups[0]
@@ -225,7 +234,16 @@ var _ = Describe("group providers", func() {
 		})
 
 		It("finds groups by name", func() {
-			res, err := serviceClient.FindGroups(ctx, &grouppb.FindGroupsRequest{Filter: "physics-lovers"})
+			res, err := serviceClient.FindGroups(ctx, &grouppb.FindGroupsRequest{
+				Filters: []*grouppb.Filter{
+					&grouppb.Filter{
+						Type: grouppb.Filter_TYPE_QUERY,
+						Term: &grouppb.Filter_Query{
+							Query: "physics-lovers",
+						},
+					},
+				},
+			})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(len(res.Groups)).To(Equal(1))
 			group := res.Groups[0]
@@ -233,7 +251,16 @@ var _ = Describe("group providers", func() {
 		})
 
 		It("finds groups by id", func() {
-			res, err := serviceClient.FindGroups(ctx, &grouppb.FindGroupsRequest{Filter: "262982c1-2362-4afa-bfdf-8cbfef64a06e"})
+			res, err := serviceClient.FindGroups(ctx, &grouppb.FindGroupsRequest{
+				Filters: []*grouppb.Filter{
+					&grouppb.Filter{
+						Type: grouppb.Filter_TYPE_QUERY,
+						Term: &grouppb.Filter_Query{
+							Query: "262982c1-2362-4afa-bfdf-8cbfef64a06e",
+						},
+					},
+				},
+			})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(len(res.Groups)).To(Equal(1))
 			group := res.Groups[0]

@@ -59,9 +59,10 @@ func shareListReceivedCommand() *command {
 				"Grantee.Idp", "Grantee.OpaqueId", "Created", "Updated", "State"})
 			for _, s := range shareRes.Shares {
 				var idp, opaque string
-				if s.Share.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_USER {
+				switch s.Share.Grantee.Type {
+				case provider.GranteeType_GRANTEE_TYPE_USER:
 					idp, opaque = s.Share.Grantee.GetUserId().Idp, s.Share.Grantee.GetUserId().OpaqueId
-				} else if s.Share.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_GROUP {
+				case provider.GranteeType_GRANTEE_TYPE_GROUP:
 					idp, opaque = s.Share.Grantee.GetGroupId().Idp, s.Share.Grantee.GetGroupId().OpaqueId
 				}
 				t.AppendRows([]table.Row{

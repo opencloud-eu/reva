@@ -22,7 +22,6 @@ import (
 	"fmt"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
-	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	storage "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
 	"github.com/opencloud-eu/reva/v2/pkg/sdk"
@@ -89,7 +88,7 @@ func (action *DownloadAction) Download(fileInfo *storage.ResourceInfo) ([]byte, 
 
 func (action *DownloadAction) initiateDownload(fileInfo *storage.ResourceInfo) (*gateway.InitiateFileDownloadResponse, error) {
 	// Initiating a download request gets us the download endpoint for the specified resource
-	req := &provider.InitiateFileDownloadRequest{Ref: &provider.Reference{ResourceId: fileInfo.Id}}
+	req := &storage.InitiateFileDownloadRequest{Ref: &storage.Reference{ResourceId: fileInfo.Id}}
 	res, err := action.session.Client().InitiateFileDownload(action.session.Context(), req)
 	if err := net.CheckRPCInvocation("initiating download", res, err); err != nil {
 		return nil, err

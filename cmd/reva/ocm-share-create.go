@@ -177,9 +177,6 @@ func getAccessMethods(webdav, webapp, datatx bool, rol string) ([]*ocm.AccessMet
 		}
 		m = append(m, ocmshare.NewWebappAccessMethod(v))
 	}
-	if datatx {
-		m = append(m, ocmshare.NewTransferAccessMethod())
-	}
 	return m, nil
 }
 

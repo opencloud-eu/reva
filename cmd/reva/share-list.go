@@ -81,9 +81,10 @@ func shareListCommand() *command {
 
 			for _, s := range shareRes.Shares {
 				var idp, opaque string
-				if s.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_USER {
+				switch s.Grantee.Type {
+				case provider.GranteeType_GRANTEE_TYPE_USER:
 					idp, opaque = s.Grantee.GetUserId().Idp, s.Grantee.GetUserId().OpaqueId
-				} else if s.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_GROUP {
+				case provider.GranteeType_GRANTEE_TYPE_GROUP:
 					idp, opaque = s.Grantee.GetGroupId().Idp, s.Grantee.GetGroupId().OpaqueId
 				}
 				t.AppendRows([]table.Row{

@@ -17,7 +17,7 @@ require (
 	github.com/cheggaaa/pb/v3 v3.1.7
 	github.com/coreos/go-oidc/v3 v3.17.0
 	github.com/cs3org/cato v0.0.0-20200828125504-e418fc54dd5e
-	github.com/cs3org/go-cs3apis v0.0.0-20250908152307-4ca807afe54e
+	github.com/cs3org/go-cs3apis v0.0.0-20260130145416-2dc593dc27e7
 	github.com/dgraph-io/ristretto v0.2.0
 	github.com/emvi/iso-639-1 v1.1.1
 	github.com/eventials/go-tus v0.0.0-20220610120217-05d0564bb571
@@ -100,7 +100,7 @@ require (
 	golang.org/x/term v0.40.0
 	golang.org/x/text v0.34.0
 	google.golang.org/genproto v0.0.0-20250303144028-a0af3efb3deb
-	google.golang.org/grpc v1.79.1
+	google.golang.org/grpc v1.79.2
 	google.golang.org/protobuf v1.36.11
 )
 
