@@ -1,5 +1,31 @@
 # Changelog
 
+## [2.42.5](https://github.com/opencloud-eu/reva/releases/tag/v2.42.5) - 2026-03-09
+
+### ❤️ Thanks to all contributors! ❤️
+
+@aduffeck, @micbar, @rhafer
+
+### 🐛 Bug Fixes
+
+- fix: copy mtime [[#535](https://github.com/opencloud-eu/reva/pull/535)]
+- Fix concurrent access to app tokens [[#527](https://github.com/opencloud-eu/reva/pull/527)]
+- Fix missing events when changing files on disk with watch_fs enabled [[#530](https://github.com/opencloud-eu/reva/pull/530)]
+
+### 📦️ Dependencies
+
+- chore(deps): bump google.golang.org/grpc from 1.79.1 to 1.79.2 [[#548](https://github.com/opencloud-eu/reva/pull/548)]
+- chore(deps): bump go.etcd.io/etcd/client/v3 from 3.6.7 to 3.6.8 [[#546](https://github.com/opencloud-eu/reva/pull/546)]
+- chore(deps): bump github.com/mattn/go-sqlite3 from 1.14.33 to 1.14.34 [[#544](https://github.com/opencloud-eu/reva/pull/544)]
+- chore(deps): bump go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc from 1.40.0 to 1.41.0 [[#543](https://github.com/opencloud-eu/reva/pull/543)]
+- chore(deps): bump google.golang.org/grpc from 1.78.0 to 1.79.1 [[#542](https://github.com/opencloud-eu/reva/pull/542)]
+- chore(deps): bump golang.org/x/crypto from 0.47.0 to 0.48.0 [[#539](https://github.com/opencloud-eu/reva/pull/539)]
+- chore(deps): bump golang.org/x/oauth2 from 0.34.0 to 0.35.0 [[#537](https://github.com/opencloud-eu/reva/pull/537)]
+- chore(deps): bump github.com/cloudflare/circl from 1.6.1 to 1.6.3 in the go_modules group across 1 directory [[#538](https://github.com/opencloud-eu/reva/pull/538)]
+- chore(deps): bump filippo.io/edwards25519 from 1.1.0 to 1.1.1 in the go_modules group across 1 directory [[#534](https://github.com/opencloud-eu/reva/pull/534)]
+- chore(deps): bump golang.org/x/term from 0.39.0 to 0.40.0 [[#533](https://github.com/opencloud-eu/reva/pull/533)]
+- chore(deps): bump github.com/go-chi/chi/v5 from 5.2.4 to 5.2.5 [[#531](https://github.com/opencloud-eu/reva/pull/531)]
+
 ## [2.42.4](https://github.com/opencloud-eu/reva/releases/tag/v2.42.4) - 2026-02-12
 
 ### ❤️ Thanks to all contributors! ❤️
