@@ -6,7 +6,9 @@
 
 @rhafer
 
+### 📦️ Dependencies
 
+- chore(deps): bump go.opentelemetry.io/otel/trace from 1.41.0 to 1.42.0 [[#550](https://github.com/opencloud-eu/reva/pull/550)]
 
 ## [2.42.5](https://github.com/opencloud-eu/reva/releases/tag/v2.42.5) - 2026-03-09
 
