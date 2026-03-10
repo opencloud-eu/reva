@@ -1,5 +1,5 @@
 variables:
-  - &golang_image 'docker.io/golang:1.24'
+  - &golang_image 'docker.io/golang:1.25'
   - &alpine_image 'owncloudci/alpine:latest'
   - &behat_image 'cs3org/behat:latest'
   - &ldap_image 'osixia/openldap:1.3.0'
