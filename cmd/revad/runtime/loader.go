@@ -32,7 +32,6 @@ import (
 	_ "github.com/opencloud-eu/reva/v2/pkg/appauth/manager/loader"
 	_ "github.com/opencloud-eu/reva/v2/pkg/auth/manager/loader"
 	_ "github.com/opencloud-eu/reva/v2/pkg/auth/registry/loader"
-	_ "github.com/opencloud-eu/reva/v2/pkg/cbox/loader"
 	_ "github.com/opencloud-eu/reva/v2/pkg/datatx/manager/loader"
 	_ "github.com/opencloud-eu/reva/v2/pkg/group/manager/loader"
 	_ "github.com/opencloud-eu/reva/v2/pkg/metrics/driver/loader"

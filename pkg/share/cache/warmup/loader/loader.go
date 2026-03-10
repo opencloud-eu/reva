@@ -18,8 +18,5 @@
 
 package loader
 
-import (
-	// Load share cache drivers.
-	_ "github.com/opencloud-eu/reva/v2/pkg/share/cache/warmup/cbox"
-	// Add your own here
-)
+// Load share cache drivers.
+// Add your own here
