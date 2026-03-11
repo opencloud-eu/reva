@@ -43,8 +43,6 @@ import (
 	"github.com/opencloud-eu/reva/v2/pkg/rhttp/global"
 	"github.com/opencloud-eu/reva/v2/pkg/rhttp/router"
 	"github.com/opencloud-eu/reva/v2/pkg/signedurl"
-	"github.com/opencloud-eu/reva/v2/pkg/storage/favorite"
-	"github.com/opencloud-eu/reva/v2/pkg/storage/favorite/registry"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/templates"
 	"github.com/opencloud-eu/reva/v2/pkg/utils"
 	"github.com/rs/zerolog"
@@ -61,12 +59,11 @@ func init() {
 }
 
 type svc struct {
-	c                *config.Config
-	webDavHandler    *WebDavHandler
-	davHandler       *DavHandler
-	favoritesManager favorite.Manager
-	client           *http.Client
-	gatewaySelector  pool.Selectable[gateway.GatewayAPIClient]
+	c               *config.Config
+	webDavHandler   *WebDavHandler
+	davHandler      *DavHandler
+	client          *http.Client
+	gatewaySelector pool.Selectable[gateway.GatewayAPIClient]
 	// LockSystem is the lock management system.
 	LockSystem          LockSystem
 	userIdentifierCache *ttlcache.Cache
@@ -78,12 +75,6 @@ func (s *svc) Config() *config.Config {
 	return s.c
 }
 
-func getFavoritesManager(c *config.Config) (favorite.Manager, error) {
-	if f, ok := registry.NewFuncs[c.FavoriteStorageDriver]; ok {
-		return f(c.FavoriteStorageDrivers[c.FavoriteStorageDriver])
-	}
-	return nil, errtypes.NotFound("driver not found: " + c.FavoriteStorageDriver)
-}
 func getLockSystem(c *config.Config) (LockSystem, error) {
 	// TODO in memory implementation
 	selector, err := pool.GatewaySelector(c.GatewaySvc)
@@ -102,20 +93,16 @@ func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) 
 
 	conf.Init()
 
-	fm, err := getFavoritesManager(conf)
-	if err != nil {
-		return nil, err
-	}
 	ls, err := getLockSystem(conf)
 	if err != nil {
 		return nil, err
 	}
 
-	return NewWith(conf, fm, ls, log, nil)
+	return NewWith(conf, ls, log, nil)
 }
 
 // NewWith returns a new ocdav service
-func NewWith(conf *config.Config, fm favorite.Manager, ls LockSystem, _ *zerolog.Logger, selector pool.Selectable[gateway.GatewayAPIClient]) (global.Service, error) {
+func NewWith(conf *config.Config, ls LockSystem, _ *zerolog.Logger, selector pool.Selectable[gateway.GatewayAPIClient]) (global.Service, error) {
 	// be safe - init the conf again
 	conf.Init()
 
@@ -137,7 +124,6 @@ func NewWith(conf *config.Config, fm favorite.Manager, ls LockSystem, _ *zerolog
 			rhttp.Insecure(conf.Insecure),
 		),
 		gatewaySelector:     selector,
-		favoritesManager:    fm,
 		LockSystem:          ls,
 		userIdentifierCache: ttlcache.NewCache(),
 		nameValidators:      ValidatorsFromConfig(conf),
