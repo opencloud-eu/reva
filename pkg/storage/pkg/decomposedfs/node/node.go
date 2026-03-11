@@ -65,7 +65,6 @@ func init() {
 const (
 	LockdiscoveryKey = "lockdiscovery"
 	FavoriteKey      = "http://owncloud.org/ns/favorite"
-	AllFavoritesKey  = "allfavorites"
 	ShareTypesKey    = "http://owncloud.org/ns/share-types"
 	ChecksumsKey     = "http://owncloud.org/ns/checksums"
 	UserShareType    = "0"
@@ -724,10 +723,10 @@ func (n *Node) SetEtag(ctx context.Context, val string) (err error) {
 }
 
 // SetFavorite sets the favorite for the current user
-func (n *Node) SetFavorite(ctx context.Context, uid *userpb.UserId, val string) error {
+func (n *Node) SetFavorite(ctx context.Context, uid *userpb.UserId) error {
 	// the favorite flag is specific to the user, so we need to incorporate the userid
 	fa := prefixes.FavoriteKey(uid)
-	return n.SetXattrString(ctx, fa, val)
+	return n.SetXattrString(ctx, fa, "1")
 }
 
 // UnsetFavorite unsets the favorite for the current user
@@ -849,7 +848,7 @@ func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissi
 			// the favorite flag is specific to the user, so we need to incorporate the userid
 			if uid := u.GetId(); uid != nil {
 				fa := prefixes.FavoriteKey(uid)
-				if val, err := n.XattrString(ctx, fa); err == nil {
+				if val, err := n.XattrString(ctx, fa); err == nil && val == "1" {
 					sublog.Debug().
 						Str("favorite", fa).
 						Msg("found favorite flag")
@@ -862,27 +861,19 @@ func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissi
 			sublog.Error().Err(errtypes.UserRequired("userrequired")).Msg("error getting user from ctx")
 		}
 	}
-	if _, ok := mdKeysMap[AllFavoritesKey]; returnAllMetadata || ok {
-		favorites := []string{}
-		attrs, err := n.Xattrs(ctx)
-		if err != nil {
-			sublog.Error().Err(err).Msg("error getting list of extended attributes")
-		} else {
-			for key, value := range attrs {
-				if string(value) == "1" && strings.HasPrefix(key, prefixes.FavPrefix) {
-					favorites = append(favorites, key[len(prefixes.FavPrefix):])
-				}
-			}
-			metadata[AllFavoritesKey] = strings.Join(favorites, ",")
-		}
+
+	// read favorites
+	if err = readFavoritesIntoOpaque(ctx, n, ri); err != nil {
+		sublog.Debug().Err(err).Msg("error reading favorites")
 	}
+
 	// read locks
 	// FIXME move to fieldmask
 	if _, ok := mdKeysMap[LockdiscoveryKey]; returnAllMetadata || ok {
 		if n.hasLocks(ctx) {
 			err = readLocksIntoOpaque(ctx, n, ri)
 			if err != nil {
-				sublog.Debug().Err(errtypes.InternalError("lockfail"))
+				sublog.Debug().Err(errtypes.InternalError("lockfail")).Msg("error reading locks")
 			}
 		}
 	}
@@ -1496,4 +1487,33 @@ func ReadChildNodeFromLink(ctx context.Context, path string) (string, error) {
 	nodeID := strings.TrimLeft(link, "/.")
 	nodeID = strings.ReplaceAll(nodeID, "/", "")
 	return nodeID, nil
+}
+
+func readFavoritesIntoOpaque(ctx context.Context, n *Node, ri *provider.ResourceInfo) error {
+	attrs, err := n.Xattrs(ctx)
+	if err != nil {
+		return err
+	}
+
+	favorites := []string{}
+	for key, value := range attrs {
+		if string(value) == "1" && strings.HasPrefix(key, prefixes.FavPrefix) {
+			favorites = append(favorites, key[len(prefixes.FavPrefix):])
+		}
+	}
+
+	var b []byte
+	if b, err = json.Marshal(favorites); err != nil {
+		appctx.GetLogger(ctx).Error().Err(err).Msg("Decomposedfs: could not marshal favorites")
+	}
+	if ri.Opaque == nil {
+		ri.Opaque = &types.Opaque{
+			Map: map[string]*types.OpaqueEntry{},
+		}
+	}
+	ri.Opaque.Map["favorites"] = &types.OpaqueEntry{
+		Decoder: "json",
+		Value:   b,
+	}
+	return nil
 }

@@ -1055,7 +1055,7 @@ func (fs *Decomposedfs) AddFavorite(ctx context.Context, ref *provider.Reference
 		return errtypes.PermissionDenied("stat")
 	}
 
-	return n.SetFavorite(ctx, uid, "1")
+	return n.SetFavorite(ctx, uid)
 }
 
 // RemoveFavorite removes a favorite

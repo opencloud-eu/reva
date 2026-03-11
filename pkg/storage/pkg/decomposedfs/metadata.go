@@ -22,14 +22,11 @@ import (
 	"context"
 	"path/filepath"
 
-	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/opencloud-eu/reva/v2/pkg/appctx"
-	ctxpkg "github.com/opencloud-eu/reva/v2/pkg/ctx"
 	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata/prefixes"
-	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/node"
 	"github.com/opencloud-eu/reva/v2/pkg/storagespace"
 	"github.com/pkg/errors"
 )
@@ -42,8 +39,6 @@ func (fs *Decomposedfs) SetArbitraryMetadata(ctx context.Context, ref *provider.
 	if err != nil {
 		return errors.Wrap(err, "Decomposedfs: error resolving ref")
 	}
-	sublog := appctx.GetLogger(ctx).With().Str("spaceid", n.SpaceID).Str("nodeid", n.ID).Logger()
-
 	if !n.Exists {
 		err = errtypes.NotFound(filepath.Join(n.ParentID, n.Name))
 		return err
@@ -87,25 +82,6 @@ func (fs *Decomposedfs) SetArbitraryMetadata(ctx context.Context, ref *provider.
 			delete(md.Metadata, "etag")
 			if err := n.SetEtag(ctx, val); err != nil {
 				errs = append(errs, errors.Wrap(err, "could not set etag"))
-			}
-		}
-		if val, ok := md.Metadata[node.FavoriteKey]; ok {
-			delete(md.Metadata, node.FavoriteKey)
-			if u, ok := ctxpkg.ContextGetUser(ctx); ok {
-				if uid := u.GetId(); uid != nil {
-					if err := n.SetFavorite(ctx, uid, val); err != nil {
-						sublog.Error().Err(err).
-							Interface("user", u).
-							Msg("could not set favorite flag")
-						errs = append(errs, errors.Wrap(err, "could not set favorite flag"))
-					}
-				} else {
-					sublog.Error().Interface("user", u).Msg("user has no id")
-					errs = append(errs, errors.Wrap(errtypes.UserRequired("userrequired"), "user has no id"))
-				}
-			} else {
-				sublog.Error().Interface("user", u).Msg("error getting user from ctx")
-				errs = append(errs, errors.Wrap(errtypes.UserRequired("userrequired"), "error getting user from ctx"))
 			}
 		}
 	}
@@ -166,46 +142,14 @@ func (fs *Decomposedfs) UnsetArbitraryMetadata(ctx context.Context, ref *provide
 
 	errs := []error{}
 	for _, k := range keys {
-		switch k {
-		case node.FavoriteKey:
-			// the favorite flag is specific to the user, so we need to incorporate the userid
-			u, ok := ctxpkg.ContextGetUser(ctx)
-			if !ok {
-				sublog.Error().
-					Interface("user", u).
-					Msg("error getting user from ctx")
-				errs = append(errs, errors.Wrap(errtypes.UserRequired("userrequired"), "error getting user from ctx"))
-				continue
+		if err = n.RemoveXattr(ctx, prefixes.MetadataPrefix+k, true); err != nil {
+			if metadata.IsAttrUnset(err) {
+				continue // already gone, ignore
 			}
-			var uid *userpb.UserId
-			if uid = u.GetId(); uid == nil || uid.OpaqueId == "" {
-				sublog.Error().
-					Interface("user", u).
-					Msg("user has no id")
-				errs = append(errs, errors.Wrap(errtypes.UserRequired("userrequired"), "user has no id"))
-				continue
-			}
-			fa := prefixes.FavoriteKey(uid)
-			if err := n.RemoveXattr(ctx, fa, true); err != nil {
-				if metadata.IsAttrUnset(err) {
-					continue // already gone, ignore
-				}
-				sublog.Error().Err(err).
-					Interface("user", u).
-					Str("key", fa).
-					Msg("could not unset favorite flag")
-				errs = append(errs, errors.Wrap(err, "could not unset favorite flag"))
-			}
-		default:
-			if err = n.RemoveXattr(ctx, prefixes.MetadataPrefix+k, true); err != nil {
-				if metadata.IsAttrUnset(err) {
-					continue // already gone, ignore
-				}
-				sublog.Error().Err(err).
-					Str("key", k).
-					Msg("could not unset metadata")
-				errs = append(errs, errors.Wrap(err, "could not unset metadata"))
-			}
+			sublog.Error().Err(err).
+				Str("key", k).
+				Msg("could not unset metadata")
+			errs = append(errs, errors.Wrap(err, "could not unset metadata"))
 		}
 	}
 	switch len(errs) {
