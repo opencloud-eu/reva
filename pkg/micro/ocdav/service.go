@@ -33,7 +33,6 @@ import (
 	"github.com/opencloud-eu/reva/v2/internal/http/services/owncloud/ocdav"
 	"github.com/opencloud-eu/reva/v2/pkg/rgrpc/todo/pool"
 	"github.com/opencloud-eu/reva/v2/pkg/rhttp/global"
-	"github.com/opencloud-eu/reva/v2/pkg/storage/favorite/memory"
 	rtrace "github.com/opencloud-eu/reva/v2/pkg/trace"
 	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
@@ -82,7 +81,7 @@ func Service(opts ...Option) (micro.Service, error) {
 		server.RegisterInterval(sopts.RegisterInterval),
 	)
 
-	revaService, err := ocdav.NewWith(&sopts.config, sopts.FavoriteManager, sopts.lockSystem, &sopts.Logger, sopts.GatewaySelector)
+	revaService, err := ocdav.NewWith(&sopts.config, sopts.lockSystem, &sopts.Logger, sopts.GatewaySelector)
 	if err != nil {
 		return nil, err
 	}
@@ -129,9 +128,6 @@ func setDefaults(sopts *Options) error {
 			return errors.Wrap(err, "error getting gateway selector")
 		}
 		sopts.lockSystem = ocdav.NewCS3LS(selector)
-	}
-	if sopts.FavoriteManager == nil {
-		sopts.FavoriteManager, _ = memory.New(map[string]interface{}{})
 	}
 	if !strings.HasPrefix(sopts.config.Prefix, "/") {
 		sopts.config.Prefix = "/" + sopts.config.Prefix
