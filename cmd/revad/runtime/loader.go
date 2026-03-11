@@ -44,7 +44,6 @@ import (
 	_ "github.com/opencloud-eu/reva/v2/pkg/rhttp/datatx/manager/loader"
 	_ "github.com/opencloud-eu/reva/v2/pkg/share/cache/warmup/loader"
 	_ "github.com/opencloud-eu/reva/v2/pkg/share/manager/loader"
-	_ "github.com/opencloud-eu/reva/v2/pkg/storage/favorite/loader"
 	_ "github.com/opencloud-eu/reva/v2/pkg/storage/fs/loader"
 	_ "github.com/opencloud-eu/reva/v2/pkg/storage/registry/loader"
 	_ "github.com/opencloud-eu/reva/v2/pkg/token/manager/loader"

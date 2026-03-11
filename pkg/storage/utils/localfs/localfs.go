@@ -722,6 +722,14 @@ func (fs *localfs) GetLock(ctx context.Context, ref *provider.Reference) (*provi
 	return nil, errtypes.NotSupported("unimplemented")
 }
 
+func (fs *localfs) AddFavorite(ctx context.Context, ref *provider.Reference, userID *userpb.UserId) error {
+	return errtypes.NotSupported("AddFavorite not implemented")
+}
+
+func (fs *localfs) RemoveFavorite(ctx context.Context, ref *provider.Reference, userID *userpb.UserId) error {
+	return errtypes.NotSupported("RemoveFavorite not implemented")
+}
+
 // SetLock puts a lock on the given reference
 func (fs *localfs) SetLock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error {
 	return errtypes.NotSupported("unimplemented")

@@ -36,11 +36,8 @@ import (
 	"github.com/opencloud-eu/reva/v2/internal/http/services/owncloud/ocdav/propfind"
 	"github.com/opencloud-eu/reva/v2/internal/http/services/owncloud/ocdav/spacelookup"
 	"github.com/opencloud-eu/reva/v2/pkg/appctx"
-	ctxpkg "github.com/opencloud-eu/reva/v2/pkg/ctx"
 	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
-	"github.com/opencloud-eu/reva/v2/pkg/permission"
 	rstatus "github.com/opencloud-eu/reva/v2/pkg/rgrpc/status"
-	"github.com/opencloud-eu/reva/v2/pkg/utils"
 	"github.com/rs/zerolog"
 )
 
@@ -214,30 +211,6 @@ func (s *svc) handleProppatch(ctx context.Context, w http.ResponseWriter, r *htt
 					errors.HandleWebdavError(&log, w, b, err)
 					return nil, nil, false
 				}
-				if key == "http://owncloud.org/ns/favorite" {
-					statRes, err := client.Stat(ctx, &provider.StatRequest{Ref: ref})
-					if err != nil {
-						w.WriteHeader(http.StatusInternalServerError)
-						return nil, nil, false
-					}
-					currentUser := ctxpkg.ContextMustGetUser(ctx)
-					ok, err := utils.CheckPermission(ctx, permission.WriteFavorites, client)
-					if err != nil {
-						log.Error().Err(err).Msg("error checking permission")
-						w.WriteHeader(http.StatusInternalServerError)
-						return nil, nil, false
-					}
-					if !ok {
-						log.Info().Interface("user", currentUser).Msg("user not allowed to unset favorite")
-						w.WriteHeader(http.StatusForbidden)
-						return nil, nil, false
-					}
-					err = s.favoritesManager.UnsetFavorite(ctx, currentUser.Id, statRes.Info)
-					if err != nil {
-						w.WriteHeader(http.StatusInternalServerError)
-						return nil, nil, false
-					}
-				}
 				removedProps = append(removedProps, propNameXML)
 			} else {
 				sreq.ArbitraryMetadata.Metadata[key] = value
@@ -282,31 +255,6 @@ func (s *svc) handleProppatch(ctx context.Context, w http.ResponseWriter, r *htt
 
 				acceptedProps = append(acceptedProps, propNameXML)
 				delete(sreq.ArbitraryMetadata.Metadata, key)
-
-				if key == "http://owncloud.org/ns/favorite" {
-					statRes, err := client.Stat(ctx, &provider.StatRequest{Ref: ref})
-					if err != nil || statRes.Info == nil {
-						w.WriteHeader(http.StatusInternalServerError)
-						return nil, nil, false
-					}
-					currentUser := ctxpkg.ContextMustGetUser(ctx)
-					ok, err := utils.CheckPermission(ctx, permission.WriteFavorites, client)
-					if err != nil {
-						log.Error().Err(err).Msg("error checking permission")
-						w.WriteHeader(http.StatusInternalServerError)
-						return nil, nil, false
-					}
-					if !ok {
-						log.Info().Interface("user", currentUser).Msg("user not allowed to set favorite")
-						w.WriteHeader(http.StatusForbidden)
-						return nil, nil, false
-					}
-					err = s.favoritesManager.SetFavorite(ctx, currentUser.Id, statRes.Info)
-					if err != nil {
-						w.WriteHeader(http.StatusInternalServerError)
-						return nil, nil, false
-					}
-				}
 			}
 		}
 		// FIXME: in case of error, need to set all properties back to the original state,

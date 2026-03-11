@@ -648,6 +648,46 @@ func (s *svc) CreateContainer(ctx context.Context, req *provider.CreateContainer
 	return res, nil
 }
 
+func (s *svc) AddFavorite(ctx context.Context, req *provider.AddFavoriteRequest) (*provider.AddFavoriteResponse, error) {
+	var c provider.ProviderAPIClient
+	var err error
+	c, _, req.Ref, err = s.findAndUnwrap(ctx, req.Ref)
+	if err != nil {
+		return &provider.AddFavoriteResponse{
+			Status: status.NewStatusFromErrType(ctx, fmt.Sprintf("gateway could not find space for ref=%+v", req.Ref), err),
+		}, nil
+	}
+
+	res, err := c.AddFavorite(ctx, req)
+	if err != nil {
+		return &provider.AddFavoriteResponse{
+			Status: status.NewStatusFromErrType(ctx, "gateway could not call AddFavorite", err),
+		}, nil
+	}
+
+	return res, nil
+}
+
+func (s *svc) RemoveFavorite(ctx context.Context, req *provider.RemoveFavoriteRequest) (*provider.RemoveFavoriteResponse, error) {
+	var c provider.ProviderAPIClient
+	var err error
+	c, _, req.Ref, err = s.findAndUnwrap(ctx, req.Ref)
+	if err != nil {
+		return &provider.RemoveFavoriteResponse{
+			Status: status.NewStatusFromErrType(ctx, fmt.Sprintf("gateway could not find space for ref=%+v", req.Ref), err),
+		}, nil
+	}
+
+	res, err := c.RemoveFavorite(ctx, req)
+	if err != nil {
+		return &provider.RemoveFavoriteResponse{
+			Status: status.NewStatusFromErrType(ctx, "gateway could not call RemoveFavorite", err),
+		}, nil
+	}
+
+	return res, nil
+}
+
 func (s *svc) TouchFile(ctx context.Context, req *provider.TouchFileRequest) (*provider.TouchFileResponse, error) {
 	var c provider.ProviderAPIClient
 	var err error

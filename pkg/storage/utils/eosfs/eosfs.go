@@ -281,6 +281,14 @@ func (fs *eosfs) Shutdown(ctx context.Context) error {
 	return nil
 }
 
+func (fs *eosfs) AddFavorite(ctx context.Context, ref *provider.Reference, userID *userpb.UserId) error {
+	return errtypes.NotSupported("AddFavorite not implemented")
+}
+
+func (fs *eosfs) RemoveFavorite(ctx context.Context, ref *provider.Reference, userID *userpb.UserId) error {
+	return errtypes.NotSupported("RemoveFavorite not implemented")
+}
+
 func getUser(ctx context.Context) (*userpb.User, error) {
 	u, ok := ctxpkg.ContextGetUser(ctx)
 	if !ok {

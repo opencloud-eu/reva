@@ -222,6 +222,79 @@ func (_c *GatewayAPIClient_AddAppProvider_Call) RunAndReturn(run func(context.Co
 	return _c
 }
 
+// AddFavorite provides a mock function with given fields: ctx, in, opts
+func (_m *GatewayAPIClient) AddFavorite(ctx context.Context, in *providerv1beta1.AddFavoriteRequest, opts ...grpc.CallOption) (*providerv1beta1.AddFavoriteResponse, error) {
+	var tmpRet mock.Arguments
+	if len(opts) > 0 {
+		tmpRet = _m.Called(ctx, in, opts)
+	} else {
+		tmpRet = _m.Called(ctx, in)
+	}
+	ret := tmpRet
+
+	if len(ret) == 0 {
+		panic("no return value specified for AddFavorite")
+	}
+
+	var r0 *providerv1beta1.AddFavoriteResponse
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, *providerv1beta1.AddFavoriteRequest, ...grpc.CallOption) (*providerv1beta1.AddFavoriteResponse, error)); ok {
+		return rf(ctx, in, opts...)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, *providerv1beta1.AddFavoriteRequest, ...grpc.CallOption) *providerv1beta1.AddFavoriteResponse); ok {
+		r0 = rf(ctx, in, opts...)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*providerv1beta1.AddFavoriteResponse)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, *providerv1beta1.AddFavoriteRequest, ...grpc.CallOption) error); ok {
+		r1 = rf(ctx, in, opts...)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// GatewayAPIClient_AddFavorite_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'AddFavorite'
+type GatewayAPIClient_AddFavorite_Call struct {
+	*mock.Call
+}
+
+// AddFavorite is a helper method to define mock.On call
+//   - ctx context.Context
+//   - in *providerv1beta1.AddFavoriteRequest
+//   - opts ...grpc.CallOption
+func (_e *GatewayAPIClient_Expecter) AddFavorite(ctx interface{}, in interface{}, opts ...interface{}) *GatewayAPIClient_AddFavorite_Call {
+	return &GatewayAPIClient_AddFavorite_Call{Call: _e.mock.On("AddFavorite",
+		append([]interface{}{ctx, in}, opts...)...)}
+}
+
+func (_c *GatewayAPIClient_AddFavorite_Call) Run(run func(ctx context.Context, in *providerv1beta1.AddFavoriteRequest, opts ...grpc.CallOption)) *GatewayAPIClient_AddFavorite_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		variadicArgs := make([]grpc.CallOption, len(args)-2)
+		for i, a := range args[2:] {
+			if a != nil {
+				variadicArgs[i] = a.(grpc.CallOption)
+			}
+		}
+		run(args[0].(context.Context), args[1].(*providerv1beta1.AddFavoriteRequest), variadicArgs...)
+	})
+	return _c
+}
+
+func (_c *GatewayAPIClient_AddFavorite_Call) Return(_a0 *providerv1beta1.AddFavoriteResponse, _a1 error) *GatewayAPIClient_AddFavorite_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *GatewayAPIClient_AddFavorite_Call) RunAndReturn(run func(context.Context, *providerv1beta1.AddFavoriteRequest, ...grpc.CallOption) (*providerv1beta1.AddFavoriteResponse, error)) *GatewayAPIClient_AddFavorite_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // Authenticate provides a mock function with given fields: ctx, in, opts
 func (_m *GatewayAPIClient) Authenticate(ctx context.Context, in *gatewayv1beta1.AuthenticateRequest, opts ...grpc.CallOption) (*gatewayv1beta1.AuthenticateResponse, error) {
 	var tmpRet mock.Arguments
@@ -5985,6 +6058,79 @@ func (_c *GatewayAPIClient_RefreshLock_Call) Return(_a0 *providerv1beta1.Refresh
 }
 
 func (_c *GatewayAPIClient_RefreshLock_Call) RunAndReturn(run func(context.Context, *providerv1beta1.RefreshLockRequest, ...grpc.CallOption) (*providerv1beta1.RefreshLockResponse, error)) *GatewayAPIClient_RefreshLock_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// RemoveFavorite provides a mock function with given fields: ctx, in, opts
+func (_m *GatewayAPIClient) RemoveFavorite(ctx context.Context, in *providerv1beta1.RemoveFavoriteRequest, opts ...grpc.CallOption) (*providerv1beta1.RemoveFavoriteResponse, error) {
+	var tmpRet mock.Arguments
+	if len(opts) > 0 {
+		tmpRet = _m.Called(ctx, in, opts)
+	} else {
+		tmpRet = _m.Called(ctx, in)
+	}
+	ret := tmpRet
+
+	if len(ret) == 0 {
+		panic("no return value specified for RemoveFavorite")
+	}
+
+	var r0 *providerv1beta1.RemoveFavoriteResponse
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, *providerv1beta1.RemoveFavoriteRequest, ...grpc.CallOption) (*providerv1beta1.RemoveFavoriteResponse, error)); ok {
+		return rf(ctx, in, opts...)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, *providerv1beta1.RemoveFavoriteRequest, ...grpc.CallOption) *providerv1beta1.RemoveFavoriteResponse); ok {
+		r0 = rf(ctx, in, opts...)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*providerv1beta1.RemoveFavoriteResponse)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, *providerv1beta1.RemoveFavoriteRequest, ...grpc.CallOption) error); ok {
+		r1 = rf(ctx, in, opts...)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// GatewayAPIClient_RemoveFavorite_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'RemoveFavorite'
+type GatewayAPIClient_RemoveFavorite_Call struct {
+	*mock.Call
+}
+
+// RemoveFavorite is a helper method to define mock.On call
+//   - ctx context.Context
+//   - in *providerv1beta1.RemoveFavoriteRequest
+//   - opts ...grpc.CallOption
+func (_e *GatewayAPIClient_Expecter) RemoveFavorite(ctx interface{}, in interface{}, opts ...interface{}) *GatewayAPIClient_RemoveFavorite_Call {
+	return &GatewayAPIClient_RemoveFavorite_Call{Call: _e.mock.On("RemoveFavorite",
+		append([]interface{}{ctx, in}, opts...)...)}
+}
+
+func (_c *GatewayAPIClient_RemoveFavorite_Call) Run(run func(ctx context.Context, in *providerv1beta1.RemoveFavoriteRequest, opts ...grpc.CallOption)) *GatewayAPIClient_RemoveFavorite_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		variadicArgs := make([]grpc.CallOption, len(args)-2)
+		for i, a := range args[2:] {
+			if a != nil {
+				variadicArgs[i] = a.(grpc.CallOption)
+			}
+		}
+		run(args[0].(context.Context), args[1].(*providerv1beta1.RemoveFavoriteRequest), variadicArgs...)
+	})
+	return _c
+}
+
+func (_c *GatewayAPIClient_RemoveFavorite_Call) Return(_a0 *providerv1beta1.RemoveFavoriteResponse, _a1 error) *GatewayAPIClient_RemoveFavorite_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *GatewayAPIClient_RemoveFavorite_Call) RunAndReturn(run func(context.Context, *providerv1beta1.RemoveFavoriteRequest, ...grpc.CallOption) (*providerv1beta1.RemoveFavoriteResponse, error)) *GatewayAPIClient_RemoveFavorite_Call {
 	_c.Call.Return(run)
 	return _c
 }

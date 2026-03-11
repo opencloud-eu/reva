@@ -18,6 +18,10 @@
 
 package prefixes
 
+import (
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+)
+
 // Declare a list of xattr keys
 
 // Currently,extended file attributes have four separated
@@ -102,3 +106,8 @@ const (
 	UserAcePrefix  string = "u:"
 	GroupAcePrefix string = "g:"
 )
+
+func FavoriteKey(uid *userpb.UserId) string {
+	// the favorite flag is specific to the user, so we need to incorporate the userid
+	return FavPrefix + uid.OpaqueId
+}

@@ -32,6 +32,7 @@ import (
 	"strings"
 
 	cephfs2 "github.com/ceph/go-ceph/cephfs"
+	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
@@ -600,6 +601,14 @@ func (fs *cephfs) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Refe
 	})
 
 	return getRevaError(err)
+}
+
+func (fs *cephfs) AddFavorite(ctx context.Context, ref *provider.Reference, userID *user.UserId) error {
+	return errtypes.NotSupported("AddFavorite not implemented")
+}
+
+func (fs *cephfs) RemoveFavorite(ctx context.Context, ref *provider.Reference, userID *user.UserId) error {
+	return errtypes.NotSupported("RemoveFavorite not implemented")
 }
 
 func (fs *cephfs) EmptyRecycle(ctx context.Context, ref *provider.Reference) error {

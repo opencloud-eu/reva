@@ -862,6 +862,16 @@ func (nc *StorageDriver) Unlock(ctx context.Context, ref *provider.Reference, lo
 	return errtypes.NotSupported("unimplemented")
 }
 
+// AddFavorite adds a favourite to a resource
+func (nc *StorageDriver) AddFavorite(ctx context.Context, ref *provider.Reference, userID *user.UserId) error {
+	return errtypes.NotSupported("AddFavorite not implemented")
+}
+
+// RemoveFavorite removes a favourite from a resource
+func (nc *StorageDriver) RemoveFavorite(ctx context.Context, ref *provider.Reference, userID *user.UserId) error {
+	return errtypes.NotSupported("RemoveFavorite not implemented")
+}
+
 // ListStorageSpaces as defined in the storage.FS interface
 func (nc *StorageDriver) ListStorageSpaces(ctx context.Context, f []*provider.ListStorageSpacesRequest_Filter, unrestricted bool) ([]*provider.StorageSpace, error) {
 	bodyStr, _ := json.Marshal(f)
