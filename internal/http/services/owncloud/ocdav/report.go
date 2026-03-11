@@ -23,14 +23,8 @@ import (
 	"io"
 	"net/http"
 
-	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
-	providerv1beta1 "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	"github.com/opencloud-eu/reva/v2/internal/http/services/owncloud/ocdav/net"
 	"github.com/opencloud-eu/reva/v2/internal/http/services/owncloud/ocdav/propfind"
 	"github.com/opencloud-eu/reva/v2/pkg/appctx"
-	ctxpkg "github.com/opencloud-eu/reva/v2/pkg/ctx"
-	"github.com/opencloud-eu/reva/v2/pkg/permission"
-	"github.com/opencloud-eu/reva/v2/pkg/utils"
 )
 
 const (
@@ -54,85 +48,11 @@ func (s *svc) handleReport(w http.ResponseWriter, r *http.Request, ns string) {
 		return
 	}
 
-	if rep.FilterFiles != nil {
-		s.doFilterFiles(w, r, rep.FilterFiles, ns)
-		return
-	}
-
-	// TODO(jfd): implement report
-
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
 func (s *svc) doSearchFiles(w http.ResponseWriter, r *http.Request, sf *reportSearchFiles) {
 	w.WriteHeader(http.StatusNotImplemented)
-}
-
-func (s *svc) doFilterFiles(w http.ResponseWriter, r *http.Request, ff *reportFilterFiles, namespace string) {
-	ctx := r.Context()
-	log := appctx.GetLogger(ctx)
-
-	if ff.Rules.Favorite {
-		// List the users favorite resources.
-		client, err := s.gatewaySelector.Next()
-		if err != nil {
-			log.Error().Err(err).Msg("error selecting next gateway client")
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-		currentUser := ctxpkg.ContextMustGetUser(ctx)
-		ok, err := utils.CheckPermission(ctx, permission.ListFavorites, client)
-		if err != nil {
-			log.Error().Err(err).Msg("error checking permission")
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-		if !ok {
-			log.Info().Interface("user", currentUser).Msg("user not allowed to list favorites")
-			w.WriteHeader(http.StatusForbidden)
-			return
-		}
-		favorites, err := s.favoritesManager.ListFavorites(ctx, currentUser.Id)
-		if err != nil {
-			log.Error().Err(err).Msg("error getting favorites")
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-
-		infos := make([]*providerv1beta1.ResourceInfo, 0, len(favorites))
-		for i := range favorites {
-			statRes, err := client.Stat(ctx, &providerv1beta1.StatRequest{Ref: &providerv1beta1.Reference{ResourceId: favorites[i]}})
-			if err != nil {
-				log.Error().Err(err).Msg("error getting resource info")
-				continue
-			}
-			if statRes.Status.Code != rpcv1beta1.Code_CODE_OK {
-				log.Error().Interface("stat_response", statRes).Msg("error getting resource info")
-				continue
-			}
-			infos = append(infos, statRes.Info)
-		}
-
-		prefer := net.ParsePrefer(r.Header.Get("prefer"))
-		returnMinimal := prefer[net.HeaderPreferReturn] == "minimal"
-
-		responsesXML, err := propfind.MultistatusResponse(ctx, &propfind.XML{Prop: ff.Prop}, infos, s.c.PublicURL, namespace, nil, returnMinimal, nil)
-		if err != nil {
-			log.Error().Err(err).Msg("error formatting propfind")
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-		w.Header().Set(net.HeaderDav, "1, 3, extended-mkcol")
-		w.Header().Set(net.HeaderContentType, "application/xml; charset=utf-8")
-		w.Header().Set(net.HeaderVary, net.HeaderPrefer)
-		if returnMinimal {
-			w.Header().Set(net.HeaderPreferenceApplied, "return=minimal")
-		}
-		w.WriteHeader(http.StatusMultiStatus)
-		if _, err := w.Write(responsesXML); err != nil {
-			log.Err(err).Msg("error writing response")
-		}
-	}
 }
 
 type report struct {
