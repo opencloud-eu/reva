@@ -23,6 +23,7 @@ import (
 	"io"
 	"net/url"
 
+	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	registry "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
 	tusd "github.com/tus/tusd/v2/pkg/handler"
@@ -115,6 +116,11 @@ type FS interface {
 	SetArbitraryMetadata(ctx context.Context, ref *provider.Reference, md *provider.ArbitraryMetadata) error
 	// UnsetArbitraryMetadata removes arbitraty metadata from a resource
 	UnsetArbitraryMetadata(ctx context.Context, ref *provider.Reference, keys []string) error
+
+	// AddFavorite adds a favorite to a resource
+	AddFavorite(ctx context.Context, ref *provider.Reference, userID *user.UserId) error
+	// RemoveFavorite removes a favorite from a resource
+	RemoveFavorite(ctx context.Context, ref *provider.Reference, userID *user.UserId) error
 
 	// Locks
 

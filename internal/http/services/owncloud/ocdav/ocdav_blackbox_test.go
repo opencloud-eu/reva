@@ -161,7 +161,7 @@ var _ = Describe("ocdav", func() {
 		sel := selector{
 			client: client,
 		}
-		handler, err = ocdav.NewWith(cfg, nil, ocdav.NewCS3LS(sel), nil, sel)
+		handler, err = ocdav.NewWith(cfg, ocdav.NewCS3LS(sel), nil, sel)
 		Expect(err).ToNot(HaveOccurred())
 
 		userspace = &cs3storageprovider.StorageSpace{

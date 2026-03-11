@@ -929,6 +929,14 @@ func (s *service) GetQuota(ctx context.Context, req *provider.GetQuotaRequest) (
 	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
 }
 
+func (s *service) AddFavorite(ctx context.Context, req *provider.AddFavoriteRequest) (*provider.AddFavoriteResponse, error) {
+	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
+}
+
+func (s *service) RemoveFavorite(ctx context.Context, req *provider.RemoveFavoriteRequest) (*provider.RemoveFavoriteResponse, error) {
+	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
+}
+
 // resolveToken returns the resource info for the publicly shared resource.
 func (s *service) resolveToken(ctx context.Context, share interface{}) (*provider.ResourceInfo, interface{}, error) {
 	gatewayClient, err := s.gatewaySelector.Next()

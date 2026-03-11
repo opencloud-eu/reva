@@ -264,3 +264,9 @@ func (c *cachedAPIClient) GetHome(ctx context.Context, in *provider.GetHomeReque
 func (c *cachedAPIClient) TouchFile(ctx context.Context, in *provider.TouchFileRequest, opts ...grpc.CallOption) (*provider.TouchFileResponse, error) {
 	return c.c.TouchFile(ctx, in, opts...)
 }
+func (c *cachedAPIClient) AddFavorite(ctx context.Context, in *provider.AddFavoriteRequest, opts ...grpc.CallOption) (*provider.AddFavoriteResponse, error) {
+	return c.c.AddFavorite(ctx, in, opts...)
+}
+func (c *cachedAPIClient) RemoveFavorite(ctx context.Context, in *provider.RemoveFavoriteRequest, opts ...grpc.CallOption) (*provider.RemoveFavoriteResponse, error) {
+	return c.c.RemoveFavorite(ctx, in, opts...)
+}

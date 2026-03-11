@@ -23,6 +23,7 @@ import (
 	"io"
 	"net/url"
 
+	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 
 	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
@@ -122,6 +123,14 @@ func (fs *hellofs) SetArbitraryMetadata(ctx context.Context, ref *provider.Refer
 // UnsetArbitraryMetadata removes arbitraty metadata from a resource
 func (fs *hellofs) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Reference, keys []string) error {
 	return errtypes.NotSupported("unimplemented")
+}
+
+func (fs *hellofs) AddFavorite(ctx context.Context, ref *provider.Reference, userID *user.UserId) error {
+	return errtypes.NotSupported("AddFavorite not implemented")
+}
+
+func (fs *hellofs) RemoveFavorite(ctx context.Context, ref *provider.Reference, userID *user.UserId) error {
+	return errtypes.NotSupported("RemoveFavorite not implemented")
 }
 
 // locks

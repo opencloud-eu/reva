@@ -23,6 +23,7 @@ import (
 	"io"
 	"net/url"
 
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	tusd "github.com/tus/tusd/v2/pkg/handler"
 
@@ -1079,6 +1080,60 @@ func (f *FS) DeleteStorageSpace(ctx context.Context, req *provider.DeleteStorage
 	}
 
 	res0 := f.next.DeleteStorageSpace(ctx, req)
+
+	for _, unhook := range unhooks {
+		if err := unhook(); err != nil {
+			return err
+		}
+	}
+
+	return res0
+}
+
+func (f *FS) AddFavorite(ctx context.Context, ref *provider.Reference, userID *userpb.UserId) error {
+	var (
+		err     error
+		unhook  UnHook
+		unhooks []UnHook
+	)
+	for _, hook := range f.hooks {
+		ctx, unhook, err = hook("AddFavorite", ctx, ref.GetResourceId().GetSpaceId())
+		if err != nil {
+			return err
+		}
+		if unhook != nil {
+			unhooks = append(unhooks, unhook)
+		}
+	}
+
+	res0 := f.next.AddFavorite(ctx, ref, userID)
+
+	for _, unhook := range unhooks {
+		if err := unhook(); err != nil {
+			return err
+		}
+	}
+
+	return res0
+}
+
+func (f *FS) RemoveFavorite(ctx context.Context, ref *provider.Reference, userID *userpb.UserId) error {
+	var (
+		err     error
+		unhook  UnHook
+		unhooks []UnHook
+	)
+	for _, hook := range f.hooks {
+		ctx, unhook, err = hook("RemoveFavorite", ctx, ref.GetResourceId().GetSpaceId())
+		if err != nil {
+			return err
+		}
+		if unhook != nil {
+			unhooks = append(unhooks, unhook)
+		}
+	}
+
+	res0 := f.next.RemoveFavorite(ctx, ref, userID)
 
 	for _, unhook := range unhooks {
 		if err := unhook(); err != nil {

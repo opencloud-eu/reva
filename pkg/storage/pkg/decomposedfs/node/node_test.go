@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"time"
 
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -207,29 +208,50 @@ var _ = Describe("Node", func() {
 				Expect(len(ri.Etag)).To(Equal(34))
 				Expect(ri.Etag).ToNot(Equal(before))
 			})
+		})
 
-			It("includes the lock in the Opaque", func() {
-				lock := &provider.Lock{
-					Type:   provider.LockType_LOCK_TYPE_EXCL,
-					User:   env.Owner.Id,
-					LockId: "foo",
-				}
-				err := n.SetLock(env.Ctx, lock)
-				Expect(err).ToNot(HaveOccurred())
+		It("includes the lock in the Opaque", func() {
+			lock := &provider.Lock{
+				Type:   provider.LockType_LOCK_TYPE_EXCL,
+				User:   env.Owner.Id,
+				LockId: "foo",
+			}
+			err := n.SetLock(env.Ctx, lock)
+			Expect(err).ToNot(HaveOccurred())
 
-				perms := node.OwnerPermissions()
-				ri, err := n.AsResourceInfo(env.Ctx, perms, []string{}, []string{}, false)
-				Expect(err).ToNot(HaveOccurred())
-				Expect(ri.Opaque).ToNot(BeNil())
-				Expect(ri.Opaque.Map["lock"]).ToNot(BeNil())
+			perms := node.OwnerPermissions()
+			ri, err := n.AsResourceInfo(env.Ctx, perms, []string{}, []string{}, false)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(ri.Opaque).ToNot(BeNil())
+			Expect(ri.Opaque.Map["lock"]).ToNot(BeNil())
 
-				storedLock := &provider.Lock{}
-				err = json.Unmarshal(ri.Opaque.Map["lock"].Value, storedLock)
-				Expect(err).ToNot(HaveOccurred())
-				Expect(storedLock).To(BeComparableTo(lock, protocmp.Transform()))
-			})
+			storedLock := &provider.Lock{}
+			err = json.Unmarshal(ri.Opaque.Map["lock"].Value, storedLock)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(storedLock).To(BeComparableTo(lock, protocmp.Transform()))
+		})
+
+		It("includes the favorites in the Opaque", func() {
+			favoriteUsers := []*userpb.UserId{
+				{Idp: "idp", OpaqueId: "user1"},
+				{Idp: "idp", OpaqueId: "user2"},
+			}
+			for _, u := range favoriteUsers {
+				Expect(n.SetFavorite(env.Ctx, u)).To(Succeed())
+			}
+			perms := node.OwnerPermissions()
+			ri, err := n.AsResourceInfo(env.Ctx, perms, []string{}, []string{}, false)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(ri.Opaque).ToNot(BeNil())
+			Expect(ri.Opaque.Map["favorites"]).ToNot(BeNil())
+
+			storedFavorites := []string{}
+			err = json.Unmarshal(ri.Opaque.Map["favorites"].Value, &storedFavorites)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(storedFavorites).To(Equal([]string{"user1", "user2"}))
 		})
 	})
+
 	Describe("Permissions", func() {
 		It("Checks the owner permissions on a personal space", func() {
 			node1, err := env.Lookup.NodeFromSpaceID(env.Ctx, env.SpaceRootRes.SpaceId)

@@ -706,6 +706,36 @@ func (s *Service) TouchFile(ctx context.Context, req *provider.TouchFileRequest)
 	}, nil
 }
 
+func (s *Service) AddFavorite(ctx context.Context, req *provider.AddFavoriteRequest) (*provider.AddFavoriteResponse, error) {
+	appctx.GetLogger(ctx).Debug().Msg("AddFavorite")
+
+	err := s.Storage.AddFavorite(ctx, req.Ref, req.UserId)
+	if err != nil {
+		return &provider.AddFavoriteResponse{
+			Status: status.NewStatusFromErrType(ctx, "add favorite", err),
+		}, nil
+	}
+
+	return &provider.AddFavoriteResponse{
+		Status: status.NewOK(ctx),
+	}, nil
+}
+
+func (s *Service) RemoveFavorite(ctx context.Context, req *provider.RemoveFavoriteRequest) (*provider.RemoveFavoriteResponse, error) {
+	appctx.GetLogger(ctx).Debug().Msg("RemoveFavorite")
+
+	err := s.Storage.RemoveFavorite(ctx, req.Ref, req.UserId)
+	if err != nil {
+		return &provider.RemoveFavoriteResponse{
+			Status: status.NewStatusFromErrType(ctx, "remove favorite", err),
+		}, nil
+	}
+
+	return &provider.RemoveFavoriteResponse{
+		Status: status.NewOK(ctx),
+	}, nil
+}
+
 func (s *Service) Delete(ctx context.Context, req *provider.DeleteRequest) (*provider.DeleteResponse, error) {
 	if req.Ref.GetPath() == "/" {
 		return &provider.DeleteResponse{

@@ -27,7 +27,6 @@ import (
 	"github.com/opencloud-eu/reva/v2/internal/http/services/owncloud/ocdav"
 	"github.com/opencloud-eu/reva/v2/internal/http/services/owncloud/ocdav/config"
 	"github.com/opencloud-eu/reva/v2/pkg/rgrpc/todo/pool"
-	"github.com/opencloud-eu/reva/v2/pkg/storage/favorite"
 	"github.com/rs/zerolog"
 	"go-micro.dev/v4/broker"
 	"go.opentelemetry.io/otel/trace"
@@ -48,7 +47,6 @@ type Options struct {
 	Name      string
 	JWTSecret string
 
-	FavoriteManager favorite.Manager
 	GatewaySelector pool.Selectable[gateway.GatewayAPIClient]
 
 	TracesExporter string
@@ -205,13 +203,6 @@ func Insecure(val bool) Option {
 func PublicURL(val string) Option {
 	return func(o *Options) {
 		o.config.PublicURL = val
-	}
-}
-
-// FavoriteManager provides a function to set the FavoriteManager option.
-func FavoriteManager(val favorite.Manager) Option {
-	return func(o *Options) {
-		o.FavoriteManager = val
 	}
 }
 
