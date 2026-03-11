@@ -1,6 +1,6 @@
 # Changelog
 
-## [2.42.6](https://github.com/opencloud-eu/reva/releases/tag/v2.42.6) - 2026-03-10
+## [2.42.6](https://github.com/opencloud-eu/reva/releases/tag/v2.42.6) - 2026-03-11
 
 ### ❤️ Thanks to all contributors! ❤️
 
@@ -8,6 +8,7 @@
 
 ### 📦️ Dependencies
 
+- chore(deps): bump github.com/minio/minio-go/v7 from 7.0.98 to 7.0.99 [[#553](https://github.com/opencloud-eu/reva/pull/553)]
 - chore(deps): bump go.opentelemetry.io/otel/trace from 1.41.0 to 1.42.0 [[#550](https://github.com/opencloud-eu/reva/pull/550)]
 
 ## [2.42.5](https://github.com/opencloud-eu/reva/releases/tag/v2.42.5) - 2026-03-09
