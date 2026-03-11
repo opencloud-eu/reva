@@ -8,6 +8,7 @@
 
 ### 📦️ Dependencies
 
+- chore(deps): bump github.com/google/renameio/v2 from 2.0.1 to 2.0.2 [[#495](https://github.com/opencloud-eu/reva/pull/495)]
 - chore(deps): bump github.com/minio/minio-go/v7 from 7.0.98 to 7.0.99 [[#553](https://github.com/opencloud-eu/reva/pull/553)]
 - chore(deps): bump go.opentelemetry.io/otel/trace from 1.41.0 to 1.42.0 [[#550](https://github.com/opencloud-eu/reva/pull/550)]
 
