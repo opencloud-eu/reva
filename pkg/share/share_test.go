@@ -142,6 +142,46 @@ func TestMatchesFilter(t *testing.T) {
 	}
 }
 
+func TestSpaceRootFilter(t *testing.T) {
+	// A space root share: SpaceId == OpaqueId
+	spaceRootShare := &collaboration.Share{
+		ResourceId: &provider.ResourceId{
+			StorageId: "storage",
+			SpaceId:   "spaceid",
+			OpaqueId:  "spaceid", // same as SpaceId -> space root
+		},
+	}
+
+	// A regular file/folder share: SpaceId != OpaqueId
+	fileShare := &collaboration.Share{
+		ResourceId: &provider.ResourceId{
+			StorageId: "storage",
+			SpaceId:   "spaceid",
+			OpaqueId:  "nodeid", // different from SpaceId -> not a space root
+		},
+	}
+
+	tests := []struct {
+		name        string
+		share       *collaboration.Share
+		filterValue bool
+		want        bool
+	}{
+		{"space root matches SpaceRootFilter(true)", spaceRootShare, true, true},
+		{"space root does not match SpaceRootFilter(false)", spaceRootShare, false, false},
+		{"file share matches SpaceRootFilter(false)", fileShare, false, true},
+		{"file share does not match SpaceRootFilter(true)", fileShare, true, false},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := MatchesFilter(tc.share, NoState, SpaceRootFilter(tc.filterValue)); got != tc.want {
+				t.Errorf("MatchesFilter() = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
 func TestMatchesAnyFilter(t *testing.T) {
 	id := &provider.ResourceId{StorageId: "storage", OpaqueId: "opaque"}
 	share := &collaboration.Share{
