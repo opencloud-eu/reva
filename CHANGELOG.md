@@ -8,6 +8,7 @@
 
 ### 📦️ Dependencies
 
+- chore(deps): bump golang.org/x/sync from 0.19.0 to 0.20.0 [[#558](https://github.com/opencloud-eu/reva/pull/558)]
 - chore(deps): bump github.com/tus/tusd/v2 from 2.8.0 to 2.9.2 [[#557](https://github.com/opencloud-eu/reva/pull/557)]
 - chore(deps): bump go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc from 1.41.0 to 1.42.0 [[#555](https://github.com/opencloud-eu/reva/pull/555)]
 - chore(deps): bump github.com/google/renameio/v2 from 2.0.1 to 2.0.2 [[#495](https://github.com/opencloud-eu/reva/pull/495)]
