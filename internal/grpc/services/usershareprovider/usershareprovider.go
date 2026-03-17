@@ -166,13 +166,6 @@ func (s *service) isPathAllowed(path string) bool {
 func (s *service) CreateShare(ctx context.Context, req *collaboration.CreateShareRequest) (*collaboration.CreateShareResponse, error) {
 	log := appctx.GetLogger(ctx)
 	user := ctxpkg.ContextMustGetUser(ctx)
-	// Grants must not allow grant permissions
-	if HasGrantPermissions(req.GetGrant().GetPermissions().GetPermissions()) {
-		return &collaboration.CreateShareResponse{
-			Status: status.NewInvalidArg(ctx, "resharing not supported"),
-		}, nil
-	}
-
 	// check if the grantee is a user or group
 	if req.GetGrant().GetGrantee().GetType() == provider.GranteeType_GRANTEE_TYPE_USER {
 		// check if the tenantId of the user matches the tenantId of the target user
@@ -224,6 +217,15 @@ func (s *service) CreateShare(ctx context.Context, req *collaboration.CreateShar
 		return &collaboration.CreateShareResponse{
 			Status: status.NewPermissionDenied(ctx, nil, "no permission to add grants on shared resource"),
 		}, err
+	}
+	// resharing is forbidden for not space roots
+	if !utils.IsSpaceRoot(sRes.GetInfo()) {
+		// Resharing of Files/Directories is forbidden. So the grants must not allow the "grant" permissions
+		if HasGrantPermissions(req.GetGrant().GetPermissions().GetPermissions()) {
+			return &collaboration.CreateShareResponse{
+				Status: status.NewInvalidArg(ctx, "resharing not supported"),
+			}, nil
+		}
 	}
 	// check if the share creator has sufficient permissions to do so.
 	if shareCreationAllowed := conversions.SufficientCS3Permissions(
@@ -361,13 +363,6 @@ func (s *service) UpdateShare(ctx context.Context, req *collaboration.UpdateShar
 	log := appctx.GetLogger(ctx)
 	user := ctxpkg.ContextMustGetUser(ctx)
 
-	// Grants must not allow grant permissions
-	if HasGrantPermissions(req.GetShare().GetPermissions().GetPermissions()) {
-		return &collaboration.UpdateShareResponse{
-			Status: status.NewInvalidArg(ctx, "resharing not supported"),
-		}, nil
-	}
-
 	gatewayClient, err := s.gatewaySelector.Next()
 	if err != nil {
 		return nil, err
@@ -427,6 +422,15 @@ func (s *service) UpdateShare(ctx context.Context, req *collaboration.UpdateShar
 		}, err
 	}
 
+	// resharing is forbidden for not space roots
+	if !utils.IsSpaceRoot(sRes.GetInfo()) {
+		// Resharing of Files/Directories is forbidden. So the grants must not allow the "grant" permissions
+		if HasGrantPermissions(req.GetShare().GetPermissions().GetPermissions()) {
+			return &collaboration.UpdateShareResponse{
+				Status: status.NewInvalidArg(ctx, "resharing not supported"),
+			}, nil
+		}
+	}
 	// If this is a permissions update, check if user's permissions on the resource are sufficient to set the desired permissions
 	var newPermissions *provider.ResourcePermissions
 	if slices.Contains(req.GetUpdateMask().GetPaths(), _fieldMaskPathPermissions) {
