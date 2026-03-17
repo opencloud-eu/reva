@@ -113,6 +113,11 @@ var _ = Describe("user share provider service", func() {
 		statResourceResponse = &providerpb.StatResponse{
 			Status: status.NewOK(ctx),
 			Info: &providerpb.ResourceInfo{
+				Id: &providerpb.ResourceId{
+					StorageId: "1",
+					SpaceId:   "2",
+					OpaqueId:  "3",
+				},
 				PermissionSet: &providerpb.ResourcePermissions{},
 			},
 		}
@@ -357,7 +362,7 @@ var _ = Describe("user share provider service", func() {
 				conversions.RoleFromName("spaceeditor").CS3ResourcePermissions(),
 				conversions.RoleFromName("manager").CS3ResourcePermissions(),
 				rpcpb.Code_CODE_OK,
-				rpcpb.Code_CODE_INVALID_ARGUMENT,
+				rpcpb.Code_CODE_PERMISSION_DENIED,
 				0,
 			),
 			Entry(
