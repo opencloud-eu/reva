@@ -1,6 +1,6 @@
 # Changelog
 
-## [2.42.6](https://github.com/opencloud-eu/reva/releases/tag/v2.42.6) - 2026-03-19
+## [2.42.6](https://github.com/opencloud-eu/reva/releases/tag/v2.42.6) - 2026-03-23
 
 ### ❤️ Thanks to all contributors! ❤️
 
@@ -8,6 +8,7 @@
 
 ### 📦️ Dependencies
 
+- chore(deps): bump github.com/mattn/go-sqlite3 from 1.14.34 to 1.14.37 [[#563](https://github.com/opencloud-eu/reva/pull/563)]
 - chore(deps): bump google.golang.org/grpc from 1.79.2 to 1.79.3 in the go_modules group across 1 directory [[#562](https://github.com/opencloud-eu/reva/pull/562)]
 - chore(deps): bump golang.org/x/crypto from 0.48.0 to 0.49.0 [[#559](https://github.com/opencloud-eu/reva/pull/559)]
 - chore(deps): bump github.com/ceph/go-ceph from 0.37.0 to 0.38.0 [[#560](https://github.com/opencloud-eu/reva/pull/560)]
