@@ -1642,7 +1642,7 @@ func (fs *eosfs) createUserDir(ctx context.Context, u *userpb.User, path string,
 	return nil
 }
 
-func (fs *eosfs) CreateDir(ctx context.Context, ref *provider.Reference) error {
+func (fs *eosfs) CreateDir(ctx context.Context, ref *provider.Reference, mtime string) error {
 	log := appctx.GetLogger(ctx)
 	p, err := fs.resolve(ctx, ref)
 	if err != nil {

@@ -59,7 +59,7 @@ type FS interface {
 	// CreateReference creates a resource of type reference
 	CreateReference(ctx context.Context, path string, targetURI *url.URL) error
 	// CreateDir creates a resource of type container
-	CreateDir(ctx context.Context, ref *provider.Reference) error
+	CreateDir(ctx context.Context, ref *provider.Reference, mtime string) error
 	// TouchFile sets the mtime of a resource, creating an empty file if it does not exist
 	// FIXME the markprocessing flag is an implementation detail of decomposedfs, remove it from the function
 	// FIXME the mtime should either be a time.Time or a CS3 Timestamp, not a string

@@ -382,6 +382,16 @@ func (s *svc) executeSpacesCopy(ctx context.Context, w http.ResponseWriter, sele
 		// create dir
 		createReq := &provider.CreateContainerRequest{
 			Ref: cp.destination,
+			Opaque: &typespb.Opaque{
+				Map: map[string]*typespb.OpaqueEntry{
+					net.HeaderOCMtime: {
+						Decoder: "plain",
+						Value: []byte(
+							utils.TimeToOCMtime(utils.TSToTime(cp.sourceInfo.GetMtime())),
+						),
+					},
+				},
+			},
 		}
 		createRes, err := client.CreateContainer(ctx, createReq)
 		if err != nil {

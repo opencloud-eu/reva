@@ -181,7 +181,7 @@ func (t *Tree) TouchFile(ctx context.Context, n *node.Node, markprocessing bool,
 }
 
 // CreateDir creates a new directory entry in the tree
-func (t *Tree) CreateDir(ctx context.Context, n *node.Node) (err error) {
+func (t *Tree) CreateDir(ctx context.Context, n *node.Node, mtime string) (err error) {
 	ctx, span := tracer.Start(ctx, "CreateDir")
 	defer span.End()
 	if n.Exists {
@@ -197,6 +197,10 @@ func (t *Tree) CreateDir(ctx context.Context, n *node.Node) (err error) {
 	err = t.createDirNode(ctx, n)
 	if err != nil {
 		return
+	}
+
+	if err = n.SetMtimeString(ctx, mtime); err != nil {
+		return errors.Wrap(err, "Decomposedfs: could not set mtime")
 	}
 
 	// make child appear in listings

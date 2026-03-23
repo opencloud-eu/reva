@@ -123,7 +123,7 @@ type Tree interface {
 	GetMD(ctx context.Context, node *Node) (os.FileInfo, error)
 	ListFolder(ctx context.Context, node *Node) ([]*Node, error)
 	// CreateHome(owner *userpb.UserId) (n *Node, err error)
-	CreateDir(ctx context.Context, node *Node) (err error)
+	CreateDir(ctx context.Context, node *Node, mtime string) (err error)
 	TouchFile(ctx context.Context, node *Node, markprocessing bool, mtime string) error
 	// CreateReference(ctx context.Context, node *Node, targetURI *url.URL) error
 	Move(ctx context.Context, oldNode *Node, newNode *Node) (err error)

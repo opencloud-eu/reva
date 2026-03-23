@@ -52,7 +52,7 @@ func (fs *hellofs) DeleteStorageSpace(ctx context.Context, req *provider.DeleteS
 }
 
 // CreateDir creates a resource of type container
-func (fs *hellofs) CreateDir(ctx context.Context, ref *provider.Reference) error {
+func (fs *hellofs) CreateDir(ctx context.Context, ref *provider.Reference, mtime string) error {
 	return errtypes.NotSupported("unimplemented")
 }
 

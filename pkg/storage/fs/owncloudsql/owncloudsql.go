@@ -40,6 +40,7 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/mitchellh/mapstructure"
+	"github.com/opencloud-eu/reva/v2/pkg/utils"
 	"github.com/pkg/errors"
 	"github.com/pkg/xattr"
 	"github.com/rs/zerolog"
@@ -754,7 +755,7 @@ func (fs *owncloudsqlfs) GetHome(ctx context.Context) (string, error) {
 	return "", nil
 }
 
-func (fs *owncloudsqlfs) CreateDir(ctx context.Context, ref *provider.Reference) (err error) {
+func (fs *owncloudsqlfs) CreateDir(ctx context.Context, ref *provider.Reference, mtime string) (err error) {
 
 	ip, err := fs.resolve(ctx, ref)
 	if err != nil {
@@ -787,7 +788,22 @@ func (fs *owncloudsqlfs) CreateDir(ctx context.Context, ref *provider.Reference)
 	if err != nil {
 		return err
 	}
-	mtime := time.Now().Unix()
+	var mtimeInt int64
+	if mtime != "" {
+		mt, err := utils.MTimeToTime(mtime)
+		if err != nil {
+			log.Info().
+				Str("owncloudsql", ip).
+				Str("mtime", mtime).
+				Msg("error mtime conversion. mtine set to system time")
+			mtimeInt = time.Now().Unix()
+		} else {
+			mtimeInt = mt.Unix()
+		}
+
+	} else {
+		mtimeInt = time.Now().Unix()
+	}
 
 	permissions := 31 // 1: READ, 2: UPDATE, 4: CREATE, 8: DELETE, 16: SHARE
 	if perm, err := fs.readPermissions(ctx, filepath.Dir(ip)); err == nil {
@@ -798,8 +814,8 @@ func (fs *owncloudsqlfs) CreateDir(ctx context.Context, ref *provider.Reference)
 		"etag":          calcEtag(ctx, fi),
 		"mimetype":      "httpd/unix-directory",
 		"permissions":   permissions,
-		"mtime":         mtime,
-		"storage_mtime": mtime,
+		"mtime":         mtimeInt,
+		"storage_mtime": mtimeInt,
 	}
 	storageID, err := fs.getStorage(ctx, ip)
 	if err != nil {

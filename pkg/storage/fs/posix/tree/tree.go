@@ -336,7 +336,7 @@ func (t *Tree) TouchFile(ctx context.Context, n *node.Node, markprocessing bool,
 }
 
 // CreateDir creates a new directory entry in the tree
-func (t *Tree) CreateDir(ctx context.Context, n *node.Node) (err error) {
+func (t *Tree) CreateDir(ctx context.Context, n *node.Node, mtime string) (err error) {
 	ctx, span := tracer.Start(ctx, "CreateDir")
 	defer span.End()
 	if n.Exists {
@@ -349,7 +349,7 @@ func (t *Tree) CreateDir(ctx context.Context, n *node.Node) (err error) {
 		n.ID = uuid.New().String()
 	}
 
-	err = t.createDirNode(ctx, n)
+	err = t.createDirNode(ctx, n, mtime)
 	if err != nil {
 		return
 	}
@@ -699,7 +699,7 @@ func (t *Tree) InitNewNode(ctx context.Context, n *node.Node, fsize uint64) (met
 }
 
 // TODO check if node exists?
-func (t *Tree) createDirNode(ctx context.Context, n *node.Node) (err error) {
+func (t *Tree) createDirNode(ctx context.Context, n *node.Node, mtime string) (err error) {
 	ctx, span := tracer.Start(ctx, "createDirNode")
 	defer span.End()
 
@@ -741,10 +741,19 @@ func (t *Tree) createDirNode(ctx context.Context, n *node.Node) (err error) {
 	if err != nil {
 		return err
 	}
-	mtime := fi.ModTime()
+	var mt time.Time
+	if mtime == "" {
+		mt = fi.ModTime()
+	} else {
+		mt, err = utils.MTimeToTime(mtime)
+		if err != nil {
+			return err
+		}
+	}
 
 	attributes := n.NodeMetadata(ctx)
-	attributes[prefixes.MTimeAttr] = []byte(mtime.UTC().Format(time.RFC3339Nano))
+	attributes[prefixes.MTimeAttr] = []byte(mt.UTC().Format(time.RFC3339Nano))
+	attributes[prefixes.TreeMTimeAttr] = []byte(mt.UTC().Format(time.RFC3339Nano))
 	attributes[prefixes.IDAttr] = []byte(n.ID)
 	attributes[prefixes.TreesizeAttr] = []byte("0") // initialize as empty, TODO why bother? if it is not set we could treat it as 0?
 

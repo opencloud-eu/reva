@@ -145,7 +145,7 @@ func (f *FS) CreateHome(ctx context.Context) error {
 	return res0
 }
 
-func (f *FS) CreateDir(ctx context.Context, ref *provider.Reference) error {
+func (f *FS) CreateDir(ctx context.Context, ref *provider.Reference, mtime string) error {
 	var (
 		err     error
 		unhook  UnHook
@@ -161,7 +161,7 @@ func (f *FS) CreateDir(ctx context.Context, ref *provider.Reference) error {
 		}
 	}
 
-	res0 := f.next.CreateDir(ctx, ref)
+	res0 := f.next.CreateDir(ctx, ref, mtime)
 
 	for _, unhook := range unhooks {
 		if err := unhook(); err != nil {

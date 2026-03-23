@@ -779,7 +779,7 @@ func (fs *localfs) createHomeInternal(ctx context.Context, fn string) error {
 	return nil
 }
 
-func (fs *localfs) CreateDir(ctx context.Context, ref *provider.Reference) error {
+func (fs *localfs) CreateDir(ctx context.Context, ref *provider.Reference, mtime string) error {
 
 	fn, err := fs.resolve(ctx, ref)
 	if err != nil {

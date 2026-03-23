@@ -709,7 +709,7 @@ func (fs *Decomposedfs) GetPathByID(ctx context.Context, id *provider.ResourceId
 }
 
 // CreateDir creates the specified directory
-func (fs *Decomposedfs) CreateDir(ctx context.Context, ref *provider.Reference) (err error) {
+func (fs *Decomposedfs) CreateDir(ctx context.Context, ref *provider.Reference, mtime string) (err error) {
 	ctx, span := tracer.Start(ctx, "CreateDir")
 	defer span.End()
 
@@ -764,7 +764,7 @@ func (fs *Decomposedfs) CreateDir(ctx context.Context, ref *provider.Reference) 
 		return errtypes.AlreadyExists(ref.Path)
 	}
 
-	if err = fs.tp.CreateDir(ctx, n); err != nil {
+	if err = fs.tp.CreateDir(ctx, n, mtime); err != nil {
 		return
 	}
 

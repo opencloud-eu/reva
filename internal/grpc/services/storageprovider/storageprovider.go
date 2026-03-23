@@ -676,13 +676,15 @@ func (s *Service) DeleteStorageSpace(ctx context.Context, req *provider.DeleteSt
 
 func (s *Service) CreateContainer(ctx context.Context, req *provider.CreateContainerRequest) (*provider.CreateContainerResponse, error) {
 	// FIXME these should be part of the CreateContainerRequest object
+	var mtime string
 	if req.Opaque != nil {
 		if e, ok := req.Opaque.Map["lockid"]; ok && e.Decoder == "plain" {
 			ctx = ctxpkg.ContextSetLockID(ctx, string(e.Value))
 		}
+		mtime = utils.ReadPlainFromOpaque(req.Opaque, "X-OC-Mtime")
 	}
 
-	err := s.Storage.CreateDir(ctx, req.Ref)
+	err := s.Storage.CreateDir(ctx, req.Ref, mtime)
 
 	return &provider.CreateContainerResponse{
 		Status: status.NewStatusFromErrType(ctx, "create container", err),

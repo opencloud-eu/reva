@@ -257,7 +257,7 @@ func (nc *StorageDriver) CreateHome(ctx context.Context) error {
 }
 
 // CreateDir as defined in the storage.FS interface
-func (nc *StorageDriver) CreateDir(ctx context.Context, ref *provider.Reference) error {
+func (nc *StorageDriver) CreateDir(ctx context.Context, ref *provider.Reference, mtime string) error {
 	bodyStr, err := json.Marshal(ref)
 	if err != nil {
 		return err

@@ -209,7 +209,7 @@ func (d *driver) webdavClient(ctx context.Context, forUser *userpb.UserId, ref *
 	return c, share, rel, nil
 }
 
-func (d *driver) CreateDir(ctx context.Context, ref *provider.Reference) error {
+func (d *driver) CreateDir(ctx context.Context, ref *provider.Reference, mtime string) error {
 	client, _, rel, err := d.webdavClient(ctx, nil, ref)
 	if err != nil {
 		return err

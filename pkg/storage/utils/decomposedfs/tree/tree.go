@@ -185,7 +185,7 @@ func (t *Tree) TouchFile(ctx context.Context, n *node.Node, markprocessing bool,
 }
 
 // CreateDir creates a new directory entry in the tree
-func (t *Tree) CreateDir(ctx context.Context, n *node.Node) (err error) {
+func (t *Tree) CreateDir(ctx context.Context, n *node.Node, mtime string) (err error) {
 	ctx, span := tracer.Start(ctx, "CreateDir")
 	defer span.End()
 	if n.Exists {
