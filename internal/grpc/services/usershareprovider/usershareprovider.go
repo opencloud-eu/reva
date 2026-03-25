@@ -31,6 +31,7 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
@@ -227,7 +228,8 @@ func (s *service) CreateShare(ctx context.Context, req *collaboration.CreateShar
 	}
 
 	// resharing is forbidden for not space roots
-	if !utils.IsSpaceRoot(sRes.GetInfo()) {
+	isSpaceRoot := utils.IsSpaceRoot(sRes.GetInfo())
+	if !isSpaceRoot {
 		// Resharing of Files/Directories is forbidden. So the grants must not allow the "grant" permissions
 		if HasGrantPermissions(req.GetGrant().GetPermissions().GetPermissions()) {
 			return &collaboration.CreateShareResponse{
@@ -266,10 +268,18 @@ func (s *service) CreateShare(ctx context.Context, req *collaboration.CreateShar
 		}, nil
 	}
 
+	var opaque *typesv1beta1.Opaque
+	if isSpaceRoot {
+		opaque = &typesv1beta1.Opaque{
+			Map: map[string]*typesv1beta1.OpaqueEntry{
+				"spacegrant": {},
+			},
+		}
+	}
 	return &collaboration.CreateShareResponse{
 		Status: status.NewOK(ctx),
 		Share:  createdShare,
-		Opaque: utils.AppendPlainToOpaque(nil, "resourcename", sRes.GetInfo().GetName()),
+		Opaque: utils.AppendPlainToOpaque(opaque, "resourcename", sRes.GetInfo().GetName()),
 	}, nil
 }
 
@@ -317,16 +327,24 @@ func (s *service) RemoveShare(ctx context.Context, req *collaboration.RemoveShar
 		}, nil
 	}
 
-	o := utils.AppendJSONToOpaque(nil, "resourceid", share.GetResourceId())
-	o = utils.AppendPlainToOpaque(o, "resourcename", sRes.GetInfo().GetName())
+	var opaque *typesv1beta1.Opaque
+	if utils.IsSpaceRoot(sRes.GetInfo()) {
+		opaque = &typesv1beta1.Opaque{
+			Map: map[string]*typesv1beta1.OpaqueEntry{
+				"spacegrant": {},
+			},
+		}
+	}
+	opaque = utils.AppendJSONToOpaque(opaque, "resourceid", share.GetResourceId())
+	opaque = utils.AppendPlainToOpaque(opaque, "resourcename", sRes.GetInfo().GetName())
 	if user := share.GetGrantee().GetUserId(); user != nil {
-		o = utils.AppendJSONToOpaque(o, "granteeuserid", user)
+		opaque = utils.AppendJSONToOpaque(opaque, "granteeuserid", user)
 	} else {
-		o = utils.AppendJSONToOpaque(o, "granteegroupid", share.GetGrantee().GetGroupId())
+		opaque = utils.AppendJSONToOpaque(opaque, "granteegroupid", share.GetGrantee().GetGroupId())
 	}
 
 	return &collaboration.RemoveShareResponse{
-		Opaque: o,
+		Opaque: opaque,
 		Status: status.NewOK(ctx),
 	}, nil
 }
@@ -469,10 +487,19 @@ func (s *service) UpdateShare(ctx context.Context, req *collaboration.UpdateShar
 		}, nil
 	}
 
+	var opaque *typesv1beta1.Opaque
+	if utils.IsSpaceRoot(sRes.GetInfo()) {
+		opaque = &typesv1beta1.Opaque{
+			Map: map[string]*typesv1beta1.OpaqueEntry{
+				"spacegrant": {},
+			},
+		}
+	}
+
 	res := &collaboration.UpdateShareResponse{
 		Status: status.NewOK(ctx),
 		Share:  share,
-		Opaque: utils.AppendPlainToOpaque(nil, "resourcename", sRes.GetInfo().GetName()),
+		Opaque: utils.AppendPlainToOpaque(opaque, "resourcename", sRes.GetInfo().GetName()),
 	}
 	return res, nil
 }
