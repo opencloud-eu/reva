@@ -220,15 +220,38 @@ func (s *service) CreateShare(ctx context.Context, req *collaboration.CreateShar
 		}, err
 	}
 
+	isSpaceRoot := utils.IsSpaceRoot(sRes.GetInfo())
+
 	// do not allow share to myself or the owner if share is for a user
 	if req.GetGrant().GetGrantee().GetType() == provider.GranteeType_GRANTEE_TYPE_USER &&
 		(utils.UserEqual(req.GetGrant().GetGrantee().GetUserId(), user.Id) || utils.UserEqual(req.GetGrant().GetGrantee().GetUserId(), sRes.GetInfo().GetOwner())) {
-		err := errtypes.BadRequest("jsoncs3: owner/creator and grantee are the same")
-		return nil, err
+
+		denySelfShare := true
+		// To allow adding the initial "mananger" share for the creator of a space when need to make an exception here
+		// if the shared resource is a space root, that does not have any Share existin yet. Note, that we have already
+		// verified that the user adding the share does really have "AddGrant" permissions on the affected resource, so
+		// this "hack" should be ok.
+		if isSpaceRoot {
+			shares, err := s.sm.ListShares(
+				ctx,
+				[]*collaboration.Filter{share.ResourceIDFilter(req.GetResourceInfo().GetId())},
+			)
+			if err != nil {
+				return &collaboration.CreateShareResponse{
+					Status: status.NewInternal(ctx, "failed to list existing shares"),
+				}, nil
+			}
+			if len(shares) == 0 {
+				denySelfShare = false
+			}
+		}
+		if denySelfShare {
+			err := errtypes.BadRequest("jsoncs3: owner/creator and grantee are the same")
+			return nil, err
+		}
 	}
 
 	// resharing is forbidden for not space roots
-	isSpaceRoot := utils.IsSpaceRoot(sRes.GetInfo())
 	if !isSpaceRoot {
 		// Resharing of Files/Directories is forbidden. So the grants must not allow the "grant" permissions
 		if HasGrantPermissions(req.GetGrant().GetPermissions().GetPermissions()) {

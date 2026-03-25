@@ -646,7 +646,7 @@ func (s *svc) addShare(ctx context.Context, req *collaboration.CreateShareReques
 		}
 
 		switch status.Code {
-		case rpc.Code_CODE_OK:
+		case rpc.Code_CODE_OK, rpc.Code_CODE_ALREADY_EXISTS:
 			// ok
 		case rpc.Code_CODE_UNIMPLEMENTED:
 			appctx.GetLogger(ctx).Debug().Interface("status", status).Interface("req", req).Msg("storing grants not supported, ignoring")
