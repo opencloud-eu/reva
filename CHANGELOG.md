@@ -1,6 +1,6 @@
 # Changelog
 
-## [2.42.6](https://github.com/opencloud-eu/reva/releases/tag/v2.42.6) - 2026-03-24
+## [2.42.6](https://github.com/opencloud-eu/reva/releases/tag/v2.42.6) - 2026-03-25
 
 ### ❤️ Thanks to all contributors! ❤️
 
@@ -8,6 +8,7 @@
 
 ### 📦️ Dependencies
 
+- chore(deps): bump github.com/nats-io/nats-server/v2 from 2.12.4 to 2.12.6 in the go_modules group across 1 directory [[#568](https://github.com/opencloud-eu/reva/pull/568)]
 - chore(deps): bump golang.org/x/oauth2 from 0.35.0 to 0.36.0 [[#565](https://github.com/opencloud-eu/reva/pull/565)]
 - chore(deps): bump github.com/nats-io/nats.go from 1.48.0 to 1.49.0 [[#564](https://github.com/opencloud-eu/reva/pull/564)]
 - chore(deps): bump github.com/mattn/go-sqlite3 from 1.14.34 to 1.14.37 [[#563](https://github.com/opencloud-eu/reva/pull/563)]
