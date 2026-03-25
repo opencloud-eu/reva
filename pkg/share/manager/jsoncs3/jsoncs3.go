@@ -296,16 +296,6 @@ func (m *Manager) Share(ctx context.Context, md *provider.ResourceInfo, g *colla
 	user := ctxpkg.ContextMustGetUser(ctx)
 	ts := utils.TSNow()
 
-	// do not allow share to myself or the owner if share is for a user
-	// TODO: should this not already be caught at the gw level?
-	if g.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_USER &&
-		(utils.UserEqual(g.Grantee.GetUserId(), user.Id) || utils.UserEqual(g.Grantee.GetUserId(), md.Owner)) {
-		err := errtypes.BadRequest("jsoncs3: owner/creator and grantee are the same")
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
-		return nil, err
-	}
-
 	// check if share already exists.
 	key := &collaboration.ShareKey{
 		// Owner:      md.Owner, owner no longer matters as it belongs to the space
