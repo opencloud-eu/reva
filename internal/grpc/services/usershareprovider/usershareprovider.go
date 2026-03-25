@@ -218,6 +218,14 @@ func (s *service) CreateShare(ctx context.Context, req *collaboration.CreateShar
 			Status: status.NewPermissionDenied(ctx, nil, "no permission to add grants on shared resource"),
 		}, err
 	}
+
+	// do not allow share to myself or the owner if share is for a user
+	if req.GetGrant().GetGrantee().GetType() == provider.GranteeType_GRANTEE_TYPE_USER &&
+		(utils.UserEqual(req.GetGrant().GetGrantee().GetUserId(), user.Id) || utils.UserEqual(req.GetGrant().GetGrantee().GetUserId(), sRes.GetInfo().GetOwner())) {
+		err := errtypes.BadRequest("jsoncs3: owner/creator and grantee are the same")
+		return nil, err
+	}
+
 	// resharing is forbidden for not space roots
 	if !utils.IsSpaceRoot(sRes.GetInfo()) {
 		// Resharing of Files/Directories is forbidden. So the grants must not allow the "grant" permissions
