@@ -498,16 +498,9 @@ func (m *Manager) Unshare(ctx context.Context, ref *collaboration.ShareReference
 		return err
 	}
 
-	user := ctxpkg.ContextMustGetUser(ctx)
-
 	s, err := m.get(ctx, ref)
 	if err != nil {
 		return err
-	}
-	// TODO allow manager to unshare shares in a space created by other users
-	if !share.IsCreatedByUser(s, user) {
-		// TODO why not permission denied?
-		return errtypes.NotFound(ref.String())
 	}
 
 	return m.removeShare(ctx, s, false)

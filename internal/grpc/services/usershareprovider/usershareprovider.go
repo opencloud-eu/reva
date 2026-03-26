@@ -253,6 +253,7 @@ func (s *service) CreateShare(ctx context.Context, req *collaboration.CreateShar
 			}
 			if len(shares) == 0 {
 				denySelfShare = false
+				noEvent = true
 			}
 		}
 		if denySelfShare {
@@ -306,6 +307,14 @@ func (s *service) CreateShare(ctx context.Context, req *collaboration.CreateShar
 		opaque = &typesv1beta1.Opaque{
 			Map: map[string]*typesv1beta1.OpaqueEntry{
 				"spacegrant": {},
+			},
+		}
+	}
+
+	if noEvent {
+		opaque = &typesv1beta1.Opaque{
+			Map: map[string]*typesv1beta1.OpaqueEntry{
+				"noevent": {},
 			},
 		}
 	}
