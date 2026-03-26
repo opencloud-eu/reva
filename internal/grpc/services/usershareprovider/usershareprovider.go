@@ -55,6 +55,9 @@ const (
 	_fieldMaskPathMountPoint  = "mount_point"
 	_fieldMaskPathPermissions = "permissions"
 	_fieldMaskPathState       = "state"
+	_spaceTypePersonal        = "personal"
+	_spaceTypeProject         = "project"
+	_spaceTypeVirtual         = "virtual"
 )
 
 func init() {
@@ -221,6 +224,13 @@ func (s *service) CreateShare(ctx context.Context, req *collaboration.CreateShar
 	}
 
 	isSpaceRoot := utils.IsSpaceRoot(sRes.GetInfo())
+	var noEvent bool
+
+	if isSpaceRoot {
+		if sRes.GetInfo().GetSpace().GetSpaceType() == _spaceTypePersonal || sRes.GetInfo().GetSpace().GetSpaceType() == _spaceTypeVirtual {
+			return &collaboration.CreateShareResponse{Status: status.NewInvalid(ctx, "space type is not eligible for sharing")}, nil
+		}
+	}
 
 	// do not allow share to myself or the owner if share is for a user
 	if req.GetGrant().GetGrantee().GetType() == provider.GranteeType_GRANTEE_TYPE_USER &&
