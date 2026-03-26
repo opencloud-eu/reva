@@ -81,6 +81,9 @@ func NewUnary(m map[string]interface{}) (grpc.UnaryServerInterceptor, int, error
 		switch v := res.(type) {
 		case *collaboration.CreateShareResponse:
 			if isSuccess(v) {
+				if utils.ExistsInOpaque(v.Opaque, "noevent") {
+					break
+				}
 				if utils.ExistsInOpaque(v.Opaque, "spacegrant") {
 					ev = SpaceShared(v, executant)
 				} else {
