@@ -8,6 +8,7 @@ steps:
   release-helper:
     image: woodpeckerci/plugin-ready-release-go:latest
     settings:
+      release_branch: stable-2.40
       git_email: devops@opencloud.eu
       forge_type: github
       forge_token:
