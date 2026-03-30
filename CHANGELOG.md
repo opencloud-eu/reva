@@ -1,5 +1,27 @@
 # Changelog
 
+## [2.42.6](https://github.com/opencloud-eu/reva/releases/tag/v2.42.6) - 2026-03-27
+
+### ❤️ Thanks to all contributors! ❤️
+
+@aduffeck, @rhafer
+
+### 📦️ Dependencies
+
+- chore(deps): bump github.com/nats-io/nats-server/v2 from 2.12.4 to 2.12.6 in the go_modules group across 1 directory [[#568](https://github.com/opencloud-eu/reva/pull/568)]
+- chore(deps): bump golang.org/x/oauth2 from 0.35.0 to 0.36.0 [[#565](https://github.com/opencloud-eu/reva/pull/565)]
+- chore(deps): bump github.com/nats-io/nats.go from 1.48.0 to 1.49.0 [[#564](https://github.com/opencloud-eu/reva/pull/564)]
+- chore(deps): bump github.com/mattn/go-sqlite3 from 1.14.34 to 1.14.37 [[#563](https://github.com/opencloud-eu/reva/pull/563)]
+- chore(deps): bump google.golang.org/grpc from 1.79.2 to 1.79.3 in the go_modules group across 1 directory [[#562](https://github.com/opencloud-eu/reva/pull/562)]
+- chore(deps): bump golang.org/x/crypto from 0.48.0 to 0.49.0 [[#559](https://github.com/opencloud-eu/reva/pull/559)]
+- chore(deps): bump github.com/ceph/go-ceph from 0.37.0 to 0.38.0 [[#560](https://github.com/opencloud-eu/reva/pull/560)]
+- chore(deps): bump golang.org/x/sync from 0.19.0 to 0.20.0 [[#558](https://github.com/opencloud-eu/reva/pull/558)]
+- chore(deps): bump github.com/tus/tusd/v2 from 2.8.0 to 2.9.2 [[#557](https://github.com/opencloud-eu/reva/pull/557)]
+- chore(deps): bump go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc from 1.41.0 to 1.42.0 [[#555](https://github.com/opencloud-eu/reva/pull/555)]
+- chore(deps): bump github.com/google/renameio/v2 from 2.0.1 to 2.0.2 [[#495](https://github.com/opencloud-eu/reva/pull/495)]
+- chore(deps): bump github.com/minio/minio-go/v7 from 7.0.98 to 7.0.99 [[#553](https://github.com/opencloud-eu/reva/pull/553)]
+- chore(deps): bump go.opentelemetry.io/otel/trace from 1.41.0 to 1.42.0 [[#550](https://github.com/opencloud-eu/reva/pull/550)]
+
 ## [2.42.5](https://github.com/opencloud-eu/reva/releases/tag/v2.42.5) - 2026-03-09
 
 ### ❤️ Thanks to all contributors! ❤️
