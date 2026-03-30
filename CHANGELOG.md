@@ -1,5 +1,15 @@
 # Changelog
 
+## [2.40.4](https://github.com/opencloud-eu/reva/releases/tag/v2.40.4) - 2026-03-27
+
+### ❤️ Thanks to all contributors! ❤️
+
+@ScharfViktor, @aduffeck, @rhafer
+
+### 🐛 Bug Fixes
+
+- Backport excessive load fixes [[#571](https://github.com/opencloud-eu/reva/pull/571)]
+
 ## [2.40.1](https://github.com/opencloud-eu/reva/releases/tag/v2.40.1) - 2025-11-28
 
 ### ❤️ Thanks to all contributors! ❤️
