@@ -20,6 +20,7 @@ package node_test
 
 import (
 	"encoding/json"
+	"slices"
 	"time"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -248,6 +249,7 @@ var _ = Describe("Node", func() {
 			storedFavorites := []string{}
 			err = json.Unmarshal(ri.Opaque.Map["favorites"].Value, &storedFavorites)
 			Expect(err).ToNot(HaveOccurred())
+			slices.Sort(storedFavorites)
 			Expect(storedFavorites).To(Equal([]string{"user1", "user2"}))
 		})
 	})
