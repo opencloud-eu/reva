@@ -1,12 +1,14 @@
 # Changelog
 
-## [2.42.7](https://github.com/opencloud-eu/reva/releases/tag/v2.42.7) - 2026-03-30
+## [2.42.7](https://github.com/opencloud-eu/reva/releases/tag/v2.42.7) - 2026-04-01
 
 ### ❤️ Thanks to all contributors! ❤️
 
 @rhafer
 
+### 📦️ Dependencies
 
+- chore(deps): bump golang.org/x/image from 0.24.0 to 0.38.0 in the go_modules group across 1 directory [[#577](https://github.com/opencloud-eu/reva/pull/577)]
 
 ## [2.42.6](https://github.com/opencloud-eu/reva/releases/tag/v2.42.6) - 2026-03-27
 
