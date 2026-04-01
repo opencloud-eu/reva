@@ -8,6 +8,7 @@
 
 ### 📦️ Dependencies
 
+- chore(deps): bump github.com/go-git/go-git/v5 from 5.16.5 to 5.17.1 in the go_modules group across 1 directory [[#579](https://github.com/opencloud-eu/reva/pull/579)]
 - chore(deps): bump golang.org/x/image from 0.24.0 to 0.38.0 in the go_modules group across 1 directory [[#577](https://github.com/opencloud-eu/reva/pull/577)]
 
 ## [2.42.6](https://github.com/opencloud-eu/reva/releases/tag/v2.42.6) - 2026-03-27
