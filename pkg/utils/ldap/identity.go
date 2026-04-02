@@ -915,14 +915,14 @@ func (i *Identity) GetLDAPTenantByFilter(ctx context.Context, lc ldap.Client, fi
 	)
 
 	setLDAPSearchSpanAttributes(span, searchRequest)
-	log.Debug().Str("backend", "ldap").Str("basedn", i.User.BaseDN).Str("filter", filter).Int("scope", i.User.scopeVal).Msg("LDAP Search")
+	log.Debug().Str("backend", "ldap").Str("basedn", i.Tenant.BaseDN).Str("filter", filter).Int("scope", i.Tenant.scopeVal).Msg("LDAP Search")
 	res, err := lc.Search(searchRequest)
 	if err != nil {
-		log.Debug().Str("backend", "ldap").Err(err).Str("tenantfilter", filter).Msg("Error looking up user by filter")
+		log.Debug().Str("backend", "ldap").Err(err).Str("tenantfilter", filter).Msg("Error looking up tenant by filter")
 		var errmsg string
 		if lerr, ok := err.(*ldap.Error); ok {
 			if lerr.ResultCode == ldap.LDAPResultSizeLimitExceeded {
-				errmsg = fmt.Sprintf("too many results searching for user '%s'", filter)
+				errmsg = fmt.Sprintf("too many results searching for tenant '%s'", filter)
 			}
 		}
 		span.SetAttributes(attribute.String("ldap.error", errmsg))
@@ -968,13 +968,15 @@ func (i *Identity) getTenantAttributeFilter(attribute, value string) (string, er
 	case "externalid":
 		attribute = i.Tenant.Schema.ExternalID
 	}
-	// we can ignore the error here, filterEscapeAttribute only returns error when binary (the 2nd parameter) is `true`
-	value, _ = filterEscapeAttribute("", false, value)
+	escapedValue, err := filterEscapeAttribute("", false, value)
+	if err != nil {
+		return "", fmt.Errorf("error escaping filter value %q: %w", value, err)
+	}
 	return fmt.Sprintf("(&%s(objectclass=%s)(%s=%s))",
 		i.Tenant.Filter,
 		i.Tenant.Objectclass,
 		attribute,
-		value,
+		escapedValue,
 	), nil
 }
 
