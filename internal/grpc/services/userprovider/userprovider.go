@@ -103,11 +103,11 @@ func getDriver(c *config) (user.Manager, *plugin.RevaPlugin, error) {
 }
 
 func getTenantManager(c *config) (tenant.Manager, error) {
-	if f, ok := tenantRegistry.NewFuncs[c.Driver]; ok {
-		mgr, err := f(c.Drivers[c.Driver])
+	if f, ok := tenantRegistry.NewFuncs[c.TenantDriver]; ok {
+		mgr, err := f(c.TenantDrivers[c.TenantDriver])
 		return mgr, err
 	}
-	return nil, errtypes.NotFound(fmt.Sprintf("driver %s not found for tenant manager", c.Driver))
+	return nil, errtypes.NotFound(fmt.Sprintf("driver %s not found for tenant manager", c.TenantDriver))
 }
 
 // New returns a new UserProviderServiceServer.
