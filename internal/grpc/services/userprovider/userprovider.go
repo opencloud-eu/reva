@@ -116,13 +116,16 @@ func New(m map[string]interface{}, ss *grpc.Server, _ *zerolog.Logger) (rgrpc.Se
 		return nil, err
 	}
 
-	svc := &service{
-		usermgr:   userManager,
-		tenantmgr: tenantManager,
+	return NewWithManagers(userManager, tenantManager, plug), nil
+}
+
+// NewWithManagers returns a new UserProviderService with the given managers.
+func NewWithManagers(um user.Manager, tm tenant.Manager, plug *plugin.RevaPlugin) rgrpc.Service {
+	return &service{
+		usermgr:   um,
+		tenantmgr: tm,
 		plugin:    plug,
 	}
-
-	return svc, nil
 }
 
 type service struct {
