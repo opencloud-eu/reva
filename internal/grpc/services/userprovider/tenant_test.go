@@ -25,16 +25,20 @@ var _ = Describe("the tenant api service", func() {
 		var err error
 		config = map[string]any{
 			"driver": "memory",
-			"tenants": []map[string]any{
-				{
-					"id":         "id1",
-					"externalid": "externalid1",
-					"name":       "tenant1",
-				},
-				{
-					"id":         "id2",
-					"externalid": "externalid2",
-					"name":       "tenant2",
+			"drivers": map[string]any{
+				"memory": map[string]any{
+					"tenants": map[string]any{
+						"id1": map[string]any{
+							"id":          "id1",
+							"external_id": "externalid1",
+							"name":        "tenant1",
+						},
+						"id2": map[string]any{
+							"id":          "id2",
+							"external_id": "externalid2",
+							"name":        "tenant2",
+						},
+					},
 				},
 			},
 		}
@@ -54,5 +58,29 @@ var _ = Describe("the tenant api service", func() {
 		Expect(err).To(BeNil())
 		Expect(resp).ToNot(BeNil())
 		Expect(resp.GetStatus().GetCode()).To(Equal(rpcpb.Code_CODE_NOT_FOUND))
+	})
+
+	It("returns a tenant for a given tenant id ", func() {
+		resp, err := provider.GetTenant(context.Background(),
+			&tenantpb.GetTenantRequest{
+				TenantId: "id1",
+			},
+		)
+		Expect(err).To(BeNil())
+		Expect(resp).ToNot(BeNil())
+		Expect(resp.GetStatus().GetCode()).To(Equal(rpcpb.Code_CODE_OK))
+	})
+
+	It("returns a tenant for a given external id ", func() {
+		tbR := tenantpb.GetTenantByClaimRequest{
+			Claim: "externalid",
+			Value: "externalid1",
+		}
+		resp, err := provider.GetTenantByClaim(context.Background(),
+			&tbR,
+		)
+		Expect(err).To(BeNil())
+		Expect(resp).ToNot(BeNil())
+		Expect(resp.GetStatus().GetCode()).To(Equal(rpcpb.Code_CODE_OK))
 	})
 })
