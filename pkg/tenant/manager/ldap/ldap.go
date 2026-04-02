@@ -27,7 +27,6 @@ import (
 	"github.com/go-ldap/ldap/v3"
 	"github.com/mitchellh/mapstructure"
 	"github.com/opencloud-eu/reva/v2/pkg/appctx"
-	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
 	"github.com/opencloud-eu/reva/v2/pkg/tenant"
 	"github.com/opencloud-eu/reva/v2/pkg/tenant/manager/registry"
 	"github.com/opencloud-eu/reva/v2/pkg/utils"
@@ -105,7 +104,11 @@ func (m *manager) GetTenant(ctx context.Context, id string) (*tenantpb.Tenant, e
 }
 
 func (m *manager) GetTenantByClaim(ctx context.Context, claim, value string) (*tenantpb.Tenant, error) {
-	return nil, errtypes.NotFound(value)
+	tenantEntry, err := m.conf.LDAPIdentity.GetLDAPTenantByAttribute(ctx, m.ldap, claim, value)
+	if err != nil {
+		return nil, err
+	}
+	return m.ldapEntryToTenant(tenantEntry)
 }
 
 func (m *manager) ldapEntryToTenant(entry *ldap.Entry) (*tenantpb.Tenant, error) {
