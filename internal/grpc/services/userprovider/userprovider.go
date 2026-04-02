@@ -48,13 +48,22 @@ func init() {
 }
 
 type config struct {
-	Driver  string                            `mapstructure:"driver"`
-	Drivers map[string]map[string]interface{} `mapstructure:"drivers"`
+	Driver        string                            `mapstructure:"driver"`
+	Drivers       map[string]map[string]interface{} `mapstructure:"drivers"`
+	TenantDriver  string                            `mapstructure:"tenant_driver"`
+	TenantDrivers map[string]map[string]interface{} `mapstructure:"tenant_drivers"`
 }
 
 func (c *config) init() {
 	if c.Driver == "" {
 		c.Driver = "json"
+	}
+	// Fall back to user driver/drivers when no tenant-specific config is provided.
+	if c.TenantDriver == "" {
+		c.TenantDriver = c.Driver
+	}
+	if c.TenantDrivers == nil {
+		c.TenantDrivers = c.Drivers
 	}
 }
 

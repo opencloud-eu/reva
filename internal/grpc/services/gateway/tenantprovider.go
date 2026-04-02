@@ -29,7 +29,7 @@ import (
 )
 
 func (s *svc) GetTenant(ctx context.Context, req *tenant.GetTenantRequest) (*tenant.GetTenantResponse, error) {
-	c, err := pool.GetTenantProviderServiceClient(s.c.UserProviderEndpoint)
+	c, err := pool.GetTenantProviderServiceClient(s.c.TenantProviderEndpoint)
 	if err != nil {
 		return &tenant.GetTenantResponse{
 			Status: status.NewInternal(ctx, "error getting tenant service client"),
@@ -45,7 +45,7 @@ func (s *svc) GetTenant(ctx context.Context, req *tenant.GetTenantRequest) (*ten
 }
 
 func (s *svc) GetTenantByClaim(ctx context.Context, req *tenant.GetTenantByClaimRequest) (*tenant.GetTenantByClaimResponse, error) {
-	c, err := pool.GetTenantProviderServiceClient(s.c.UserProviderEndpoint)
+	c, err := pool.GetTenantProviderServiceClient(s.c.TenantProviderEndpoint)
 	if err != nil {
 		return &tenant.GetTenantByClaimResponse{
 			Status: status.NewInternal(ctx, "error getting tenant service client"),
