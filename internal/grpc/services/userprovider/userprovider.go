@@ -37,6 +37,7 @@ import (
 	"github.com/opencloud-eu/reva/v2/pkg/plugin"
 	"github.com/opencloud-eu/reva/v2/pkg/rgrpc"
 	"github.com/opencloud-eu/reva/v2/pkg/rgrpc/status"
+	"github.com/opencloud-eu/reva/v2/pkg/sharedconf"
 	"github.com/opencloud-eu/reva/v2/pkg/tenant"
 	tenantRegistry "github.com/opencloud-eu/reva/v2/pkg/tenant/manager/registry"
 	"github.com/opencloud-eu/reva/v2/pkg/user"
@@ -58,12 +59,18 @@ func (c *config) init() {
 	if c.Driver == "" {
 		c.Driver = "json"
 	}
+
 	// Fall back to user driver/drivers when no tenant-specific config is provided.
 	if c.TenantDriver == "" {
 		c.TenantDriver = c.Driver
 	}
 	if c.TenantDrivers == nil {
 		c.TenantDrivers = c.Drivers
+	}
+
+	// Force "null" driver if multi-tenancy is disabled
+	if !sharedconf.MultiTenantEnabled() {
+		c.TenantDriver = "null"
 	}
 }
 
