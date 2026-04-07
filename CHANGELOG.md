@@ -6,6 +6,10 @@
 
 @rhafer
 
+### 🐛 Bug Fixes
+
+- fix: error handling in upload session cleanup [[#582](https://github.com/opencloud-eu/reva/pull/582)]
+
 ### 📦️ Dependencies
 
 - chore(deps): bump github.com/go-jose/go-jose/v4 from 4.1.3 to 4.1.4 in the go_modules group across 1 directory [[#581](https://github.com/opencloud-eu/reva/pull/581)]
