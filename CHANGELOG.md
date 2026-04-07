@@ -1,6 +1,6 @@
 # Changelog
 
-## [2.42.7](https://github.com/opencloud-eu/reva/releases/tag/v2.42.7) - 2026-04-02
+## [2.42.7](https://github.com/opencloud-eu/reva/releases/tag/v2.42.7) - 2026-04-07
 
 ### ❤️ Thanks to all contributors! ❤️
 
@@ -8,6 +8,8 @@
 
 ### 📦️ Dependencies
 
+- chore(deps): bump github.com/go-jose/go-jose/v4 from 4.1.3 to 4.1.4 in the go_modules group across 1 directory [[#581](https://github.com/opencloud-eu/reva/pull/581)]
+- chore(deps): bump github.com/onsi/ginkgo/v2 from 2.28.0 to 2.28.1 [[#580](https://github.com/opencloud-eu/reva/pull/580)]
 - chore(deps): bump github.com/samber/slog-zerolog/v2 from 2.9.1 to 2.9.2 [[#569](https://github.com/opencloud-eu/reva/pull/569)]
 - chore(deps): bump github.com/go-git/go-git/v5 from 5.16.5 to 5.17.1 in the go_modules group across 1 directory [[#579](https://github.com/opencloud-eu/reva/pull/579)]
 - chore(deps): bump golang.org/x/image from 0.24.0 to 0.38.0 in the go_modules group across 1 directory [[#577](https://github.com/opencloud-eu/reva/pull/577)]
