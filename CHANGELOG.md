@@ -1,6 +1,6 @@
 # Changelog
 
-## [2.42.7](https://github.com/opencloud-eu/reva/releases/tag/v2.42.7) - 2026-04-07
+## [2.42.7](https://github.com/opencloud-eu/reva/releases/tag/v2.42.7) - 2026-04-08
 
 ### ❤️ Thanks to all contributors! ❤️
 
@@ -12,6 +12,8 @@
 
 ### 📦️ Dependencies
 
+- chore(deps): bump go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc from 0.65.0 to 0.68.0 [[#584](https://github.com/opencloud-eu/reva/pull/584)]
+- chore(deps): bump github.com/rs/zerolog from 1.34.0 to 1.35.0 [[#583](https://github.com/opencloud-eu/reva/pull/583)]
 - chore(deps): bump github.com/go-jose/go-jose/v4 from 4.1.3 to 4.1.4 in the go_modules group across 1 directory [[#581](https://github.com/opencloud-eu/reva/pull/581)]
 - chore(deps): bump github.com/onsi/ginkgo/v2 from 2.28.0 to 2.28.1 [[#580](https://github.com/opencloud-eu/reva/pull/580)]
 - chore(deps): bump github.com/samber/slog-zerolog/v2 from 2.9.1 to 2.9.2 [[#569](https://github.com/opencloud-eu/reva/pull/569)]
