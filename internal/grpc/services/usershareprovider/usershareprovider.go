@@ -27,6 +27,7 @@ import (
 	"strings"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
+	grouppb "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
@@ -199,13 +200,23 @@ func (s *service) CreateShare(ctx context.Context, req *collaboration.CreateShar
 		}, nil
 	}
 
+	// use logged in user Idp as default, if the Grantee does not have an IDP set.
 	if req.GetGrant().GetGrantee().GetType() == provider.GranteeType_GRANTEE_TYPE_USER && req.GetGrant().GetGrantee().GetUserId().GetIdp() == "" {
-		// use logged in user Idp as default.
 		req.GetGrant().GetGrantee().Id = &provider.Grantee_UserId{
 			UserId: &userpb.UserId{
 				OpaqueId: req.GetGrant().GetGrantee().GetUserId().GetOpaqueId(),
 				Idp:      user.GetId().GetIdp(),
 				Type:     userpb.UserType_USER_TYPE_PRIMARY},
+		}
+	}
+	// some for group grantees
+	if req.GetGrant().GetGrantee().GetType() == provider.GranteeType_GRANTEE_TYPE_GROUP && req.GetGrant().GetGrantee().GetGroupId().GetIdp() == "" {
+		// use logged in user Idp as default.
+		req.GetGrant().GetGrantee().Id = &provider.Grantee_GroupId{
+			GroupId: &grouppb.GroupId{
+				OpaqueId: req.GetGrant().GetGrantee().GetGroupId().GetOpaqueId(),
+				Idp:      user.GetId().GetIdp(),
+				Type:     grouppb.GroupType_GROUP_TYPE_REGULAR},
 		}
 	}
 
