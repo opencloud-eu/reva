@@ -340,6 +340,30 @@ func HasGrantPermissions(p *provider.ResourcePermissions) bool {
 	return p.GetAddGrant() || p.GetUpdateGrant() || p.GetRemoveGrant() || p.GetDenyGrant()
 }
 
+// spaceRootHasRemainingManager returns true if the given resource has at least one share
+// (excluding the share with excludeShareOpaqueID) that grants both AddGrant and RemoveGrant.
+func (s *service) spaceRootHasRemainingManager(ctx context.Context, resourceID *provider.ResourceId, excludeShareOpaqueID string) (bool, error) {
+	shares, err := s.sm.ListShares(ctx, []*collaboration.Filter{
+		{
+			Type: collaboration.Filter_TYPE_RESOURCE_ID,
+			Term: &collaboration.Filter_ResourceId{ResourceId: resourceID},
+		},
+	})
+	if err != nil {
+		return false, err
+	}
+	for _, s := range shares {
+		if s.GetId().GetOpaqueId() == excludeShareOpaqueID {
+			continue
+		}
+		perms := s.GetPermissions().GetPermissions()
+		if perms.GetAddGrant() && perms.GetRemoveGrant() {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 func (s *service) RemoveShare(ctx context.Context, req *collaboration.RemoveShareRequest) (*collaboration.RemoveShareResponse, error) {
 	log := appctx.GetLogger(ctx)
 	user := ctxpkg.ContextMustGetUser(ctx)
@@ -371,6 +395,20 @@ func (s *service) RemoveShare(ctx context.Context, req *collaboration.RemoveShar
 		return &collaboration.RemoveShareResponse{
 			Status: status.NewPermissionDenied(ctx, nil, "no permission to remove grants on shared resource"),
 		}, err
+	}
+
+	// For space root shares, ensure at least one share with both AddGrant and RemoveGrant will remain
+	// so the space always has a manager who can administer grants.
+	if utils.IsSpaceRoot(sRes.GetInfo()) {
+		if ok, err := s.spaceRootHasRemainingManager(ctx, share.GetResourceId(), share.GetId().GetOpaqueId()); err != nil {
+			return &collaboration.RemoveShareResponse{
+				Status: status.NewInternal(ctx, "failed to list shares for space root"),
+			}, nil
+		} else if !ok {
+			return &collaboration.RemoveShareResponse{
+				Status: status.NewPermissionDenied(ctx, nil, "cannot remove the last share with manager permissions on a space root"),
+			}, nil
+		}
 	}
 
 	err = s.sm.Unshare(ctx, req.Ref)
@@ -521,6 +559,20 @@ func (s *service) UpdateShare(ctx context.Context, req *collaboration.UpdateShar
 		return &collaboration.UpdateShareResponse{
 			Status: status.NewPermissionDenied(ctx, nil, "insufficient permissions to create that kind of share"),
 		}, nil
+	}
+
+	// For space root shares, if the new permissions would strip AddGrant or RemoveGrant from this share,
+	// ensure at least one other share still has both so the space retains a manager.
+	if utils.IsSpaceRoot(sRes.GetInfo()) && newPermissions != nil && (!newPermissions.GetAddGrant() || !newPermissions.GetRemoveGrant()) {
+		if ok, err := s.spaceRootHasRemainingManager(ctx, currentShare.GetResourceId(), currentShare.GetId().GetOpaqueId()); err != nil {
+			return &collaboration.UpdateShareResponse{
+				Status: status.NewInternal(ctx, "failed to list shares for space root"),
+			}, nil
+		} else if !ok {
+			return &collaboration.UpdateShareResponse{
+				Status: status.NewPermissionDenied(ctx, nil, "cannot remove the last share with manager permissions on a space root"),
+			}, nil
+		}
 	}
 
 	// check if the requested permission are plausible for the Resource
