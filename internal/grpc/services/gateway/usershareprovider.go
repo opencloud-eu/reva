@@ -760,6 +760,9 @@ func (s *svc) removeShare(ctx context.Context, req *collaboration.RemoveShareReq
 	if err != nil {
 		return nil, errors.Wrap(err, "gateway: error calling RemoveShare")
 	}
+	if res.Status.Code != rpc.Code_CODE_OK {
+		return res, nil
+	}
 
 	if s.c.CommitShareToStorageGrant {
 		var opaque *typesv1beta1.Opaque
