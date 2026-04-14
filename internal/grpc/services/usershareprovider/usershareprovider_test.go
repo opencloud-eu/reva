@@ -551,7 +551,7 @@ var _ = Describe("user share provider service", func() {
 
 			manager.AssertNumberOfCalls(GinkgoT(), "UpdateShare", 0)
 		})
-		It("succeeds when the user is not the owner/creator and does not have the UpdateGrant permissions", func() {
+		It("fails when the user is not the owner/creator and does not have the UpdateGrant permissions", func() {
 			// user has only read access
 			statResourceResponse.Info.PermissionSet = &providerpb.ResourcePermissions{
 				InitiateFileDownload: true,
@@ -931,6 +931,60 @@ var _ = Describe("user share provider service", func() {
 				manager.AssertNumberOfCalls(GinkgoT(), "ListShares", 0)
 				manager.AssertNumberOfCalls(GinkgoT(), "Unshare", 1)
 			})
+
+			DescribeTable("only the share creator, owner, or a user with RemoveGrant permission may delete the share",
+				func(
+					resourcePermissions *providerpb.ResourcePermissions,
+					shareCreator *userpb.UserId,
+					shareOwner *userpb.UserId,
+					expectedCode rpcpb.Code,
+					expectedUnshareCalls int,
+				) {
+					statResourceResponse.Info.PermissionSet = resourcePermissions
+					getShareResponse.Creator = shareCreator
+					getShareResponse.Owner = shareOwner
+
+					removeShareResponse, err := provider.RemoveShare(ctx, &collaborationpb.RemoveShareRequest{
+						Ref: removeShareRef,
+					})
+
+					Expect(err).ToNot(HaveOccurred())
+					Expect(removeShareResponse.Status.Code).To(Equal(expectedCode))
+					manager.AssertNumberOfCalls(GinkgoT(), "Unshare", expectedUnshareCalls)
+				},
+				Entry(
+					"denies deletion when user is neither the owner/creator nor has RemoveGrant",
+					&providerpb.ResourcePermissions{Stat: true, InitiateFileDownload: true},
+					bob.GetId(), // creator = bob
+					bob.GetId(), // owner = bob
+					rpcpb.Code_CODE_PERMISSION_DENIED,
+					0,
+				),
+				Entry(
+					"allows deletion when user is the creator of the share",
+					&providerpb.ResourcePermissions{Stat: true, InitiateFileDownload: true},
+					alice.GetId(), // creator = alice (the logged-in user)
+					bob.GetId(),   // owner = bob
+					rpcpb.Code_CODE_OK,
+					1,
+				),
+				Entry(
+					"allows deletion when user is the owner of the share",
+					&providerpb.ResourcePermissions{Stat: true, InitiateFileDownload: true},
+					bob.GetId(),   // creator = bob
+					alice.GetId(), // owner = alice (the logged-in user)
+					rpcpb.Code_CODE_OK,
+					1,
+				),
+				Entry(
+					"allows deletion when user has RemoveGrant permission on the resource",
+					&providerpb.ResourcePermissions{Stat: true, InitiateFileDownload: true, RemoveGrant: true},
+					bob.GetId(), // creator = bob
+					bob.GetId(), // owner = bob
+					rpcpb.Code_CODE_OK,
+					1,
+				),
+			)
 		})
 
 	})

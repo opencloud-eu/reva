@@ -467,18 +467,6 @@ var _ = Describe("Jsoncs3", func() {
 		})
 
 		Describe("UnShare", func() {
-			It("does not remove shares of other users", func() {
-				err := m.Unshare(otherCtx, &collaboration.ShareReference{
-					Spec: &collaboration.ShareReference_Id{
-						Id: &collaboration.ShareId{
-							OpaqueId: share.Id.OpaqueId,
-						},
-					},
-				})
-
-				Expect(err).To(HaveOccurred())
-			})
-
 			It("removes an existing share", func() {
 				err := m.Unshare(ctx, &collaboration.ShareReference{
 					Spec: &collaboration.ShareReference_Id{
