@@ -273,3 +273,5 @@ tool (
 replace github.com/go-micro/plugins/v4/store/nats-js-kv => github.com/opencloud-eu/go-micro-plugins/v4/store/nats-js-kv v0.0.0-20250512152754-23325793059a
 
 replace github.com/pablodz/inotifywaitgo v0.0.9 => github.com/opencloud-eu/inotifywaitgo v0.0.0-20251111171128-a390bae3c5e9
+
+replace github.com/cs3org/go-cs3apis => github.com/rhafer/go-cs3apis v0.0.0-20260413131235-e7986512ba10

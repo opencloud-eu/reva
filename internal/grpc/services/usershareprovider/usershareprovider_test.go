@@ -113,6 +113,11 @@ var _ = Describe("user share provider service", func() {
 		statResourceResponse = &providerpb.StatResponse{
 			Status: status.NewOK(ctx),
 			Info: &providerpb.ResourceInfo{
+				Id: &providerpb.ResourceId{
+					StorageId: "1",
+					SpaceId:   "2",
+					OpaqueId:  "3",
+				},
 				PermissionSet: &providerpb.ResourcePermissions{},
 			},
 		}
@@ -357,7 +362,7 @@ var _ = Describe("user share provider service", func() {
 				conversions.RoleFromName("spaceeditor").CS3ResourcePermissions(),
 				conversions.RoleFromName("manager").CS3ResourcePermissions(),
 				rpcpb.Code_CODE_OK,
-				rpcpb.Code_CODE_INVALID_ARGUMENT,
+				rpcpb.Code_CODE_PERMISSION_DENIED,
 				0,
 			),
 			Entry(
@@ -546,7 +551,7 @@ var _ = Describe("user share provider service", func() {
 
 			manager.AssertNumberOfCalls(GinkgoT(), "UpdateShare", 0)
 		})
-		It("succeeds when the user is not the owner/creator and does not have the UpdateGrant permissions", func() {
+		It("fails when the user is not the owner/creator and does not have the UpdateGrant permissions", func() {
 			// user has only read access
 			statResourceResponse.Info.PermissionSet = &providerpb.ResourcePermissions{
 				InitiateFileDownload: true,
@@ -653,6 +658,335 @@ var _ = Describe("user share provider service", func() {
 
 			manager.AssertNumberOfCalls(GinkgoT(), "UpdateShare", 1)
 		})
+
+		Context("last manager check on space root", func() {
+			var (
+				spaceRootStatResponse *providerpb.StatResponse
+				managerPerms          *providerpb.ResourcePermissions
+				updateShareRef        *collaborationpb.ShareReference
+			)
+
+			BeforeEach(func() {
+				managerPerms = conversions.RoleFromName("manager").CS3ResourcePermissions()
+
+				spaceRootStatResponse = &providerpb.StatResponse{
+					Status: status.NewOK(ctx),
+					Info: &providerpb.ResourceInfo{
+						Id: &providerpb.ResourceId{
+							StorageId: "storage1",
+							SpaceId:   "space1",
+							OpaqueId:  "space1",
+						},
+						Space: &providerpb.StorageSpace{
+							Root: &providerpb.ResourceId{
+								StorageId: "storage1",
+								SpaceId:   "space1",
+								OpaqueId:  "space1",
+							},
+						},
+						PermissionSet: managerPerms,
+					},
+				}
+				gatewayClient.On("Stat", mock.Anything, mock.Anything).Unset()
+				gatewayClient.On("Stat", mock.Anything, mock.Anything).Return(spaceRootStatResponse, nil)
+
+				getShareResponse.Id = &collaborationpb.ShareId{OpaqueId: "share-to-update"}
+				getShareResponse.Permissions = &collaborationpb.SharePermissions{Permissions: managerPerms}
+				getShareResponse.ResourceId = spaceRootStatResponse.Info.Id
+
+				updateShareRef = &collaborationpb.ShareReference{
+					Spec: &collaborationpb.ShareReference_Id{
+						Id: &collaborationpb.ShareId{OpaqueId: "share-to-update"},
+					},
+				}
+			})
+
+			It("does not check when new permissions still have both AddGrant and RemoveGrant", func() {
+				updateShareResponse, err := provider.UpdateShare(ctx, &collaborationpb.UpdateShareRequest{
+					Ref:        updateShareRef,
+					Share:      &collaborationpb.Share{Permissions: &collaborationpb.SharePermissions{Permissions: managerPerms}},
+					UpdateMask: &fieldmaskpb.FieldMask{Paths: []string{"permissions"}},
+				})
+
+				Expect(err).ToNot(HaveOccurred())
+				Expect(updateShareResponse.Status.Code).To(Equal(rpcpb.Code_CODE_OK))
+				manager.AssertNumberOfCalls(GinkgoT(), "ListShares", 0)
+				manager.AssertNumberOfCalls(GinkgoT(), "UpdateShare", 1)
+			})
+
+			It("does not check when the update mask does not include permissions", func() {
+				updateShareResponse, err := provider.UpdateShare(ctx, &collaborationpb.UpdateShareRequest{
+					Ref:        updateShareRef,
+					Share:      &collaborationpb.Share{},
+					UpdateMask: &fieldmaskpb.FieldMask{Paths: []string{"mount_point"}},
+				})
+
+				Expect(err).ToNot(HaveOccurred())
+				Expect(updateShareResponse.Status.Code).To(Equal(rpcpb.Code_CODE_OK))
+				manager.AssertNumberOfCalls(GinkgoT(), "ListShares", 0)
+				manager.AssertNumberOfCalls(GinkgoT(), "UpdateShare", 1)
+			})
+
+			It("denies downgrade when it would strip the last manager share", func() {
+				manager.On("ListShares", mock.Anything, mock.Anything).Return([]*collaborationpb.Share{
+					getShareResponse, // only this share, which is being downgraded
+				}, nil)
+
+				updateShareResponse, err := provider.UpdateShare(ctx, &collaborationpb.UpdateShareRequest{
+					Ref: updateShareRef,
+					Share: &collaborationpb.Share{Permissions: &collaborationpb.SharePermissions{
+						Permissions: &providerpb.ResourcePermissions{Stat: true},
+					}},
+					UpdateMask: &fieldmaskpb.FieldMask{Paths: []string{"permissions"}},
+				})
+
+				Expect(err).ToNot(HaveOccurred())
+				Expect(updateShareResponse.Status.Code).To(Equal(rpcpb.Code_CODE_PERMISSION_DENIED))
+				manager.AssertNumberOfCalls(GinkgoT(), "UpdateShare", 0)
+			})
+
+			It("allows downgrade when another manager share remains", func() {
+				manager.On("ListShares", mock.Anything, mock.Anything).Return([]*collaborationpb.Share{
+					getShareResponse,
+					{
+						Id:          &collaborationpb.ShareId{OpaqueId: "other-manager"},
+						Permissions: &collaborationpb.SharePermissions{Permissions: managerPerms},
+					},
+				}, nil)
+
+				updateShareResponse, err := provider.UpdateShare(ctx, &collaborationpb.UpdateShareRequest{
+					Ref: updateShareRef,
+					Share: &collaborationpb.Share{Permissions: &collaborationpb.SharePermissions{
+						Permissions: &providerpb.ResourcePermissions{Stat: true},
+					}},
+					UpdateMask: &fieldmaskpb.FieldMask{Paths: []string{"permissions"}},
+				})
+
+				Expect(err).ToNot(HaveOccurred())
+				Expect(updateShareResponse.Status.Code).To(Equal(rpcpb.Code_CODE_OK))
+				manager.AssertNumberOfCalls(GinkgoT(), "UpdateShare", 1)
+			})
+
+			It("returns internal error when listing shares fails", func() {
+				manager.On("ListShares", mock.Anything, mock.Anything).Return(nil, errors.New("storage error"))
+
+				updateShareResponse, err := provider.UpdateShare(ctx, &collaborationpb.UpdateShareRequest{
+					Ref: updateShareRef,
+					Share: &collaborationpb.Share{Permissions: &collaborationpb.SharePermissions{
+						Permissions: &providerpb.ResourcePermissions{Stat: true},
+					}},
+					UpdateMask: &fieldmaskpb.FieldMask{Paths: []string{"permissions"}},
+				})
+
+				Expect(err).ToNot(HaveOccurred())
+				Expect(updateShareResponse.Status.Code).To(Equal(rpcpb.Code_CODE_INTERNAL))
+				manager.AssertNumberOfCalls(GinkgoT(), "UpdateShare", 0)
+			})
+		})
+	})
+
+	Describe("RemoveShare", func() {
+		var (
+			spaceRootStatResponse *providerpb.StatResponse
+			managerPerms          *providerpb.ResourcePermissions
+			removeShareRef        *collaborationpb.ShareReference
+		)
+
+		BeforeEach(func() {
+			managerPerms = conversions.RoleFromName("manager").CS3ResourcePermissions()
+
+			// statResourceResponse that represents a space root
+			spaceRootStatResponse = &providerpb.StatResponse{
+				Status: status.NewOK(ctx),
+				Info: &providerpb.ResourceInfo{
+					Id: &providerpb.ResourceId{
+						StorageId: "storage1",
+						SpaceId:   "space1",
+						OpaqueId:  "space1",
+					},
+					Space: &providerpb.StorageSpace{
+						Root: &providerpb.ResourceId{
+							StorageId: "storage1",
+							SpaceId:   "space1",
+							OpaqueId:  "space1",
+						},
+					},
+					PermissionSet: managerPerms,
+				},
+			}
+			getShareResponse.Id = &collaborationpb.ShareId{OpaqueId: "share-to-remove"}
+			getShareResponse.Permissions = &collaborationpb.SharePermissions{Permissions: managerPerms}
+			getShareResponse.ResourceId = spaceRootStatResponse.Info.Id
+
+			removeShareRef = &collaborationpb.ShareReference{
+				Spec: &collaborationpb.ShareReference_Id{
+					Id: &collaborationpb.ShareId{OpaqueId: "share-to-remove"},
+				},
+			}
+
+			manager.On("Unshare", mock.Anything, mock.Anything).Return(nil)
+		})
+
+		// When removing a Space Member, we want to ensure that at least one Grantee remains that has Permission
+		// to invite new members to the space.
+		Context("when removing a share on a space root", func() {
+			BeforeEach(func() {
+				gatewayClient.On("Stat", mock.Anything, mock.Anything).Unset()
+				gatewayClient.On("Stat", mock.Anything, mock.Anything).Return(spaceRootStatResponse, nil)
+			})
+
+			It("denies removal when it would be the last manager share", func() {
+				manager.On("ListShares", mock.Anything, mock.Anything).Return([]*collaborationpb.Share{
+					getShareResponse, // only the share being removed
+				}, nil)
+
+				removeShareResponse, err := provider.RemoveShare(ctx, &collaborationpb.RemoveShareRequest{
+					Ref: removeShareRef,
+				})
+
+				Expect(err).ToNot(HaveOccurred())
+				Expect(removeShareResponse.Status.Code).To(Equal(rpcpb.Code_CODE_PERMISSION_DENIED))
+				manager.AssertNumberOfCalls(GinkgoT(), "Unshare", 0)
+			})
+
+			It("denies removal when remaining shares only have AddGrant but not RemoveGrant", func() {
+				manager.On("ListShares", mock.Anything, mock.Anything).Return([]*collaborationpb.Share{
+					getShareResponse,
+					{
+						Id: &collaborationpb.ShareId{OpaqueId: "other-share"},
+						Permissions: &collaborationpb.SharePermissions{
+							Permissions: &providerpb.ResourcePermissions{AddGrant: true, RemoveGrant: false},
+						},
+					},
+				}, nil)
+
+				removeShareResponse, err := provider.RemoveShare(ctx, &collaborationpb.RemoveShareRequest{
+					Ref: removeShareRef,
+				})
+
+				Expect(err).ToNot(HaveOccurred())
+				Expect(removeShareResponse.Status.Code).To(Equal(rpcpb.Code_CODE_PERMISSION_DENIED))
+				manager.AssertNumberOfCalls(GinkgoT(), "Unshare", 0)
+			})
+
+			It("denies removal when remaining shares only have RemoveGrant but not AddGrant", func() {
+				manager.On("ListShares", mock.Anything, mock.Anything).Return([]*collaborationpb.Share{
+					getShareResponse,
+					{
+						Id: &collaborationpb.ShareId{OpaqueId: "other-share"},
+						Permissions: &collaborationpb.SharePermissions{
+							Permissions: &providerpb.ResourcePermissions{AddGrant: false, RemoveGrant: true},
+						},
+					},
+				}, nil)
+
+				removeShareResponse, err := provider.RemoveShare(ctx, &collaborationpb.RemoveShareRequest{
+					Ref: removeShareRef,
+				})
+
+				Expect(err).ToNot(HaveOccurred())
+				Expect(removeShareResponse.Status.Code).To(Equal(rpcpb.Code_CODE_PERMISSION_DENIED))
+				manager.AssertNumberOfCalls(GinkgoT(), "Unshare", 0)
+			})
+
+			It("allows removal when another share with both AddGrant and RemoveGrant remains", func() {
+				manager.On("ListShares", mock.Anything, mock.Anything).Return([]*collaborationpb.Share{
+					getShareResponse,
+					{
+						Id:          &collaborationpb.ShareId{OpaqueId: "manager-share"},
+						Permissions: &collaborationpb.SharePermissions{Permissions: managerPerms},
+					},
+				}, nil)
+
+				removeShareResponse, err := provider.RemoveShare(ctx, &collaborationpb.RemoveShareRequest{
+					Ref: removeShareRef,
+				})
+
+				Expect(err).ToNot(HaveOccurred())
+				Expect(removeShareResponse.Status.Code).To(Equal(rpcpb.Code_CODE_OK))
+				manager.AssertNumberOfCalls(GinkgoT(), "Unshare", 1)
+			})
+
+			It("returns internal error when listing shares fails", func() {
+				manager.On("ListShares", mock.Anything, mock.Anything).Return(nil, errors.New("storage error"))
+
+				removeShareResponse, err := provider.RemoveShare(ctx, &collaborationpb.RemoveShareRequest{
+					Ref: removeShareRef,
+				})
+
+				Expect(err).ToNot(HaveOccurred())
+				Expect(removeShareResponse.Status.Code).To(Equal(rpcpb.Code_CODE_INTERNAL))
+				manager.AssertNumberOfCalls(GinkgoT(), "Unshare", 0)
+			})
+		})
+		Context("when removing a share on a non-space-root resource", func() {
+			It("does not check for remaining manager shares and succeeds", func() {
+				// statResourceResponse (default) is not a space root
+				removeShareResponse, err := provider.RemoveShare(ctx, &collaborationpb.RemoveShareRequest{
+					Ref: removeShareRef,
+				})
+
+				Expect(err).ToNot(HaveOccurred())
+				Expect(removeShareResponse.Status.Code).To(Equal(rpcpb.Code_CODE_OK))
+				manager.AssertNumberOfCalls(GinkgoT(), "ListShares", 0)
+				manager.AssertNumberOfCalls(GinkgoT(), "Unshare", 1)
+			})
+
+			DescribeTable("only the share creator, owner, or a user with RemoveGrant permission may delete the share",
+				func(
+					resourcePermissions *providerpb.ResourcePermissions,
+					shareCreator *userpb.UserId,
+					shareOwner *userpb.UserId,
+					expectedCode rpcpb.Code,
+					expectedUnshareCalls int,
+				) {
+					statResourceResponse.Info.PermissionSet = resourcePermissions
+					getShareResponse.Creator = shareCreator
+					getShareResponse.Owner = shareOwner
+
+					removeShareResponse, err := provider.RemoveShare(ctx, &collaborationpb.RemoveShareRequest{
+						Ref: removeShareRef,
+					})
+
+					Expect(err).ToNot(HaveOccurred())
+					Expect(removeShareResponse.Status.Code).To(Equal(expectedCode))
+					manager.AssertNumberOfCalls(GinkgoT(), "Unshare", expectedUnshareCalls)
+				},
+				Entry(
+					"denies deletion when user is neither the owner/creator nor has RemoveGrant",
+					&providerpb.ResourcePermissions{Stat: true, InitiateFileDownload: true},
+					bob.GetId(), // creator = bob
+					bob.GetId(), // owner = bob
+					rpcpb.Code_CODE_PERMISSION_DENIED,
+					0,
+				),
+				Entry(
+					"allows deletion when user is the creator of the share",
+					&providerpb.ResourcePermissions{Stat: true, InitiateFileDownload: true},
+					alice.GetId(), // creator = alice (the logged-in user)
+					bob.GetId(),   // owner = bob
+					rpcpb.Code_CODE_OK,
+					1,
+				),
+				Entry(
+					"allows deletion when user is the owner of the share",
+					&providerpb.ResourcePermissions{Stat: true, InitiateFileDownload: true},
+					bob.GetId(),   // creator = bob
+					alice.GetId(), // owner = alice (the logged-in user)
+					rpcpb.Code_CODE_OK,
+					1,
+				),
+				Entry(
+					"allows deletion when user has RemoveGrant permission on the resource",
+					&providerpb.ResourcePermissions{Stat: true, InitiateFileDownload: true, RemoveGrant: true},
+					bob.GetId(), // creator = bob
+					bob.GetId(), // owner = bob
+					rpcpb.Code_CODE_OK,
+					1,
+				),
+			)
+		})
+
 	})
 })
 

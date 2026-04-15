@@ -150,7 +150,16 @@ func (s *svc) updateShare(ctx context.Context, req *collaboration.UpdateShareReq
 			Expiration:  res.GetShare().GetExpiration(),
 			Creator:     creator.GetId(),
 		}
-		updateGrantStatus, err := s.updateGrant(ctx, res.GetShare().GetResourceId(), grant, nil)
+		var opaque *typesv1beta1.Opaque
+		if refIsSpaceRoot(res.GetShare().GetResourceId()) {
+			opaque = &typesv1beta1.Opaque{
+				Map: map[string]*typesv1beta1.OpaqueEntry{
+					"spacegrant": {},
+				},
+			}
+			utils.AppendPlainToOpaque(opaque, "spacetype", utils.ReadPlainFromOpaque(req.GetOpaque(), "spacetype"))
+		}
+		updateGrantStatus, err := s.updateGrant(ctx, res.GetShare().GetResourceId(), grant, opaque)
 
 		if err != nil {
 			return nil, errors.Wrap(err, "gateway: error calling updateGrant")
@@ -613,13 +622,22 @@ func (s *svc) addShare(ctx context.Context, req *collaboration.CreateShareReques
 	if s.c.CommitShareToStorageGrant {
 		// If the share is a denial we call denyGrant instead.
 		var status *rpc.Status
+		var opaque *typesv1beta1.Opaque
+		if refIsSpaceRoot(req.ResourceInfo.Id) {
+			opaque = &typesv1beta1.Opaque{
+				Map: map[string]*typesv1beta1.OpaqueEntry{
+					"spacegrant": {},
+				},
+			}
+			utils.AppendPlainToOpaque(opaque, "spacetype", req.ResourceInfo.GetSpace().GetSpaceType())
+		}
 		if grants.PermissionsEqual(req.Grant.Permissions.Permissions, &provider.ResourcePermissions{}) {
-			status, err = s.denyGrant(ctx, req.ResourceInfo.Id, req.Grant.Grantee, nil)
+			status, err = s.denyGrant(ctx, req.ResourceInfo.Id, req.Grant.Grantee, opaque)
 			if err != nil {
 				return nil, errors.Wrap(err, "gateway: error denying grant in storage")
 			}
 		} else {
-			status, err = s.addGrant(ctx, req.ResourceInfo.Id, req.Grant.Grantee, req.Grant.Permissions.Permissions, req.Grant.Expiration, nil)
+			status, err = s.addGrant(ctx, req.ResourceInfo.Id, req.Grant.Grantee, req.Grant.Permissions.Permissions, req.Grant.Expiration, opaque)
 			if err != nil {
 				appctx.GetLogger(ctx).Debug().Interface("status", status).Interface("req", req).Msg(err.Error())
 				rollBackFn(status)
@@ -628,7 +646,7 @@ func (s *svc) addShare(ctx context.Context, req *collaboration.CreateShareReques
 		}
 
 		switch status.Code {
-		case rpc.Code_CODE_OK:
+		case rpc.Code_CODE_OK, rpc.Code_CODE_ALREADY_EXISTS:
 			// ok
 		case rpc.Code_CODE_UNIMPLEMENTED:
 			appctx.GetLogger(ctx).Debug().Interface("status", status).Interface("req", req).Msg("storing grants not supported, ignoring")
@@ -742,9 +760,20 @@ func (s *svc) removeShare(ctx context.Context, req *collaboration.RemoveShareReq
 	if err != nil {
 		return nil, errors.Wrap(err, "gateway: error calling RemoveShare")
 	}
+	if res.Status.Code != rpc.Code_CODE_OK {
+		return res, nil
+	}
 
 	if s.c.CommitShareToStorageGrant {
-		removeGrantStatus, err := s.removeGrant(ctx, share.ResourceId, share.Grantee, share.Permissions.Permissions, nil)
+		var opaque *typesv1beta1.Opaque
+		if refIsSpaceRoot(share.ResourceId) {
+			opaque = &typesv1beta1.Opaque{
+				Map: map[string]*typesv1beta1.OpaqueEntry{
+					"spacegrant": {},
+				},
+			}
+		}
+		removeGrantStatus, err := s.removeGrant(ctx, share.ResourceId, share.Grantee, share.Permissions.Permissions, opaque)
 		if err != nil {
 			return nil, errors.Wrap(err, "gateway: error removing grant from storage")
 		}
