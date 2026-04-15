@@ -1,6 +1,6 @@
 # Changelog
 
-## [2.42.7](https://github.com/opencloud-eu/reva/releases/tag/v2.42.7) - 2026-04-13
+## [2.42.7](https://github.com/opencloud-eu/reva/releases/tag/v2.42.7) - 2026-04-15
 
 ### ❤️ Thanks to all contributors! ❤️
 
@@ -12,6 +12,7 @@
 
 ### 📦️ Dependencies
 
+- chore(deps): bump github.com/go-playground/validator/v10 from 10.30.1 to 10.30.2 [[#589](https://github.com/opencloud-eu/reva/pull/589)]
 - chore(deps): bump go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc from 1.42.0 to 1.43.0 [[#585](https://github.com/opencloud-eu/reva/pull/585)]
 - chore(deps): bump go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc from 0.65.0 to 0.68.0 [[#584](https://github.com/opencloud-eu/reva/pull/584)]
 - chore(deps): bump github.com/rs/zerolog from 1.34.0 to 1.35.0 [[#583](https://github.com/opencloud-eu/reva/pull/583)]
