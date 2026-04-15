@@ -6,7 +6,9 @@ when:
   - event:
       - push
       - manual
-    branch: ${CI_REPO_DEFAULT_BRANCH}
+    branch:
+      - ${CI_REPO_DEFAULT_BRANCH}
+      - feature/*
   - event:
       - pull_request
       - cron
