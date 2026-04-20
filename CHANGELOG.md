@@ -17,6 +17,7 @@
 
 ### 📦️ Dependencies
 
+- chore(deps): bump github.com/nats-io/nats.go from 1.49.0 to 1.51.0 [[#591](https://github.com/opencloud-eu/reva/pull/591)]
 - chore(deps): bump github.com/coreos/go-oidc/v3 from 3.17.0 to 3.18.0 [[#586](https://github.com/opencloud-eu/reva/pull/586)]
 - chore(deps): bump github.com/go-git/go-git/v5 from 5.17.1 to 5.18.0 in the go_modules group across 1 directory [[#595](https://github.com/opencloud-eu/reva/pull/595)]
 - chore(deps): bump github.com/go-playground/validator/v10 from 10.30.1 to 10.30.2 [[#589](https://github.com/opencloud-eu/reva/pull/589)]
