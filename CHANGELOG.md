@@ -4,10 +4,11 @@
 
 ### ❤️ Thanks to all contributors! ❤️
 
-@aduffeck, @rhafer
+@aduffeck, @fschade, @rhafer
 
 ### 📈 Enhancement
 
+- experimental: add darwin watchfs support [[#471](https://github.com/opencloud-eu/reva/pull/471)]
 - Tracing [[#596](https://github.com/opencloud-eu/reva/pull/596)]
 
 ### 🐛 Bug Fixes
