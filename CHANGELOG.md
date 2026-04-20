@@ -6,14 +6,15 @@
 
 @aduffeck, @fschade, @rhafer
 
+### 🐛 Bug Fixes
+
+- Fix race conditions in the hybrid metadata backend [[#594](https://github.com/opencloud-eu/reva/pull/594)]
+- fix: error handling in upload session cleanup [[#582](https://github.com/opencloud-eu/reva/pull/582)]
+
 ### 📈 Enhancement
 
 - experimental: add darwin watchfs support [[#471](https://github.com/opencloud-eu/reva/pull/471)]
 - Tracing [[#596](https://github.com/opencloud-eu/reva/pull/596)]
-
-### 🐛 Bug Fixes
-
-- fix: error handling in upload session cleanup [[#582](https://github.com/opencloud-eu/reva/pull/582)]
 
 ### 📦️ Dependencies
 
