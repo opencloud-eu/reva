@@ -13,6 +13,7 @@ stat_cache_ttl = 1
 permissionssvc = "{{permissions_address}}"# sharing
 usershareprovidersvc = "{{shares_address}}"
 publicshareprovidersvc = "{{shares_address}}"
+use_common_space_root_share_logic = true
 
 [grpc.services.authregistry]
 driver = "static"

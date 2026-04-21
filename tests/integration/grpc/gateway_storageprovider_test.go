@@ -190,6 +190,7 @@ var _ = Describe("gateway", func() {
 				{Name: "storage", Config: "storageprovider-decomposed.toml"},
 				{Name: "storage2", Config: "storageprovider-decomposed.toml"},
 				{Name: "permissions", Config: "permissions-opencloud-ci.toml"},
+				{Name: "shares", Config: "shares.toml"},
 			}
 		})
 
