@@ -49,3 +49,5 @@ packages:
         interfaces:
             GatewayAPIClient:
             CollaborationAPIClient:
+            SpacesAPIClient:
+            StorageRegistryAPIClient:

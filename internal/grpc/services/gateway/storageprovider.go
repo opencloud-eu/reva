@@ -233,6 +233,15 @@ func (s *svc) CreateStorageSpace(ctx context.Context, req *provider.CreateStorag
 	// Note: the DecomposedFS storagadriver already adds a grant to the space root giving that access, the "CreateShare"
 	//       here is happeing so that that grant is also visible when listing permission (shares) on the spaceroot.
 	if req.GetType() != "personal" && createRes.GetStatus().GetCode() == rpc.Code_CODE_OK {
+		rollbackFn := func() {
+			dsRes, dsErr := s.DeleteStorageSpace(ctx, &provider.DeleteStorageSpaceRequest{
+				Id: createRes.GetStorageSpace().GetId(),
+			})
+			if dsErr != nil || dsRes.GetStatus().GetCode() != rpc.Code_CODE_OK {
+				log.Error().Err(dsErr).Interface("status", dsRes.GetStatus()).Interface("space_id", createRes.GetStorageSpace().GetId()).Msg("failed to delete space during rollback")
+			}
+		}
+
 		u := ctxpkg.ContextMustGetUser(ctx)
 		shareReq := &collaborationv1beta1.CreateShareRequest{
 			ResourceInfo: &provider.ResourceInfo{
@@ -252,7 +261,16 @@ func (s *svc) CreateStorageSpace(ctx context.Context, req *provider.CreateStorag
 		}
 		csResp, err := s.CreateShare(ctx, shareReq)
 		if err != nil || csResp.GetStatus().GetCode() != rpc.Code_CODE_OK {
-			log.Error().Err(err).Interface("status", csResp.GetStatus()).Interface("space_id", createRes.GetStorageSpace().GetId()).Msg("failed to create share for space owner")
+			log.Error().Err(err).Interface("status", csResp.GetStatus()).Interface("space_id", createRes.GetStorageSpace().GetId()).Msg("failed to create initial share for space creator, rolling back space creation")
+			rollbackFn()
+
+			shareErrMsg := "failed to create initial share for space creator"
+			if err == nil {
+				shareErrMsg = csResp.GetStatus().GetMessage()
+			}
+			return &provider.CreateStorageSpaceResponse{
+				Status: status.NewInternal(ctx, shareErrMsg),
+			}, nil
 		}
 	}
 
