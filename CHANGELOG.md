@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.43.1](https://github.com/opencloud-eu/reva/releases/tag/v2.43.1) - 2026-04-21
+
+### 📦️ Dependencies
+
+- chore(deps): bump github.com/ceph/go-ceph from 0.38.0 to 0.39.0 [[#599](https://github.com/opencloud-eu/reva/pull/599)]
+
 ## [2.43.0](https://github.com/opencloud-eu/reva/releases/tag/v2.43.0) - 2026-04-20
 
 ### ❤️ Thanks to all contributors! ❤️
