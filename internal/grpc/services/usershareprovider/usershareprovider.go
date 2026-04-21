@@ -315,11 +315,7 @@ func (s *service) CreateShare(ctx context.Context, req *collaboration.CreateShar
 
 	var opaque *typesv1beta1.Opaque
 	if isSpaceRoot {
-		opaque = &typesv1beta1.Opaque{
-			Map: map[string]*typesv1beta1.OpaqueEntry{
-				"spacegrant": {},
-			},
-		}
+		opaque = utils.SpaceGrantOpaque()
 	}
 
 	if noEvent {
@@ -420,11 +416,7 @@ func (s *service) RemoveShare(ctx context.Context, req *collaboration.RemoveShar
 
 	var opaque *typesv1beta1.Opaque
 	if utils.IsSpaceRoot(sRes.GetInfo()) {
-		opaque = &typesv1beta1.Opaque{
-			Map: map[string]*typesv1beta1.OpaqueEntry{
-				"spacegrant": {},
-			},
-		}
+		opaque = utils.SpaceGrantOpaque()
 	}
 	opaque = utils.AppendJSONToOpaque(opaque, "resourceid", share.GetResourceId())
 	opaque = utils.AppendPlainToOpaque(opaque, "resourcename", sRes.GetInfo().GetName())
@@ -594,11 +586,7 @@ func (s *service) UpdateShare(ctx context.Context, req *collaboration.UpdateShar
 
 	var opaque *typesv1beta1.Opaque
 	if utils.IsSpaceRoot(sRes.GetInfo()) {
-		opaque = &typesv1beta1.Opaque{
-			Map: map[string]*typesv1beta1.OpaqueEntry{
-				"spacegrant": {},
-			},
-		}
+		opaque = utils.SpaceGrantOpaque()
 	}
 
 	res := &collaboration.UpdateShareResponse{
