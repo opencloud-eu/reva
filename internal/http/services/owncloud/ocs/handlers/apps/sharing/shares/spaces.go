@@ -189,8 +189,18 @@ func (h *Handler) addSpaceMember(w http.ResponseWriter, r *http.Request, info *p
 }
 
 func (h *Handler) isSpaceShare(r *http.Request, shareID string) bool {
-	_, err := storagespace.ParseReference(shareID)
-	return err == nil
+	ref, err := storagespace.ParseReference(shareID)
+	// NOTE: we ignore the 'Path' part of the reference here as we're just interested in the space root
+	switch {
+	case err != nil:
+		return false
+	case ref.GetResourceId().GetSpaceId() == "":
+		return false
+	case ref.GetResourceId().GetOpaqueId() == "" || ref.GetResourceId().GetSpaceId() == ref.GetResourceId().GetOpaqueId():
+		return true
+	default:
+		return false
+	}
 }
 
 func (h *Handler) removeSpaceMember(w http.ResponseWriter, r *http.Request, spaceID string) {
