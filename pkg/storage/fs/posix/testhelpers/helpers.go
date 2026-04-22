@@ -20,17 +20,21 @@ package helpers
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/nats-io/nats.go/jetstream"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/mock"
 	"google.golang.org/grpc"
 
-	"maps"
+	natsserver "github.com/nats-io/nats-server/v2/server"
+	natsclient "github.com/nats-io/nats.go"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	cs3permissions "github.com/cs3org/go-cs3apis/cs3/permissions/v1beta1"
@@ -58,6 +62,51 @@ import (
 	"github.com/opencloud-eu/reva/v2/pkg/store"
 	"github.com/opencloud-eu/reva/v2/tests/helpers"
 )
+
+func NewInProcessNATSServer() (conn *natsclient.Conn, js jetstream.JetStream, cleanup func(), err error) {
+	tmp, err := os.MkdirTemp("", "nats_test")
+	if err != nil {
+		err = fmt.Errorf("failed to create temp directory for NATS storage: %w", err)
+		return
+	}
+	server, err := natsserver.NewServer(&natsserver.Options{
+		DontListen: true, // Don't make a TCP socket.
+		JetStream:  true,
+		StoreDir:   tmp,
+	})
+	if err != nil {
+		err = fmt.Errorf("failed to create NATS server: %w", err)
+		return
+	}
+	// Add logs to stdout.
+	// server.ConfigureLogger()
+	server.Start()
+	cleanup = func() {
+		server.Shutdown()
+		os.RemoveAll(tmp)
+	}
+
+	if !server.ReadyForConnections(time.Second * 5) {
+		err = errors.New("failed to start server after 5 seconds")
+		return
+	}
+
+	// Create a connection.
+	conn, err = natsclient.Connect("", natsclient.InProcessServer(server))
+	if err != nil {
+		err = fmt.Errorf("failed to connect to server: %w", err)
+		return
+	}
+
+	// Create a JetStream client.
+	js, err = jetstream.New(conn)
+	if err != nil {
+		err = fmt.Errorf("failed to create jetstream: %w", err)
+		return
+	}
+
+	return
+}
 
 // TestEnv represents a test environment for unit tests
 type TestEnv struct {
@@ -202,6 +251,17 @@ func NewTestEnv(config map[string]interface{}) (*TestEnv, error) {
 	default:
 		return nil, fmt.Errorf("unknown metadata backend %s", o.MetadataBackend)
 	}
+
+	// wire in-process nats server for testing
+	nc, js, _, err := NewInProcessNATSServer()
+	if err != nil {
+		return nil, fmt.Errorf("failed to set up in-process NATS server: %w", err)
+	}
+	defer nc.Close()
+	kv, err := js.CreateKeyValue(context.Background(), jetstream.KeyValueConfig{
+		Bucket: o.IDCache.Database,
+	})
+	lu.IDCache = lookup.NewStoreIDCacheForExistingKV(kv)
 
 	pmock := &mocks.PermissionsChecker{}
 

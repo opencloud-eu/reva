@@ -35,6 +35,12 @@ type StoreIDCache struct {
 	kv jetstream.KeyValue
 }
 
+func NewStoreIDCacheForExistingKV(kv jetstream.KeyValue) *StoreIDCache {
+	return &StoreIDCache{
+		kv: kv,
+	}
+}
+
 // NewStoreIDCache returns a new StoreIDCache
 func NewStoreIDCache(c cache.Config) (*StoreIDCache, error) {
 	c.Database += "_v2" // Use a versioned bucket name to avoid conflicts with previous implementations
