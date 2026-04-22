@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/cenkalti/backoff"
-	"github.com/go-micro/plugins/v4/events/natsjs"
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 )
@@ -24,9 +23,9 @@ func NewNatsKeyValue(c Config) (jetstream.KeyValue, error) {
 		return nil, errors.New("at least one node is required")
 	}
 
-	opts := []natsjs.Option{}
+	opts := []nats.Option{}
 	if c.AuthUsername != "" || c.AuthPassword != "" {
-		opts = append(opts, natsjs.Authenticate(c.AuthUsername, c.AuthPassword))
+		opts = append(opts, nats.UserInfo(c.AuthUsername, c.AuthPassword))
 	}
 
 	if c.TLSEnabled {
@@ -41,31 +40,11 @@ func NewNatsKeyValue(c Config) (jetstream.KeyValue, error) {
 				tlsConfig.RootCAs = caCertPool
 			}
 		}
-		opts = append(opts, natsjs.TLSConfig(tlsConfig))
+		opts = append(opts, nats.Secure(tlsConfig))
 	}
 
 	var kv jetstream.KeyValue
 	o := func() error {
-		opts := []nats.Option{}
-		if c.AuthUsername != "" || c.AuthPassword != "" {
-			opts = append(opts, nats.UserInfo(c.AuthUsername, c.AuthPassword))
-		}
-
-		if c.TLSEnabled {
-			tlsConfig := &tls.Config{
-				InsecureSkipVerify: c.TLSInsecure,
-			}
-			if c.TLSRootCACertificate != "" {
-				caCert, err := os.ReadFile(c.TLSRootCACertificate)
-				if err == nil {
-					caCertPool := x509.NewCertPool()
-					caCertPool.AppendCertsFromPEM(caCert)
-					tlsConfig.RootCAs = caCertPool
-				}
-			}
-			opts = append(opts, nats.Secure(tlsConfig))
-		}
-
 		nc, err := nats.Connect(nodes, opts...)
 		if err != nil {
 			return err

@@ -37,7 +37,7 @@ type StoreIDCache struct {
 
 // NewStoreIDCache returns a new StoreIDCache
 func NewStoreIDCache(c cache.Config) (*StoreIDCache, error) {
-	c.Database = c.Database + "_v2" // Use a versioned bucket name to avoid conflicts with previous implementations
+	c.Database += "_v2" // Use a versioned bucket name to avoid conflicts with previous implementations
 
 	kv, err := cache.NewNatsKeyValue(c)
 	if err != nil {
@@ -87,7 +87,7 @@ func (c *StoreIDCache) DeleteByPath(ctx context.Context, path string) error {
 	if err != nil {
 		return err
 	}
-	defer watcher.Stop()
+	defer func() { _ = watcher.Stop() }()
 
 	for update := range watcher.Updates() {
 		if update == nil {
