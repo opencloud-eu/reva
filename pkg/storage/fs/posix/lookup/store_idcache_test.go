@@ -16,12 +16,14 @@ var _ = Describe("StoreIdcache", func() {
 	)
 
 	BeforeEach(func() {
-		storeIdcache = lookup.NewStoreIDCache(cache.Config{
+		var err error
+		storeIdcache, err = lookup.NewStoreIDCache(cache.Config{
 			Store:    "memory",
 			Database: "idcache",
 			Size:     100,
 			Nodes:    []string{"localhost:2379"},
 		})
+		Expect(err).ToNot(HaveOccurred())
 
 		Expect(storeIdcache.Set(context.TODO(), "spaceID", "nodeID", "path")).To(Succeed())
 	})

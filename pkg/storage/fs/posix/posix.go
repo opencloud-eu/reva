@@ -89,9 +89,12 @@ func New(m map[string]interface{}, stream events.Stream, log *zerolog.Logger) (s
 	var lu *lookup.Lookup
 	switch o.MetadataBackend {
 	case "xattrs":
-		lu = lookup.New(metadata.NewXattrsBackend(o.FileMetadataCache), um, o, &timemanager.Manager{})
+		lu, err = lookup.New(metadata.NewXattrsBackend(o.FileMetadataCache), um, o, &timemanager.Manager{})
+		if err != nil {
+			return nil, err
+		}
 	case "hybrid":
-		lu = lookup.New(metadata.NewHybridBackend(1024, // start offloading grants after 1KB
+		lu, err = lookup.New(metadata.NewHybridBackend(1024, // start offloading grants after 1KB
 			func(n metadata.MetadataNode) string {
 				spaceRoot, _ := lu.IDCache.Get(context.Background(), n.GetSpaceID(), n.GetSpaceID())
 				if len(spaceRoot) == 0 {
@@ -101,6 +104,9 @@ func New(m map[string]interface{}, stream events.Stream, log *zerolog.Logger) (s
 				return filepath.Join(spaceRoot, lookup.MetadataDir)
 			},
 			o.FileMetadataCache), um, o, &timemanager.Manager{})
+		if err != nil {
+			return nil, err
+		}
 	default:
 		return nil, fmt.Errorf("unknown metadata backend %s, only 'xattrs' or 'hybrid' (default) supported", o.MetadataBackend)
 	}

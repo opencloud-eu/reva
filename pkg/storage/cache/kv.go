@@ -1,0 +1,108 @@
+// Copyright 2026 OpenCloud GmbH <mail@opencloud.eu>
+// SPDX-License-Identifier: Apache-2.0
+
+package cache
+
+import (
+	"context"
+	"crypto/tls"
+	"crypto/x509"
+	"errors"
+	"os"
+	"strings"
+	"time"
+
+	"github.com/cenkalti/backoff"
+	"github.com/go-micro/plugins/v4/events/natsjs"
+	"github.com/nats-io/nats.go"
+	"github.com/nats-io/nats.go/jetstream"
+)
+
+func NewNatsKeyValue(c Config) (jetstream.KeyValue, error) {
+	nodes := strings.Join(c.Nodes, ",")
+	if nodes == "" {
+		return nil, errors.New("at least one node is required")
+	}
+
+	opts := []natsjs.Option{}
+	if c.AuthUsername != "" || c.AuthPassword != "" {
+		opts = append(opts, natsjs.Authenticate(c.AuthUsername, c.AuthPassword))
+	}
+
+	if c.TLSEnabled {
+		tlsConfig := &tls.Config{
+			InsecureSkipVerify: c.TLSInsecure,
+		}
+		if c.TLSRootCACertificate != "" {
+			caCert, err := os.ReadFile(c.TLSRootCACertificate)
+			if err == nil {
+				caCertPool := x509.NewCertPool()
+				caCertPool.AppendCertsFromPEM(caCert)
+				tlsConfig.RootCAs = caCertPool
+			}
+		}
+		opts = append(opts, natsjs.TLSConfig(tlsConfig))
+	}
+
+	var kv jetstream.KeyValue
+	o := func() error {
+		opts := []nats.Option{}
+		if c.AuthUsername != "" || c.AuthPassword != "" {
+			opts = append(opts, nats.UserInfo(c.AuthUsername, c.AuthPassword))
+		}
+
+		if c.TLSEnabled {
+			tlsConfig := &tls.Config{
+				InsecureSkipVerify: c.TLSInsecure,
+			}
+			if c.TLSRootCACertificate != "" {
+				caCert, err := os.ReadFile(c.TLSRootCACertificate)
+				if err == nil {
+					caCertPool := x509.NewCertPool()
+					caCertPool.AppendCertsFromPEM(caCert)
+					tlsConfig.RootCAs = caCertPool
+				}
+			}
+			opts = append(opts, nats.Secure(tlsConfig))
+		}
+
+		nc, err := nats.Connect(nodes, opts...)
+		if err != nil {
+			return err
+		}
+
+		js, err := jetstream.New(nc)
+		if err != nil {
+			return err
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		kv, err = js.KeyValue(ctx, c.Database)
+		if err != nil {
+			kvConfig := jetstream.KeyValueConfig{
+				Bucket: c.Database,
+				TTL:    0, // we don't do TTLs for this store
+			}
+			if c.DisablePersistence {
+				kvConfig.Storage = jetstream.MemoryStorage
+			}
+			if c.Size > 0 {
+				kvConfig.MaxBytes = int64(c.Size)
+			}
+			kv, err = js.CreateKeyValue(ctx, kvConfig)
+			if err != nil {
+				panic(err)
+			}
+		}
+
+		return nil
+	}
+	err := backoff.Retry(o, backoff.NewExponentialBackOff())
+	if err != nil {
+		return nil, err
+	}
+
+	return kv, nil
+}

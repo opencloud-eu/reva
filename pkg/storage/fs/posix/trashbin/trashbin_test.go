@@ -22,10 +22,12 @@ import (
 
 func TestTrashbin_RestoreRecycleItem(t *testing.T) {
 	backend := mocks.NewBackend(t)
+	lu, err := lookup.New(backend, nil, &options.Options{}, nil)
+	assert.NoError(t, err)
 	tb, err := trashbin.New(
 		nil,
 		nil,
-		lookup.New(backend, nil, &options.Options{}, nil),
+		lu,
 		nil,
 	)
 	assert.NoError(t, err)

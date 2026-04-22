@@ -82,24 +82,33 @@ type Lookup struct {
 }
 
 // New returns a new Lookup instance
-func New(b metadata.Backend, um usermapper.Mapper, o *options.Options, tm node.TimeManager) *Lookup {
+func New(b metadata.Backend, um usermapper.Mapper, o *options.Options, tm node.TimeManager) (*Lookup, error) {
 	idHistoryConf := o.IDCache
 	idHistoryConf.Table = o.IDCache.Table + "_history"
 	idHistoryConf.TTL = 1 * time.Minute
 
 	spaceRootCache, _ := lru.New[string, string](1000)
 
+	idCache, err := NewStoreIDCache(o.IDCache)
+	if err != nil {
+		return nil, err
+	}
+	historyIDCache, err := NewStoreIDCache(idHistoryConf)
+	if err != nil {
+		return nil, err
+	}
+
 	lu := &Lookup{
 		Options:         o,
 		metadataBackend: b,
-		IDCache:         NewStoreIDCache(o.IDCache),
-		IDHistoryCache:  NewStoreIDCache(idHistoryConf),
+		IDCache:         idCache,
+		IDHistoryCache:  historyIDCache,
 		spaceRootCache:  spaceRootCache,
 		userMapper:      um,
 		tm:              tm,
 	}
 
-	return lu
+	return lu, nil
 }
 
 // CacheID caches the path for the given space and node id
