@@ -84,12 +84,8 @@ func newTestSvc(
 
 	return &svc{
 		c: &config{
-			StorageRegistryEndpoint:    providerAddr,
-			UserShareProviderEndpoint:  providerAddr,
-			// UseCommonSpaceRootShareLogic=true makes CreateShare always call the
-			// collaboration client directly, bypassing the addSpaceShare path that
-			// would try to call AddGrant on a storage provider.
-			UseCommonSpaceRootShareLogic: true,
+			StorageRegistryEndpoint:   providerAddr,
+			UserShareProviderEndpoint: providerAddr,
 		},
 		providerCache:            cache.GetProviderCache(cache.Config{Store: "noop"}),
 		createPersonalSpaceCache: cache.GetCreatePersonalSpaceCache(cache.Config{Store: "memory"}),
