@@ -122,5 +122,4 @@ services:
 
   nats:
     image: *nats_image
-    commands:
-      - nats-server -js -p 4222 --jetstream --store file --dir /data --logtime
+    entrypoint: ["nats-server", "-js", "-p", "4222"]
