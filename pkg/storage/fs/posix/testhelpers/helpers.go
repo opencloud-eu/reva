@@ -20,17 +20,21 @@ package helpers
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/nats-io/nats.go/jetstream"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/mock"
 	"google.golang.org/grpc"
 
-	"maps"
+	natsserver "github.com/nats-io/nats-server/v2/server"
+	natsclient "github.com/nats-io/nats.go"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	cs3permissions "github.com/cs3org/go-cs3apis/cs3/permissions/v1beta1"
@@ -40,6 +44,7 @@ import (
 	"github.com/opencloud-eu/reva/v2/pkg/rgrpc/todo/pool"
 	"github.com/opencloud-eu/reva/v2/pkg/storage"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/cache"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/idcache"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/lookup"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/options"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/timemanager"
@@ -55,9 +60,53 @@ import (
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/permissions/mocks"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/usermapper"
 	"github.com/opencloud-eu/reva/v2/pkg/storagespace"
-	"github.com/opencloud-eu/reva/v2/pkg/store"
 	"github.com/opencloud-eu/reva/v2/tests/helpers"
 )
+
+func NewInProcessNATSServer() (conn *natsclient.Conn, js jetstream.JetStream, cleanup func(), err error) {
+	tmp, err := os.MkdirTemp("", "nats_test")
+	if err != nil {
+		err = fmt.Errorf("failed to create temp directory for NATS storage: %w", err)
+		return
+	}
+	server, err := natsserver.NewServer(&natsserver.Options{
+		DontListen: true, // Don't make a TCP socket.
+		JetStream:  true,
+		StoreDir:   tmp,
+	})
+	if err != nil {
+		err = fmt.Errorf("failed to create NATS server: %w", err)
+		return
+	}
+	// Add logs to stdout.
+	// server.ConfigureLogger()
+	server.Start()
+	cleanup = func() {
+		server.Shutdown()
+		os.RemoveAll(tmp)
+	}
+
+	if !server.ReadyForConnections(time.Second * 5) {
+		err = errors.New("failed to start server after 5 seconds")
+		return
+	}
+
+	// Create a connection.
+	conn, err = natsclient.Connect("", natsclient.InProcessServer(server))
+	if err != nil {
+		err = fmt.Errorf("failed to connect to server: %w", err)
+		return
+	}
+
+	// Create a JetStream client.
+	js, err = jetstream.New(conn)
+	if err != nil {
+		err = fmt.Errorf("failed to create jetstream: %w", err)
+		return
+	}
+
+	return
+}
 
 // TestEnv represents a test environment for unit tests
 type TestEnv struct {
@@ -130,6 +179,10 @@ func NewTestEnv(config map[string]interface{}) (*TestEnv, error) {
 		"generalspacepath_template":  "projects/{{.SpaceId}}",
 		"watch_fs":                   false,
 		"scan_fs":                    false,
+		"idcache": map[string]interface{}{
+			"cache_store":    "nats-js-kv",
+			"cache_database": "ids-storage-users",
+		},
 	}
 	// make it possible to override single config values
 	maps.Copy(defaultConfig, config)
@@ -180,12 +233,41 @@ func NewTestEnv(config map[string]interface{}) (*TestEnv, error) {
 		},
 	}
 
+	// wire in-process nats server for testing
+	_, js, _, err := NewInProcessNATSServer()
+	if err != nil {
+		return nil, fmt.Errorf("failed to set up in-process NATS server: %w", err)
+	}
+	kv, err := js.CreateKeyValue(context.Background(), jetstream.KeyValueConfig{
+		Bucket: o.IDCache.Database,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create key-value store in NATS: %w", err)
+	}
+
+	c, err := idcache.NewStoreIDCache(kv)
+	if err != nil {
+		return nil, err
+	}
+
+	historyKv, err := js.CreateKeyValue(context.Background(), jetstream.KeyValueConfig{
+		Bucket: o.IDCache.Database + "_history",
+		TTL:    1 * time.Minute,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create key-value store in NATS: %w", err)
+	}
+	historyCache, err := idcache.NewStoreIDCache(historyKv)
+	if err != nil {
+		return nil, err
+	}
+
 	var lu *lookup.Lookup
 	switch o.MetadataBackend {
 	case "xattrs":
-		lu = lookup.New(metadata.NewXattrsBackend(o.FileMetadataCache), um, o, &timemanager.Manager{})
+		lu, _ = lookup.New(metadata.NewXattrsBackend(o.FileMetadataCache), um, o, &timemanager.Manager{}, c, historyCache)
 	case "hybrid":
-		lu = lookup.New(metadata.NewHybridBackend(1024,
+		lu, _ = lookup.New(metadata.NewHybridBackend(1024,
 			func(n metadata.MetadataNode) string {
 				spaceRoot, _ := lu.IDCache.Get(context.Background(), n.GetSpaceID(), n.GetSpaceID())
 				if len(spaceRoot) == 0 {
@@ -196,9 +278,9 @@ func NewTestEnv(config map[string]interface{}) (*TestEnv, error) {
 			},
 			cache.Config{
 				Database: o.Root,
-			}), um, o, &timemanager.Manager{})
+			}), um, o, &timemanager.Manager{}, c, historyCache)
 	case "messagepack":
-		lu = lookup.New(metadata.NewMessagePackBackend(o.FileMetadataCache), um, o, &timemanager.Manager{})
+		lu, _ = lookup.New(metadata.NewMessagePackBackend(o.FileMetadataCache), um, o, &timemanager.Manager{}, c, historyCache)
 	default:
 		return nil, fmt.Errorf("unknown metadata backend %s", o.MetadataBackend)
 	}
@@ -223,7 +305,7 @@ func NewTestEnv(config map[string]interface{}) (*TestEnv, error) {
 	if err != nil {
 		return nil, err
 	}
-	tree, err := tree.New(lu, bs, um, tb, permissions.Permissions{}, o, nil, store.Create(), &logger)
+	tree, err := tree.New(lu, bs, um, tb, permissions.Permissions{}, o, nil, c, &logger)
 	if err != nil {
 		return nil, err
 	}
