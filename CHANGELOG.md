@@ -1,9 +1,10 @@
 # Changelog
 
-## [2.43.1](https://github.com/opencloud-eu/reva/releases/tag/v2.43.1) - 2026-04-22
+## [2.43.1](https://github.com/opencloud-eu/reva/releases/tag/v2.43.1) - 2026-04-23
 
 ### 📦️ Dependencies
 
+- chore(deps): bump golang.org/x/sys from 0.42.0 to 0.43.0 [[#601](https://github.com/opencloud-eu/reva/pull/601)]
 - chore(deps): bump github.com/mattn/go-sqlite3 from 1.14.37 to 1.14.42 [[#598](https://github.com/opencloud-eu/reva/pull/598)]
 - chore(deps): bump github.com/ceph/go-ceph from 0.38.0 to 0.39.0 [[#599](https://github.com/opencloud-eu/reva/pull/599)]
 
