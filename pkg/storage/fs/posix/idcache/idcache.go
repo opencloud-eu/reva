@@ -16,7 +16,7 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package lookup
+package idcache
 
 import (
 	"context"
@@ -27,36 +27,21 @@ import (
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 	"github.com/opencloud-eu/reva/v2/pkg/appctx"
-	"github.com/opencloud-eu/reva/v2/pkg/storage/cache"
-	"github.com/pkg/errors"
 )
 
-type StoreIDCache struct {
+type IDCache struct {
 	kv jetstream.KeyValue
 }
 
-func NewStoreIDCacheForExistingKV(kv jetstream.KeyValue) *StoreIDCache {
-	return &StoreIDCache{
-		kv: kv,
-	}
-}
-
 // NewStoreIDCache returns a new StoreIDCache
-func NewStoreIDCache(c cache.Config) (*StoreIDCache, error) {
-	c.Database += "_v2" // Use a versioned bucket name to avoid conflicts with previous implementations
-
-	kv, err := cache.NewNatsKeyValue(c)
-	if err != nil {
-		return nil, errors.Wrap(err, "could not create nats key value store")
-	}
-
-	return &StoreIDCache{
+func NewStoreIDCache(kv jetstream.KeyValue) (*IDCache, error) {
+	return &IDCache{
 		kv: kv,
 	}, nil
 }
 
 // Delete removes an entry from the cache
-func (c *StoreIDCache) Delete(ctx context.Context, spaceID, nodeID string) error {
+func (c *IDCache) Delete(ctx context.Context, spaceID, nodeID string) error {
 	var rerr error
 	v, err := c.kv.Get(ctx, cacheKey(spaceID, nodeID))
 	if err == nil {
@@ -71,7 +56,7 @@ func (c *StoreIDCache) Delete(ctx context.Context, spaceID, nodeID string) error
 }
 
 // DeleteByPath removes an entry from the cache
-func (c *StoreIDCache) DeleteByPath(ctx context.Context, path string) error {
+func (c *IDCache) DeleteByPath(ctx context.Context, path string) error {
 	baseKey := reverseCacheKey(path)
 
 	spaceID, nodeID, ok := c.GetByPath(ctx, path)
@@ -121,12 +106,12 @@ func (c *StoreIDCache) DeleteByPath(ctx context.Context, path string) error {
 }
 
 // DeletePath removes only the path entry from the cache
-func (c *StoreIDCache) DeletePath(ctx context.Context, path string) error {
+func (c *IDCache) DeletePath(ctx context.Context, path string) error {
 	return c.kv.Purge(ctx, reverseCacheKey(path))
 }
 
 // Set adds a new entry to the cache
-func (c *StoreIDCache) Set(ctx context.Context, spaceID, nodeID, val string) error {
+func (c *IDCache) Set(ctx context.Context, spaceID, nodeID, val string) error {
 	_, err := c.kv.Put(ctx, cacheKey(spaceID, nodeID), []byte(val))
 	if err != nil {
 		return err
@@ -137,7 +122,7 @@ func (c *StoreIDCache) Set(ctx context.Context, spaceID, nodeID, val string) err
 }
 
 // Get returns the value for a given key
-func (c *StoreIDCache) Get(ctx context.Context, spaceID, nodeID string) (string, bool) {
+func (c *IDCache) Get(ctx context.Context, spaceID, nodeID string) (string, bool) {
 	record, err := c.kv.Get(ctx, cacheKey(spaceID, nodeID))
 	if err != nil {
 		return "", false
@@ -145,7 +130,7 @@ func (c *StoreIDCache) Get(ctx context.Context, spaceID, nodeID string) (string,
 	return string(record.Value()), true
 }
 
-func (c *StoreIDCache) getByReverseCacheKey(ctx context.Context, reverseKey string) (string, string, bool) {
+func (c *IDCache) getByReverseCacheKey(ctx context.Context, reverseKey string) (string, string, bool) {
 	record, err := c.kv.Get(ctx, reverseKey)
 	if err != nil {
 		return "", "", false
@@ -162,7 +147,7 @@ func (c *StoreIDCache) getByReverseCacheKey(ctx context.Context, reverseKey stri
 }
 
 // GetByPath returns the key for a given value
-func (c *StoreIDCache) GetByPath(ctx context.Context, path string) (string, string, bool) {
+func (c *IDCache) GetByPath(ctx context.Context, path string) (string, string, bool) {
 	return c.getByReverseCacheKey(ctx, reverseCacheKey(path))
 }
 

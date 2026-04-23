@@ -27,12 +27,13 @@ import (
 
 	"github.com/rs/zerolog"
 	tusd "github.com/tus/tusd/v2/pkg/handler"
-	microstore "go-micro.dev/v4/store"
 
 	"github.com/opencloud-eu/reva/v2/pkg/events"
 	"github.com/opencloud-eu/reva/v2/pkg/rgrpc/todo/pool"
 	"github.com/opencloud-eu/reva/v2/pkg/storage"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/cache"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/blobstore"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/idcache"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/lookup"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/options"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/timemanager"
@@ -47,12 +48,11 @@ import (
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/upload"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/usermapper"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/middleware"
-	"github.com/opencloud-eu/reva/v2/pkg/store"
 	"github.com/pkg/errors"
 )
 
 func init() {
-	registry.Register("posix", New)
+	registry.Register("posix", NewDefault)
 }
 
 type posixFS struct {
@@ -63,12 +63,41 @@ type posixFS struct {
 
 // New returns an implementation to of the storage.FS interface that talk to
 // a local filesystem.
-func New(m map[string]interface{}, stream events.Stream, log *zerolog.Logger) (storage.FS, error) {
+func NewDefault(m map[string]interface{}, stream events.Stream, log *zerolog.Logger) (storage.FS, error) {
 	o, err := options.New(m)
 	if err != nil {
 		return nil, err
 	}
 
+	o.IDCache.Database += "_v2" // Use a versioned bucket name to avoid conflicts with previous implementations
+	kv, err := cache.NewNatsKeyValue(o.IDCache)
+	if err != nil {
+		return nil, errors.Wrap(err, "could not create nats key value store")
+	}
+	c, err := idcache.NewStoreIDCache(kv)
+	if err != nil {
+		return nil, err
+	}
+
+	o.IDCache.Database += "_history" // Use a versioned bucket name to avoid conflicts with previous implementations
+	historyKv, err := cache.NewNatsKeyValue(o.IDCache)
+	if err != nil {
+		return nil, errors.Wrap(err, "could not create nats key value store")
+	}
+	historyCache, err := idcache.NewStoreIDCache(historyKv)
+	if err != nil {
+		return nil, err
+	}
+
+	return New(o, stream, c, historyCache, log)
+}
+
+func New(o *options.Options, stream events.Stream, cache, historyCache *idcache.IDCache, log *zerolog.Logger) (storage.FS, error) {
+	if o.IDCache.Store != "nats-js-kv" {
+		return nil, fmt.Errorf("the posix driver requires a nats-js-kv cache")
+	}
+
+	var err error
 	if log == nil {
 		log = &zerolog.Logger{}
 	}
@@ -89,7 +118,7 @@ func New(m map[string]interface{}, stream events.Stream, log *zerolog.Logger) (s
 	var lu *lookup.Lookup
 	switch o.MetadataBackend {
 	case "xattrs":
-		lu, err = lookup.New(metadata.NewXattrsBackend(o.FileMetadataCache), um, o, &timemanager.Manager{})
+		lu, err = lookup.New(metadata.NewXattrsBackend(o.FileMetadataCache), um, o, &timemanager.Manager{}, cache, historyCache)
 		if err != nil {
 			return nil, err
 		}
@@ -103,7 +132,7 @@ func New(m map[string]interface{}, stream events.Stream, log *zerolog.Logger) (s
 
 				return filepath.Join(spaceRoot, lookup.MetadataDir)
 			},
-			o.FileMetadataCache), um, o, &timemanager.Manager{})
+			o.FileMetadataCache), um, o, &timemanager.Manager{}, cache, historyCache)
 		if err != nil {
 			return nil, err
 		}
@@ -131,25 +160,7 @@ func New(m map[string]interface{}, stream events.Stream, log *zerolog.Logger) (s
 		return nil, err
 	}
 
-	switch o.IDCache.Store {
-	case "", "memory", "noop":
-		return nil, fmt.Errorf("the posix driver requires a shared id cache, e.g. nats-js-kv or redis")
-	}
-
-	tp, err := tree.New(lu, bs, um, trashbin, p, o, stream, store.Create(
-		// TODO use a NewStoreIDCache here?
-		store.Store(o.IDCache.Store),
-		store.TTL(o.IDCache.TTL),
-		store.Size(o.IDCache.Size),
-		microstore.Nodes(o.IDCache.Nodes...),
-		microstore.Database(o.IDCache.Database),
-		microstore.Table(o.IDCache.Table),
-		store.DisablePersistence(o.IDCache.DisablePersistence),
-		store.Authentication(o.IDCache.AuthUsername, o.IDCache.AuthPassword),
-		store.TLSEnabled(o.IDCache.TLSEnabled),
-		store.TLSInsecure(o.IDCache.TLSInsecure),
-		store.TLSRootCA(o.IDCache.TLSRootCACertificate),
-	), log)
+	tp, err := tree.New(lu, bs, um, trashbin, p, o, stream, cache, log)
 	if err != nil {
 		return nil, err
 	}

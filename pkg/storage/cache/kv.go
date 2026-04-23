@@ -22,7 +22,6 @@ func NewNatsKeyValue(c Config) (jetstream.KeyValue, error) {
 	if nodes == "" {
 		return nil, errors.New("at least one node is required")
 	}
-
 	opts := []nats.Option{}
 	if c.AuthUsername != "" || c.AuthPassword != "" {
 		opts = append(opts, nats.UserInfo(c.AuthUsername, c.AuthPassword))
@@ -43,18 +42,29 @@ func NewNatsKeyValue(c Config) (jetstream.KeyValue, error) {
 		opts = append(opts, nats.Secure(tlsConfig))
 	}
 
-	var kv jetstream.KeyValue
+	var js jetstream.JetStream
 	o := func() error {
 		nc, err := nats.Connect(nodes, opts...)
 		if err != nil {
 			return err
 		}
 
-		js, err := jetstream.New(nc)
-		if err != nil {
-			return err
-		}
+		js, err = jetstream.New(nc)
+		return err
+	}
 
+	err := backoff.Retry(o, backoff.NewExponentialBackOff())
+	if err != nil {
+		return nil, err
+	}
+
+	return NewNatsKeyValueFromJetStream(c, js)
+}
+
+func NewNatsKeyValueFromJetStream(c Config, js jetstream.JetStream) (jetstream.KeyValue, error) {
+	var err error
+	var kv jetstream.KeyValue
+	o := func() error {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 
@@ -78,7 +88,7 @@ func NewNatsKeyValue(c Config) (jetstream.KeyValue, error) {
 
 		return nil
 	}
-	err := backoff.Retry(o, backoff.NewExponentialBackOff())
+	err = backoff.Retry(o, backoff.NewExponentialBackOff())
 	if err != nil {
 		return nil, err
 	}

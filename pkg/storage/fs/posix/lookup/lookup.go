@@ -25,7 +25,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -33,6 +32,7 @@ import (
 	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/opencloud-eu/reva/v2/pkg/appctx"
 	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/idcache"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/options"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata/prefixes"
@@ -82,27 +82,14 @@ type Lookup struct {
 }
 
 // New returns a new Lookup instance
-func New(b metadata.Backend, um usermapper.Mapper, o *options.Options, tm node.TimeManager) (*Lookup, error) {
-	idHistoryConf := o.IDCache
-	idHistoryConf.Table = o.IDCache.Table + "_history"
-	idHistoryConf.TTL = 1 * time.Minute
-
+func New(b metadata.Backend, um usermapper.Mapper, o *options.Options, tm node.TimeManager, cache, historyCache *idcache.IDCache) (*Lookup, error) {
 	spaceRootCache, _ := lru.New[string, string](1000)
-
-	idCache, err := NewStoreIDCache(o.IDCache)
-	if err != nil {
-		return nil, err
-	}
-	historyIDCache, err := NewStoreIDCache(idHistoryConf)
-	if err != nil {
-		return nil, err
-	}
 
 	lu := &Lookup{
 		Options:         o,
 		metadataBackend: b,
-		IDCache:         idCache,
-		IDHistoryCache:  historyIDCache,
+		IDCache:         cache,
+		IDHistoryCache:  historyCache,
 		spaceRootCache:  spaceRootCache,
 		userMapper:      um,
 		tm:              tm,

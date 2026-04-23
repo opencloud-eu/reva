@@ -44,6 +44,7 @@ import (
 	"github.com/opencloud-eu/reva/v2/pkg/rgrpc/todo/pool"
 	"github.com/opencloud-eu/reva/v2/pkg/storage"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/cache"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/idcache"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/lookup"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/options"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/timemanager"
@@ -59,7 +60,6 @@ import (
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/permissions/mocks"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/usermapper"
 	"github.com/opencloud-eu/reva/v2/pkg/storagespace"
-	"github.com/opencloud-eu/reva/v2/pkg/store"
 	"github.com/opencloud-eu/reva/v2/tests/helpers"
 )
 
@@ -179,6 +179,10 @@ func NewTestEnv(config map[string]interface{}) (*TestEnv, error) {
 		"generalspacepath_template":  "projects/{{.SpaceId}}",
 		"watch_fs":                   false,
 		"scan_fs":                    false,
+		"idcache": map[string]interface{}{
+			"cache_store":    "nats-js-kv",
+			"cache_database": "ids-storage-users",
+		},
 	}
 	// make it possible to override single config values
 	maps.Copy(defaultConfig, config)
@@ -229,10 +233,39 @@ func NewTestEnv(config map[string]interface{}) (*TestEnv, error) {
 		},
 	}
 
+	// wire in-process nats server for testing
+	_, js, _, err := NewInProcessNATSServer()
+	if err != nil {
+		return nil, fmt.Errorf("failed to set up in-process NATS server: %w", err)
+	}
+	kv, err := js.CreateKeyValue(context.Background(), jetstream.KeyValueConfig{
+		Bucket: o.IDCache.Database,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create key-value store in NATS: %w", err)
+	}
+
+	c, err := idcache.NewStoreIDCache(kv)
+	if err != nil {
+		return nil, err
+	}
+
+	historyKv, err := js.CreateKeyValue(context.Background(), jetstream.KeyValueConfig{
+		Bucket: o.IDCache.Database + "_history",
+		TTL:    1 * time.Minute,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create key-value store in NATS: %w", err)
+	}
+	historyCache, err := idcache.NewStoreIDCache(historyKv)
+	if err != nil {
+		return nil, err
+	}
+
 	var lu *lookup.Lookup
 	switch o.MetadataBackend {
 	case "xattrs":
-		lu, _ = lookup.New(metadata.NewXattrsBackend(o.FileMetadataCache), um, o, &timemanager.Manager{})
+		lu, _ = lookup.New(metadata.NewXattrsBackend(o.FileMetadataCache), um, o, &timemanager.Manager{}, c, historyCache)
 	case "hybrid":
 		lu, _ = lookup.New(metadata.NewHybridBackend(1024,
 			func(n metadata.MetadataNode) string {
@@ -245,23 +278,12 @@ func NewTestEnv(config map[string]interface{}) (*TestEnv, error) {
 			},
 			cache.Config{
 				Database: o.Root,
-			}), um, o, &timemanager.Manager{})
+			}), um, o, &timemanager.Manager{}, c, historyCache)
 	case "messagepack":
-		lu, _ = lookup.New(metadata.NewMessagePackBackend(o.FileMetadataCache), um, o, &timemanager.Manager{})
+		lu, _ = lookup.New(metadata.NewMessagePackBackend(o.FileMetadataCache), um, o, &timemanager.Manager{}, c, historyCache)
 	default:
 		return nil, fmt.Errorf("unknown metadata backend %s", o.MetadataBackend)
 	}
-
-	// wire in-process nats server for testing
-	nc, js, _, err := NewInProcessNATSServer()
-	if err != nil {
-		return nil, fmt.Errorf("failed to set up in-process NATS server: %w", err)
-	}
-	defer nc.Close()
-	kv, err := js.CreateKeyValue(context.Background(), jetstream.KeyValueConfig{
-		Bucket: o.IDCache.Database,
-	})
-	lu.IDCache = lookup.NewStoreIDCacheForExistingKV(kv)
 
 	pmock := &mocks.PermissionsChecker{}
 
@@ -283,7 +305,7 @@ func NewTestEnv(config map[string]interface{}) (*TestEnv, error) {
 	if err != nil {
 		return nil, err
 	}
-	tree, err := tree.New(lu, bs, um, tb, permissions.Permissions{}, o, nil, store.Create(), &logger)
+	tree, err := tree.New(lu, bs, um, tb, permissions.Permissions{}, o, nil, c, &logger)
 	if err != nil {
 		return nil, err
 	}
