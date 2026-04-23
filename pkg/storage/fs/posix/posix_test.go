@@ -19,9 +19,14 @@
 package posix_test
 
 import (
+	"context"
 	"os"
 
+	"github.com/nats-io/nats.go/jetstream"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/idcache"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/options"
+	posixhelpers "github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/testhelpers"
 	"github.com/opencloud-eu/reva/v2/tests/helpers"
 	"github.com/rs/zerolog"
 
@@ -31,8 +36,10 @@ import (
 
 var _ = Describe("Posix", func() {
 	var (
-		options map[string]interface{}
-		tmpRoot string
+		o            *options.Options
+		tmpRoot      string
+		idCache      *idcache.IDCache
+		historyCache *idcache.IDCache
 	)
 
 	BeforeEach(func() {
@@ -40,14 +47,35 @@ var _ = Describe("Posix", func() {
 		tmpRoot, err = helpers.TempDir("reva-unit-tests-*-root")
 		Expect(err).ToNot(HaveOccurred())
 
-		options = map[string]interface{}{
+		o, err = options.New(map[string]interface{}{
 			"root":           tmpRoot,
 			"share_folder":   "/Shares",
 			"permissionssvc": "any",
 			"idcache": map[string]interface{}{
 				"cache_store": "nats-js-kv",
 			},
-		}
+		})
+		Expect(err).ToNot(HaveOccurred())
+
+		// wire in-process nats server for testing
+		_, js, _, err := posixhelpers.NewInProcessNATSServer()
+		Expect(err).ToNot(HaveOccurred())
+
+		kv, err := js.CreateKeyValue(context.Background(), jetstream.KeyValueConfig{
+			Bucket: "posix-id-cache",
+		})
+		Expect(err).ToNot(HaveOccurred())
+		idCache, err = idcache.NewStoreIDCache(kv)
+		Expect(err).ToNot(HaveOccurred())
+
+		o.IDCache.Database += "_history" // Use a versioned bucket name to avoid conflicts with previous implementations
+
+		historyKv, err := js.CreateKeyValue(context.Background(), jetstream.KeyValueConfig{
+			Bucket: "posix-id-cache-history",
+		})
+		Expect(err).ToNot(HaveOccurred())
+		historyCache, err = idcache.NewStoreIDCache(historyKv)
+		Expect(err).ToNot(HaveOccurred())
 	})
 
 	AfterEach(func() {
@@ -58,7 +86,7 @@ var _ = Describe("Posix", func() {
 
 	Describe("New", func() {
 		It("returns a new instance", func() {
-			_, err := posix.New(options, nil, &zerolog.Logger{})
+			_, err := posix.New(o, nil, idCache, historyCache, &zerolog.Logger{})
 			Expect(err).ToNot(HaveOccurred())
 		})
 	})

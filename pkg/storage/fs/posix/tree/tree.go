@@ -33,7 +33,6 @@ import (
 	"github.com/pkg/errors"
 	"github.com/pkg/xattr"
 	"github.com/rs/zerolog"
-	"go-micro.dev/v4/store"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/sync/errgroup"
@@ -45,6 +44,7 @@ import (
 	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
 	"github.com/opencloud-eu/reva/v2/pkg/events"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/blobstore"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/idcache"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/lookup"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/options"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/trashbin"
@@ -93,7 +93,7 @@ type Tree struct {
 	projectSpacesRoot  string
 
 	userMapper    usermapper.Mapper
-	idCache       store.Store
+	idCache       *idcache.IDCache
 	watcher       Watcher
 	scanQueue     chan scanItem
 	scanDebouncer *ScanDebouncer
@@ -106,7 +106,7 @@ type Tree struct {
 type PermissionCheckFunc func(rp *provider.ResourcePermissions) bool
 
 // New returns a new instance of Tree
-func New(lu node.PathLookup, bs node.Blobstore, um usermapper.Mapper, trashbin *trashbin.Trashbin, permissions permissions.Permissions, o *options.Options, es events.Stream, cache store.Store, log *zerolog.Logger) (*Tree, error) {
+func New(lu node.PathLookup, bs node.Blobstore, um usermapper.Mapper, trashbin *trashbin.Trashbin, permissions permissions.Permissions, o *options.Options, es events.Stream, cache *idcache.IDCache, log *zerolog.Logger) (*Tree, error) {
 	scanQueue := make(chan scanItem)
 
 	t := &Tree{
@@ -585,7 +585,7 @@ func (t *Tree) Delete(ctx context.Context, n *node.Node) error {
 
 	// remove entry from cache immediately to avoid inconsistencies
 	defer func() {
-		if err := t.idCache.Delete(path); err != nil {
+		if err := t.idCache.DeleteByPath(ctx, path); err != nil {
 			t.log.Error().Err(err).Str("path", path).Msg("could not delete id from cache")
 		}
 	}()
