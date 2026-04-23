@@ -2,6 +2,10 @@
 
 ## [2.43.1](https://github.com/opencloud-eu/reva/releases/tag/v2.43.1) - 2026-04-23
 
+### ❤️ Thanks to all contributors! ❤️
+
+@aduffeck
+
 ### 📦️ Dependencies
 
 - chore(deps): bump golang.org/x/sys from 0.42.0 to 0.43.0 [[#601](https://github.com/opencloud-eu/reva/pull/601)]
