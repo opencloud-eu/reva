@@ -1090,14 +1090,14 @@ func (f *FS) DeleteStorageSpace(ctx context.Context, req *provider.DeleteStorage
 	return res0
 }
 
-func (f *FS) AddFavorite(ctx context.Context, ref *provider.Reference, userID *userpb.UserId) error {
+func (f *FS) AddLabel(ctx context.Context, ref *provider.Reference, userID *userpb.UserId, label string) error {
 	var (
 		err     error
 		unhook  UnHook
 		unhooks []UnHook
 	)
 	for _, hook := range f.hooks {
-		ctx, unhook, err = hook("AddFavorite", ctx, ref.GetResourceId().GetSpaceId())
+		ctx, unhook, err = hook("AddLabel", ctx, ref.GetResourceId().GetSpaceId())
 		if err != nil {
 			return err
 		}
@@ -1106,7 +1106,7 @@ func (f *FS) AddFavorite(ctx context.Context, ref *provider.Reference, userID *u
 		}
 	}
 
-	res0 := f.next.AddFavorite(ctx, ref, userID)
+	res0 := f.next.AddLabel(ctx, ref, userID, label)
 
 	for _, unhook := range unhooks {
 		if err := unhook(); err != nil {
@@ -1117,14 +1117,14 @@ func (f *FS) AddFavorite(ctx context.Context, ref *provider.Reference, userID *u
 	return res0
 }
 
-func (f *FS) RemoveFavorite(ctx context.Context, ref *provider.Reference, userID *userpb.UserId) error {
+func (f *FS) RemoveLabel(ctx context.Context, ref *provider.Reference, userID *userpb.UserId, label string) error {
 	var (
 		err     error
 		unhook  UnHook
 		unhooks []UnHook
 	)
 	for _, hook := range f.hooks {
-		ctx, unhook, err = hook("RemoveFavorite", ctx, ref.GetResourceId().GetSpaceId())
+		ctx, unhook, err = hook("RemoveLabel", ctx, ref.GetResourceId().GetSpaceId())
 		if err != nil {
 			return err
 		}
@@ -1133,7 +1133,7 @@ func (f *FS) RemoveFavorite(ctx context.Context, ref *provider.Reference, userID
 		}
 	}
 
-	res0 := f.next.RemoveFavorite(ctx, ref, userID)
+	res0 := f.next.RemoveLabel(ctx, ref, userID, label)
 
 	for _, unhook := range unhooks {
 		if err := unhook(); err != nil {
