@@ -1137,12 +1137,12 @@ func (fs *owncloudsqlfs) UnsetArbitraryMetadata(ctx context.Context, ref *provid
 	}
 }
 
-func (fs *owncloudsqlfs) AddFavorite(ctx context.Context, ref *provider.Reference, userID *userpb.UserId) error {
-	return errtypes.NotSupported("AddFavorite not implemented")
+func (fs *owncloudsqlfs) AddLabel(ctx context.Context, ref *provider.Reference, userID *userpb.UserId, label string) error {
+	return errtypes.NotSupported("AddLabel not implemented")
 }
 
-func (fs *owncloudsqlfs) RemoveFavorite(ctx context.Context, ref *provider.Reference, userID *userpb.UserId) error {
-	return errtypes.NotSupported("RemoveFavorite not implemented")
+func (fs *owncloudsqlfs) RemoveLabel(ctx context.Context, ref *provider.Reference, userID *userpb.UserId, label string) error {
+	return errtypes.NotSupported("RemoveLabel not implemented")
 }
 
 // GetLock returns an existing lock on the given reference

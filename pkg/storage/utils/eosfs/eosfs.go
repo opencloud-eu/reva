@@ -281,12 +281,12 @@ func (fs *eosfs) Shutdown(ctx context.Context) error {
 	return nil
 }
 
-func (fs *eosfs) AddFavorite(ctx context.Context, ref *provider.Reference, userID *userpb.UserId) error {
-	return errtypes.NotSupported("AddFavorite not implemented")
+func (fs *eosfs) AddLabel(ctx context.Context, ref *provider.Reference, userID *userpb.UserId, label string) error {
+	return errtypes.NotSupported("AddLabel not implemented")
 }
 
-func (fs *eosfs) RemoveFavorite(ctx context.Context, ref *provider.Reference, userID *userpb.UserId) error {
-	return errtypes.NotSupported("RemoveFavorite not implemented")
+func (fs *eosfs) RemoveLabel(ctx context.Context, ref *provider.Reference, userID *userpb.UserId, label string) error {
+	return errtypes.NotSupported("RemoveLabel not implemented")
 }
 
 func getUser(ctx context.Context) (*userpb.User, error) {

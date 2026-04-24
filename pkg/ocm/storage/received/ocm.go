@@ -610,10 +610,10 @@ func (d *driver) DeleteStorageSpace(ctx context.Context, req *provider.DeleteSto
 	return errtypes.NotSupported("operation not supported")
 }
 
-func (d *driver) AddFavorite(ctx context.Context, ref *provider.Reference, userID *userpb.UserId) error {
-	return errtypes.NotSupported("AddFavorite not implemented")
+func (d *driver) AddLabel(ctx context.Context, ref *provider.Reference, userID *userpb.UserId, label string) error {
+	return errtypes.NotSupported("AddLabel not implemented")
 }
 
-func (d *driver) RemoveFavorite(ctx context.Context, ref *provider.Reference, userID *userpb.UserId) error {
-	return errtypes.NotSupported("RemoveFavorite not implemented")
+func (d *driver) RemoveLabel(ctx context.Context, ref *provider.Reference, userID *userpb.UserId, label string) error {
+	return errtypes.NotSupported("RemoveLabel not implemented")
 }

@@ -820,10 +820,10 @@ func isTrash(path string) bool {
 	return strings.HasSuffix(path, ".trashinfo") || strings.HasSuffix(path, ".trashitem") || strings.Contains(path, ".Trash")
 }
 
-func (t *Tree) AddFavorite(ctx context.Context, ref *provider.Reference, userID *user.UserId) error {
-	return errtypes.NotSupported("AddFavorite not implemented")
+func (t *Tree) AddLabel(ctx context.Context, ref *provider.Reference, userID *user.UserId, label string) error {
+	return errtypes.NotSupported("AddLabel not implemented")
 }
 
-func (t *Tree) RemoveFavorite(ctx context.Context, ref *provider.Reference, userID *user.UserId) error {
-	return errtypes.NotSupported("RemoveFavorite not implemented")
+func (t *Tree) RemoveLabel(ctx context.Context, ref *provider.Reference, userID *user.UserId, label string) error {
+	return errtypes.NotSupported("RemoveLabel not implemented")
 }

@@ -603,12 +603,12 @@ func (fs *cephfs) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Refe
 	return getRevaError(err)
 }
 
-func (fs *cephfs) AddFavorite(ctx context.Context, ref *provider.Reference, userID *user.UserId) error {
-	return errtypes.NotSupported("AddFavorite not implemented")
+func (fs *cephfs) AddLabel(ctx context.Context, ref *provider.Reference, userID *user.UserId, label string) error {
+	return errtypes.NotSupported("AddLabel not implemented")
 }
 
-func (fs *cephfs) RemoveFavorite(ctx context.Context, ref *provider.Reference, userID *user.UserId) error {
-	return errtypes.NotSupported("RemoveFavorite not implemented")
+func (fs *cephfs) RemoveLabel(ctx context.Context, ref *provider.Reference, userID *user.UserId, label string) error {
+	return errtypes.NotSupported("RemoveLabel not implemented")
 }
 
 func (fs *cephfs) EmptyRecycle(ctx context.Context, ref *provider.Reference) error {
