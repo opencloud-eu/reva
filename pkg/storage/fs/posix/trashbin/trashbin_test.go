@@ -7,25 +7,47 @@ import (
 	"testing"
 	"time"
 
-	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata/prefixes"
-
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 
+	"github.com/opencloud-eu/reva/v2/pkg/storage/cache"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/idcache"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/lookup"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/options"
+	posixhelpers "github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/testhelpers"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/trashbin"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata/mocks"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata/prefixes"
 )
 
 func TestTrashbin_RestoreRecycleItem(t *testing.T) {
+	// wire in-process nats server for testing
+	_, js, _, err := posixhelpers.NewInProcessNATSServer()
+	assert.NoError(t, err)
+
+	kv, err := cache.NewNatsKeyValueFromJetStream(cache.Config{
+		Database: "trashbin-test",
+	}, js)
+	assert.NoError(t, err)
+	c, err := idcache.NewStoreIDCache(kv)
+	assert.NoError(t, err)
+
+	historyKv, err := cache.NewNatsKeyValueFromJetStream(cache.Config{
+		Database: "trashbin-test-history",
+	}, js)
+	assert.NoError(t, err)
+	historyCache, err := idcache.NewStoreIDCache(historyKv)
+	assert.NoError(t, err)
+
 	backend := mocks.NewBackend(t)
+	lu, err := lookup.New(backend, nil, &options.Options{}, nil, c, historyCache)
+	assert.NoError(t, err)
 	tb, err := trashbin.New(
 		nil,
 		nil,
-		lookup.New(backend, nil, &options.Options{}, nil),
+		lu,
 		nil,
 	)
 	assert.NoError(t, err)

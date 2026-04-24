@@ -224,8 +224,8 @@ func (_c *GatewayAPIClient_AddAppProvider_Call) RunAndReturn(run func(context.Co
 	return _c
 }
 
-// AddFavorite provides a mock function with given fields: ctx, in, opts
-func (_m *GatewayAPIClient) AddFavorite(ctx context.Context, in *providerv1beta1.AddFavoriteRequest, opts ...grpc.CallOption) (*providerv1beta1.AddFavoriteResponse, error) {
+// AddLabel provides a mock function with given fields: ctx, in, opts
+func (_m *GatewayAPIClient) AddLabel(ctx context.Context, in *providerv1beta1.AddLabelRequest, opts ...grpc.CallOption) (*providerv1beta1.AddLabelResponse, error) {
 	var tmpRet mock.Arguments
 	if len(opts) > 0 {
 		tmpRet = _m.Called(ctx, in, opts)
@@ -235,23 +235,23 @@ func (_m *GatewayAPIClient) AddFavorite(ctx context.Context, in *providerv1beta1
 	ret := tmpRet
 
 	if len(ret) == 0 {
-		panic("no return value specified for AddFavorite")
+		panic("no return value specified for AddLabel")
 	}
 
-	var r0 *providerv1beta1.AddFavoriteResponse
+	var r0 *providerv1beta1.AddLabelResponse
 	var r1 error
-	if rf, ok := ret.Get(0).(func(context.Context, *providerv1beta1.AddFavoriteRequest, ...grpc.CallOption) (*providerv1beta1.AddFavoriteResponse, error)); ok {
+	if rf, ok := ret.Get(0).(func(context.Context, *providerv1beta1.AddLabelRequest, ...grpc.CallOption) (*providerv1beta1.AddLabelResponse, error)); ok {
 		return rf(ctx, in, opts...)
 	}
-	if rf, ok := ret.Get(0).(func(context.Context, *providerv1beta1.AddFavoriteRequest, ...grpc.CallOption) *providerv1beta1.AddFavoriteResponse); ok {
+	if rf, ok := ret.Get(0).(func(context.Context, *providerv1beta1.AddLabelRequest, ...grpc.CallOption) *providerv1beta1.AddLabelResponse); ok {
 		r0 = rf(ctx, in, opts...)
 	} else {
 		if ret.Get(0) != nil {
-			r0 = ret.Get(0).(*providerv1beta1.AddFavoriteResponse)
+			r0 = ret.Get(0).(*providerv1beta1.AddLabelResponse)
 		}
 	}
 
-	if rf, ok := ret.Get(1).(func(context.Context, *providerv1beta1.AddFavoriteRequest, ...grpc.CallOption) error); ok {
+	if rf, ok := ret.Get(1).(func(context.Context, *providerv1beta1.AddLabelRequest, ...grpc.CallOption) error); ok {
 		r1 = rf(ctx, in, opts...)
 	} else {
 		r1 = ret.Error(1)
@@ -260,21 +260,21 @@ func (_m *GatewayAPIClient) AddFavorite(ctx context.Context, in *providerv1beta1
 	return r0, r1
 }
 
-// GatewayAPIClient_AddFavorite_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'AddFavorite'
-type GatewayAPIClient_AddFavorite_Call struct {
+// GatewayAPIClient_AddLabel_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'AddLabel'
+type GatewayAPIClient_AddLabel_Call struct {
 	*mock.Call
 }
 
-// AddFavorite is a helper method to define mock.On call
+// AddLabel is a helper method to define mock.On call
 //   - ctx context.Context
-//   - in *providerv1beta1.AddFavoriteRequest
+//   - in *providerv1beta1.AddLabelRequest
 //   - opts ...grpc.CallOption
-func (_e *GatewayAPIClient_Expecter) AddFavorite(ctx interface{}, in interface{}, opts ...interface{}) *GatewayAPIClient_AddFavorite_Call {
-	return &GatewayAPIClient_AddFavorite_Call{Call: _e.mock.On("AddFavorite",
+func (_e *GatewayAPIClient_Expecter) AddLabel(ctx interface{}, in interface{}, opts ...interface{}) *GatewayAPIClient_AddLabel_Call {
+	return &GatewayAPIClient_AddLabel_Call{Call: _e.mock.On("AddLabel",
 		append([]interface{}{ctx, in}, opts...)...)}
 }
 
-func (_c *GatewayAPIClient_AddFavorite_Call) Run(run func(ctx context.Context, in *providerv1beta1.AddFavoriteRequest, opts ...grpc.CallOption)) *GatewayAPIClient_AddFavorite_Call {
+func (_c *GatewayAPIClient_AddLabel_Call) Run(run func(ctx context.Context, in *providerv1beta1.AddLabelRequest, opts ...grpc.CallOption)) *GatewayAPIClient_AddLabel_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		variadicArgs := make([]grpc.CallOption, len(args)-2)
 		for i, a := range args[2:] {
@@ -282,17 +282,17 @@ func (_c *GatewayAPIClient_AddFavorite_Call) Run(run func(ctx context.Context, i
 				variadicArgs[i] = a.(grpc.CallOption)
 			}
 		}
-		run(args[0].(context.Context), args[1].(*providerv1beta1.AddFavoriteRequest), variadicArgs...)
+		run(args[0].(context.Context), args[1].(*providerv1beta1.AddLabelRequest), variadicArgs...)
 	})
 	return _c
 }
 
-func (_c *GatewayAPIClient_AddFavorite_Call) Return(_a0 *providerv1beta1.AddFavoriteResponse, _a1 error) *GatewayAPIClient_AddFavorite_Call {
+func (_c *GatewayAPIClient_AddLabel_Call) Return(_a0 *providerv1beta1.AddLabelResponse, _a1 error) *GatewayAPIClient_AddLabel_Call {
 	_c.Call.Return(_a0, _a1)
 	return _c
 }
 
-func (_c *GatewayAPIClient_AddFavorite_Call) RunAndReturn(run func(context.Context, *providerv1beta1.AddFavoriteRequest, ...grpc.CallOption) (*providerv1beta1.AddFavoriteResponse, error)) *GatewayAPIClient_AddFavorite_Call {
+func (_c *GatewayAPIClient_AddLabel_Call) RunAndReturn(run func(context.Context, *providerv1beta1.AddLabelRequest, ...grpc.CallOption) (*providerv1beta1.AddLabelResponse, error)) *GatewayAPIClient_AddLabel_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -6210,8 +6210,8 @@ func (_c *GatewayAPIClient_RefreshLock_Call) RunAndReturn(run func(context.Conte
 	return _c
 }
 
-// RemoveFavorite provides a mock function with given fields: ctx, in, opts
-func (_m *GatewayAPIClient) RemoveFavorite(ctx context.Context, in *providerv1beta1.RemoveFavoriteRequest, opts ...grpc.CallOption) (*providerv1beta1.RemoveFavoriteResponse, error) {
+// RemoveLabel provides a mock function with given fields: ctx, in, opts
+func (_m *GatewayAPIClient) RemoveLabel(ctx context.Context, in *providerv1beta1.RemoveLabelRequest, opts ...grpc.CallOption) (*providerv1beta1.RemoveLabelResponse, error) {
 	var tmpRet mock.Arguments
 	if len(opts) > 0 {
 		tmpRet = _m.Called(ctx, in, opts)
@@ -6221,23 +6221,23 @@ func (_m *GatewayAPIClient) RemoveFavorite(ctx context.Context, in *providerv1be
 	ret := tmpRet
 
 	if len(ret) == 0 {
-		panic("no return value specified for RemoveFavorite")
+		panic("no return value specified for RemoveLabel")
 	}
 
-	var r0 *providerv1beta1.RemoveFavoriteResponse
+	var r0 *providerv1beta1.RemoveLabelResponse
 	var r1 error
-	if rf, ok := ret.Get(0).(func(context.Context, *providerv1beta1.RemoveFavoriteRequest, ...grpc.CallOption) (*providerv1beta1.RemoveFavoriteResponse, error)); ok {
+	if rf, ok := ret.Get(0).(func(context.Context, *providerv1beta1.RemoveLabelRequest, ...grpc.CallOption) (*providerv1beta1.RemoveLabelResponse, error)); ok {
 		return rf(ctx, in, opts...)
 	}
-	if rf, ok := ret.Get(0).(func(context.Context, *providerv1beta1.RemoveFavoriteRequest, ...grpc.CallOption) *providerv1beta1.RemoveFavoriteResponse); ok {
+	if rf, ok := ret.Get(0).(func(context.Context, *providerv1beta1.RemoveLabelRequest, ...grpc.CallOption) *providerv1beta1.RemoveLabelResponse); ok {
 		r0 = rf(ctx, in, opts...)
 	} else {
 		if ret.Get(0) != nil {
-			r0 = ret.Get(0).(*providerv1beta1.RemoveFavoriteResponse)
+			r0 = ret.Get(0).(*providerv1beta1.RemoveLabelResponse)
 		}
 	}
 
-	if rf, ok := ret.Get(1).(func(context.Context, *providerv1beta1.RemoveFavoriteRequest, ...grpc.CallOption) error); ok {
+	if rf, ok := ret.Get(1).(func(context.Context, *providerv1beta1.RemoveLabelRequest, ...grpc.CallOption) error); ok {
 		r1 = rf(ctx, in, opts...)
 	} else {
 		r1 = ret.Error(1)
@@ -6246,21 +6246,21 @@ func (_m *GatewayAPIClient) RemoveFavorite(ctx context.Context, in *providerv1be
 	return r0, r1
 }
 
-// GatewayAPIClient_RemoveFavorite_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'RemoveFavorite'
-type GatewayAPIClient_RemoveFavorite_Call struct {
+// GatewayAPIClient_RemoveLabel_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'RemoveLabel'
+type GatewayAPIClient_RemoveLabel_Call struct {
 	*mock.Call
 }
 
-// RemoveFavorite is a helper method to define mock.On call
+// RemoveLabel is a helper method to define mock.On call
 //   - ctx context.Context
-//   - in *providerv1beta1.RemoveFavoriteRequest
+//   - in *providerv1beta1.RemoveLabelRequest
 //   - opts ...grpc.CallOption
-func (_e *GatewayAPIClient_Expecter) RemoveFavorite(ctx interface{}, in interface{}, opts ...interface{}) *GatewayAPIClient_RemoveFavorite_Call {
-	return &GatewayAPIClient_RemoveFavorite_Call{Call: _e.mock.On("RemoveFavorite",
+func (_e *GatewayAPIClient_Expecter) RemoveLabel(ctx interface{}, in interface{}, opts ...interface{}) *GatewayAPIClient_RemoveLabel_Call {
+	return &GatewayAPIClient_RemoveLabel_Call{Call: _e.mock.On("RemoveLabel",
 		append([]interface{}{ctx, in}, opts...)...)}
 }
 
-func (_c *GatewayAPIClient_RemoveFavorite_Call) Run(run func(ctx context.Context, in *providerv1beta1.RemoveFavoriteRequest, opts ...grpc.CallOption)) *GatewayAPIClient_RemoveFavorite_Call {
+func (_c *GatewayAPIClient_RemoveLabel_Call) Run(run func(ctx context.Context, in *providerv1beta1.RemoveLabelRequest, opts ...grpc.CallOption)) *GatewayAPIClient_RemoveLabel_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		variadicArgs := make([]grpc.CallOption, len(args)-2)
 		for i, a := range args[2:] {
@@ -6268,17 +6268,17 @@ func (_c *GatewayAPIClient_RemoveFavorite_Call) Run(run func(ctx context.Context
 				variadicArgs[i] = a.(grpc.CallOption)
 			}
 		}
-		run(args[0].(context.Context), args[1].(*providerv1beta1.RemoveFavoriteRequest), variadicArgs...)
+		run(args[0].(context.Context), args[1].(*providerv1beta1.RemoveLabelRequest), variadicArgs...)
 	})
 	return _c
 }
 
-func (_c *GatewayAPIClient_RemoveFavorite_Call) Return(_a0 *providerv1beta1.RemoveFavoriteResponse, _a1 error) *GatewayAPIClient_RemoveFavorite_Call {
+func (_c *GatewayAPIClient_RemoveLabel_Call) Return(_a0 *providerv1beta1.RemoveLabelResponse, _a1 error) *GatewayAPIClient_RemoveLabel_Call {
 	_c.Call.Return(_a0, _a1)
 	return _c
 }
 
-func (_c *GatewayAPIClient_RemoveFavorite_Call) RunAndReturn(run func(context.Context, *providerv1beta1.RemoveFavoriteRequest, ...grpc.CallOption) (*providerv1beta1.RemoveFavoriteResponse, error)) *GatewayAPIClient_RemoveFavorite_Call {
+func (_c *GatewayAPIClient_RemoveLabel_Call) RunAndReturn(run func(context.Context, *providerv1beta1.RemoveLabelRequest, ...grpc.CallOption) (*providerv1beta1.RemoveLabelResponse, error)) *GatewayAPIClient_RemoveLabel_Call {
 	_c.Call.Return(run)
 	return _c
 }

@@ -33,7 +33,6 @@ import (
 	"github.com/pkg/errors"
 	"github.com/pkg/xattr"
 	"github.com/rs/zerolog"
-	"go-micro.dev/v4/store"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/sync/errgroup"
@@ -45,6 +44,7 @@ import (
 	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
 	"github.com/opencloud-eu/reva/v2/pkg/events"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/blobstore"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/idcache"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/lookup"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/options"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/trashbin"
@@ -68,7 +68,7 @@ var (
 )
 
 func init() {
-	tracer = otel.Tracer("github.com/cs3org/reva/pkg/storage/pkg/decomposedfs/tree")
+	tracer = otel.Tracer("github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/tree")
 }
 
 type Watcher interface {
@@ -93,7 +93,7 @@ type Tree struct {
 	projectSpacesRoot  string
 
 	userMapper    usermapper.Mapper
-	idCache       store.Store
+	idCache       *idcache.IDCache
 	watcher       Watcher
 	scanQueue     chan scanItem
 	scanDebouncer *ScanDebouncer
@@ -106,7 +106,7 @@ type Tree struct {
 type PermissionCheckFunc func(rp *provider.ResourcePermissions) bool
 
 // New returns a new instance of Tree
-func New(lu node.PathLookup, bs node.Blobstore, um usermapper.Mapper, trashbin *trashbin.Trashbin, permissions permissions.Permissions, o *options.Options, es events.Stream, cache store.Store, log *zerolog.Logger) (*Tree, error) {
+func New(lu node.PathLookup, bs node.Blobstore, um usermapper.Mapper, trashbin *trashbin.Trashbin, permissions permissions.Permissions, o *options.Options, es events.Stream, cache *idcache.IDCache, log *zerolog.Logger) (*Tree, error) {
 	scanQueue := make(chan scanItem)
 
 	t := &Tree{
@@ -160,7 +160,7 @@ func New(lu node.PathLookup, bs node.Blobstore, um usermapper.Mapper, trashbin *
 				return nil, err
 			}
 		default:
-			t.watcher, err = NewInotifyWatcher(t, o, log)
+			t.watcher, err = NewWatcher(t, o, log)
 			if err != nil {
 				return nil, err
 			}
@@ -360,6 +360,9 @@ func (t *Tree) CreateDir(ctx context.Context, n *node.Node) (err error) {
 
 // Move replaces the target with the source
 func (t *Tree) Move(ctx context.Context, oldNode *node.Node, newNode *node.Node) (err error) {
+	ctx, span := tracer.Start(ctx, "Move")
+	defer span.End()
+
 	if oldNode.SpaceID != newNode.SpaceID {
 		// WebDAV RFC https://www.rfc-editor.org/rfc/rfc4918#section-9.9.4 says to use
 		// > 502 (Bad Gateway) - This may occur when the destination is on another
@@ -382,6 +385,7 @@ func (t *Tree) Move(ctx context.Context, oldNode *node.Node, newNode *node.Node)
 		newNode.ID = oldNode.ID
 	}
 
+	_, subspan := tracer.Start(ctx, "os.Rename")
 	// rename node
 	err = os.Rename(
 		filepath.Join(oldParent, oldNode.Name),
@@ -390,7 +394,9 @@ func (t *Tree) Move(ctx context.Context, oldNode *node.Node, newNode *node.Node)
 	if err != nil {
 		return errors.Wrap(err, "posixfs: could not move child")
 	}
+	subspan.End()
 
+	_, subspan = tracer.Start(ctx, "update id cache and attributes")
 	// update the id cache
 	// invalidate old tree
 	err = t.lookup.IDCache.DeleteByPath(ctx, filepath.Join(oldNode.ParentPath(), oldNode.Name))
@@ -409,6 +415,9 @@ func (t *Tree) Move(ctx context.Context, oldNode *node.Node, newNode *node.Node)
 		return errors.Wrap(err, "posixfs: could not update node attributes")
 	}
 
+	subspan.End()
+
+	_, subspan = tracer.Start(ctx, "warmup id cache for moved subtree")
 	// update id cache for the moved subtree.
 	if oldNode.IsDir(ctx) {
 		err = t.WarmupIDCache(filepath.Join(newNode.ParentPath(), newNode.Name), false, false)
@@ -416,6 +425,7 @@ func (t *Tree) Move(ctx context.Context, oldNode *node.Node, newNode *node.Node)
 			return err
 		}
 	}
+	subspan.End()
 
 	// the size diff is the current treesize or blobsize of the old/source node
 	var sizeDiff int64
@@ -429,6 +439,7 @@ func (t *Tree) Move(ctx context.Context, oldNode *node.Node, newNode *node.Node)
 		sizeDiff = oldNode.Blobsize
 	}
 
+	_, subspan = tracer.Start(ctx, "propagate size changes")
 	err = t.Propagate(ctx, oldNode, -sizeDiff)
 	if err != nil {
 		return errors.Wrap(err, "posixfs: Move: could not propagate old node")
@@ -437,6 +448,7 @@ func (t *Tree) Move(ctx context.Context, oldNode *node.Node, newNode *node.Node)
 	if err != nil {
 		return errors.Wrap(err, "posixfs: Move: could not propagate new node")
 	}
+	subspan.End()
 	return nil
 }
 
@@ -573,7 +585,7 @@ func (t *Tree) Delete(ctx context.Context, n *node.Node) error {
 
 	// remove entry from cache immediately to avoid inconsistencies
 	defer func() {
-		if err := t.idCache.Delete(path); err != nil {
+		if err := t.idCache.DeleteByPath(ctx, path); err != nil {
 			t.log.Error().Err(err).Str("path", path).Msg("could not delete id from cache")
 		}
 	}()
@@ -808,10 +820,10 @@ func isTrash(path string) bool {
 	return strings.HasSuffix(path, ".trashinfo") || strings.HasSuffix(path, ".trashitem") || strings.Contains(path, ".Trash")
 }
 
-func (t *Tree) AddFavorite(ctx context.Context, ref *provider.Reference, userID *user.UserId) error {
-	return errtypes.NotSupported("AddFavorite not implemented")
+func (t *Tree) AddLabel(ctx context.Context, ref *provider.Reference, userID *user.UserId, label string) error {
+	return errtypes.NotSupported("AddLabel not implemented")
 }
 
-func (t *Tree) RemoveFavorite(ctx context.Context, ref *provider.Reference, userID *user.UserId) error {
-	return errtypes.NotSupported("RemoveFavorite not implemented")
+func (t *Tree) RemoveLabel(ctx context.Context, ref *provider.Reference, userID *user.UserId, label string) error {
+	return errtypes.NotSupported("RemoveLabel not implemented")
 }

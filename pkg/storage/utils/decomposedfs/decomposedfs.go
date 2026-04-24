@@ -1233,12 +1233,12 @@ func (fs *Decomposedfs) Unlock(ctx context.Context, ref *provider.Reference, loc
 	return node.Unlock(ctx, lock)
 }
 
-func (fs *Decomposedfs) AddFavorite(ctx context.Context, ref *provider.Reference, userID *user.UserId) error {
-	return errtypes.NotSupported("AddFavorite not implemented")
+func (fs *Decomposedfs) AddLabel(ctx context.Context, ref *provider.Reference, userID *user.UserId, label string) error {
+	return errtypes.NotSupported("AddLabel not implemented")
 }
 
-func (fs *Decomposedfs) RemoveFavorite(ctx context.Context, ref *provider.Reference, userID *user.UserId) error {
-	return errtypes.NotSupported("RemoveFavorite not implemented")
+func (fs *Decomposedfs) RemoveLabel(ctx context.Context, ref *provider.Reference, userID *user.UserId, label string) error {
+	return errtypes.NotSupported("RemoveLabel not implemented")
 }
 
 func (fs *Decomposedfs) ListRecycle(ctx context.Context, ref *provider.Reference, key, relativePath string) ([]*provider.RecycleItem, error) {

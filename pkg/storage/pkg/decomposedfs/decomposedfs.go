@@ -86,7 +86,7 @@ var (
 )
 
 func init() {
-	tracer = otel.Tracer("github.com/cs3org/reva/pkg/storage/pkg/decomposedfs")
+	tracer = otel.Tracer("github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs")
 }
 
 // Session is the interface that DecomposedfsSession implements. By combining tus.Upload,
@@ -1035,9 +1035,13 @@ func (fs *Decomposedfs) ListFolder(ctx context.Context, ref *provider.Reference,
 	return finfos, nil
 }
 
-// AddFavorite adds a favorite
-func (fs *Decomposedfs) AddFavorite(ctx context.Context, ref *provider.Reference, uid *user.UserId) error {
-	ctx, span := tracer.Start(ctx, "AddFavorite")
+// AddLabel adds a favorite
+func (fs *Decomposedfs) AddLabel(ctx context.Context, ref *provider.Reference, uid *user.UserId, label string) error {
+	if label != "favorite" {
+		return errtypes.BadRequest("unsupported label: " + label)
+	}
+
+	ctx, span := tracer.Start(ctx, "AddLabel")
 	defer span.End()
 	n, err := fs.lu.NodeFromResource(ctx, ref)
 	if err != nil {
@@ -1058,9 +1062,13 @@ func (fs *Decomposedfs) AddFavorite(ctx context.Context, ref *provider.Reference
 	return n.SetFavorite(ctx, uid)
 }
 
-// RemoveFavorite removes a favorite
-func (fs *Decomposedfs) RemoveFavorite(ctx context.Context, ref *provider.Reference, uid *user.UserId) error {
-	ctx, span := tracer.Start(ctx, "RemoveFavorite")
+// RemoveLabel removes a favorite
+func (fs *Decomposedfs) RemoveLabel(ctx context.Context, ref *provider.Reference, uid *user.UserId, label string) error {
+	if label != "favorite" {
+		return errtypes.BadRequest("unsupported label: " + label)
+	}
+
+	ctx, span := tracer.Start(ctx, "RemoveLabel")
 	defer span.End()
 	n, err := fs.lu.NodeFromResource(ctx, ref)
 	if err != nil {
