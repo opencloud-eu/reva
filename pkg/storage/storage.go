@@ -117,10 +117,10 @@ type FS interface {
 	// UnsetArbitraryMetadata removes arbitraty metadata from a resource
 	UnsetArbitraryMetadata(ctx context.Context, ref *provider.Reference, keys []string) error
 
-	// AddFavorite adds a favorite to a resource
-	AddFavorite(ctx context.Context, ref *provider.Reference, userID *user.UserId) error
-	// RemoveFavorite removes a favorite from a resource
-	RemoveFavorite(ctx context.Context, ref *provider.Reference, userID *user.UserId) error
+	// AddLabel adds a label to a resource
+	AddLabel(ctx context.Context, ref *provider.Reference, userID *user.UserId, label string) error
+	// RemoveLabel removes a label from a resource
+	RemoveLabel(ctx context.Context, ref *provider.Reference, userID *user.UserId, label string) error
 
 	// Locks
 

@@ -706,32 +706,32 @@ func (s *Service) TouchFile(ctx context.Context, req *provider.TouchFileRequest)
 	}, nil
 }
 
-func (s *Service) AddFavorite(ctx context.Context, req *provider.AddFavoriteRequest) (*provider.AddFavoriteResponse, error) {
-	appctx.GetLogger(ctx).Debug().Msg("AddFavorite")
+func (s *Service) AddLabel(ctx context.Context, req *provider.AddLabelRequest) (*provider.AddLabelResponse, error) {
+	appctx.GetLogger(ctx).Debug().Msg("AddLabel")
 
-	err := s.Storage.AddFavorite(ctx, req.Ref, req.UserId)
+	err := s.Storage.AddLabel(ctx, req.Ref, req.UserId, req.Label)
 	if err != nil {
-		return &provider.AddFavoriteResponse{
-			Status: status.NewStatusFromErrType(ctx, "add favorite", err),
+		return &provider.AddLabelResponse{
+			Status: status.NewStatusFromErrType(ctx, "add label", err),
 		}, nil
 	}
 
-	return &provider.AddFavoriteResponse{
+	return &provider.AddLabelResponse{
 		Status: status.NewOK(ctx),
 	}, nil
 }
 
-func (s *Service) RemoveFavorite(ctx context.Context, req *provider.RemoveFavoriteRequest) (*provider.RemoveFavoriteResponse, error) {
-	appctx.GetLogger(ctx).Debug().Msg("RemoveFavorite")
+func (s *Service) RemoveLabel(ctx context.Context, req *provider.RemoveLabelRequest) (*provider.RemoveLabelResponse, error) {
+	appctx.GetLogger(ctx).Debug().Msg("RemoveLabel")
 
-	err := s.Storage.RemoveFavorite(ctx, req.Ref, req.UserId)
+	err := s.Storage.RemoveLabel(ctx, req.Ref, req.UserId, req.Label)
 	if err != nil {
-		return &provider.RemoveFavoriteResponse{
-			Status: status.NewStatusFromErrType(ctx, "remove favorite", err),
+		return &provider.RemoveLabelResponse{
+			Status: status.NewStatusFromErrType(ctx, "remove label", err),
 		}, nil
 	}
 
-	return &provider.RemoveFavoriteResponse{
+	return &provider.RemoveLabelResponse{
 		Status: status.NewOK(ctx),
 	}, nil
 }

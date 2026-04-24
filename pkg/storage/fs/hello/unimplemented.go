@@ -125,12 +125,12 @@ func (fs *hellofs) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Ref
 	return errtypes.NotSupported("unimplemented")
 }
 
-func (fs *hellofs) AddFavorite(ctx context.Context, ref *provider.Reference, userID *user.UserId) error {
-	return errtypes.NotSupported("AddFavorite not implemented")
+func (fs *hellofs) AddLabel(ctx context.Context, ref *provider.Reference, userID *user.UserId, label string) error {
+	return errtypes.NotSupported("AddLabel not implemented")
 }
 
-func (fs *hellofs) RemoveFavorite(ctx context.Context, ref *provider.Reference, userID *user.UserId) error {
-	return errtypes.NotSupported("RemoveFavorite not implemented")
+func (fs *hellofs) RemoveLabel(ctx context.Context, ref *provider.Reference, userID *user.UserId, label string) error {
+	return errtypes.NotSupported("RemoveLabel not implemented")
 }
 
 // locks

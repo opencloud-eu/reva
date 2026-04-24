@@ -11,32 +11,34 @@ import (
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 )
 
-// FavoriteAdded is emitted when a user added a resource to their favorites
-type FavoriteAdded struct {
+// LabelAdded is emitted when a user adds a label to a resource
+type LabelAdded struct {
 	Ref       *provider.Reference
+	Label     string
 	Executant *user.UserId
 	UserID    *user.UserId
 	Timestamp *types.Timestamp
 }
 
 // Unmarshal to fulfill umarshaller interface
-func (FavoriteAdded) Unmarshal(v []byte) (interface{}, error) {
-	e := FavoriteAdded{}
+func (LabelAdded) Unmarshal(v []byte) (interface{}, error) {
+	e := LabelAdded{}
 	err := json.Unmarshal(v, &e)
 	return e, err
 }
 
-// FavoriteRemoved is emitted when a user removed a resource from their favorites
-type FavoriteRemoved struct {
+// LabelRemoved is emitted when a user removes a label from a resource
+type LabelRemoved struct {
 	Ref       *provider.Reference
+	Label     string
 	Executant *user.UserId
 	UserID    *user.UserId
 	Timestamp *types.Timestamp
 }
 
 // Unmarshal to fulfill umarshaller interface
-func (FavoriteRemoved) Unmarshal(v []byte) (interface{}, error) {
-	e := FavoriteRemoved{}
+func (LabelRemoved) Unmarshal(v []byte) (interface{}, error) {
+	e := LabelRemoved{}
 	err := json.Unmarshal(v, &e)
 	return e, err
 }
