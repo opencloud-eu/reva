@@ -34,6 +34,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/opencloud-eu/reva/v2/pkg/appctx"
 	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/dirstore"
+	fsdirstore "github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/dirstore/filesystem"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/lookup"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata/prefixes"
@@ -62,10 +64,9 @@ type Tree struct {
 	blobstore   node.Blobstore
 	propagator  propagator.Propagator
 	permissions permissions.Permissions
+	dirStore    dirstore.DirStore
 
 	options *options.Options
-
-	idCache store.Store
 }
 
 // PermissionCheckFunc defined a function used to check resource permissions
@@ -78,7 +79,7 @@ func New(lu node.PathLookup, bs node.Blobstore, o *options.Options, p permission
 		blobstore:   bs,
 		options:     o,
 		permissions: p,
-		idCache:     cache,
+		dirStore:    fsdirstore.New(o.Root, cache),
 		propagator:  propagator.New(lu, o, log),
 	}
 }
@@ -162,19 +163,8 @@ func (t *Tree) TouchFile(ctx context.Context, n *node.Node, markprocessing bool,
 	}
 
 	// link child name to parent if it is new
-	childNameLink := filepath.Join(n.ParentPath(), n.Name)
-	var link string
-	link, err = os.Readlink(childNameLink)
-	if err == nil && link != "../"+n.ID {
-		if err = os.Remove(childNameLink); err != nil {
-			return errors.Wrap(err, "Decomposedfs: could not remove symlink child entry")
-		}
-	}
-	if errors.Is(err, fs.ErrNotExist) || link != "../"+n.ID {
-		relativeNodePath := filepath.Join("../../../../../", lookup.Pathify(n.ID, 4, 2))
-		if err = os.Symlink(relativeNodePath, childNameLink); err != nil {
-			return errors.Wrap(err, "Decomposedfs: could not symlink child entry")
-		}
+	if err = t.dirStore.Link(ctx, n.SpaceID, n.ParentID, n.Name, n.ID); err != nil {
+		return errors.Wrap(err, "Decomposedfs: could not link child entry")
 	}
 
 	return t.Propagate(ctx, n, 0)
@@ -200,24 +190,9 @@ func (t *Tree) CreateDir(ctx context.Context, n *node.Node) (err error) {
 	}
 
 	// make child appear in listings
-	relativeNodePath := filepath.Join("../../../../../", lookup.Pathify(n.ID, 4, 2))
-	ctx, subspan := tracer.Start(ctx, "os.Symlink")
-	err = os.Symlink(relativeNodePath, filepath.Join(n.ParentPath(), n.Name))
-	subspan.End()
+	err = t.dirStore.Link(ctx, n.SpaceID, n.ParentID, n.Name, n.ID)
 	if err != nil {
-		// no better way to check unfortunately
-		if !strings.Contains(err.Error(), "file exists") {
-			return
-		}
-
-		// try to remove the node
-		ctx, subspan = tracer.Start(ctx, "os.RemoveAll")
-		e := os.RemoveAll(n.InternalPath())
-		subspan.End()
-		if e != nil {
-			appctx.GetLogger(ctx).Debug().Err(e).Msg("cannot delete node")
-		}
-		return errtypes.AlreadyExists(err.Error())
+		return
 	}
 	return t.Propagate(ctx, n, 0)
 }
@@ -243,23 +218,12 @@ func (t *Tree) Move(ctx context.Context, oldNode *node.Node, newNode *node.Node)
 		}
 	}
 
-	// remove cache entry in any case to avoid inconsistencies
-	defer func() { _ = t.idCache.Delete(filepath.Join(oldNode.ParentPath(), oldNode.Name)) }()
-
 	// Always target the old node ID for xattr updates.
 	// The new node id is empty if the target does not exist
 	// and we need to overwrite the new one when overwriting an existing path.
 	// are we just renaming (parent stays the same)?
 	if oldNode.ParentID == newNode.ParentID {
-
-		// parentPath := t.lookup.InternalPath(oldNode.SpaceID, oldNode.ParentID)
-		parentPath := oldNode.ParentPath()
-
-		// rename child
-		err = os.Rename(
-			filepath.Join(parentPath, oldNode.Name),
-			filepath.Join(parentPath, newNode.Name),
-		)
+		err = t.dirStore.Move(ctx, oldNode.SpaceID, oldNode.ParentID, oldNode.Name, newNode.ParentID, newNode.Name)
 		if err != nil {
 			return errors.Wrap(err, "Decomposedfs: could not rename child")
 		}
@@ -273,13 +237,7 @@ func (t *Tree) Move(ctx context.Context, oldNode *node.Node, newNode *node.Node)
 	}
 
 	// we are moving the node to a new parent, any target has been removed
-	// bring old node to the new parent
-
-	// rename child
-	err = os.Rename(
-		filepath.Join(oldNode.ParentPath(), oldNode.Name),
-		filepath.Join(newNode.ParentPath(), newNode.Name),
-	)
+	err = t.dirStore.Move(ctx, oldNode.SpaceID, oldNode.ParentID, oldNode.Name, newNode.ParentID, newNode.Name)
 	if err != nil {
 		return errors.Wrap(err, "Decomposedfs: could not move child")
 	}
@@ -323,31 +281,21 @@ func (t *Tree) Move(ctx context.Context, oldNode *node.Node, newNode *node.Node)
 func (t *Tree) ListFolder(ctx context.Context, n *node.Node) ([]*node.Node, error) {
 	ctx, span := tracer.Start(ctx, "ListFolder")
 	defer span.End()
-	dir := n.InternalPath()
 
-	_, subspan := tracer.Start(ctx, "os.Open")
-	f, err := os.Open(dir)
-	subspan.End()
+	entries, err := t.dirStore.List(ctx, n.SpaceID, n.ID)
 	if err != nil {
-		if errors.Is(err, fs.ErrNotExist) {
-			return nil, errtypes.NotFound(dir)
-		}
-		return nil, errors.Wrap(err, "tree: error listing "+dir)
+		return nil, errors.Wrap(err, "tree: error listing "+n.SpaceID+"!"+n.ID)
 	}
-	defer f.Close()
 
-	_, subspan = tracer.Start(ctx, "f.Readdirnames")
-	names, err := f.Readdirnames(0)
-	subspan.End()
-	if err != nil {
-		return nil, err
+	if len(entries) == 0 {
+		return []*node.Node{}, nil
 	}
 
 	numWorkers := t.options.MaxConcurrency
-	if len(names) < numWorkers {
-		numWorkers = len(names)
+	if len(entries) < numWorkers {
+		numWorkers = len(entries)
 	}
-	work := make(chan string)
+	work := make(chan dirstore.DirEntry)
 	results := make(chan *node.Node)
 
 	g, ctx := errgroup.WithContext(ctx)
@@ -355,9 +303,9 @@ func (t *Tree) ListFolder(ctx context.Context, n *node.Node) ([]*node.Node, erro
 	// Distribute work
 	g.Go(func() error {
 		defer close(work)
-		for _, name := range names {
+		for _, entry := range entries {
 			select {
-			case work <- name:
+			case work <- entry:
 			case <-ctx.Done():
 				return ctx.Err()
 			}
@@ -368,22 +316,8 @@ func (t *Tree) ListFolder(ctx context.Context, n *node.Node) ([]*node.Node, erro
 	// Spawn workers that'll concurrently work the queue
 	for i := 0; i < numWorkers; i++ {
 		g.Go(func() error {
-			var err error
-			for name := range work {
-				path := filepath.Join(dir, name)
-				nodeID := getNodeIDFromCache(ctx, path, t.idCache)
-				if nodeID == "" {
-					nodeID, err = node.ReadChildNodeFromLink(ctx, path)
-					if err != nil {
-						return err
-					}
-					err = storeNodeIDInCache(ctx, path, nodeID, t.idCache)
-					if err != nil {
-						return err
-					}
-				}
-
-				child, err := node.ReadNode(ctx, t.lookup, n.SpaceID, nodeID, "", false, n.SpaceRoot, true)
+			for entry := range work {
+				child, err := node.ReadNode(ctx, t.lookup, n.SpaceID, entry.NodeID, "", false, n.SpaceRoot, true)
 				if err != nil {
 					return err
 				}
@@ -425,9 +359,6 @@ func (t *Tree) ListFolder(ctx context.Context, n *node.Node) ([]*node.Node, erro
 func (t *Tree) Delete(ctx context.Context, n *node.Node) (err error) {
 	_, span := tracer.Start(ctx, "Delete")
 	defer span.End()
-	path := filepath.Join(n.ParentPath(), n.Name)
-	// remove entry from cache immediately to avoid inconsistencies
-	defer func() { _ = t.idCache.Delete(path) }()
 
 	// get the original path
 	origin, err := t.lookup.Path(ctx, n, node.NoCheck)
@@ -502,11 +433,7 @@ func (t *Tree) Delete(ctx context.Context, n *node.Node) (err error) {
 	_ = os.Remove(t.lookup.MetadataBackend().LockfilePath(n))
 
 	// finally remove the entry from the parent dir
-	if err = os.Remove(path); err != nil {
-		// To roll back changes
-		// TODO revert the rename
-		// TODO remove symlink
-		// Roll back changes
+	if err = t.dirStore.Unlink(ctx, n.SpaceID, n.ParentID, n.Name); err != nil {
 		_ = n.RemoveXattr(ctx, prefixes.TrashOriginAttr, true)
 		return
 	}
@@ -556,7 +483,7 @@ func (t *Tree) RestoreRecycleItemFunc(ctx context.Context, spaceid, key, trashPa
 		restoreNode := node.NewBaseNode(targetNode.SpaceID, originalId, t.lookup)
 
 		// add the entry for the parent dir
-		err = os.Symlink("../../../../../"+lookup.Pathify(originalId, 4, 2), filepath.Join(targetNode.ParentPath(), targetNode.Name))
+		err = t.dirStore.Link(ctx, targetNode.SpaceID, targetNode.ParentID, targetNode.Name, originalId)
 		if err != nil {
 			return nil, err
 		}
@@ -679,23 +606,13 @@ func (t *Tree) InitNewNode(ctx context.Context, n *node.Node, fsize uint64) (met
 	}
 
 	// link child name to parent if it is new
-	childNameLink := filepath.Join(n.ParentPath(), n.Name)
-	relativeNodePath := filepath.Join("../../../../../", lookup.Pathify(n.ID, 4, 2))
-	log := appctx.GetLogger(ctx).With().Str("childNameLink", childNameLink).Str("relativeNodePath", relativeNodePath).Logger()
-	log.Info().Msg("initNewNode: creating symlink")
-
-	_, subspan = tracer.Start(ctx, "os.Symlink")
-	err = os.Symlink(relativeNodePath, childNameLink)
-	subspan.End()
+	err = t.dirStore.Link(ctx, n.SpaceID, n.ParentID, n.Name, n.ID)
 	if err != nil {
-		log.Info().Err(err).Msg("initNewNode: symlink failed")
-		if errors.Is(err, fs.ErrExist) {
-			log.Info().Err(err).Msg("initNewNode: symlink already exists")
+		if errors.Is(err, errtypes.AlreadyExists("")) {
 			return unlock, errtypes.AlreadyExists(n.Name)
 		}
-		return unlock, errors.Wrap(err, "Decomposedfs: could not symlink child entry")
+		return unlock, errors.Wrap(err, "Decomposedfs: could not link child entry")
 	}
-	log.Info().Msg("initNewNode: symlink created")
 
 	return unlock, nil
 }
@@ -933,23 +850,4 @@ func (t *Tree) readRecycleItem(ctx context.Context, spaceID, key, path string) (
 	}
 
 	return
-}
-
-func getNodeIDFromCache(ctx context.Context, path string, cache store.Store) string {
-	_, span := tracer.Start(ctx, "getNodeIDFromCache")
-	defer span.End()
-	recs, err := cache.Read(path)
-	if err == nil && len(recs) > 0 {
-		return string(recs[0].Value)
-	}
-	return ""
-}
-
-func storeNodeIDInCache(ctx context.Context, path string, nodeID string, cache store.Store) error {
-	_, span := tracer.Start(ctx, "storeNodeIDInCache")
-	defer span.End()
-	return cache.Write(&store.Record{
-		Key:   path,
-		Value: []byte(nodeID),
-	})
 }
