@@ -74,7 +74,7 @@ func (c *IDCache) DeleteByPath(ctx context.Context, path string) error {
 		}
 	}
 
-	watcher, err := c.kv.Watch(ctx, baseKey+".*")
+	watcher, err := c.kv.Watch(ctx, baseKey+".>")
 	if err != nil {
 		return err
 	}
