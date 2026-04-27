@@ -40,7 +40,6 @@ import (
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 
-	"github.com/opencloud-eu/reva/v2/pkg/appctx"
 	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
 	"github.com/opencloud-eu/reva/v2/pkg/events"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/blobstore"
@@ -589,11 +588,6 @@ func (t *Tree) Delete(ctx context.Context, n *node.Node) error {
 			t.log.Error().Err(err).Str("path", path).Msg("could not delete id from cache")
 		}
 	}()
-
-	if appctx.DeletingSharedResourceFromContext(ctx) {
-		src := filepath.Join(n.ParentPath(), n.Name)
-		return os.RemoveAll(src)
-	}
 
 	var sizeDiff int64
 	if n.IsDir(ctx) {
