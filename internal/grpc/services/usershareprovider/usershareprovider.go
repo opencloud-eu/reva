@@ -206,7 +206,7 @@ func (s *service) CreateShare(ctx context.Context, req *collaboration.CreateShar
 			UserId: &userpb.UserId{
 				OpaqueId: req.GetGrant().GetGrantee().GetUserId().GetOpaqueId(),
 				Idp:      user.GetId().GetIdp(),
-				Type:     userpb.UserType_USER_TYPE_PRIMARY},
+				Type:     req.GetGrant().GetGrantee().GetUserId().GetType()},
 		}
 	}
 	// some for group grantees
