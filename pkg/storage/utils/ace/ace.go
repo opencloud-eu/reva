@@ -215,7 +215,12 @@ func FromGrant(g *provider.Grant) *ACE {
 }
 
 func UserAce(id *userpb.UserId) string {
-	return "u:" + id.OpaqueId
+	switch id.GetType() {
+	case userpb.UserType_USER_TYPE_GUEST:
+		return "m:" + id.OpaqueId
+	default:
+		return "u:" + id.OpaqueId
+	}
 }
 
 // Principal returns the principal of the ACE, eg. `u:<userid>` or `g:<groupid>`
@@ -260,7 +265,7 @@ func Unmarshal(principal string, v []byte) (e *ACE, err error) {
 				return nil, fmt.Errorf("inconsistent ace: expected group")
 			}
 		} else {
-			if principal[:1] != "u" {
+			if principal[:1] != "u" && principal[:1] != "m" {
 				return nil, fmt.Errorf("inconsistent ace: expected user")
 			}
 		}
@@ -288,7 +293,11 @@ func (e *ACE) Grant() *provider.Grant {
 	if e.granteeType() == provider.GranteeType_GRANTEE_TYPE_GROUP {
 		g.Grantee.Id = &provider.Grantee_GroupId{GroupId: &grouppb.GroupId{OpaqueId: id}}
 	} else if e.granteeType() == provider.GranteeType_GRANTEE_TYPE_USER {
-		g.Grantee.Id = &provider.Grantee_UserId{UserId: &userpb.UserId{OpaqueId: id}}
+		if strings.HasPrefix(e.principal, "m:") {
+			g.Grantee.Id = &provider.Grantee_UserId{UserId: &userpb.UserId{OpaqueId: id, Type: userpb.UserType_USER_TYPE_GUEST}}
+		} else {
+			g.Grantee.Id = &provider.Grantee_UserId{UserId: &userpb.UserId{OpaqueId: id, Type: userpb.UserType_USER_TYPE_PRIMARY}}
+		}
 	}
 
 	if e.expires != 0 {

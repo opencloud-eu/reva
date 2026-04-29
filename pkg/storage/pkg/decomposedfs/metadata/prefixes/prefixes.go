@@ -55,6 +55,7 @@ const (
 	GrantPrefix         string = OcPrefix + "grant."
 	GrantUserAcePrefix  string = OcPrefix + "grant." + UserAcePrefix
 	GrantGroupAcePrefix string = OcPrefix + "grant." + GroupAcePrefix
+	GrantMailAcePrefix  string = OcPrefix + "grant." + MailAcePrefix
 	MetadataPrefix      string = OcPrefix + "md."
 
 	// favorite flag, per user
@@ -106,6 +107,7 @@ const (
 
 	UserAcePrefix  string = "u:"
 	GroupAcePrefix string = "g:"
+	MailAcePrefix  string = "m:"
 )
 
 func FavoriteKey(uid *userpb.UserId) string {
