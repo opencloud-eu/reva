@@ -128,6 +128,7 @@ type Decomposedfs struct {
 	UserCache       *ttlcache.Cache
 	userSpaceIndex  *spaceidindex.Index
 	groupSpaceIndex *spaceidindex.Index
+	mailSpaceIndex  *spaceidindex.Index
 	spaceTypeIndex  *spaceidindex.Index
 
 	log *zerolog.Logger
@@ -216,6 +217,11 @@ func New(o *options.Options, aspects aspects.Aspects, log *zerolog.Logger) (stor
 	if err != nil {
 		return nil, err
 	}
+	mailSpaceIndex := spaceidindex.New(filepath.Join(o.Root, "indexes"), "by-mail")
+	err = mailSpaceIndex.Init()
+	if err != nil {
+		return nil, err
+	}
 	spaceTypeIndex := spaceidindex.New(filepath.Join(o.Root, "indexes"), "by-type")
 	err = spaceTypeIndex.Init()
 	if err != nil {
@@ -242,6 +248,7 @@ func New(o *options.Options, aspects aspects.Aspects, log *zerolog.Logger) (stor
 		UserCache:       ttlcache.NewCache(),
 		userSpaceIndex:  userSpaceIndex,
 		groupSpaceIndex: groupSpaceIndex,
+		mailSpaceIndex:  mailSpaceIndex,
 		spaceTypeIndex:  spaceTypeIndex,
 		log:             log,
 	}

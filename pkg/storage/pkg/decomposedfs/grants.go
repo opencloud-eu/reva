@@ -23,6 +23,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/opencloud-eu/reva/v2/internal/grpc/services/storageprovider"
 	"github.com/opencloud-eu/reva/v2/pkg/appctx"
@@ -235,8 +236,14 @@ func (fs *Decomposedfs) RemoveGrant(ctx context.Context, ref *provider.Reference
 		switch g.Grantee.Type {
 		case provider.GranteeType_GRANTEE_TYPE_USER:
 			// remove from user index
-			if err := fs.userSpaceIndex.Remove(g.Grantee.GetUserId().GetOpaqueId(), grantNode.SpaceID); err != nil {
-				return err
+			if g.Grantee.GetUserId().GetType() == userpb.UserType_USER_TYPE_GUEST {
+				if err := fs.mailSpaceIndex.Remove(g.Grantee.GetUserId().GetOpaqueId(), grantNode.SpaceID); err != nil {
+					return err
+				}
+			} else {
+				if err := fs.userSpaceIndex.Remove(g.Grantee.GetUserId().GetOpaqueId(), grantNode.SpaceID); err != nil {
+					return err
+				}
 			}
 		case provider.GranteeType_GRANTEE_TYPE_GROUP:
 			// remove from group index

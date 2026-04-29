@@ -854,6 +854,9 @@ func (fs *Decomposedfs) updateIndexes(ctx context.Context, grantee *provider.Gra
 	// create space grant index
 	switch grantee.Type {
 	case provider.GranteeType_GRANTEE_TYPE_USER:
+		if grantee.GetUserId().GetType() == userv1beta1.UserType_USER_TYPE_GUEST {
+			return fs.linkSpaceByMail(ctx, grantee.GetUserId().GetOpaqueId(), spaceID, target)
+		}
 		return fs.linkSpaceByUser(ctx, grantee.GetUserId().GetOpaqueId(), spaceID, target)
 	case provider.GranteeType_GRANTEE_TYPE_GROUP:
 		return fs.linkSpaceByGroup(ctx, grantee.GetGroupId().GetOpaqueId(), spaceID, target)
@@ -868,6 +871,10 @@ func (fs *Decomposedfs) linkSpaceByUser(ctx context.Context, userID, spaceID, ta
 
 func (fs *Decomposedfs) linkSpaceByGroup(ctx context.Context, groupID, spaceID, target string) error {
 	return fs.groupSpaceIndex.Add(groupID, spaceID, target)
+}
+
+func (fs *Decomposedfs) linkSpaceByMail(ctx context.Context, mail, spaceID, target string) error {
+	return fs.mailSpaceIndex.Add(mail, spaceID, target)
 }
 
 func (fs *Decomposedfs) linkStorageSpaceType(ctx context.Context, spaceType, spaceID, target string) error {
@@ -943,10 +950,18 @@ func (fs *Decomposedfs) StorageSpaceFromNode(ctx context.Context, n *node.Node, 
 					// invalidate space grant
 					switch g.Grantee.Type {
 					case provider.GranteeType_GRANTEE_TYPE_USER:
-						// remove from user index
-						if err := fs.userSpaceIndex.Remove(g.Grantee.GetUserId().GetOpaqueId(), n.GetSpaceID()); err != nil {
-							sublog.Error().Err(err).Str("grantee", id).
-								Msg("failed to delete expired user space index")
+						if g.Grantee.GetUserId().GetType() == userv1beta1.UserType_USER_TYPE_GUEST {
+							// remove from mail index
+							if err := fs.mailSpaceIndex.Remove(g.Grantee.GetUserId().GetOpaqueId(), n.GetSpaceID()); err != nil {
+								sublog.Error().Err(err).Str("grantee", id).
+									Msg("failed to delete expired mail space index")
+							}
+						} else {
+							// remove from user index
+							if err := fs.userSpaceIndex.Remove(g.Grantee.GetUserId().GetOpaqueId(), n.GetSpaceID()); err != nil {
+								sublog.Error().Err(err).Str("grantee", id).
+									Msg("failed to delete expired user space index")
+							}
 						}
 					case provider.GranteeType_GRANTEE_TYPE_GROUP:
 						// remove from group index

@@ -435,6 +435,7 @@ var _ = Describe("user share provider service", func() {
 				Entry("ListGrants", conversions.RoleFromName("manager").CS3ResourcePermissions(), &providerpb.ResourcePermissions{ListGrants: true}, rpcpb.Code_CODE_OK, 1),
 			)
 		})
+
 		Context("create share with tenant awareness", func() {
 			JustBeforeEach(func() {
 				rgrpcService := usershareprovider.New(gatewaySelector, manager, []*regexp.Regexp{})
@@ -478,6 +479,28 @@ var _ = Describe("user share provider service", func() {
 						Grantee: &providerpb.Grantee{
 							Type: providerpb.GranteeType_GRANTEE_TYPE_USER,
 							Id:   &providerpb.Grantee_UserId{UserId: bob.GetId()},
+						},
+						Permissions: &collaborationpb.SharePermissions{
+							Permissions: conversions.RoleFromName("viewer").CS3ResourcePermissions(),
+						},
+					},
+				})
+
+				Expect(err).ToNot(HaveOccurred())
+				Expect(createShareResponse.Status.Code).To(Equal(rpcpb.Code_CODE_OK))
+
+				manager.AssertNumberOfCalls(GinkgoT(), "Share", 1)
+			})
+
+			It("succeeds when sharing with a guest using an email address", func() {
+				createShareResponse, err := provider.CreateShare(ctx, &collaborationpb.CreateShareRequest{
+					ResourceInfo: &providerpb.ResourceInfo{
+						PermissionSet: conversions.RoleFromName("manager").CS3ResourcePermissions(),
+					},
+					Grant: &collaborationpb.ShareGrant{
+						Grantee: &providerpb.Grantee{
+							Type: providerpb.GranteeType_GRANTEE_TYPE_GUEST,
+							Id:   &providerpb.Grantee_Email{Email: "guest@example.com"},
 						},
 						Permissions: &collaborationpb.SharePermissions{
 							Permissions: conversions.RoleFromName("viewer").CS3ResourcePermissions(),
