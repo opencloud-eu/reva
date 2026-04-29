@@ -84,9 +84,9 @@ type service struct {
 	allowedPathsForShares []*regexp.Regexp
 }
 
-func getShareManager(c *config) (share.Manager, error) {
+func getShareManager(c *config, logger *zerolog.Logger) (share.Manager, error) {
 	if f, ok := registry.NewFuncs[c.Driver]; ok {
-		return f(c.Drivers[c.Driver])
+		return f(c.Drivers[c.Driver], logger)
 	}
 	return nil, errtypes.NotFound("driver not found: " + c.Driver)
 }
@@ -114,7 +114,7 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 }
 
 // New creates a new user share provider svc initialized from defaults
-func NewDefault(m map[string]interface{}, ss *grpc.Server, _ *zerolog.Logger) (rgrpc.Service, error) {
+func NewDefault(m map[string]any, ss *grpc.Server, logger *zerolog.Logger) (rgrpc.Service, error) {
 
 	c, err := parseConfig(m)
 	if err != nil {
@@ -123,7 +123,7 @@ func NewDefault(m map[string]interface{}, ss *grpc.Server, _ *zerolog.Logger) (r
 
 	c.init()
 
-	sm, err := getShareManager(c)
+	sm, err := getShareManager(c, logger)
 	if err != nil {
 		return nil, err
 	}

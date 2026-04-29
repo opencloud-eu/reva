@@ -18,11 +18,14 @@
 
 package registry
 
-import "github.com/opencloud-eu/reva/v2/pkg/share"
+import (
+	"github.com/opencloud-eu/reva/v2/pkg/share"
+	"github.com/rs/zerolog"
+)
 
 // NewFunc is the function that share managers
 // should register at init time.
-type NewFunc func(map[string]interface{}) (share.Manager, error)
+type NewFunc func(map[string]any, *zerolog.Logger) (share.Manager, error)
 
 // NewFuncs is a map containing all the registered share managers.
 var NewFuncs = map[string]NewFunc{}
