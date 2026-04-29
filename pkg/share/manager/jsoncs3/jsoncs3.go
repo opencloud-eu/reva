@@ -126,8 +126,8 @@ type config struct {
 	GatewayAddr       string       `mapstructure:"gateway_addr"`
 	MaxConcurrency    int          `mapstructure:"max_concurrency"`
 	ProviderAddr      string       `mapstructure:"provider_addr"`
-	ServiceUserID     string       `mapstructure:"service_user_id"`
-	ServiceUserIdp    string       `mapstructure:"service_user_idp"`
+	SystemUserID      string       `mapstructure:"system_user_id"`
+	SystemUserIdp     string       `mapstructure:"system_user_idp"`
 	MachineAuthAPIKey string       `mapstructure:"machine_auth_apikey"`
 	CacheTTL          int          `mapstructure:"ttl"`
 	Events            EventOptions `mapstructure:"events"`
@@ -170,7 +170,7 @@ func NewDefault(m map[string]interface{}, logger *zerolog.Logger) (share.Manager
 		return nil, err
 	}
 
-	s, err := metadata.NewCS3Storage(c.ProviderAddr, c.ProviderAddr, c.ServiceUserID, c.ServiceUserIdp, c.MachineAuthAPIKey)
+	s, err := metadata.NewCS3Storage(c.ProviderAddr, c.ProviderAddr, c.SystemUserID, c.SystemUserIdp, c.MachineAuthAPIKey)
 	if err != nil {
 		return nil, err
 	}
