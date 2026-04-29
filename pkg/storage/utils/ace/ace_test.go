@@ -63,6 +63,20 @@ var _ = Describe("ACE", func() {
 			Permissions: &provider.ResourcePermissions{
 				CreateContainer: true,
 			},
+			Creator: &userpb.UserId{},
+		}
+
+		guestGrant = &provider.Grant{
+			Grantee: &provider.Grantee{
+				Type: provider.GranteeType_GRANTEE_TYPE_MAIL,
+				Id: &provider.Grantee_Mail{
+					Mail: "guest@example.com",
+				},
+			},
+			Permissions: &provider.ResourcePermissions{
+				CreateContainer: true,
+			},
+			Creator: &userpb.UserId{},
 		}
 	)
 
@@ -76,6 +90,12 @@ var _ = Describe("ACE", func() {
 			ace := ace.FromGrant(groupGrant)
 			Expect(ace.Principal()).To(Equal("g:foo"))
 		})
+
+		It("creates an ACE from a guest grant", func() {
+			guestGrant.Grantee.Id = &provider.Grantee_Mail{Mail: "GUEST@example.com"}
+			ace := ace.FromGrant(guestGrant)
+			Expect(ace.Principal()).To(Equal("m:guest@example.com"))
+		})
 	})
 
 	Describe("Grant", func() {
@@ -85,6 +105,23 @@ var _ = Describe("ACE", func() {
 			// do not check opaque values
 			grant.Grantee.Opaque = nil
 			Expect(grant).To(BeComparableTo(userGrant, protocmp.Transform()))
+		})
+
+		It("returns a proper Grant for group ACE", func() {
+			ace := ace.FromGrant(groupGrant)
+			grant := ace.Grant()
+			// do not check opaque values
+			grant.Grantee.Opaque = nil
+			Expect(grant).To(BeComparableTo(groupGrant, protocmp.Transform()))
+		})
+
+		It("returns a proper Grant for guest ACE", func() {
+			guestGrant.Grantee.Id = &provider.Grantee_Mail{Mail: "guest@example.com"}
+			ace := ace.FromGrant(guestGrant)
+			grant := ace.Grant()
+			// do not check opaque values
+			grant.Grantee.Opaque = nil
+			Expect(grant).To(BeComparableTo(guestGrant, protocmp.Transform()))
 		})
 	})
 
