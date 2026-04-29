@@ -48,6 +48,7 @@ import (
 	"github.com/opencloud-eu/reva/v2/pkg/storagespace"
 	"github.com/opencloud-eu/reva/v2/pkg/utils"
 	"github.com/pkg/errors"
+	"github.com/rs/zerolog"
 	"go.opentelemetry.io/otel/codes"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/genproto/protobuf/field_mask"
@@ -145,8 +146,6 @@ type EventOptions struct {
 
 // Manager implements a share manager using a cs3 storage backend with local caching
 type Manager struct {
-	sync.RWMutex
-
 	Cache              providercache.Cache      // holds all shares, sharded by provider id and space id
 	CreatedCache       sharecache.Cache         // holds the list of shares a user has created, sharded by user id
 	GroupReceivedCache sharecache.Cache         // holds the list of shares a group has access to, sharded by group id
@@ -155,7 +154,7 @@ type Manager struct {
 	storage   metadata.Storage
 	SpaceRoot *provider.ResourceId
 
-	initialized bool
+	ready chan struct{} // closed once initialize() has completed successfully
 
 	MaxConcurrency int
 
@@ -164,7 +163,7 @@ type Manager struct {
 }
 
 // NewDefault returns a new manager instance with default dependencies
-func NewDefault(m map[string]interface{}) (share.Manager, error) {
+func NewDefault(m map[string]interface{}, logger *zerolog.Logger) (share.Manager, error) {
 	c := &config{}
 	if err := mapstructure.Decode(m, c); err != nil {
 		err = errors.Wrap(err, "error creating a new manager")
@@ -189,11 +188,11 @@ func NewDefault(m map[string]interface{}) (share.Manager, error) {
 		}
 	}
 
-	return New(s, gatewaySelector, c.CacheTTL, es, c.MaxConcurrency)
+	return New(s, logger, gatewaySelector, c.CacheTTL, es, c.MaxConcurrency)
 }
 
 // New returns a new manager instance.
-func New(s metadata.Storage, gatewaySelector pool.Selectable[gatewayv1beta1.GatewayAPIClient], ttlSeconds int, es events.Stream, maxconcurrency int) (*Manager, error) {
+func New(s metadata.Storage, logger *zerolog.Logger, gatewaySelector pool.Selectable[gatewayv1beta1.GatewayAPIClient], ttlSeconds int, es events.Stream, maxconcurrency int) (*Manager, error) {
 	ttl := time.Duration(ttlSeconds) * time.Second
 
 	m := &Manager{
@@ -205,13 +204,33 @@ func New(s metadata.Storage, gatewaySelector pool.Selectable[gatewayv1beta1.Gate
 		gatewaySelector:    gatewaySelector,
 		eventStream:        es,
 		MaxConcurrency:     maxconcurrency,
+		ready:              make(chan struct{}),
 	}
+
+	// Initialize the metadata storage connection in the background, retrying
+	// with exponential backoff if the backend is not yet available.
+	go func() {
+		backoff := time.Second
+		for {
+			if err := m.initialize(context.Background()); err != nil {
+				logger.Info().Err(err).Dur("backoff", backoff).Msg("share manager: metadata storage initialization failed, retrying")
+				time.Sleep(backoff)
+				if backoff < 30*time.Second {
+					backoff *= 2
+				}
+				continue
+			}
+			logger.Debug().Msg("share manager: initialization succeeded")
+			close(m.ready)
+			return
+		}
+	}()
 
 	// listen for events
 	if m.eventStream != nil {
 		ch, err := events.Consume(m.eventStream, "jsoncs3sharemanager", _registeredEvents...)
 		if err != nil {
-			appctx.GetLogger(context.Background()).Error().Err(err).Msg("error consuming events")
+			logger.Error().Err(err).Msg("error consuming events")
 		}
 		go m.ProcessEvents(ch)
 	}
@@ -219,23 +238,13 @@ func New(s metadata.Storage, gatewaySelector pool.Selectable[gatewayv1beta1.Gate
 	return m, nil
 }
 
+// initialize connects to the metadata storage backend and ensures the required
+// directory structure exists. It is called once at startup from a background
+// goroutine (see New) and must not be called concurrently.
 func (m *Manager) initialize(ctx context.Context) error {
 	_, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "initialize")
 	defer span.End()
-	if m.initialized {
-		span.SetStatus(codes.Ok, "already initialized")
-		return nil
-	}
 
-	m.Lock()
-	defer m.Unlock()
-
-	if m.initialized { // check if initialization happened while grabbing the lock
-		span.SetStatus(codes.Ok, "initialized while grabbing lock")
-		return nil
-	}
-
-	ctx = context.Background()
 	err := m.storage.Init(ctx, "jsoncs3-share-manager-metadata")
 	if err != nil {
 		span.RecordError(err)
@@ -262,20 +271,30 @@ func (m *Manager) initialize(ctx context.Context) error {
 		return err
 	}
 
-	m.initialized = true
 	span.SetStatus(codes.Ok, "initialized")
 	return nil
 }
 
+// waitForInit blocks until the background initialization goroutine has
+// successfully completed, or until ctx is cancelled.
+func (m *Manager) waitForInit(ctx context.Context) error {
+	select {
+	case <-m.ready:
+		return nil
+	case <-ctx.Done():
+		return errors.Wrap(ctx.Err(), "share manager not yet initialized")
+	}
+}
+
 func (m *Manager) ProcessEvents(ch <-chan events.Event) {
 	log := logger.New()
+	ctx := context.Background()
+	if err := m.waitForInit(ctx); err != nil {
+		log.Error().Err(err).Msg("share manager: error waiting for initialization")
+		return
+	}
 	for event := range ch {
 		ctx := context.Background()
-
-		if err := m.initialize(ctx); err != nil {
-			log.Error().Err(err).Msg("error initializing manager")
-		}
-
 		if ev, ok := event.Event.(events.SpaceDeleted); ok {
 			log.Debug().Msgf("space deleted event: %v", ev)
 			go func() { m.purgeSpace(ctx, ev.ID) }()
@@ -287,7 +306,7 @@ func (m *Manager) ProcessEvents(ch <-chan events.Event) {
 func (m *Manager) Share(ctx context.Context, md *provider.ResourceInfo, g *collaboration.ShareGrant) (*collaboration.Share, error) {
 	ctx, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "Share")
 	defer span.End()
-	if err := m.initialize(ctx); err != nil {
+	if err := m.waitForInit(ctx); err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
 		return nil, err
@@ -436,7 +455,7 @@ func (m *Manager) GetShare(ctx context.Context, ref *collaboration.ShareReferenc
 	ctx, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "GetShare")
 	defer span.End()
 	sublog := appctx.GetLogger(ctx).With().Str("id", ref.GetId().GetOpaqueId()).Str("key", ref.GetKey().String()).Str("driver", "jsoncs3").Str("handler", "GetShare").Logger()
-	if err := m.initialize(ctx); err != nil {
+	if err := m.waitForInit(ctx); err != nil {
 		return nil, err
 	}
 
@@ -494,7 +513,7 @@ func (m *Manager) Unshare(ctx context.Context, ref *collaboration.ShareReference
 	ctx, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "Unshare")
 	defer span.End()
 
-	if err := m.initialize(ctx); err != nil {
+	if err := m.waitForInit(ctx); err != nil {
 		return err
 	}
 
@@ -511,7 +530,7 @@ func (m *Manager) UpdateShare(ctx context.Context, ref *collaboration.ShareRefer
 	ctx, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "UpdateShare")
 	defer span.End()
 
-	if err := m.initialize(ctx); err != nil {
+	if err := m.waitForInit(ctx); err != nil {
 		return nil, err
 	}
 
@@ -599,7 +618,7 @@ func (m *Manager) ListShares(ctx context.Context, filters []*collaboration.Filte
 	ctx, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "ListShares")
 	defer span.End()
 
-	if err := m.initialize(ctx); err != nil {
+	if err := m.waitForInit(ctx); err != nil {
 		return nil, err
 	}
 
@@ -816,7 +835,7 @@ func (m *Manager) ListReceivedShares(ctx context.Context, filters []*collaborati
 	defer span.End()
 	sublog := appctx.GetLogger(ctx).With().Str("driver", "jsoncs3").Str("handler", "ListReceivedShares").Logger()
 
-	if err := m.initialize(ctx); err != nil {
+	if err := m.waitForInit(ctx); err != nil {
 		return nil, err
 	}
 
@@ -1012,7 +1031,7 @@ func (m *Manager) convert(ctx context.Context, userID string, s *collaboration.S
 
 // GetReceivedShare returns the information for a received share.
 func (m *Manager) GetReceivedShare(ctx context.Context, ref *collaboration.ShareReference) (*collaboration.ReceivedShare, error) {
-	if err := m.initialize(ctx); err != nil {
+	if err := m.waitForInit(ctx); err != nil {
 		return nil, err
 	}
 
@@ -1056,7 +1075,7 @@ func (m *Manager) UpdateReceivedShare(ctx context.Context, receivedShare *collab
 	ctx, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "UpdateReceivedShare")
 	defer span.End()
 
-	if err := m.initialize(ctx); err != nil {
+	if err := m.waitForInit(ctx); err != nil {
 		return nil, err
 	}
 
@@ -1104,7 +1123,7 @@ func updateShareID(share *collaboration.Share) {
 // Load imports shares and received shares from channels (e.g. during migration)
 func (m *Manager) Load(ctx context.Context, shareChan <-chan *collaboration.Share, receivedShareChan <-chan share.ReceivedShareWithUser) error {
 	log := appctx.GetLogger(ctx)
-	if err := m.initialize(ctx); err != nil {
+	if err := m.waitForInit(ctx); err != nil {
 		return err
 	}
 
@@ -1220,7 +1239,7 @@ func (m *Manager) removeShare(ctx context.Context, s *collaboration.Share, skipS
 func (m *Manager) CleanupStaleShares(ctx context.Context) {
 	log := appctx.GetLogger(ctx)
 
-	if err := m.initialize(ctx); err != nil {
+	if err := m.waitForInit(ctx); err != nil {
 		return
 	}
 

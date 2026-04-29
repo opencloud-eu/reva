@@ -28,6 +28,7 @@ import (
 
 	ctxpkg "github.com/opencloud-eu/reva/v2/pkg/ctx"
 	"github.com/opencloud-eu/reva/v2/pkg/share"
+	"github.com/rs/zerolog"
 	"google.golang.org/genproto/protobuf/field_mask"
 
 	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -46,7 +47,7 @@ func init() {
 }
 
 // New returns a new manager.
-func New(c map[string]interface{}) (share.Manager, error) {
+func New(c map[string]any, _ *zerolog.Logger) (share.Manager, error) {
 	state := map[string]map[*collaboration.ShareId]collaboration.ShareState{}
 	mp := map[string]map[*collaboration.ShareId]*provider.Reference{}
 	return &manager{
