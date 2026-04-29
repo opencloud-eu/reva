@@ -1,10 +1,10 @@
 # Changelog
 
-## [2.43.1](https://github.com/opencloud-eu/reva/releases/tag/v2.43.1) - 2026-04-28
+## [2.43.1](https://github.com/opencloud-eu/reva/releases/tag/v2.43.1) - 2026-04-29
 
 ### ❤️ Thanks to all contributors! ❤️
 
-@aduffeck, @butonic
+@ScharfViktor, @aduffeck, @butonic
 
 ### 📦️ Dependencies
 
