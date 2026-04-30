@@ -24,6 +24,7 @@ import (
 	"os"
 	"path/filepath"
 	"syscall"
+	"time"
 
 	"github.com/rs/zerolog"
 	tusd "github.com/tus/tusd/v2/pkg/handler"
@@ -70,6 +71,7 @@ func NewDefault(m map[string]interface{}, stream events.Stream, log *zerolog.Log
 	}
 
 	o.IDCache.Database += "_v2" // Use a versioned bucket name to avoid conflicts with previous implementations
+	o.IDCache.TTL = 0           // Disable TTL for the ID cache, as the posix driver relies on it for caching file IDs and we don't want them to expire
 	kv, err := cache.NewNatsKeyValue(o.IDCache)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not create nats key value store")
@@ -80,6 +82,7 @@ func NewDefault(m map[string]interface{}, stream events.Stream, log *zerolog.Log
 	}
 
 	o.IDCache.Database += "_history" // Use a versioned bucket name to avoid conflicts with previous implementations
+	o.IDCache.TTL = 24 * 60 * time.Minute
 	historyKv, err := cache.NewNatsKeyValue(o.IDCache)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not create nats key value store")
