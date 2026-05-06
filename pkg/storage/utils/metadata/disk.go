@@ -170,7 +170,10 @@ func (disk *Disk) Download(_ context.Context, req DownloadRequest) (*DownloadRes
 // SimpleDownload reads a file from disk
 func (disk *Disk) SimpleDownload(ctx context.Context, downloadpath string) ([]byte, error) {
 	res, err := disk.Download(ctx, DownloadRequest{Path: downloadpath})
-	return res.Content, err
+	if err != nil {
+		return nil, err
+	}
+	return res.Content, nil
 }
 
 // Delete deletes a path
