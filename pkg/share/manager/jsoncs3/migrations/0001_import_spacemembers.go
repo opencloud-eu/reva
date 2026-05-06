@@ -41,14 +41,22 @@ import (
 	"github.com/opencloud-eu/reva/v2/pkg/share/manager/jsoncs3/shareid"
 	"github.com/opencloud-eu/reva/v2/pkg/utils"
 	"github.com/rs/zerolog"
+	"google.golang.org/grpc"
 )
 
+// storageProvider is the narrow subset of provider.ProviderAPIClient that the
+// migration actually uses. Keeping it narrow makes test stubs trivial to write.
+type storageProvider interface {
+	ListGrants(ctx context.Context, in *provider.ListGrantsRequest, opts ...grpc.CallOption) (*provider.ListGrantsResponse, error)
+}
+
 type ImportSpaceMembersMigration struct {
-	cfg          config
-	sharesChan   chan *collaboration.Share
-	receivedChan chan share.ReceivedShareWithUser
-	userCache    map[string]*userpb.UserId
-	groupCache   map[string]*grouppb.GroupId
+	cfg              config
+	sharesChan       chan *collaboration.Share
+	receivedChan     chan share.ReceivedShareWithUser
+	userCache        map[string]*userpb.UserId
+	groupCache       map[string]*grouppb.GroupId
+	providerResolver func(context.Context, *provider.StorageSpace) (storageProvider, error)
 }
 
 func init() {
@@ -61,6 +69,9 @@ func (m *ImportSpaceMembersMigration) Initialize(cfg config) {
 	m.receivedChan = make(chan share.ReceivedShareWithUser)
 	m.userCache = make(map[string]*userpb.UserId)
 	m.groupCache = make(map[string]*grouppb.GroupId)
+	m.providerResolver = func(ctx context.Context, space *provider.StorageSpace) (storageProvider, error) {
+		return m.storageProviderForSpace(ctx, space)
+	}
 }
 
 func (m *ImportSpaceMembersMigration) Name() string {
@@ -145,7 +156,7 @@ func (m *ImportSpaceMembersMigration) Migrate() error {
 }
 
 func (m *ImportSpaceMembersMigration) migrateSpace(ctx context.Context, space *provider.StorageSpace) (int, error) {
-	spClient, err := m.storageProviderForSpace(ctx, space)
+	spClient, err := m.providerResolver(ctx, space)
 	if err != nil {
 		return 0, err
 	}
