@@ -1156,14 +1156,15 @@ func (m *Manager) Load(ctx context.Context, shareChan <-chan *collaboration.Shar
 				if !shareIsRoutable(s.ReceivedShare.GetShare()) {
 					updateShareID(s.ReceivedShare.GetShare())
 				}
-				switch s.ReceivedShare.Share.Grantee.Type {
-				case provider.GranteeType_GRANTEE_TYPE_USER:
-					if err := m.UserReceivedStates.Add(context.Background(), s.ReceivedShare.GetShare().GetGrantee().GetUserId().GetOpaqueId(), s.ReceivedShare.GetShare().GetResourceId().GetSpaceId(), s.ReceivedShare); err != nil {
+				if s.UserID != nil {
+					spaceid := s.ReceivedShare.GetShare().GetResourceId().GetStorageId() + shareid.IDDelimiter + s.ReceivedShare.GetShare().GetResourceId().GetSpaceId()
+					if err := m.UserReceivedStates.Add(context.Background(), s.UserID.GetOpaqueId(), spaceid, s.ReceivedShare); err != nil {
 						log.Error().Err(err).Interface("received share", s).Msg("error persisting received share for user")
 					} else {
-						log.Debug().Str("userid", s.ReceivedShare.GetShare().GetGrantee().GetUserId().GetOpaqueId()).Str("spaceid", s.ReceivedShare.GetShare().GetResourceId().GetSpaceId()).Str("shareid", s.ReceivedShare.GetShare().Id.OpaqueId).Msg("updated received share userdata")
+						log.Debug().Str("userid", s.UserID.GetOpaqueId()).Str("spaceid", spaceid).Str("shareid", s.ReceivedShare.GetShare().Id.OpaqueId).Msg("updated received share userdata")
 					}
-				case provider.GranteeType_GRANTEE_TYPE_GROUP:
+				}
+				if s.ReceivedShare.Share.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_GROUP && s.UserID == nil {
 					if err := m.GroupReceivedCache.Add(context.Background(), s.ReceivedShare.GetShare().GetGrantee().GetGroupId().GetOpaqueId(), s.ReceivedShare.GetShare().GetId().GetOpaqueId()); err != nil {
 						log.Error().Err(err).Interface("received share", s).Msg("error persisting received share to group cache")
 					} else {
