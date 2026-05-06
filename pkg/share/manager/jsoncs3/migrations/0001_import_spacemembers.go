@@ -23,7 +23,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"sync"
+	"time"
 
+	"github.com/cenkalti/backoff"
 	grouppb "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
@@ -38,12 +40,15 @@ import (
 	"github.com/opencloud-eu/reva/v2/pkg/share"
 	"github.com/opencloud-eu/reva/v2/pkg/share/manager/jsoncs3/shareid"
 	"github.com/opencloud-eu/reva/v2/pkg/utils"
+	"github.com/rs/zerolog"
 )
 
 type ImportSpaceMembersMigration struct {
 	cfg          config
 	sharesChan   chan *collaboration.Share
 	receivedChan chan share.ReceivedShareWithUser
+	userCache    map[string]*userpb.UserId
+	groupCache   map[string]*grouppb.GroupId
 }
 
 func init() {
@@ -54,6 +59,8 @@ func (m *ImportSpaceMembersMigration) Initialize(cfg config) {
 	m.cfg = cfg
 	m.sharesChan = make(chan *collaboration.Share)
 	m.receivedChan = make(chan share.ReceivedShareWithUser)
+	m.userCache = make(map[string]*userpb.UserId)
+	m.groupCache = make(map[string]*grouppb.GroupId)
 }
 
 func (m *ImportSpaceMembersMigration) Name() string {
@@ -183,28 +190,113 @@ func (m *ImportSpaceMembersMigration) migrateSpace(ctx context.Context, space *p
 	return sharesCreated, nil
 }
 
+// resolveRetries is the maximum number of times resolveUserID / resolveGroupID
+// will retry after receiving an errtypes.Unavailable response (LDAP down).
+const resolveRetries = 10
+
+// retryOnUnavailable calls op, retrying with exponential backoff whenever op
+// returns errtypes.Unavailable.  Any other error (including context
+// cancellation) stops the loop immediately and is returned as-is.
+// Retries are capped at resolveRetries attempts and respect ctx cancellation.
+func retryOnUnavailable(ctx context.Context, log zerolog.Logger, op func() error) error {
+	b := backoff.WithContext(
+		backoff.WithMaxRetries(backoff.NewExponentialBackOff(), resolveRetries),
+		ctx,
+	)
+	notify := func(err error, d time.Duration) {
+		log.Warn().Err(err).Dur("retry_in", d).Msg("identity provider temporarily unavailable, retrying")
+	}
+	return backoff.RetryNotify(func() error {
+		err := op()
+		if err == nil {
+			return nil
+		}
+		if _, ok := err.(errtypes.Unavailable); ok {
+			return err // transient — keep retrying
+		}
+		return backoff.Permanent(err) // permanent — stop immediately
+	}, b, notify)
+}
+
+func (m *ImportSpaceMembersMigration) resolveUserID(ctx context.Context, opaqueID string) (*userpb.UserId, error) {
+	if id, ok := m.userCache[opaqueID]; ok {
+		return id, nil
+	}
+	var id *userpb.UserId
+	err := retryOnUnavailable(ctx, m.cfg.logger, func() error {
+		gwc, err := m.cfg.gatewaySelector.Next()
+		if err != nil {
+			return err
+		}
+		res, err := gwc.GetUser(ctx, &userpb.GetUserRequest{
+			UserId:                 &userpb.UserId{OpaqueId: opaqueID},
+			SkipFetchingUserGroups: true,
+		})
+		if err != nil {
+			return err
+		}
+		if res.GetStatus().GetCode() != rpc.Code_CODE_OK {
+			// errtypes.NewErrtypeFromStatus maps CODE_UNAVAILABLE → errtypes.Unavailable,
+			// which retryOnUnavailable will retry; all other codes are treated as permanent.
+			return errtypes.NewErrtypeFromStatus(res.GetStatus())
+		}
+		id = res.GetUser().GetId()
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	m.userCache[opaqueID] = id
+	return id, nil
+}
+
+func (m *ImportSpaceMembersMigration) resolveGroupID(ctx context.Context, opaqueID string) (*grouppb.GroupId, error) {
+	if id, ok := m.groupCache[opaqueID]; ok {
+		return id, nil
+	}
+	var id *grouppb.GroupId
+	err := retryOnUnavailable(ctx, m.cfg.logger, func() error {
+		gwc, err := m.cfg.gatewaySelector.Next()
+		if err != nil {
+			return err
+		}
+		res, err := gwc.GetGroup(ctx, &grouppb.GetGroupRequest{
+			GroupId:             &grouppb.GroupId{OpaqueId: opaqueID},
+			SkipFetchingMembers: true,
+		})
+		if err != nil {
+			return err
+		}
+		if res.GetStatus().GetCode() != rpc.Code_CODE_OK {
+			return errtypes.NewErrtypeFromStatus(res.GetStatus())
+		}
+		id = res.GetGroup().GetId()
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	m.groupCache[opaqueID] = id
+	return id, nil
+}
+
 func (m *ImportSpaceMembersMigration) spaceGrantToShares(ctx context.Context, grant *provider.Grant, space *provider.StorageSpace) (*collaboration.Share, []share.ReceivedShareWithUser, error) {
-	// The grantee ids as peristed on disk do not have a IDP and type stored as part of the userid/groupid.
-	// We either need to do a lookup via the user/groupprovider or set a default IDP value via config
-	// FIXME get rid of hardcoded IDP value
-	idp := "https://localhost:9200"
+	// The grantee ids as persisted on disk do not have an IDP or type stored as
+	// part of the userid/groupid. Resolve them via the gateway so we get the
+	// full userid
 	switch grant.GetGrantee().GetType() {
 	case provider.GranteeType_GRANTEE_TYPE_GROUP:
-		grant.Grantee.Id = &provider.Grantee_GroupId{
-			GroupId: &grouppb.GroupId{
-				OpaqueId: grant.GetGrantee().GetGroupId().GetOpaqueId(),
-				Type:     grouppb.GroupType_GROUP_TYPE_REGULAR,
-				Idp:      idp,
-			},
+		groupID, err := m.resolveGroupID(ctx, grant.GetGrantee().GetGroupId().GetOpaqueId())
+		if err != nil {
+			return nil, nil, fmt.Errorf("resolve group %s: %w", grant.GetGrantee().GetGroupId().GetOpaqueId(), err)
 		}
+		grant.Grantee.Id = &provider.Grantee_GroupId{GroupId: groupID}
 	case provider.GranteeType_GRANTEE_TYPE_USER:
-		grant.Grantee.Id = &provider.Grantee_UserId{
-			UserId: &userpb.UserId{
-				OpaqueId: grant.GetGrantee().GetUserId().GetOpaqueId(),
-				Type:     userpb.UserType_USER_TYPE_PRIMARY,
-				Idp:      idp,
-			},
+		userID, err := m.resolveUserID(ctx, grant.GetGrantee().GetUserId().GetOpaqueId())
+		if err != nil {
+			return nil, nil, fmt.Errorf("resolve user %s: %w", grant.GetGrantee().GetUserId().GetOpaqueId(), err)
 		}
+		grant.Grantee.Id = &provider.Grantee_UserId{UserId: userID}
 	}
 
 	ref := &collaboration.ShareReference{
