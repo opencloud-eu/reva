@@ -32,6 +32,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/pkg/errors"
+	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/mock"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/types/known/fieldmaskpb"
@@ -91,7 +92,7 @@ var _ = Describe("user share provider service", func() {
 	BeforeEach(func() {
 		manager = &mocks.Manager{}
 
-		registry.Register("mockManager", func(m map[string]interface{}) (share.Manager, error) {
+		registry.Register("mockManager", func(m map[string]interface{}, l *zerolog.Logger) (share.Manager, error) {
 			return manager, nil
 		})
 		manager.On("UpdateShare", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(&collaborationpb.Share{}, nil)

@@ -36,9 +36,9 @@ import (
 	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
 	"github.com/opencloud-eu/reva/v2/pkg/events"
 	"github.com/opencloud-eu/reva/v2/pkg/events/stream"
-	"github.com/opencloud-eu/reva/v2/pkg/logger"
 	"github.com/opencloud-eu/reva/v2/pkg/rgrpc/todo/pool"
 	"github.com/opencloud-eu/reva/v2/pkg/share"
+	migration "github.com/opencloud-eu/reva/v2/pkg/share/manager/jsoncs3/migrations"
 	"github.com/opencloud-eu/reva/v2/pkg/share/manager/jsoncs3/providercache"
 	"github.com/opencloud-eu/reva/v2/pkg/share/manager/jsoncs3/receivedsharecache"
 	"github.com/opencloud-eu/reva/v2/pkg/share/manager/jsoncs3/sharecache"
@@ -123,14 +123,20 @@ var (
 )
 
 type config struct {
-	GatewayAddr       string       `mapstructure:"gateway_addr"`
-	MaxConcurrency    int          `mapstructure:"max_concurrency"`
-	ProviderAddr      string       `mapstructure:"provider_addr"`
-	SystemUserID      string       `mapstructure:"system_user_id"`
-	SystemUserIdp     string       `mapstructure:"system_user_idp"`
-	MachineAuthAPIKey string       `mapstructure:"machine_auth_apikey"`
-	CacheTTL          int          `mapstructure:"ttl"`
-	Events            EventOptions `mapstructure:"events"`
+	GatewayAddr          string `mapstructure:"gateway_addr"`
+	MaxConcurrency       int    `mapstructure:"max_concurrency"`
+	ProviderAddr         string `mapstructure:"provider_addr"`
+	SystemUserID         string `mapstructure:"system_user_id"`
+	SystemUserIdp        string `mapstructure:"system_user_idp"`
+	MachineAuthAPIKey    string `mapstructure:"machine_auth_apikey"`
+	ServiceAccountID     string `mapstructure:"service_account_id"`
+	ServiceAccountSecret string `mapstructure:"service_account_secret"`
+	// ProviderRegistryAddr is the address of the storage registry used during
+	// migrations. Defaults to GatewayAddr when empty, because in the default
+	// OpenCloud deployment the registry is co-located with the gateway.
+	ProviderRegistryAddr string       `mapstructure:"provider_registry_addr"`
+	CacheTTL             int          `mapstructure:"ttl"`
+	Events               EventOptions `mapstructure:"events"`
 }
 
 // EventOptions are the configurable options for events
@@ -160,6 +166,7 @@ type Manager struct {
 
 	gatewaySelector pool.Selectable[gatewayv1beta1.GatewayAPIClient]
 	eventStream     events.Stream
+	logger          *zerolog.Logger
 }
 
 // NewDefault returns a new manager instance with default dependencies
@@ -188,11 +195,34 @@ func NewDefault(m map[string]interface{}, logger *zerolog.Logger) (share.Manager
 		}
 	}
 
-	return New(s, logger, gatewaySelector, c.CacheTTL, es, c.MaxConcurrency)
+	mgr, err := New(s, logger, gatewaySelector, c.CacheTTL, es, c.MaxConcurrency)
+	if err != nil {
+		return nil, err
+	}
+	providerRegistryAddr := c.ProviderRegistryAddr
+	if providerRegistryAddr == "" {
+		providerRegistryAddr = c.GatewayAddr
+	}
+	mgr.RunMigrations(migration.MigrationConfig{
+		ServiceAccountID:     c.ServiceAccountID,
+		ServiceAccountSecret: c.ServiceAccountSecret,
+		ProviderRegistryAddr: providerRegistryAddr,
+	})
+	return mgr, nil
 }
 
 // New returns a new manager instance.
-func New(s metadata.Storage, logger *zerolog.Logger, gatewaySelector pool.Selectable[gatewayv1beta1.GatewayAPIClient], ttlSeconds int, es events.Stream, maxconcurrency int) (*Manager, error) {
+func New(s metadata.Storage,
+	logger *zerolog.Logger,
+	gatewaySelector pool.Selectable[gatewayv1beta1.GatewayAPIClient],
+	ttlSeconds int,
+	es events.Stream,
+	maxconcurrency int,
+) (*Manager, error) {
+	if logger == nil {
+		nop := zerolog.Nop()
+		logger = &nop
+	}
 	ttl := time.Duration(ttlSeconds) * time.Second
 
 	m := &Manager{
@@ -204,6 +234,7 @@ func New(s metadata.Storage, logger *zerolog.Logger, gatewaySelector pool.Select
 		gatewaySelector:    gatewaySelector,
 		eventStream:        es,
 		MaxConcurrency:     maxconcurrency,
+		logger:             logger,
 		ready:              make(chan struct{}),
 	}
 
@@ -286,8 +317,25 @@ func (m *Manager) waitForInit(ctx context.Context) error {
 	}
 }
 
+// RunMigrations starts data migrations in a background goroutine. It should be
+// called once after New() in production server startup. Tests that do not need
+// migration behaviour can omit this call entirely.
+func (m *Manager) RunMigrations(cfg migration.MigrationConfig) {
+	go m.doMigrations(cfg)
+}
+
+func (m *Manager) doMigrations(cfg migration.MigrationConfig) {
+	if err := m.waitForInit(context.Background()); err != nil {
+		m.logger.Error().Err(err).Msg("share manager: aborting migrations, manager did not initialize")
+		return
+	}
+	m.logger.Debug().Msg("migrations start")
+	migrations := migration.New(*m.logger, m.gatewaySelector, m.storage, cfg, m, m)
+	migrations.RunMigrations()
+}
+
 func (m *Manager) ProcessEvents(ch <-chan events.Event) {
-	log := logger.New()
+	log := m.logger
 	ctx := context.Background()
 	if err := m.waitForInit(ctx); err != nil {
 		log.Error().Err(err).Msg("share manager: error waiting for initialization")
@@ -1122,7 +1170,7 @@ func updateShareID(share *collaboration.Share) {
 
 // Load imports shares and received shares from channels (e.g. during migration)
 func (m *Manager) Load(ctx context.Context, shareChan <-chan *collaboration.Share, receivedShareChan <-chan share.ReceivedShareWithUser) error {
-	log := appctx.GetLogger(ctx)
+	l := m.logger
 	if err := m.waitForInit(ctx); err != nil {
 		return err
 	}
@@ -1138,14 +1186,14 @@ func (m *Manager) Load(ctx context.Context, shareChan <-chan *collaboration.Shar
 				updateShareID(s)
 			}
 			if err := m.Cache.Add(context.Background(), s.GetResourceId().GetStorageId(), s.GetResourceId().GetSpaceId(), s.Id.OpaqueId, s); err != nil {
-				log.Error().Err(err).Interface("share", s).Msg("error persisting share")
+				l.Error().Err(err).Interface("share", s).Msg("error persisting share")
 			} else {
-				log.Debug().Str("storageid", s.GetResourceId().GetStorageId()).Str("spaceid", s.GetResourceId().GetSpaceId()).Str("shareid", s.Id.OpaqueId).Msg("imported share")
+				l.Debug().Str("storageid", s.GetResourceId().GetStorageId()).Str("spaceid", s.GetResourceId().GetSpaceId()).Str("shareid", s.Id.OpaqueId).Msg("imported share")
 			}
 			if err := m.CreatedCache.Add(ctx, s.GetCreator().GetOpaqueId(), s.Id.OpaqueId); err != nil {
-				log.Error().Err(err).Interface("share", s).Msg("error persisting created cache")
+				l.Error().Err(err).Interface("share", s).Msg("error persisting created cache")
 			} else {
-				log.Debug().Str("creatorid", s.GetCreator().GetOpaqueId()).Str("shareid", s.Id.OpaqueId).Msg("updated created cache")
+				l.Debug().Str("creatorid", s.GetCreator().GetOpaqueId()).Str("shareid", s.Id.OpaqueId).Msg("updated created cache")
 			}
 		}
 		wg.Done()
@@ -1159,16 +1207,16 @@ func (m *Manager) Load(ctx context.Context, shareChan <-chan *collaboration.Shar
 				if s.UserID != nil {
 					spaceid := s.ReceivedShare.GetShare().GetResourceId().GetStorageId() + shareid.IDDelimiter + s.ReceivedShare.GetShare().GetResourceId().GetSpaceId()
 					if err := m.UserReceivedStates.Add(context.Background(), s.UserID.GetOpaqueId(), spaceid, s.ReceivedShare); err != nil {
-						log.Error().Err(err).Interface("received share", s).Msg("error persisting received share for user")
+						l.Error().Err(err).Interface("received share", s).Msg("error persisting received share for user")
 					} else {
-						log.Debug().Str("userid", s.UserID.GetOpaqueId()).Str("spaceid", spaceid).Str("shareid", s.ReceivedShare.GetShare().Id.OpaqueId).Msg("updated received share userdata")
+						l.Debug().Str("userid", s.UserID.GetOpaqueId()).Str("spaceid", spaceid).Str("shareid", s.ReceivedShare.GetShare().Id.OpaqueId).Msg("updated received share userdata")
 					}
 				}
 				if s.ReceivedShare.Share.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_GROUP && s.UserID == nil {
 					if err := m.GroupReceivedCache.Add(context.Background(), s.ReceivedShare.GetShare().GetGrantee().GetGroupId().GetOpaqueId(), s.ReceivedShare.GetShare().GetId().GetOpaqueId()); err != nil {
-						log.Error().Err(err).Interface("received share", s).Msg("error persisting received share to group cache")
+						l.Error().Err(err).Interface("received share", s).Msg("error persisting received share to group cache")
 					} else {
-						log.Debug().Str("groupid", s.ReceivedShare.GetShare().GetGrantee().GetGroupId().GetOpaqueId()).Str("shareid", s.ReceivedShare.GetShare().Id.OpaqueId).Msg("updated received share group cache")
+						l.Debug().Str("groupid", s.ReceivedShare.GetShare().GetGrantee().GetGroupId().GetOpaqueId()).Str("shareid", s.ReceivedShare.GetShare().Id.OpaqueId).Msg("updated received share group cache")
 					}
 				}
 			}
