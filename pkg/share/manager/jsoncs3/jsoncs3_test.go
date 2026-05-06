@@ -102,10 +102,10 @@ var _ = Describe("Jsoncs3", func() {
 				},
 			},
 		}
-		storage    metadata.Storage
-		client     *mocks.GatewayAPIClient
-		tmpdir     string
-		m          *jsoncs3.Manager
+		storage metadata.Storage
+		client  *mocks.GatewayAPIClient
+		tmpdir  string
+		m       *jsoncs3.Manager
 
 		ctx        = ctxpkg.ContextSetUser(context.Background(), user1)
 		granteeCtx = ctxpkg.ContextSetUser(context.Background(), user2)
