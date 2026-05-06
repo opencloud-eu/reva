@@ -102,10 +102,10 @@ var _ = Describe("Jsoncs3", func() {
 				},
 			},
 		}
-		storage metadata.Storage
-		client  *mocks.GatewayAPIClient
-		tmpdir  string
-		m       *jsoncs3.Manager
+		storage    metadata.Storage
+		client     *mocks.GatewayAPIClient
+		tmpdir     string
+		m          *jsoncs3.Manager
 
 		ctx        = ctxpkg.ContextSetUser(context.Background(), user1)
 		granteeCtx = ctxpkg.ContextSetUser(context.Background(), user2)
@@ -166,7 +166,7 @@ var _ = Describe("Jsoncs3", func() {
 				return client
 			},
 		)
-		m, err = jsoncs3.New(storage, gatewaySelector, 0, nil, 0)
+		m, err = jsoncs3.New(storage, nil, gatewaySelector, 0, nil, 0)
 		Expect(err).ToNot(HaveOccurred())
 	})
 
@@ -261,7 +261,7 @@ var _ = Describe("Jsoncs3", func() {
 			})
 			Expect(s).ToNot(BeNil())
 
-			m, err = jsoncs3.New(storage, nil, 0, nil, 0) // Reset in-memory cache
+			m, err = jsoncs3.New(storage, nil, nil, 0, nil, 0) // Reset in-memory cache
 			Expect(err).ToNot(HaveOccurred())
 
 			s = shareBykey(&collaboration.ShareKey{
@@ -451,7 +451,7 @@ var _ = Describe("Jsoncs3", func() {
 			})
 
 			It("loads the cache when it doesn't have an entry", func() {
-				m, err := jsoncs3.New(storage, nil, 0, nil, 0) // Reset in-memory cache
+				m, err := jsoncs3.New(storage, nil, nil, 0, nil, 0) // Reset in-memory cache
 				Expect(err).ToNot(HaveOccurred())
 
 				s, err := m.GetShare(ctx, shareRef)
@@ -499,7 +499,7 @@ var _ = Describe("Jsoncs3", func() {
 				})
 				Expect(err).ToNot(HaveOccurred())
 
-				m, err = jsoncs3.New(storage, nil, 0, nil, 0) // Reset in-memory cache
+				m, err = jsoncs3.New(storage, nil, nil, 0, nil, 0) // Reset in-memory cache
 				Expect(err).ToNot(HaveOccurred())
 
 				s, err := m.GetShare(ctx, &collaboration.ShareReference{
@@ -612,7 +612,7 @@ var _ = Describe("Jsoncs3", func() {
 				Expect(us).ToNot(BeNil())
 				Expect(us.GetPermissions().GetPermissions().InitiateFileUpload).To(BeTrue())
 
-				m, err = jsoncs3.New(storage, nil, 0, nil, 0) // Reset in-memory cache
+				m, err = jsoncs3.New(storage, nil, nil, 0, nil, 0) // Reset in-memory cache
 				Expect(err).ToNot(HaveOccurred())
 
 				s = shareBykey(&collaboration.ShareKey{
@@ -751,7 +751,7 @@ var _ = Describe("Jsoncs3", func() {
 			})
 
 			It("syncronizes the user received cache before listing", func() {
-				m, err := jsoncs3.New(storage, nil, 0, nil, 0) // Reset in-memory cache
+				m, err := jsoncs3.New(storage, nil, nil, 0, nil, 0) // Reset in-memory cache
 				Expect(err).ToNot(HaveOccurred())
 
 				received, err := m.ListReceivedShares(granteeCtx, []*collaboration.Filter{}, nil)
@@ -819,7 +819,7 @@ var _ = Describe("Jsoncs3", func() {
 				})
 
 				It("syncronizes the group received cache before listing", func() {
-					m, err := jsoncs3.New(storage, nil, 0, nil, 0) // Reset in-memory cache
+					m, err := jsoncs3.New(storage, nil, nil, 0, nil, 0) // Reset in-memory cache
 					Expect(err).ToNot(HaveOccurred())
 
 					received, err := m.ListReceivedShares(granteeCtx, []*collaboration.Filter{}, nil)
@@ -863,7 +863,7 @@ var _ = Describe("Jsoncs3", func() {
 			})
 
 			It("syncs the cache", func() {
-				m, err := jsoncs3.New(storage, nil, 0, nil, 0) // Reset in-memory cache
+				m, err := jsoncs3.New(storage, nil, nil, 0, nil, 0) // Reset in-memory cache
 				Expect(err).ToNot(HaveOccurred())
 
 				rs, err := m.GetReceivedShare(granteeCtx, &collaboration.ShareReference{
@@ -897,7 +897,7 @@ var _ = Describe("Jsoncs3", func() {
 				})
 
 				It("syncs the cache", func() {
-					m, err := jsoncs3.New(storage, nil, 0, nil, 0) // Reset in-memory cache
+					m, err := jsoncs3.New(storage, nil, nil, 0, nil, 0) // Reset in-memory cache
 					Expect(err).ToNot(HaveOccurred())
 
 					rs, err := m.GetReceivedShare(granteeCtx, &collaboration.ShareReference{
@@ -1050,7 +1050,7 @@ var _ = Describe("Jsoncs3", func() {
 					Expect(err).ToNot(HaveOccurred())
 					Expect(rs.State).To(Equal(collaboration.ShareState_SHARE_STATE_ACCEPTED))
 
-					m, err := jsoncs3.New(storage, nil, 0, nil, 0) // Reset in-memory cache
+					m, err := jsoncs3.New(storage, nil, nil, 0, nil, 0) // Reset in-memory cache
 					Expect(err).ToNot(HaveOccurred())
 
 					rs, err = m.GetReceivedShare(granteeCtx, &collaboration.ShareReference{
@@ -1078,7 +1078,7 @@ var _ = Describe("Jsoncs3", func() {
 					Expect(rs.State).To(Equal(collaboration.ShareState_SHARE_STATE_ACCEPTED))
 					Expect(rs.Hidden).To(Equal(true))
 
-					m, err := jsoncs3.New(storage, nil, 0, nil, 0) // Reset in-memory cache
+					m, err := jsoncs3.New(storage, nil, nil, 0, nil, 0) // Reset in-memory cache
 					Expect(err).ToNot(HaveOccurred())
 
 					rs, err = m.GetReceivedShare(granteeCtx, &collaboration.ShareReference{
@@ -1107,7 +1107,7 @@ var _ = Describe("Jsoncs3", func() {
 					Expect(rs.State).To(Equal(collaboration.ShareState_SHARE_STATE_ACCEPTED))
 					Expect(rs.Hidden).To(Equal(true))
 
-					m, err := jsoncs3.New(storage, nil, 0, nil, 0) // Reset in-memory cache
+					m, err := jsoncs3.New(storage, nil, nil, 0, nil, 0) // Reset in-memory cache
 					Expect(err).ToNot(HaveOccurred())
 
 					rs, err = m.GetReceivedShare(granteeCtx, &collaboration.ShareReference{
