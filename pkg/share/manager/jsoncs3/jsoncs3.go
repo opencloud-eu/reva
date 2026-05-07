@@ -301,6 +301,12 @@ func (m *Manager) initialize(ctx context.Context) error {
 		span.SetStatus(codes.Error, err.Error())
 		return err
 	}
+	err = m.storage.MakeDirIfNotExist(ctx, "migrations")
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		return err
+	}
 
 	span.SetStatus(codes.Ok, "initialized")
 	return nil
