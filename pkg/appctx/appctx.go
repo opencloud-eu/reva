@@ -27,16 +27,6 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-// deletingSharedResource flags to a storage a shared resource is being deleted not by the owner.
-type deletingSharedResource struct{}
-
-func WithDeletingSharedResource(ctx context.Context) context.Context {
-	return context.WithValue(ctx, deletingSharedResource{}, struct{}{})
-}
-func DeletingSharedResourceFromContext(ctx context.Context) bool {
-	return ctx.Value(deletingSharedResource{}) != nil
-}
-
 // WithLogger returns a context with an associated logger.
 func WithLogger(ctx context.Context, l *zerolog.Logger) context.Context {
 	return l.WithContext(ctx)

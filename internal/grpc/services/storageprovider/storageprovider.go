@@ -744,16 +744,6 @@ func (s *Service) Delete(ctx context.Context, req *provider.DeleteRequest) (*pro
 	}
 
 	ctx = ctxpkg.ContextSetLockID(ctx, req.LockId)
-
-	// check DeleteRequest for any known opaque properties.
-	// FIXME these should be part of the DeleteRequest object
-	if req.Opaque != nil {
-		if _, ok := req.Opaque.Map["deleting_shared_resource"]; ok {
-			// it is a binary key; its existence signals true. Although, do not assume.
-			ctx = appctx.WithDeletingSharedResource(ctx)
-		}
-	}
-
 	md, err := s.Storage.GetMD(ctx, req.Ref, []string{}, []string{"id", "status"})
 	if err != nil {
 		return &provider.DeleteResponse{
