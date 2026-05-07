@@ -6,6 +6,10 @@
 
 @ScharfViktor, @aduffeck, @butonic, @rhafer
 
+### 🐛 Bug Fixes
+
+- Fix nats ttl [[#614](https://github.com/opencloud-eu/reva/pull/614)]
+
 ### 📈 Enhancement
 
 - fix(users): improve LDAP error handling [[#618](https://github.com/opencloud-eu/reva/pull/618)]
