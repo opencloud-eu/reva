@@ -21,8 +21,11 @@ package migration
 import (
 	"cmp"
 	"context"
+	"crypto/rand"
 	"encoding/json"
+	"fmt"
 	"slices"
+	"time"
 
 	gatewayv1beta1 "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
@@ -33,6 +36,23 @@ import (
 )
 
 const stateFile = "migrations/state.json"
+
+const (
+	lockFile              = "migrations/lock.json"
+	lockTTL               = time.Minute
+	lockHeartbeatInterval = 20 * time.Second
+)
+
+// lockPollInterval is how long acquireLock sleeps between retries when the
+// lock is held by another instance. Declared as a variable so tests can
+// shorten it without rebuilding.
+var lockPollInterval = 5 * time.Second
+
+// lockData is the content written to the lock file.
+type lockData struct {
+	Timestamp  time.Time `json:"timestamp"`
+	InstanceID string    `json:"instance_id"`
+}
 
 type migration interface {
 	Name() string
@@ -72,7 +92,8 @@ type config struct {
 
 type Migrations struct {
 	config
-	state state
+	state      state
+	instanceID string
 }
 
 var migrations []migration
@@ -95,6 +116,10 @@ func New(logger zerolog.Logger,
 		return cmp.Compare(a.Version(), b.Version())
 	})
 
+	b := make([]byte, 8)
+	_, _ = rand.Read(b)
+	instanceID := fmt.Sprintf("%x", b)
+
 	return Migrations{
 		config{
 			logger:               logger.With().Str("jsoncs3", "migrations").Logger(),
@@ -107,7 +132,153 @@ func New(logger zerolog.Logger,
 			loader:               loader,
 		},
 		state{},
+		instanceID,
 	}
+}
+
+// acquireLock tries to atomically create the lock file, blocking until the lock
+// is obtained. It returns the etag of the lock file on success. It retries
+// indefinitely until ctx is cancelled. A lock whose timestamp is older than
+// lockTTL is considered stale and will be taken over.
+func (m *Migrations) acquireLock(ctx context.Context) (string, error) {
+	m.logger.Debug().Str("instance", m.instanceID).Msg("acquiring migration lock")
+	for {
+		// Fast path: create the lock file only if it does not exist yet.
+		data, err := json.Marshal(lockData{Timestamp: time.Now(), InstanceID: m.instanceID})
+		if err != nil {
+			return "", err
+		}
+		res, err := m.storage.Upload(ctx, metadata.UploadRequest{
+			Path:        lockFile,
+			Content:     data,
+			IfNoneMatch: []string{"*"},
+		})
+		if err == nil {
+			m.logger.Debug().Str("instance", m.instanceID).Msg("migration lock acquired")
+			return res.Etag, nil
+		}
+
+		// Propagate context cancellation immediately.
+		select {
+		case <-ctx.Done():
+			return "", ctx.Err()
+		default:
+		}
+
+		// Any error other than a conflict means something unexpected happened.
+		if !isConflict(err) {
+			return "", err
+		}
+
+		// Lock file already exists — read it to decide whether it is stale.
+		dl, err := m.storage.Download(ctx, metadata.DownloadRequest{Path: lockFile})
+		if err != nil {
+			if _, ok := err.(errtypes.IsNotFound); ok {
+				// Lock was released between our upload attempt and the download;
+				// retry acquiring it immediately.
+				m.logger.Debug().Str("instance", m.instanceID).Msg("migration lock vanished during read; retrying")
+				continue
+			}
+			return "", err
+		}
+
+		var existing lockData
+		stale := true
+		if err := json.Unmarshal(dl.Content, &existing); err == nil {
+			stale = time.Since(existing.Timestamp) > lockTTL
+		}
+
+		if stale {
+			m.logger.Debug().
+				Str("instance", m.instanceID).
+				Str("held_by", existing.InstanceID).
+				Time("lock_timestamp", existing.Timestamp).
+				Msg("migration lock is stale; attempting takeover")
+
+			// Atomically take over the stale lock using the etag we just read.
+			newData, err := json.Marshal(lockData{Timestamp: time.Now(), InstanceID: m.instanceID})
+			if err != nil {
+				return "", err
+			}
+			res, err := m.storage.Upload(ctx, metadata.UploadRequest{
+				Path:        lockFile,
+				Content:     newData,
+				IfMatchEtag: dl.Etag,
+			})
+			if err == nil {
+				m.logger.Debug().Str("instance", m.instanceID).Msg("migration lock acquired via stale takeover")
+				return res.Etag, nil
+			}
+			// Another instance took the stale lock before us; loop and retry.
+			m.logger.Debug().Str("instance", m.instanceID).Err(err).Msg("stale lock takeover lost race; retrying")
+			continue
+		}
+
+		m.logger.Debug().
+			Str("instance", m.instanceID).
+			Str("held_by", existing.InstanceID).
+			Time("lock_timestamp", existing.Timestamp).
+			Dur("poll_interval", lockPollInterval).
+			Msg("migration lock held by another instance; waiting")
+
+		// Lock is fresh and held by another instance; wait before retrying.
+		select {
+		case <-ctx.Done():
+			return "", ctx.Err()
+		case <-time.After(lockPollInterval):
+		}
+	}
+}
+
+// startHeartbeat spawns a goroutine that periodically renews the lock file so
+// that it is not considered stale while a long migration is running. Call the
+// returned cancel function to stop the heartbeat.
+func (m *Migrations) startHeartbeat(ctx context.Context, etag string) context.CancelFunc {
+	hbCtx, cancel := context.WithCancel(ctx)
+	go func() {
+		ticker := time.NewTicker(lockHeartbeatInterval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-hbCtx.Done():
+				return
+			case <-ticker.C:
+				data, err := json.Marshal(lockData{Timestamp: time.Now(), InstanceID: m.instanceID})
+				if err != nil {
+					m.logger.Warn().Err(err).Msg("failed to marshal heartbeat data for migration lock")
+					return
+				}
+				res, err := m.storage.Upload(hbCtx, metadata.UploadRequest{
+					Path:        lockFile,
+					Content:     data,
+					IfMatchEtag: etag,
+				})
+				if err != nil {
+					m.logger.Warn().Err(err).Msg("failed to renew migration lock; another instance may take over")
+					return
+				}
+				etag = res.Etag
+			}
+		}
+	}()
+	return cancel
+}
+
+// releaseLock deletes the lock file unconditionally.
+func (m *Migrations) releaseLock(ctx context.Context) {
+	if err := m.storage.Delete(ctx, lockFile); err != nil {
+		m.logger.Warn().Err(err).Msg("failed to release migration lock")
+	}
+}
+
+// isConflict returns true for errors that signal a conditional-upload conflict,
+// i.e. the lock file already exists or the etag did not match.
+func isConflict(err error) bool {
+	switch err.(type) {
+	case errtypes.IsAlreadyExists, errtypes.IsAborted, errtypes.IsPreconditionFailed:
+		return true
+	}
+	return false
 }
 
 // loadState reads the persisted migration version from storage. If no state
@@ -141,6 +312,15 @@ func (m *Migrations) saveState(ctx context.Context) error {
 
 func (m *Migrations) RunMigrations() {
 	ctx := context.Background()
+
+	etag, err := m.acquireLock(ctx)
+	if err != nil {
+		m.logger.Error().Err(err).Msg("failed to acquire migration lock; skipping migrations")
+		return
+	}
+	cancelHB := m.startHeartbeat(ctx, etag)
+	defer cancelHB()
+	defer m.releaseLock(ctx)
 
 	if err := m.loadState(ctx); err != nil {
 		m.logger.Error().Err(err).Msg("failed to load migration state; skipping migrations")
