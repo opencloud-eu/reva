@@ -132,9 +132,6 @@ func (m *Migrations) loadState(ctx context.Context) error {
 // saveState writes the current migration version to storage so that already-
 // applied migrations are not re-run on the next server start.
 func (m *Migrations) saveState(ctx context.Context) error {
-	if err := m.storage.MakeDirIfNotExist(ctx, "migrations"); err != nil {
-		return err
-	}
 	data, err := json.Marshal(persistedState{Version: m.state.version})
 	if err != nil {
 		return err
