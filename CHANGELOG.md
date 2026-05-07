@@ -1,13 +1,19 @@
 # Changelog
 
-## [2.43.1](https://github.com/opencloud-eu/reva/releases/tag/v2.43.1) - 2026-05-06
+## [2.44.0](https://github.com/opencloud-eu/reva/releases/tag/v2.44.0) - 2026-05-07
 
 ### ❤️ Thanks to all contributors! ❤️
 
-@ScharfViktor, @aduffeck, @butonic
+@ScharfViktor, @aduffeck, @butonic, @rhafer
+
+### 📈 Enhancement
+
+- fix(users): improve LDAP error handling [[#618](https://github.com/opencloud-eu/reva/pull/618)]
 
 ### 📦️ Dependencies
 
+- chore(deps): bump github.com/onsi/gomega from 1.39.1 to 1.40.0 [[#620](https://github.com/opencloud-eu/reva/pull/620)]
+- chore(deps): bump github.com/go-sql-driver/mysql from 1.9.3 to 1.10.0 [[#619](https://github.com/opencloud-eu/reva/pull/619)]
 - chore(deps): bump github.com/nats-io/nats-server/v2 from 2.12.6 to 2.14.0 [[#612](https://github.com/opencloud-eu/reva/pull/612)]
 - chore(deps): bump go.etcd.io/etcd/client/v3 from 3.6.8 to 3.6.10 [[#603](https://github.com/opencloud-eu/reva/pull/603)]
 - chore(deps): bump github.com/Azure/go-ntlmssp from 0.0.0-20221128193559-754e69321358 to 0.1.1 in the go_modules group across 1 directory [[#605](https://github.com/opencloud-eu/reva/pull/605)]
