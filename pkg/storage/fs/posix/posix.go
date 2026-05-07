@@ -58,7 +58,8 @@ func init() {
 type posixFS struct {
 	storage.FS
 
-	um usermapper.Mapper
+	tree *tree.Tree
+	um   usermapper.Mapper
 }
 
 // New returns an implementation to of the storage.FS interface that talk to
@@ -215,9 +216,15 @@ func New(o *options.Options, stream events.Stream, cache, historyCache *idcache.
 
 	mw := middleware.NewFS(dfs, hooks...)
 	fs.FS = mw
+	fs.tree = tp
 	fs.um = um
 
 	return fs, nil
+}
+
+// WarmupIDCache allows triggering a posix fs scan and id cache warmup manually.
+func (fs *posixFS) WarmupIDCache(root string, assimilate, onlyDirty bool) error {
+	return fs.tree.WarmupIDCache(root, assimilate, onlyDirty)
 }
 
 // ListUploadSessions returns the upload sessions matching the given filter
