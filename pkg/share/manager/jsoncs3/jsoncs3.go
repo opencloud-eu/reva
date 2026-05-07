@@ -160,7 +160,8 @@ type Manager struct {
 	storage   metadata.Storage
 	SpaceRoot *provider.ResourceId
 
-	ready chan struct{} // closed once initialize() has completed successfully
+	ready          chan struct{} // closed once initialize() has completed successfully
+	migrationsDone chan struct{} // closed once doMigrations() has returned on this instance
 
 	MaxConcurrency int
 
@@ -236,6 +237,10 @@ func New(s metadata.Storage,
 		MaxConcurrency:     maxconcurrency,
 		logger:             logger,
 		ready:              make(chan struct{}),
+		// migrationsDone is open (blocking) by default. It is closed by
+		// doMigrations when all migrations complete, or by SkipMigrations for
+		// callers (e.g. tests) that do not run migrations at all.
+		migrationsDone: make(chan struct{}),
 	}
 
 	// Initialize the metadata storage connection in the background, retrying
@@ -323,14 +328,45 @@ func (m *Manager) waitForInit(ctx context.Context) error {
 	}
 }
 
+// waitForMigrations blocks until both storage initialization and all data
+// migrations have completed on this instance, or until ctx is cancelled.
+// It is a strict superset of waitForInit and should be used by write operations
+// to ensure no writes race with an in-progress migration.
+func (m *Manager) waitForMigrations(ctx context.Context) error {
+	select {
+	case <-m.ready:
+	case <-ctx.Done():
+		return errors.Wrap(ctx.Err(), "share manager not yet initialized")
+	}
+	select {
+	case <-m.migrationsDone:
+		return nil
+	case <-ctx.Done():
+		return errors.Wrap(ctx.Err(), "share manager migrations not yet complete")
+	}
+}
+
 // RunMigrations starts data migrations in a background goroutine. It should be
-// called once after New() in production server startup. Tests that do not need
-// migration behaviour can omit this call entirely.
+// called once after New() in production server startup. Callers that do not
+// need migrations should call SkipMigrations instead to unblock write operations.
 func (m *Manager) RunMigrations(cfg migration.MigrationConfig) {
 	go m.doMigrations(cfg)
 }
 
+// SkipMigrations unblocks write operations on this instance without running
+// any migrations. It must be called when RunMigrations will not be called,
+// for example in tests.
+func (m *Manager) SkipMigrations() {
+	close(m.migrationsDone)
+}
+
 func (m *Manager) doMigrations(cfg migration.MigrationConfig) {
+	// Always close migrationsDone when this goroutine exits, whether migrations
+	// ran, were skipped, or failed. This unblocks write operations on this
+	// instance. Non-winning instances are held here by acquireLock until the
+	// winning instance finishes, so the close happens only after the storage
+	// state is fully migrated.
+	defer close(m.migrationsDone)
 	if err := m.waitForInit(context.Background()); err != nil {
 		m.logger.Error().Err(err).Msg("share manager: aborting migrations, manager did not initialize")
 		return
@@ -360,7 +396,7 @@ func (m *Manager) ProcessEvents(ch <-chan events.Event) {
 func (m *Manager) Share(ctx context.Context, md *provider.ResourceInfo, g *collaboration.ShareGrant) (*collaboration.Share, error) {
 	ctx, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "Share")
 	defer span.End()
-	if err := m.waitForInit(ctx); err != nil {
+	if err := m.waitForMigrations(ctx); err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
 		return nil, err
@@ -567,7 +603,7 @@ func (m *Manager) Unshare(ctx context.Context, ref *collaboration.ShareReference
 	ctx, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "Unshare")
 	defer span.End()
 
-	if err := m.waitForInit(ctx); err != nil {
+	if err := m.waitForMigrations(ctx); err != nil {
 		return err
 	}
 
@@ -584,7 +620,7 @@ func (m *Manager) UpdateShare(ctx context.Context, ref *collaboration.ShareRefer
 	ctx, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "UpdateShare")
 	defer span.End()
 
-	if err := m.waitForInit(ctx); err != nil {
+	if err := m.waitForMigrations(ctx); err != nil {
 		return nil, err
 	}
 
@@ -1129,7 +1165,7 @@ func (m *Manager) UpdateReceivedShare(ctx context.Context, receivedShare *collab
 	ctx, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "UpdateReceivedShare")
 	defer span.End()
 
-	if err := m.waitForInit(ctx); err != nil {
+	if err := m.waitForMigrations(ctx); err != nil {
 		return nil, err
 	}
 
@@ -1294,7 +1330,7 @@ func (m *Manager) removeShare(ctx context.Context, s *collaboration.Share, skipS
 func (m *Manager) CleanupStaleShares(ctx context.Context) {
 	log := appctx.GetLogger(ctx)
 
-	if err := m.waitForInit(ctx); err != nil {
+	if err := m.waitForMigrations(ctx); err != nil {
 		return
 	}
 
