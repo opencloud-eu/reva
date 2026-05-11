@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.44.1](https://github.com/opencloud-eu/reva/releases/tag/v2.44.1) - 2026-05-11
+
+### 📦️ Dependencies
+
+- chore(deps): bump github.com/go-git/go-git/v5 from 5.18.0 to 5.19.0 in the go_modules group across 1 directory [[#628](https://github.com/opencloud-eu/reva/pull/628)]
+
 ## [2.44.0](https://github.com/opencloud-eu/reva/releases/tag/v2.44.0) - 2026-05-11
 
 ### ❤️ Thanks to all contributors! ❤️
