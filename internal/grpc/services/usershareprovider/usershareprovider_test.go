@@ -499,8 +499,8 @@ var _ = Describe("user share provider service", func() {
 					},
 					Grant: &collaborationpb.ShareGrant{
 						Grantee: &providerpb.Grantee{
-							Type: providerpb.GranteeType_GRANTEE_TYPE_GUEST,
-							Id:   &providerpb.Grantee_Email{Email: "guest@example.com"},
+							Type: providerpb.GranteeType_GRANTEE_TYPE_USER,
+							Id:   &providerpb.Grantee_UserId{UserId: &userpb.UserId{OpaqueId: "GUEST@example.com", Type: userpb.UserType_USER_TYPE_GUEST}},
 						},
 						Permissions: &collaborationpb.SharePermissions{
 							Permissions: conversions.RoleFromName("viewer").CS3ResourcePermissions(),
