@@ -155,14 +155,7 @@ func New(lu node.PathLookup, bs node.Blobstore, um usermapper.Mapper, trashbin *
 				return nil, err
 			}
 		case "natswatcher":
-			cfg := options.NatsWatcherConfig{
-				Endpoint:    "nats://localhost:9233",
-				Cluster:     "test-cluster",
-				Durable:     "natswatcher",
-				Stream:      "leilfs-events",
-				TLSInsecure: true,
-			}
-			t.watcher, err = natswatcher.New(context.TODO(), t, cfg, o.WatchRoot, log)
+			t.watcher, err = natswatcher.New(context.TODO(), t, o.NatsWatcher, o.WatchRoot, log)
 			if err != nil {
 				return nil, err
 			}
