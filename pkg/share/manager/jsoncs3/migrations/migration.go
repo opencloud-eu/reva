@@ -24,7 +24,10 @@ import (
 	"crypto/rand"
 	"encoding/json"
 	"fmt"
+	"os"
+	"os/signal"
 	"slices"
+	"syscall"
 	"time"
 
 	gatewayv1beta1 "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
@@ -311,7 +314,8 @@ func (m *Migrations) saveState(ctx context.Context) error {
 }
 
 func (m *Migrations) RunMigrations() {
-	ctx := context.Background()
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
 
 	etag, err := m.acquireLock(ctx)
 	if err != nil {
