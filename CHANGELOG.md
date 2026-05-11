@@ -1,6 +1,6 @@
 # Changelog
 
-## [2.44.0](https://github.com/opencloud-eu/reva/releases/tag/v2.44.0) - 2026-05-07
+## [2.44.0](https://github.com/opencloud-eu/reva/releases/tag/v2.44.0) - 2026-05-11
 
 ### ❤️ Thanks to all contributors! ❤️
 
@@ -16,6 +16,7 @@
 
 ### 📦️ Dependencies
 
+- chore(deps): bump github.com/minio/minio-go/v7 from 7.0.99 to 7.1.0 [[#624](https://github.com/opencloud-eu/reva/pull/624)]
 - chore(deps): bump github.com/onsi/gomega from 1.39.1 to 1.40.0 [[#620](https://github.com/opencloud-eu/reva/pull/620)]
 - chore(deps): bump github.com/go-sql-driver/mysql from 1.9.3 to 1.10.0 [[#619](https://github.com/opencloud-eu/reva/pull/619)]
 - chore(deps): bump github.com/nats-io/nats-server/v2 from 2.12.6 to 2.14.0 [[#612](https://github.com/opencloud-eu/reva/pull/612)]
