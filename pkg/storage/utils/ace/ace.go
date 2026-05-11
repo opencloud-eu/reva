@@ -217,7 +217,7 @@ func FromGrant(g *provider.Grant) *ACE {
 func UserAce(id *userpb.UserId) string {
 	switch id.GetType() {
 	case userpb.UserType_USER_TYPE_GUEST:
-		return "m:" + id.OpaqueId
+		return "m:" + strings.ToLower(id.OpaqueId)
 	default:
 		return "u:" + id.OpaqueId
 	}
