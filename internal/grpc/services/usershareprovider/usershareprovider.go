@@ -173,8 +173,9 @@ func (s *service) CreateShare(ctx context.Context, req *collaboration.CreateShar
 	user := ctxpkg.ContextMustGetUser(ctx)
 	// check if the grantee is a user or group
 	if req.GetGrant().GetGrantee().GetType() == provider.GranteeType_GRANTEE_TYPE_USER {
-		// check if the tenantId of the user matches the tenantId of the target user
-		if user.GetId().GetTenantId() != req.GetGrant().GetGrantee().GetUserId().GetTenantId() {
+		// check if the tenantId of the user matches the tenantId of the target user, skipping guests
+		if req.GetGrant().GetGrantee().GetUserId().GetType() != userpb.UserType_USER_TYPE_GUEST &&
+			user.GetId().GetTenantId() != req.GetGrant().GetGrantee().GetUserId().GetTenantId() {
 			log.Warn().Msg("user tenantId does not match the target user tenantId, this is not supported yet")
 			return &collaboration.CreateShareResponse{
 				Status: status.NewPermissionDenied(ctx, nil, "user tenantId does not match the target user tenantId"),
