@@ -8,10 +8,14 @@
 
 ### 🐛 Bug Fixes
 
+- Skip internal dirs entirely, including all children [[#622](https://github.com/opencloud-eu/reva/pull/622)]
 - Fix nats ttl [[#614](https://github.com/opencloud-eu/reva/pull/614)]
+- Fix invalidating the id cache recursively [[#610](https://github.com/opencloud-eu/reva/pull/610)]
+- Fix performance issue by changingthe  key format of the id cache in posix fs [[#602](https://github.com/opencloud-eu/reva/pull/602)]
 
 ### 📈 Enhancement
 
+- Expose WarmupIDCache, it's gonna be used by a "scan" command later [[#621](https://github.com/opencloud-eu/reva/pull/621)]
 - fix(users): improve LDAP error handling [[#618](https://github.com/opencloud-eu/reva/pull/618)]
 
 ### 📦️ Dependencies
