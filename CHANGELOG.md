@@ -1,5 +1,36 @@
 # Changelog
 
+## [2.44.0](https://github.com/opencloud-eu/reva/releases/tag/v2.44.0) - 2026-05-11
+
+### ❤️ Thanks to all contributors! ❤️
+
+@ScharfViktor, @aduffeck, @butonic, @rhafer
+
+### 🐛 Bug Fixes
+
+- Skip internal dirs entirely, including all children [[#622](https://github.com/opencloud-eu/reva/pull/622)]
+- Fix nats ttl [[#614](https://github.com/opencloud-eu/reva/pull/614)]
+- Fix invalidating the id cache recursively [[#610](https://github.com/opencloud-eu/reva/pull/610)]
+- Fix performance issue by changingthe  key format of the id cache in posix fs [[#602](https://github.com/opencloud-eu/reva/pull/602)]
+
+### 📈 Enhancement
+
+- Expose WarmupIDCache, it's gonna be used by a "scan" command later [[#621](https://github.com/opencloud-eu/reva/pull/621)]
+- fix(users): improve LDAP error handling [[#618](https://github.com/opencloud-eu/reva/pull/618)]
+
+### 📦️ Dependencies
+
+- chore(deps): bump github.com/hashicorp/go-plugin from 1.7.0 to 1.8.0 [[#623](https://github.com/opencloud-eu/reva/pull/623)]
+- chore(deps): bump github.com/minio/minio-go/v7 from 7.0.99 to 7.1.0 [[#624](https://github.com/opencloud-eu/reva/pull/624)]
+- chore(deps): bump github.com/onsi/gomega from 1.39.1 to 1.40.0 [[#620](https://github.com/opencloud-eu/reva/pull/620)]
+- chore(deps): bump github.com/go-sql-driver/mysql from 1.9.3 to 1.10.0 [[#619](https://github.com/opencloud-eu/reva/pull/619)]
+- chore(deps): bump github.com/nats-io/nats-server/v2 from 2.12.6 to 2.14.0 [[#612](https://github.com/opencloud-eu/reva/pull/612)]
+- chore(deps): bump go.etcd.io/etcd/client/v3 from 3.6.8 to 3.6.10 [[#603](https://github.com/opencloud-eu/reva/pull/603)]
+- chore(deps): bump github.com/Azure/go-ntlmssp from 0.0.0-20221128193559-754e69321358 to 0.1.1 in the go_modules group across 1 directory [[#605](https://github.com/opencloud-eu/reva/pull/605)]
+- chore(deps): bump golang.org/x/sys from 0.42.0 to 0.43.0 [[#601](https://github.com/opencloud-eu/reva/pull/601)]
+- chore(deps): bump github.com/mattn/go-sqlite3 from 1.14.37 to 1.14.42 [[#598](https://github.com/opencloud-eu/reva/pull/598)]
+- chore(deps): bump github.com/ceph/go-ceph from 0.38.0 to 0.39.0 [[#599](https://github.com/opencloud-eu/reva/pull/599)]
+
 ## [2.43.0](https://github.com/opencloud-eu/reva/releases/tag/v2.43.0) - 2026-04-20
 
 ### ❤️ Thanks to all contributors! ❤️
