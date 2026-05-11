@@ -20,6 +20,7 @@
 
 ### 📦️ Dependencies
 
+- chore(deps): bump github.com/hashicorp/go-plugin from 1.7.0 to 1.8.0 [[#623](https://github.com/opencloud-eu/reva/pull/623)]
 - chore(deps): bump github.com/minio/minio-go/v7 from 7.0.99 to 7.1.0 [[#624](https://github.com/opencloud-eu/reva/pull/624)]
 - chore(deps): bump github.com/onsi/gomega from 1.39.1 to 1.40.0 [[#620](https://github.com/opencloud-eu/reva/pull/620)]
 - chore(deps): bump github.com/go-sql-driver/mysql from 1.9.3 to 1.10.0 [[#619](https://github.com/opencloud-eu/reva/pull/619)]
