@@ -365,7 +365,7 @@ var _ = Describe("gateway", func() {
 		})
 	})
 
-	Context("with a basic user storage", func() {
+	FContext("with a basic user storage", MustPassRepeatedly(20), func() {
 		var (
 			fs            storage.FS
 			embeddedFs    storage.FS
@@ -402,6 +402,12 @@ var _ = Describe("gateway", func() {
 
 			spaces, err := fs.ListStorageSpaces(ctx, []*storagep.ListStorageSpacesRequest_Filter{}, false)
 			Expect(err).ToNot(HaveOccurred())
+			// var spaces []*storagep.StorageSpace
+			// Eventually(func() int {
+			// spaces, err = fs.ListStorageSpaces(ctx, []*storagep.ListStorageSpacesRequest_Filter{}, false)
+			// Expect(err).ToNot(HaveOccurred())
+			// return len(spaces)
+			// }, "5s", "100ms").Should(BeNumerically(">", 0))
 			homeSpace = spaces[0]
 			ssid, err := storagespace.ParseID(homeSpace.Id.OpaqueId)
 			Expect(err).ToNot(HaveOccurred())
