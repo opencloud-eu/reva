@@ -1234,10 +1234,15 @@ func (n *Node) ReadGrant(ctx context.Context, grantee string) (g *provider.Grant
 func (n *Node) DeleteGrant(ctx context.Context, g *provider.Grant, acquireLock bool) (err error) {
 
 	var attr string
-	if g.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_GROUP {
+	switch g.Grantee.Type {
+	case provider.GranteeType_GRANTEE_TYPE_GROUP:
 		attr = prefixes.GrantGroupAcePrefix + g.Grantee.GetGroupId().OpaqueId
-	} else {
-		attr = prefixes.GrantUserAcePrefix + g.Grantee.GetUserId().OpaqueId
+	default:
+		prefix := prefixes.GrantUserAcePrefix
+		if g.Grantee.GetUserId().GetType() == userpb.UserType_USER_TYPE_GUEST {
+			prefix = prefixes.GrantMailAcePrefix
+		}
+		attr = prefix + g.Grantee.GetUserId().OpaqueId
 	}
 
 	if err = n.RemoveXattr(ctx, attr, acquireLock); err != nil {
