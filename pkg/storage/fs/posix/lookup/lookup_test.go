@@ -84,23 +84,38 @@ var _ = Describe("Lookup", func() {
 		BeforeEach(func() {
 			n = node.New(spaceID, "node-1", "", "", 0, "", providerv1beta1.ResourceType_RESOURCE_TYPE_FILE, nil, env.Lookup)
 		})
-		It("returns the lock file paths for a given node", func() {
-			mockCache.EXPECT().Get(mock.Anything, spaceID, n.ID).Return(filepath.Join(spaceRoot, "file"), nil)
 
-			lockPaths := env.Lookup.LockfilePaths(n)
-			Expect(lockPaths).To(HaveLen(2))
-			Expect(lockPaths[0]).To(ContainSubstring("/.oc-nodes/no/de/-1.lock"))
-			Expect(lockPaths[1]).To(Equal("/path/to/space/file.lock"))
+		Context("with scan_fs disabled", func() {
+			It("returns the lock file paths for a given node", func() {
+				lockPaths := env.Lookup.LockfilePaths(n)
+				Expect(lockPaths).To(HaveLen(1))
+				Expect(lockPaths[0]).To(ContainSubstring("/.oc-nodes/no/de/-1.lock"))
+			})
 		})
 
-		It("only returns the new lock file path in .oc-nodes if the internal path cannot be found", func() {
-			n.ID = "node-that-does-not-exist"
+		Context("with scan_fs ensabled", func() {
+			BeforeEach(func() {
+				env.Options.WatchFS = true
+			})
 
-			mockCache.EXPECT().Get(mock.Anything, spaceID, n.ID).Return("", errtypes.NotFound("node not found"))
+			It("returns the lock file paths for a given node", func() {
+				mockCache.EXPECT().Get(mock.Anything, spaceID, n.ID).Return(filepath.Join(spaceRoot, "file"), nil)
 
-			lockPaths := env.Lookup.LockfilePaths(n)
-			Expect(lockPaths).To(HaveLen(1))
-			Expect(lockPaths[0]).To(ContainSubstring("/.oc-nodes/no/de/-t/ha/t-does-not-exist.lock"))
+				lockPaths := env.Lookup.LockfilePaths(n)
+				Expect(lockPaths).To(HaveLen(2))
+				Expect(lockPaths[0]).To(ContainSubstring("/.oc-nodes/no/de/-1.lock"))
+				Expect(lockPaths[1]).To(Equal("/path/to/space/file.lock"))
+			})
+
+			It("only returns the new lock file path in .oc-nodes if the internal path cannot be found", func() {
+				n.ID = "node-that-does-not-exist"
+
+				mockCache.EXPECT().Get(mock.Anything, spaceID, n.ID).Return("", errtypes.NotFound("node not found"))
+
+				lockPaths := env.Lookup.LockfilePaths(n)
+				Expect(lockPaths).To(HaveLen(1))
+				Expect(lockPaths[0]).To(ContainSubstring("/.oc-nodes/no/de/-t/ha/t-does-not-exist.lock"))
+			})
 		})
 	})
 })
