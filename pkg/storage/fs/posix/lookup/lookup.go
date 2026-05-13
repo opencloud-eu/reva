@@ -350,9 +350,11 @@ func (lu *Lookup) LockfilePaths(n *node.Node) []string {
 	}
 	paths := []string{filepath.Join(spaceRoot, MetadataDir, Pathify(n.ID, 4, 2)+".lock")}
 
-	nodepath := n.InternalPath()
-	if len(nodepath) > 0 {
-		paths = append(paths, nodepath+".lock")
+	if lu.Options.WatchFS {
+		nodepath := n.InternalPath()
+		if len(nodepath) > 0 {
+			paths = append(paths, nodepath+".lock")
+		}
 	}
 
 	return paths
