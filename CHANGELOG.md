@@ -1,6 +1,23 @@
 # Changelog
 
-## [2.44.1](https://github.com/opencloud-eu/reva/releases/tag/v2.44.1) - 2026-05-11
+## [3.0.0](https://github.com/opencloud-eu/reva/releases/tag/v3.0.0) - 2026-05-13
+
+### ❤️ Thanks to all contributors! ❤️
+
+@rhafer
+
+### 💥 Breaking changes
+
+- Persist space memberships in share manager [[#634](https://github.com/opencloud-eu/reva/pull/634)]
+
+### ✨ Features
+
+- [feature/guest-links] introduce migration framework and import spacemember shares [[#617](https://github.com/opencloud-eu/reva/pull/617)]
+- [feature/guest-links] Manage space membership in shareprovider [[#593](https://github.com/opencloud-eu/reva/pull/593)]
+
+### 🐛 Bug Fixes
+
+- fix(jsoncs3-sharemanager): Make migrations interruptible [[#627](https://github.com/opencloud-eu/reva/pull/627)]
 
 ### 📦️ Dependencies
 
