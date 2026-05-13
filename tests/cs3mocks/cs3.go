@@ -21,6 +21,8 @@ package cs3mocks
 import (
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
+	storageprovider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	storageregistry "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
 )
 
 // GatewayAPIClient provides the mocks for the gateway.GatewayAPIClient
@@ -31,4 +33,14 @@ type GatewayAPIClient interface {
 // CollaborationAPIClient provides the mocks for the collaboration.CollaborationAPIClient
 type CollaborationAPIClient interface {
 	collaboration.CollaborationAPIClient
+}
+
+// SpacesAPIClient provides the mocks for the storageprovider.SpacesAPIClient
+type SpacesAPIClient interface {
+	storageprovider.SpacesAPIClient
+}
+
+// StorageRegistryAPIClient provides the mocks for the storageregistry.RegistryAPIClient
+type StorageRegistryAPIClient interface {
+	storageregistry.RegistryAPIClient
 }

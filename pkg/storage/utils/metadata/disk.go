@@ -93,6 +93,40 @@ func (disk *Disk) SimpleUpload(ctx context.Context, uploadpath string, content [
 // Upload stores a file on disk
 func (disk *Disk) Upload(_ context.Context, req UploadRequest) (*UploadResponse, error) {
 	p := disk.targetPath(req.Path)
+
+	// IfNoneMatch: ["*"] means create the file only if it does not already
+	// exist. Use O_EXCL so the check and the create are atomic on the local
+	// filesystem.
+	for _, tag := range req.IfNoneMatch {
+		if tag != "*" {
+			continue
+		}
+		f, err := os.OpenFile(p, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0644)
+		if err != nil {
+			if errors.Is(err, os.ErrExist) {
+				return nil, errtypes.AlreadyExists(p)
+			}
+			return nil, err
+		}
+		if _, err := f.Write(req.Content); err != nil {
+			_ = f.Close()
+			return nil, err
+		}
+		if err := f.Close(); err != nil {
+			return nil, err
+		}
+		info, err := os.Stat(p)
+		if err != nil {
+			return nil, err
+		}
+		res := &UploadResponse{}
+		res.Etag, err = calcEtag(info.ModTime(), info.Size())
+		if err != nil {
+			return nil, err
+		}
+		return res, nil
+	}
+
 	if req.IfMatchEtag != "" {
 		info, err := os.Stat(p)
 		if err != nil && !errors.Is(err, os.ErrNotExist) {
@@ -170,7 +204,10 @@ func (disk *Disk) Download(_ context.Context, req DownloadRequest) (*DownloadRes
 // SimpleDownload reads a file from disk
 func (disk *Disk) SimpleDownload(ctx context.Context, downloadpath string) ([]byte, error) {
 	res, err := disk.Download(ctx, DownloadRequest{Path: downloadpath})
-	return res.Content, err
+	if err != nil {
+		return nil, err
+	}
+	return res.Content, nil
 }
 
 // Delete deletes a path

@@ -16,22 +16,16 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package registry
+package gateway
 
 import (
-	"github.com/opencloud-eu/reva/v2/pkg/share"
-	"github.com/rs/zerolog"
+	"testing"
+
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 )
 
-// NewFunc is the function that share managers
-// should register at init time.
-type NewFunc func(map[string]any, *zerolog.Logger) (share.Manager, error)
-
-// NewFuncs is a map containing all the registered share managers.
-var NewFuncs = map[string]NewFunc{}
-
-// Register registers a new share manager new function.
-// Not safe for concurrent use. Safe for use from package init.
-func Register(name string, f NewFunc) {
-	NewFuncs[name] = f
+func TestGateway(t *testing.T) {
+	RegisterFailHandler(Fail)
+	RunSpecs(t, "Gateway Suite")
 }
