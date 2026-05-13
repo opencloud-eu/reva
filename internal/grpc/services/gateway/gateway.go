@@ -36,12 +36,6 @@ import (
 	"google.golang.org/grpc"
 )
 
-const (
-	_spaceTypePersonal = "personal"
-	_spaceTypeProject  = "project"
-	_spaceTypeVirtual  = "virtual"
-)
-
 func init() {
 	rgrpc.Register("gateway", New)
 }
@@ -77,7 +71,6 @@ type config struct {
 	AllowedUserAgents              map[string][]string               `mapstructure:"allowed_user_agents"` // map[path][]user-agent
 	CreatePersonalSpaceCacheConfig cache.Config                      `mapstructure:"create_personal_space_cache_config"`
 	ProviderCacheConfig            cache.Config                      `mapstructure:"provider_cache_config"`
-	UseCommonSpaceRootShareLogic   bool                              `mapstructure:"use_common_space_root_share_logic"`
 }
 
 // sets defaults

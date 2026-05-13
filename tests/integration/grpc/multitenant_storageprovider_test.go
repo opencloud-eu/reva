@@ -26,7 +26,6 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	storagep "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/opencloud-eu/reva/v2/pkg/auth/scope"
 	"github.com/opencloud-eu/reva/v2/pkg/conversions"
 	ctxpkg "github.com/opencloud-eu/reva/v2/pkg/ctx"
@@ -128,11 +127,7 @@ var _ = Describe("storage providers", func() {
 		Expect(res.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
 
 		By("adding a grant for a user from the same tenant")
-		opaque := &typesv1beta1.Opaque{
-			Map: map[string]*typesv1beta1.OpaqueEntry{
-				"spacegrant": {},
-			},
-		}
+		opaque := utils.SpaceGrantOpaque()
 		utils.AppendPlainToOpaque(opaque, "spacetype", "project")
 		addGrantReq := &storagep.AddGrantRequest{
 			Opaque: opaque,

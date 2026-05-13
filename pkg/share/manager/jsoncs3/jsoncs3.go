@@ -36,9 +36,9 @@ import (
 	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
 	"github.com/opencloud-eu/reva/v2/pkg/events"
 	"github.com/opencloud-eu/reva/v2/pkg/events/stream"
-	"github.com/opencloud-eu/reva/v2/pkg/logger"
 	"github.com/opencloud-eu/reva/v2/pkg/rgrpc/todo/pool"
 	"github.com/opencloud-eu/reva/v2/pkg/share"
+	migration "github.com/opencloud-eu/reva/v2/pkg/share/manager/jsoncs3/migrations"
 	"github.com/opencloud-eu/reva/v2/pkg/share/manager/jsoncs3/providercache"
 	"github.com/opencloud-eu/reva/v2/pkg/share/manager/jsoncs3/receivedsharecache"
 	"github.com/opencloud-eu/reva/v2/pkg/share/manager/jsoncs3/sharecache"
@@ -48,6 +48,7 @@ import (
 	"github.com/opencloud-eu/reva/v2/pkg/storagespace"
 	"github.com/opencloud-eu/reva/v2/pkg/utils"
 	"github.com/pkg/errors"
+	"github.com/rs/zerolog"
 	"go.opentelemetry.io/otel/codes"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/genproto/protobuf/field_mask"
@@ -122,14 +123,20 @@ var (
 )
 
 type config struct {
-	GatewayAddr       string       `mapstructure:"gateway_addr"`
-	MaxConcurrency    int          `mapstructure:"max_concurrency"`
-	ProviderAddr      string       `mapstructure:"provider_addr"`
-	ServiceUserID     string       `mapstructure:"service_user_id"`
-	ServiceUserIdp    string       `mapstructure:"service_user_idp"`
-	MachineAuthAPIKey string       `mapstructure:"machine_auth_apikey"`
-	CacheTTL          int          `mapstructure:"ttl"`
-	Events            EventOptions `mapstructure:"events"`
+	GatewayAddr          string `mapstructure:"gateway_addr"`
+	MaxConcurrency       int    `mapstructure:"max_concurrency"`
+	ProviderAddr         string `mapstructure:"provider_addr"`
+	SystemUserID         string `mapstructure:"system_user_id"`
+	SystemUserIdp        string `mapstructure:"system_user_idp"`
+	MachineAuthAPIKey    string `mapstructure:"machine_auth_apikey"`
+	ServiceAccountID     string `mapstructure:"service_account_id"`
+	ServiceAccountSecret string `mapstructure:"service_account_secret"`
+	// ProviderRegistryAddr is the address of the storage registry used during
+	// migrations. Defaults to GatewayAddr when empty, because in the default
+	// OpenCloud deployment the registry is co-located with the gateway.
+	ProviderRegistryAddr string       `mapstructure:"provider_registry_addr"`
+	CacheTTL             int          `mapstructure:"ttl"`
+	Events               EventOptions `mapstructure:"events"`
 }
 
 // EventOptions are the configurable options for events
@@ -145,8 +152,6 @@ type EventOptions struct {
 
 // Manager implements a share manager using a cs3 storage backend with local caching
 type Manager struct {
-	sync.RWMutex
-
 	Cache              providercache.Cache      // holds all shares, sharded by provider id and space id
 	CreatedCache       sharecache.Cache         // holds the list of shares a user has created, sharded by user id
 	GroupReceivedCache sharecache.Cache         // holds the list of shares a group has access to, sharded by group id
@@ -155,23 +160,25 @@ type Manager struct {
 	storage   metadata.Storage
 	SpaceRoot *provider.ResourceId
 
-	initialized bool
+	ready          chan struct{} // closed once initialize() has completed successfully
+	migrationsDone chan struct{} // closed once doMigrations() has returned on this instance
 
 	MaxConcurrency int
 
 	gatewaySelector pool.Selectable[gatewayv1beta1.GatewayAPIClient]
 	eventStream     events.Stream
+	logger          *zerolog.Logger
 }
 
 // NewDefault returns a new manager instance with default dependencies
-func NewDefault(m map[string]interface{}) (share.Manager, error) {
+func NewDefault(m map[string]interface{}, logger *zerolog.Logger) (share.Manager, error) {
 	c := &config{}
 	if err := mapstructure.Decode(m, c); err != nil {
 		err = errors.Wrap(err, "error creating a new manager")
 		return nil, err
 	}
 
-	s, err := metadata.NewCS3Storage(c.ProviderAddr, c.ProviderAddr, c.ServiceUserID, c.ServiceUserIdp, c.MachineAuthAPIKey)
+	s, err := metadata.NewCS3Storage(c.ProviderAddr, c.ProviderAddr, c.SystemUserID, c.SystemUserIdp, c.MachineAuthAPIKey)
 	if err != nil {
 		return nil, err
 	}
@@ -189,11 +196,34 @@ func NewDefault(m map[string]interface{}) (share.Manager, error) {
 		}
 	}
 
-	return New(s, gatewaySelector, c.CacheTTL, es, c.MaxConcurrency)
+	mgr, err := New(s, logger, gatewaySelector, c.CacheTTL, es, c.MaxConcurrency)
+	if err != nil {
+		return nil, err
+	}
+	providerRegistryAddr := c.ProviderRegistryAddr
+	if providerRegistryAddr == "" {
+		providerRegistryAddr = c.GatewayAddr
+	}
+	mgr.RunMigrations(migration.MigrationConfig{
+		ServiceAccountID:     c.ServiceAccountID,
+		ServiceAccountSecret: c.ServiceAccountSecret,
+		ProviderRegistryAddr: providerRegistryAddr,
+	})
+	return mgr, nil
 }
 
 // New returns a new manager instance.
-func New(s metadata.Storage, gatewaySelector pool.Selectable[gatewayv1beta1.GatewayAPIClient], ttlSeconds int, es events.Stream, maxconcurrency int) (*Manager, error) {
+func New(s metadata.Storage,
+	logger *zerolog.Logger,
+	gatewaySelector pool.Selectable[gatewayv1beta1.GatewayAPIClient],
+	ttlSeconds int,
+	es events.Stream,
+	maxconcurrency int,
+) (*Manager, error) {
+	if logger == nil {
+		nop := zerolog.Nop()
+		logger = &nop
+	}
 	ttl := time.Duration(ttlSeconds) * time.Second
 
 	m := &Manager{
@@ -205,13 +235,38 @@ func New(s metadata.Storage, gatewaySelector pool.Selectable[gatewayv1beta1.Gate
 		gatewaySelector:    gatewaySelector,
 		eventStream:        es,
 		MaxConcurrency:     maxconcurrency,
+		logger:             logger,
+		ready:              make(chan struct{}),
+		// migrationsDone is open (blocking) by default. It is closed by
+		// doMigrations when all migrations complete, or by SkipMigrations for
+		// callers (e.g. tests) that do not run migrations at all.
+		migrationsDone: make(chan struct{}),
 	}
+
+	// Initialize the metadata storage connection in the background, retrying
+	// with exponential backoff if the backend is not yet available.
+	go func() {
+		backoff := time.Second
+		for {
+			if err := m.initialize(context.Background()); err != nil {
+				logger.Info().Err(err).Dur("backoff", backoff).Msg("share manager: metadata storage initialization failed, retrying")
+				time.Sleep(backoff)
+				if backoff < 30*time.Second {
+					backoff *= 2
+				}
+				continue
+			}
+			logger.Debug().Msg("share manager: initialization succeeded")
+			close(m.ready)
+			return
+		}
+	}()
 
 	// listen for events
 	if m.eventStream != nil {
 		ch, err := events.Consume(m.eventStream, "jsoncs3sharemanager", _registeredEvents...)
 		if err != nil {
-			appctx.GetLogger(context.Background()).Error().Err(err).Msg("error consuming events")
+			logger.Error().Err(err).Msg("error consuming events")
 		}
 		go m.ProcessEvents(ch)
 	}
@@ -219,23 +274,13 @@ func New(s metadata.Storage, gatewaySelector pool.Selectable[gatewayv1beta1.Gate
 	return m, nil
 }
 
+// initialize connects to the metadata storage backend and ensures the required
+// directory structure exists. It is called once at startup from a background
+// goroutine (see New) and must not be called concurrently.
 func (m *Manager) initialize(ctx context.Context) error {
 	_, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "initialize")
 	defer span.End()
-	if m.initialized {
-		span.SetStatus(codes.Ok, "already initialized")
-		return nil
-	}
 
-	m.Lock()
-	defer m.Unlock()
-
-	if m.initialized { // check if initialization happened while grabbing the lock
-		span.SetStatus(codes.Ok, "initialized while grabbing lock")
-		return nil
-	}
-
-	ctx = context.Background()
 	err := m.storage.Init(ctx, "jsoncs3-share-manager-metadata")
 	if err != nil {
 		span.RecordError(err)
@@ -261,21 +306,85 @@ func (m *Manager) initialize(ctx context.Context) error {
 		span.SetStatus(codes.Error, err.Error())
 		return err
 	}
+	err = m.storage.MakeDirIfNotExist(ctx, "migrations")
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		return err
+	}
 
-	m.initialized = true
 	span.SetStatus(codes.Ok, "initialized")
 	return nil
 }
 
+// waitForInit blocks until the background initialization goroutine has
+// successfully completed, or until ctx is cancelled.
+func (m *Manager) waitForInit(ctx context.Context) error {
+	select {
+	case <-m.ready:
+		return nil
+	case <-ctx.Done():
+		return errors.Wrap(ctx.Err(), "share manager not yet initialized")
+	}
+}
+
+// waitForMigrations blocks until both storage initialization and all data
+// migrations have completed on this instance, or until ctx is cancelled.
+// It is a strict superset of waitForInit and should be used by write operations
+// to ensure no writes race with an in-progress migration.
+func (m *Manager) waitForMigrations(ctx context.Context) error {
+	select {
+	case <-m.ready:
+	case <-ctx.Done():
+		return errors.Wrap(ctx.Err(), "share manager not yet initialized")
+	}
+	select {
+	case <-m.migrationsDone:
+		return nil
+	case <-ctx.Done():
+		return errors.Wrap(ctx.Err(), "share manager migrations not yet complete")
+	}
+}
+
+// RunMigrations starts data migrations in a background goroutine. It should be
+// called once after New() in production server startup. Callers that do not
+// need migrations should call SkipMigrations instead to unblock write operations.
+func (m *Manager) RunMigrations(cfg migration.MigrationConfig) {
+	go m.doMigrations(cfg)
+}
+
+// SkipMigrations unblocks write operations on this instance without running
+// any migrations. It must be called when RunMigrations will not be called,
+// for example in tests.
+func (m *Manager) SkipMigrations() {
+	close(m.migrationsDone)
+}
+
+func (m *Manager) doMigrations(cfg migration.MigrationConfig) {
+	// Always close migrationsDone when this goroutine exits, whether migrations
+	// ran, were skipped, or failed. This unblocks write operations on this
+	// instance. Non-winning instances are held here by acquireLock until the
+	// winning instance finishes, so the close happens only after the storage
+	// state is fully migrated.
+	defer close(m.migrationsDone)
+	if err := m.waitForInit(context.Background()); err != nil {
+		m.logger.Error().Err(err).Msg("share manager: aborting migrations, manager did not initialize")
+		return
+	}
+	m.logger.Debug().Msg("migrations start")
+	migrations := migration.New(*m.logger, m.gatewaySelector, m.storage, cfg, m, m)
+	migrations.RunMigrations()
+}
+
 func (m *Manager) ProcessEvents(ch <-chan events.Event) {
-	log := logger.New()
+	log := m.logger
+	ctx := context.Background()
+	if err := m.waitForInit(ctx); err != nil {
+		log.Error().Err(err).Msg("share manager: error waiting for initialization")
+		return
+	}
 	for event := range ch {
 		ctx := context.Background()
-
-		if err := m.initialize(ctx); err != nil {
-			log.Error().Err(err).Msg("error initializing manager")
-		}
-
 		if ev, ok := event.Event.(events.SpaceDeleted); ok {
 			log.Debug().Msgf("space deleted event: %v", ev)
 			go func() { m.purgeSpace(ctx, ev.ID) }()
@@ -287,7 +396,7 @@ func (m *Manager) ProcessEvents(ch <-chan events.Event) {
 func (m *Manager) Share(ctx context.Context, md *provider.ResourceInfo, g *collaboration.ShareGrant) (*collaboration.Share, error) {
 	ctx, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "Share")
 	defer span.End()
-	if err := m.initialize(ctx); err != nil {
+	if err := m.waitForMigrations(ctx); err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
 		return nil, err
@@ -295,16 +404,6 @@ func (m *Manager) Share(ctx context.Context, md *provider.ResourceInfo, g *colla
 
 	user := ctxpkg.ContextMustGetUser(ctx)
 	ts := utils.TSNow()
-
-	// do not allow share to myself or the owner if share is for a user
-	// TODO: should this not already be caught at the gw level?
-	if g.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_USER &&
-		(utils.UserEqual(g.Grantee.GetUserId(), user.Id) || utils.UserEqual(g.Grantee.GetUserId(), md.Owner)) {
-		err := errtypes.BadRequest("jsoncs3: owner/creator and grantee are the same")
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
-		return nil, err
-	}
 
 	// check if share already exists.
 	key := &collaboration.ShareKey{
@@ -446,7 +545,7 @@ func (m *Manager) GetShare(ctx context.Context, ref *collaboration.ShareReferenc
 	ctx, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "GetShare")
 	defer span.End()
 	sublog := appctx.GetLogger(ctx).With().Str("id", ref.GetId().GetOpaqueId()).Str("key", ref.GetKey().String()).Str("driver", "jsoncs3").Str("handler", "GetShare").Logger()
-	if err := m.initialize(ctx); err != nil {
+	if err := m.waitForInit(ctx); err != nil {
 		return nil, err
 	}
 
@@ -504,20 +603,13 @@ func (m *Manager) Unshare(ctx context.Context, ref *collaboration.ShareReference
 	ctx, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "Unshare")
 	defer span.End()
 
-	if err := m.initialize(ctx); err != nil {
+	if err := m.waitForMigrations(ctx); err != nil {
 		return err
 	}
-
-	user := ctxpkg.ContextMustGetUser(ctx)
 
 	s, err := m.get(ctx, ref)
 	if err != nil {
 		return err
-	}
-	// TODO allow manager to unshare shares in a space created by other users
-	if !share.IsCreatedByUser(s, user) {
-		// TODO why not permission denied?
-		return errtypes.NotFound(ref.String())
 	}
 
 	return m.removeShare(ctx, s, false)
@@ -528,7 +620,7 @@ func (m *Manager) UpdateShare(ctx context.Context, ref *collaboration.ShareRefer
 	ctx, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "UpdateShare")
 	defer span.End()
 
-	if err := m.initialize(ctx); err != nil {
+	if err := m.waitForMigrations(ctx); err != nil {
 		return nil, err
 	}
 
@@ -616,7 +708,7 @@ func (m *Manager) ListShares(ctx context.Context, filters []*collaboration.Filte
 	ctx, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "ListShares")
 	defer span.End()
 
-	if err := m.initialize(ctx); err != nil {
+	if err := m.waitForInit(ctx); err != nil {
 		return nil, err
 	}
 
@@ -833,7 +925,7 @@ func (m *Manager) ListReceivedShares(ctx context.Context, filters []*collaborati
 	defer span.End()
 	sublog := appctx.GetLogger(ctx).With().Str("driver", "jsoncs3").Str("handler", "ListReceivedShares").Logger()
 
-	if err := m.initialize(ctx); err != nil {
+	if err := m.waitForInit(ctx); err != nil {
 		return nil, err
 	}
 
@@ -1029,7 +1121,7 @@ func (m *Manager) convert(ctx context.Context, userID string, s *collaboration.S
 
 // GetReceivedShare returns the information for a received share.
 func (m *Manager) GetReceivedShare(ctx context.Context, ref *collaboration.ShareReference) (*collaboration.ReceivedShare, error) {
-	if err := m.initialize(ctx); err != nil {
+	if err := m.waitForInit(ctx); err != nil {
 		return nil, err
 	}
 
@@ -1073,7 +1165,7 @@ func (m *Manager) UpdateReceivedShare(ctx context.Context, receivedShare *collab
 	ctx, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "UpdateReceivedShare")
 	defer span.End()
 
-	if err := m.initialize(ctx); err != nil {
+	if err := m.waitForMigrations(ctx); err != nil {
 		return nil, err
 	}
 
@@ -1120,8 +1212,8 @@ func updateShareID(share *collaboration.Share) {
 
 // Load imports shares and received shares from channels (e.g. during migration)
 func (m *Manager) Load(ctx context.Context, shareChan <-chan *collaboration.Share, receivedShareChan <-chan share.ReceivedShareWithUser) error {
-	log := appctx.GetLogger(ctx)
-	if err := m.initialize(ctx); err != nil {
+	l := m.logger
+	if err := m.waitForInit(ctx); err != nil {
 		return err
 	}
 
@@ -1136,14 +1228,14 @@ func (m *Manager) Load(ctx context.Context, shareChan <-chan *collaboration.Shar
 				updateShareID(s)
 			}
 			if err := m.Cache.Add(context.Background(), s.GetResourceId().GetStorageId(), s.GetResourceId().GetSpaceId(), s.Id.OpaqueId, s); err != nil {
-				log.Error().Err(err).Interface("share", s).Msg("error persisting share")
+				l.Error().Err(err).Interface("share", s).Msg("error persisting share")
 			} else {
-				log.Debug().Str("storageid", s.GetResourceId().GetStorageId()).Str("spaceid", s.GetResourceId().GetSpaceId()).Str("shareid", s.Id.OpaqueId).Msg("imported share")
+				l.Debug().Str("storageid", s.GetResourceId().GetStorageId()).Str("spaceid", s.GetResourceId().GetSpaceId()).Str("shareid", s.Id.OpaqueId).Msg("imported share")
 			}
 			if err := m.CreatedCache.Add(ctx, s.GetCreator().GetOpaqueId(), s.Id.OpaqueId); err != nil {
-				log.Error().Err(err).Interface("share", s).Msg("error persisting created cache")
+				l.Error().Err(err).Interface("share", s).Msg("error persisting created cache")
 			} else {
-				log.Debug().Str("creatorid", s.GetCreator().GetOpaqueId()).Str("shareid", s.Id.OpaqueId).Msg("updated created cache")
+				l.Debug().Str("creatorid", s.GetCreator().GetOpaqueId()).Str("shareid", s.Id.OpaqueId).Msg("updated created cache")
 			}
 		}
 		wg.Done()
@@ -1154,18 +1246,19 @@ func (m *Manager) Load(ctx context.Context, shareChan <-chan *collaboration.Shar
 				if !shareIsRoutable(s.ReceivedShare.GetShare()) {
 					updateShareID(s.ReceivedShare.GetShare())
 				}
-				switch s.ReceivedShare.Share.Grantee.Type {
-				case provider.GranteeType_GRANTEE_TYPE_USER:
-					if err := m.UserReceivedStates.Add(context.Background(), s.ReceivedShare.GetShare().GetGrantee().GetUserId().GetOpaqueId(), s.ReceivedShare.GetShare().GetResourceId().GetSpaceId(), s.ReceivedShare); err != nil {
-						log.Error().Err(err).Interface("received share", s).Msg("error persisting received share for user")
+				if s.UserID != nil {
+					spaceid := s.ReceivedShare.GetShare().GetResourceId().GetStorageId() + shareid.IDDelimiter + s.ReceivedShare.GetShare().GetResourceId().GetSpaceId()
+					if err := m.UserReceivedStates.Add(context.Background(), s.UserID.GetOpaqueId(), spaceid, s.ReceivedShare); err != nil {
+						l.Error().Err(err).Interface("received share", s).Msg("error persisting received share for user")
 					} else {
-						log.Debug().Str("userid", s.ReceivedShare.GetShare().GetGrantee().GetUserId().GetOpaqueId()).Str("spaceid", s.ReceivedShare.GetShare().GetResourceId().GetSpaceId()).Str("shareid", s.ReceivedShare.GetShare().Id.OpaqueId).Msg("updated received share userdata")
+						l.Debug().Str("userid", s.UserID.GetOpaqueId()).Str("spaceid", spaceid).Str("shareid", s.ReceivedShare.GetShare().Id.OpaqueId).Msg("updated received share userdata")
 					}
-				case provider.GranteeType_GRANTEE_TYPE_GROUP:
+				}
+				if s.ReceivedShare.Share.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_GROUP && s.UserID == nil {
 					if err := m.GroupReceivedCache.Add(context.Background(), s.ReceivedShare.GetShare().GetGrantee().GetGroupId().GetOpaqueId(), s.ReceivedShare.GetShare().GetId().GetOpaqueId()); err != nil {
-						log.Error().Err(err).Interface("received share", s).Msg("error persisting received share to group cache")
+						l.Error().Err(err).Interface("received share", s).Msg("error persisting received share to group cache")
 					} else {
-						log.Debug().Str("groupid", s.ReceivedShare.GetShare().GetGrantee().GetGroupId().GetOpaqueId()).Str("shareid", s.ReceivedShare.GetShare().Id.OpaqueId).Msg("updated received share group cache")
+						l.Debug().Str("groupid", s.ReceivedShare.GetShare().GetGrantee().GetGroupId().GetOpaqueId()).Str("shareid", s.ReceivedShare.GetShare().Id.OpaqueId).Msg("updated received share group cache")
 					}
 				}
 			}
@@ -1237,7 +1330,7 @@ func (m *Manager) removeShare(ctx context.Context, s *collaboration.Share, skipS
 func (m *Manager) CleanupStaleShares(ctx context.Context) {
 	log := appctx.GetLogger(ctx)
 
-	if err := m.initialize(ctx); err != nil {
+	if err := m.waitForMigrations(ctx); err != nil {
 		return
 	}
 

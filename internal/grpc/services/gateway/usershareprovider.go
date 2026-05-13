@@ -20,7 +20,6 @@ package gateway
 
 import (
 	"context"
-	"slices"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
@@ -39,25 +38,14 @@ import (
 
 // TODO(labkode): add multi-phase commit logic when commit share or commit ref is enabled.
 func (s *svc) CreateShare(ctx context.Context, req *collaboration.CreateShareRequest) (*collaboration.CreateShareResponse, error) {
-	// Don't use the share manager when sharing a space root
-	if !s.c.UseCommonSpaceRootShareLogic && refIsSpaceRoot(req.ResourceInfo.Id) {
-		return s.addSpaceShare(ctx, req)
-	}
 	return s.addShare(ctx, req)
 }
 
 func (s *svc) RemoveShare(ctx context.Context, req *collaboration.RemoveShareRequest) (*collaboration.RemoveShareResponse, error) {
-	key := req.GetRef().GetKey()
-	if !s.c.UseCommonSpaceRootShareLogic && shareIsSpaceRoot(key) {
-		return s.removeSpaceShare(ctx, key.GetResourceId(), key.GetGrantee())
-	}
 	return s.removeShare(ctx, req)
 }
 
 func (s *svc) UpdateShare(ctx context.Context, req *collaboration.UpdateShareRequest) (*collaboration.UpdateShareResponse, error) {
-	if !s.c.UseCommonSpaceRootShareLogic && refIsSpaceRoot(req.GetShare().GetResourceId()) {
-		return s.updateSpaceShare(ctx, req)
-	}
 	return s.updateShare(ctx, req)
 }
 
@@ -150,7 +138,12 @@ func (s *svc) updateShare(ctx context.Context, req *collaboration.UpdateShareReq
 			Expiration:  res.GetShare().GetExpiration(),
 			Creator:     creator.GetId(),
 		}
-		updateGrantStatus, err := s.updateGrant(ctx, res.GetShare().GetResourceId(), grant, nil)
+		var opaque *typesv1beta1.Opaque
+		if refIsSpaceRoot(res.GetShare().GetResourceId()) {
+			opaque = utils.SpaceGrantOpaque()
+			utils.AppendPlainToOpaque(opaque, "spacetype", utils.ReadPlainFromOpaque(req.GetOpaque(), "spacetype"))
+		}
+		updateGrantStatus, err := s.updateGrant(ctx, res.GetShare().GetResourceId(), grant, opaque)
 
 		if err != nil {
 			return nil, errors.Wrap(err, "gateway: error calling updateGrant")
@@ -164,87 +157,6 @@ func (s *svc) updateShare(ctx context.Context, req *collaboration.UpdateShareReq
 		}
 	}
 
-	return res, nil
-}
-
-func (s *svc) updateSpaceShare(ctx context.Context, req *collaboration.UpdateShareRequest) (*collaboration.UpdateShareResponse, error) {
-	if req.GetShare().GetGrantee() == nil {
-		return &collaboration.UpdateShareResponse{Status: status.NewInvalid(ctx, "updating requires a received grantee object")}, nil
-	}
-	// If the share is a denial we call  denyGrant instead.
-	var st *rpc.Status
-	var err error
-	// TODO: change CS3 APIs
-	opaque := &typesv1beta1.Opaque{
-		Map: map[string]*typesv1beta1.OpaqueEntry{
-			"spacegrant": {},
-		},
-	}
-	utils.AppendPlainToOpaque(opaque, "spacetype", utils.ReadPlainFromOpaque(req.Opaque, "spacetype"))
-
-	if grants.PermissionsEqual(req.Share.GetPermissions().GetPermissions(), &provider.ResourcePermissions{}) {
-		st, err = s.denyGrant(ctx, req.GetShare().GetResourceId(), req.GetShare().GetGrantee(), opaque)
-		if err != nil {
-			return nil, errors.Wrap(err, "gateway: error denying grant in storage")
-		}
-	} else {
-		listGrantRes, err := s.listGrants(ctx, req.GetShare().GetResourceId())
-		if err != nil {
-			return nil, errors.Wrap(err, "gateway: error getting grant to remove from storage")
-		}
-		existsGrant := s.getGranteeGrant(listGrantRes.GetGrants(), req.GetShare().GetGrantee())
-
-		if !slices.Contains(req.GetUpdateMask().GetPaths(), "permissions") {
-			req.Share.Permissions = &collaboration.SharePermissions{Permissions: existsGrant.GetPermissions()}
-		}
-
-		if !slices.Contains(req.GetUpdateMask().GetPaths(), "expiration") {
-			req.Share.Expiration = existsGrant.GetExpiration()
-		}
-
-		u, ok := ctxpkg.ContextGetUser(ctx)
-		if !ok {
-			return nil, errors.New("user not found in context")
-		}
-
-		grant := &provider.Grant{
-			Grantee:     req.GetShare().GetGrantee(),
-			Permissions: req.GetShare().GetPermissions().GetPermissions(),
-			Expiration:  req.GetShare().GetExpiration(),
-			Creator:     u.GetId(),
-		}
-
-		if grant.GetPermissions() == nil {
-			return &collaboration.UpdateShareResponse{Status: status.NewInvalid(ctx, "updating requires a received permission object")}, nil
-		}
-
-		if !grant.GetPermissions().GetRemoveGrant() {
-			// this request might remove Manager Permissions so we need to
-			// check if there is at least one manager remaining of the
-			// resource.
-			if !isSpaceManagerRemaining(listGrantRes.GetGrants(), grant.GetGrantee()) {
-				return &collaboration.UpdateShareResponse{
-					Status: status.NewPermissionDenied(ctx, errtypes.PermissionDenied(""), "can't remove the last manager"),
-				}, nil
-			}
-
-		}
-		st, err = s.updateGrant(ctx, req.GetShare().GetResourceId(), grant, opaque)
-		if err != nil {
-			return nil, errors.Wrap(err, "gateway: error adding grant to storage")
-		}
-	}
-
-	res := &collaboration.UpdateShareResponse{
-		Status: st,
-		Share:  req.Share,
-	}
-
-	if st.Code != rpc.Code_CODE_OK {
-		return res, nil
-	}
-
-	s.providerCache.RemoveListStorageProviders(req.GetShare().GetResourceId())
 	return res, nil
 }
 
@@ -526,53 +438,6 @@ func (s *svc) removeGrant(ctx context.Context, id *provider.ResourceId, g *provi
 	return status.NewOK(ctx), nil
 }
 
-func (s *svc) listGrants(ctx context.Context, id *provider.ResourceId) (*provider.ListGrantsResponse, error) {
-	ref := &provider.Reference{
-		ResourceId: id,
-	}
-
-	grantReq := &provider.ListGrantsRequest{
-		Ref: ref,
-	}
-
-	c, _, err := s.find(ctx, ref)
-	if err != nil {
-		appctx.GetLogger(ctx).
-			Err(err).
-			Interface("reference", ref).
-			Msg("listGrants: failed to get storage provider")
-		if _, ok := err.(errtypes.IsNotFound); ok {
-			return &provider.ListGrantsResponse{
-				Status: status.NewNotFound(ctx, "storage provider not found"),
-			}, nil
-		}
-		return &provider.ListGrantsResponse{
-			Status: status.NewInternal(ctx, "error finding storage provider"),
-		}, nil
-	}
-
-	grantRes, err := c.ListGrants(ctx, grantReq)
-	if err != nil {
-		return nil, errors.Wrap(err, "gateway: error calling ListGrants")
-	}
-	if grantRes.Status.Code != rpc.Code_CODE_OK {
-		return &provider.ListGrantsResponse{Status: status.NewInternal(ctx,
-				"error listing storage grants"),
-			},
-			nil
-	}
-	return grantRes, nil
-}
-
-func (s *svc) getGranteeGrant(grants []*provider.Grant, grantee *provider.Grantee) *provider.Grant {
-	for _, g := range grants {
-		if isEqualGrantee(g.Grantee, grantee) {
-			return g
-		}
-	}
-	return nil
-}
-
 func (s *svc) addShare(ctx context.Context, req *collaboration.CreateShareRequest) (*collaboration.CreateShareResponse, error) {
 	c, err := pool.GetUserShareProviderClient(s.c.UserShareProviderEndpoint)
 	if err != nil {
@@ -613,13 +478,18 @@ func (s *svc) addShare(ctx context.Context, req *collaboration.CreateShareReques
 	if s.c.CommitShareToStorageGrant {
 		// If the share is a denial we call denyGrant instead.
 		var status *rpc.Status
+		var opaque *typesv1beta1.Opaque
+		if refIsSpaceRoot(req.ResourceInfo.Id) {
+			opaque = utils.SpaceGrantOpaque()
+			utils.AppendPlainToOpaque(opaque, "spacetype", req.ResourceInfo.GetSpace().GetSpaceType())
+		}
 		if grants.PermissionsEqual(req.Grant.Permissions.Permissions, &provider.ResourcePermissions{}) {
-			status, err = s.denyGrant(ctx, req.ResourceInfo.Id, req.Grant.Grantee, nil)
+			status, err = s.denyGrant(ctx, req.ResourceInfo.Id, req.Grant.Grantee, opaque)
 			if err != nil {
 				return nil, errors.Wrap(err, "gateway: error denying grant in storage")
 			}
 		} else {
-			status, err = s.addGrant(ctx, req.ResourceInfo.Id, req.Grant.Grantee, req.Grant.Permissions.Permissions, req.Grant.Expiration, nil)
+			status, err = s.addGrant(ctx, req.ResourceInfo.Id, req.Grant.Grantee, req.Grant.Permissions.Permissions, req.Grant.Expiration, opaque)
 			if err != nil {
 				appctx.GetLogger(ctx).Debug().Interface("status", status).Interface("req", req).Msg(err.Error())
 				rollBackFn(status)
@@ -628,7 +498,7 @@ func (s *svc) addShare(ctx context.Context, req *collaboration.CreateShareReques
 		}
 
 		switch status.Code {
-		case rpc.Code_CODE_OK:
+		case rpc.Code_CODE_OK, rpc.Code_CODE_ALREADY_EXISTS:
 			// ok
 		case rpc.Code_CODE_UNIMPLEMENTED:
 			appctx.GetLogger(ctx).Debug().Interface("status", status).Interface("req", req).Msg("storing grants not supported, ignoring")
@@ -642,58 +512,6 @@ func (s *svc) addShare(ctx context.Context, req *collaboration.CreateShareReques
 		}
 	}
 	return res, nil
-}
-
-func (s *svc) addSpaceShare(ctx context.Context, req *collaboration.CreateShareRequest) (*collaboration.CreateShareResponse, error) {
-	if refIsSpaceRoot(req.GetResourceInfo().GetId()) &&
-		(req.GetResourceInfo().GetSpace().GetSpaceType() == _spaceTypePersonal || req.GetResourceInfo().GetSpace().GetSpaceType() == _spaceTypeVirtual) {
-		return &collaboration.CreateShareResponse{Status: status.NewInvalid(ctx, "space type is not eligible for sharing")}, nil
-	}
-	// If the share is a denial we call  denyGrant instead.
-	var st *rpc.Status
-	var err error
-	// TODO: change CS3 APIs
-	opaque := &typesv1beta1.Opaque{
-		Map: map[string]*typesv1beta1.OpaqueEntry{
-			"spacegrant": {},
-		},
-	}
-	utils.AppendPlainToOpaque(
-		opaque,
-		"spacetype",
-		req.ResourceInfo.GetSpace().GetSpaceType(),
-	)
-	if grants.PermissionsEqual(req.Grant.Permissions.Permissions, &provider.ResourcePermissions{}) {
-		st, err = s.denyGrant(ctx, req.ResourceInfo.Id, req.Grant.Grantee, opaque)
-		if err != nil {
-			return nil, errors.Wrap(err, "gateway: error denying grant in storage")
-		}
-	} else {
-		st, err = s.addGrant(ctx, req.ResourceInfo.Id, req.Grant.Grantee, req.Grant.Permissions.Permissions, req.Grant.Expiration, opaque)
-		if err != nil {
-			return nil, errors.Wrap(err, "gateway: error adding grant to storage")
-		}
-	}
-
-	switch st.Code {
-	case rpc.Code_CODE_OK:
-		s.providerCache.RemoveListStorageProviders(req.ResourceInfo.Id)
-	case rpc.Code_CODE_UNIMPLEMENTED:
-		appctx.GetLogger(ctx).Debug().Interface("status", st).Interface("req", req).Msg("storing grants not supported, ignoring")
-	default:
-		return &collaboration.CreateShareResponse{
-			Status: st,
-		}, err
-	}
-
-	return &collaboration.CreateShareResponse{
-		Status: status.NewOK(ctx),
-		Share: &collaboration.Share{
-			ResourceId:  req.ResourceInfo.Id,
-			Permissions: &collaboration.SharePermissions{Permissions: req.Grant.Permissions.GetPermissions()},
-			Grantee:     req.Grant.Grantee,
-		},
-	}, nil
 }
 
 func (s *svc) removeShare(ctx context.Context, req *collaboration.RemoveShareRequest) (*collaboration.RemoveShareResponse, error) {
@@ -742,9 +560,16 @@ func (s *svc) removeShare(ctx context.Context, req *collaboration.RemoveShareReq
 	if err != nil {
 		return nil, errors.Wrap(err, "gateway: error calling RemoveShare")
 	}
+	if res.Status.Code != rpc.Code_CODE_OK {
+		return res, nil
+	}
 
 	if s.c.CommitShareToStorageGrant {
-		removeGrantStatus, err := s.removeGrant(ctx, share.ResourceId, share.Grantee, share.Permissions.Permissions, nil)
+		var opaque *typesv1beta1.Opaque
+		if refIsSpaceRoot(share.ResourceId) {
+			opaque = utils.SpaceGrantOpaque()
+		}
+		removeGrantStatus, err := s.removeGrant(ctx, share.ResourceId, share.Grantee, share.Permissions.Permissions, opaque)
 		if err != nil {
 			return nil, errors.Wrap(err, "gateway: error removing grant from storage")
 		}
@@ -756,58 +581,6 @@ func (s *svc) removeShare(ctx context.Context, req *collaboration.RemoveShareReq
 	}
 
 	return res, nil
-}
-
-func (s *svc) removeSpaceShare(ctx context.Context, ref *provider.ResourceId, grantee *provider.Grantee) (*collaboration.RemoveShareResponse, error) {
-	listGrantRes, err := s.listGrants(ctx, ref)
-	if err != nil {
-		return nil, errors.Wrap(err, "gateway: error getting grant to remove from storage")
-	}
-	var permissions *provider.ResourcePermissions
-	for _, g := range listGrantRes.Grants {
-		if isEqualGrantee(g.Grantee, grantee) {
-			permissions = g.Permissions
-		}
-	}
-	if permissions == nil {
-		return nil, errors.New("gateway: error getting grant to remove from storage")
-	}
-
-	if len(listGrantRes.Grants) == 1 || !isSpaceManagerRemaining(listGrantRes.Grants, grantee) {
-		return &collaboration.RemoveShareResponse{
-			Status: status.NewPermissionDenied(ctx, errtypes.PermissionDenied(""), "can't remove the last manager"),
-		}, nil
-	}
-
-	// TODO: change CS3 APIs
-	opaque := &typesv1beta1.Opaque{
-		Map: map[string]*typesv1beta1.OpaqueEntry{
-			"spacegrant": {},
-		},
-	}
-	removeGrantStatus, err := s.removeGrant(ctx, ref, grantee, permissions, opaque)
-	if err != nil {
-		return nil, errors.Wrap(err, "gateway: error removing grant from storage")
-	}
-	if removeGrantStatus.Code != rpc.Code_CODE_OK {
-		return &collaboration.RemoveShareResponse{
-			Status: removeGrantStatus,
-		}, err
-	}
-	s.providerCache.RemoveListStorageProviders(ref)
-	return &collaboration.RemoveShareResponse{Status: status.NewOK(ctx)}, nil
-}
-
-func isSpaceManagerRemaining(grants []*provider.Grant, grantee *provider.Grantee) bool {
-	for _, g := range grants {
-		// RemoveGrant is currently the way to check for the manager role
-		// If it is not set than the current grant is not for a manager and
-		// we can just continue with the next one.
-		if g.Permissions.RemoveGrant && !isEqualGrantee(g.Grantee, grantee) {
-			return true
-		}
-	}
-	return false
 }
 
 func (s *svc) checkLock(ctx context.Context, shareId *collaboration.ShareId) (*rpc.Status, error) {
@@ -868,31 +641,4 @@ func refIsSpaceRoot(ref *provider.ResourceId) bool {
 	}
 
 	return ref.SpaceId == ref.OpaqueId
-}
-
-func shareIsSpaceRoot(key *collaboration.ShareKey) bool {
-	if key == nil {
-		return false
-	}
-	return refIsSpaceRoot(key.ResourceId)
-}
-
-func isEqualGrantee(a, b *provider.Grantee) bool {
-	// Ideally we would want to use utils.GranteeEqual()
-	// but the grants stored in the decomposedfs aren't complete (missing usertype and idp)
-	// because of that the check would fail so we can only check the ... for now.
-	if a.Type != b.Type {
-		return false
-	}
-
-	var aID, bID string
-	switch a.Type {
-	case provider.GranteeType_GRANTEE_TYPE_GROUP:
-		aID = a.GetGroupId().GetOpaqueId()
-		bID = b.GetGroupId().GetOpaqueId()
-	case provider.GranteeType_GRANTEE_TYPE_USER:
-		aID = a.GetUserId().GetOpaqueId()
-		bID = b.GetUserId().GetOpaqueId()
-	}
-	return aID == bID
 }
