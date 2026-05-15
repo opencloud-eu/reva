@@ -29,6 +29,9 @@ packages:
     github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/lookup:
         interfaces:
             IDCache:
+    github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/tree:
+        interfaces:
+            IDResolver:
     github.com/opencloud-eu/reva/v2/pkg/storage/registry/spaces:
         interfaces:
             StorageProviderClient:
