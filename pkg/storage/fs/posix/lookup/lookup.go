@@ -118,6 +118,11 @@ func (lu *Lookup) IDsForPath(ctx context.Context, path string) (string, string, 
 	// IDsForPath returns the space and opaque id for the given path
 	spaceID, nodeID, err := lu.IDCache.GetByPath(ctx, path)
 	if err != nil {
+		// fallback to disk
+		sID, nID, _, _, mErr := lu.metadataBackend.IdentifyPath(ctx, path)
+		if mErr == nil && nID != "" {
+			return sID, nID, nil
+		}
 		return "", "", err
 	}
 	return spaceID, nodeID, nil
