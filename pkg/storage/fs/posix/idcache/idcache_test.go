@@ -41,29 +41,29 @@ var _ = Describe("IDCache", func() {
 
 		Describe("Delete", func() {
 			It("should delete an entry from the cache", func() {
-				v, ok := c.Get(context.TODO(), "spaceID", "nodeID")
-				Expect(ok).To(BeTrue())
+				v, err := c.Get(context.TODO(), "spaceID", "nodeID")
+				Expect(err).ToNot(HaveOccurred())
 				Expect(v).To(Equal("path"))
 
-				err := c.Delete(context.TODO(), "spaceID", "nodeID")
+				err = c.Delete(context.TODO(), "spaceID", "nodeID")
 				Expect(err).ToNot(HaveOccurred())
 
-				_, ok = c.Get(context.TODO(), "spaceID", "nodeID")
-				Expect(ok).To(BeFalse())
+				_, err = c.Get(context.TODO(), "spaceID", "nodeID")
+				Expect(err).To(HaveOccurred())
 			})
 		})
 
 		Describe("DeleteByPath", func() {
 			It("should delete an entry from the cache", func() {
-				v, ok := c.Get(context.TODO(), "spaceID", "nodeID")
-				Expect(ok).To(BeTrue())
+				v, err := c.Get(context.TODO(), "spaceID", "nodeID")
+				Expect(err).ToNot(HaveOccurred())
 				Expect(v).To(Equal("path"))
 
-				err := c.DeleteByPath(context.TODO(), "path")
+				err = c.DeleteByPath(context.TODO(), "path")
 				Expect(err).ToNot(HaveOccurred())
 
-				_, ok = c.Get(context.TODO(), "spaceID", "nodeID")
-				Expect(ok).To(BeFalse())
+				_, err = c.Get(context.TODO(), "spaceID", "nodeID")
+				Expect(err).To(HaveOccurred())
 			})
 
 			It("should not delete an entry from the cache if the path does not exist", func() {
@@ -76,25 +76,25 @@ var _ = Describe("IDCache", func() {
 				Expect(c.Set(context.TODO(), "spaceID", "nodeID2", "path/child")).To(Succeed())
 				Expect(c.Set(context.TODO(), "spaceID", "nodeID3", "path/child2")).To(Succeed())
 
-				v, ok := c.Get(context.TODO(), "spaceID", "nodeID")
-				Expect(ok).To(BeTrue())
+				v, err := c.Get(context.TODO(), "spaceID", "nodeID")
+				Expect(err).ToNot(HaveOccurred())
 				Expect(v).To(Equal("path"))
-				v, ok = c.Get(context.TODO(), "spaceID", "nodeID2")
-				Expect(ok).To(BeTrue())
+				v, err = c.Get(context.TODO(), "spaceID", "nodeID2")
+				Expect(err).ToNot(HaveOccurred())
 				Expect(v).To(Equal("path/child"))
-				v, ok = c.Get(context.TODO(), "spaceID", "nodeID3")
-				Expect(ok).To(BeTrue())
+				v, err = c.Get(context.TODO(), "spaceID", "nodeID3")
+				Expect(err).ToNot(HaveOccurred())
 				Expect(v).To(Equal("path/child2"))
 
-				err := c.DeleteByPath(context.TODO(), "path")
+				err = c.DeleteByPath(context.TODO(), "path")
 				Expect(err).ToNot(HaveOccurred())
 
-				_, ok = c.Get(context.TODO(), "spaceID", "nodeID")
-				Expect(ok).To(BeFalse())
-				_, ok = c.Get(context.TODO(), "spaceID", "nodeID2")
-				Expect(ok).To(BeFalse())
-				_, ok = c.Get(context.TODO(), "spaceID", "nodeID3")
-				Expect(ok).To(BeFalse())
+				_, err = c.Get(context.TODO(), "spaceID", "nodeID")
+				Expect(err).To(HaveOccurred())
+				_, err = c.Get(context.TODO(), "spaceID", "nodeID2")
+				Expect(err).To(HaveOccurred())
+				_, err = c.Get(context.TODO(), "spaceID", "nodeID3")
+				Expect(err).To(HaveOccurred())
 			})
 		})
 	})

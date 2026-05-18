@@ -262,10 +262,12 @@ func NewTestEnv(config map[string]interface{}) (*TestEnv, error) {
 		return nil, err
 	}
 
+	logger := zerolog.New(os.Stderr).With().Logger()
+
 	var lu *lookup.Lookup
 	switch o.MetadataBackend {
 	case "xattrs":
-		lu, _ = lookup.New(metadata.NewXattrsBackend(o.FileMetadataCache), um, o, &timemanager.Manager{}, c, historyCache)
+		lu, _ = lookup.New(metadata.NewXattrsBackend(o.FileMetadataCache), um, o, &timemanager.Manager{}, c, historyCache, &logger)
 	case "hybrid":
 		lu, _ = lookup.New(metadata.NewHybridBackend(1024,
 			func(n metadata.MetadataNode) string {
@@ -278,9 +280,9 @@ func NewTestEnv(config map[string]interface{}) (*TestEnv, error) {
 			},
 			cache.Config{
 				Database: o.Root,
-			}), um, o, &timemanager.Manager{}, c, historyCache)
+			}), um, o, &timemanager.Manager{}, c, historyCache, &logger)
 	case "messagepack":
-		lu, _ = lookup.New(metadata.NewMessagePackBackend(o.FileMetadataCache), um, o, &timemanager.Manager{}, c, historyCache)
+		lu, _ = lookup.New(metadata.NewMessagePackBackend(o.FileMetadataCache), um, o, &timemanager.Manager{}, c, historyCache, &logger)
 	default:
 		return nil, fmt.Errorf("unknown metadata backend %s", o.MetadataBackend)
 	}
@@ -296,8 +298,6 @@ func NewTestEnv(config map[string]interface{}) (*TestEnv, error) {
 			return cs3permissionsclient
 		},
 	)
-
-	logger := zerolog.New(os.Stderr).With().Logger()
 
 	bs := &nodemocks.Blobstore{}
 	p := permissions.NewPermissions(pmock, permissionsSelector)
