@@ -8,6 +8,7 @@ import (
 	"time"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 
@@ -42,7 +43,7 @@ func TestTrashbin_RestoreRecycleItem(t *testing.T) {
 	assert.NoError(t, err)
 
 	backend := mocks.NewBackend(t)
-	lu, err := lookup.New(backend, nil, &options.Options{}, nil, c, historyCache)
+	lu, err := lookup.New(backend, nil, &options.Options{}, nil, c, historyCache, &zerolog.Logger{})
 	assert.NoError(t, err)
 	tb, err := trashbin.New(
 		nil,

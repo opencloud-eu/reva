@@ -41,6 +41,7 @@ import (
 	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/templates"
 	"github.com/pkg/errors"
 	"github.com/rogpeppe/go-internal/lockedfile"
+	"github.com/rs/zerolog"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
 )
@@ -79,10 +80,12 @@ type Lookup struct {
 	metadataBackend metadata.Backend
 	userMapper      usermapper.Mapper
 	tm              node.TimeManager
+	log             *zerolog.Logger
 }
 
 // New returns a new Lookup instance
-func New(b metadata.Backend, um usermapper.Mapper, o *options.Options, tm node.TimeManager, cache, historyCache *idcache.IDCache) (*Lookup, error) {
+func New(b metadata.Backend, um usermapper.Mapper, o *options.Options, tm node.TimeManager, cache, historyCache *idcache.IDCache, log *zerolog.Logger) (*Lookup, error) {
+
 	spaceRootCache, _ := lru.New[string, string](1000)
 
 	lu := &Lookup{
@@ -93,6 +96,7 @@ func New(b metadata.Backend, um usermapper.Mapper, o *options.Options, tm node.T
 		spaceRootCache:  spaceRootCache,
 		userMapper:      um,
 		tm:              tm,
+		log:             log,
 	}
 
 	return lu, nil
@@ -118,6 +122,9 @@ func (lu *Lookup) IDsForPath(ctx context.Context, path string) (string, string, 
 	// IDsForPath returns the space and opaque id for the given path
 	spaceID, nodeID, err := lu.IDCache.GetByPath(ctx, path)
 	if err != nil {
+		if _, ok := err.(errtypes.NotFound); !ok {
+			lu.log.Error().Err(err).Str("path", path).Msg("error looking up path in cache")
+		}
 		// fallback to disk
 		sID, nID, _, _, mErr := lu.metadataBackend.IdentifyPath(ctx, path)
 		if mErr == nil && nID != "" {
