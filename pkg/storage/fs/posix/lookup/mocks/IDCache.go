@@ -182,7 +182,7 @@ func (_c *IDCache_DeletePath_Call) RunAndReturn(run func(context.Context, string
 }
 
 // Get provides a mock function with given fields: ctx, spaceID, nodeID
-func (_m *IDCache) Get(ctx context.Context, spaceID string, nodeID string) (string, bool) {
+func (_m *IDCache) Get(ctx context.Context, spaceID string, nodeID string) (string, error) {
 	ret := _m.Called(ctx, spaceID, nodeID)
 
 	if len(ret) == 0 {
@@ -190,8 +190,8 @@ func (_m *IDCache) Get(ctx context.Context, spaceID string, nodeID string) (stri
 	}
 
 	var r0 string
-	var r1 bool
-	if rf, ok := ret.Get(0).(func(context.Context, string, string) (string, bool)); ok {
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, string, string) (string, error)); ok {
 		return rf(ctx, spaceID, nodeID)
 	}
 	if rf, ok := ret.Get(0).(func(context.Context, string, string) string); ok {
@@ -200,10 +200,10 @@ func (_m *IDCache) Get(ctx context.Context, spaceID string, nodeID string) (stri
 		r0 = ret.Get(0).(string)
 	}
 
-	if rf, ok := ret.Get(1).(func(context.Context, string, string) bool); ok {
+	if rf, ok := ret.Get(1).(func(context.Context, string, string) error); ok {
 		r1 = rf(ctx, spaceID, nodeID)
 	} else {
-		r1 = ret.Get(1).(bool)
+		r1 = ret.Error(1)
 	}
 
 	return r0, r1
@@ -229,18 +229,18 @@ func (_c *IDCache_Get_Call) Run(run func(ctx context.Context, spaceID string, no
 	return _c
 }
 
-func (_c *IDCache_Get_Call) Return(_a0 string, _a1 bool) *IDCache_Get_Call {
+func (_c *IDCache_Get_Call) Return(_a0 string, _a1 error) *IDCache_Get_Call {
 	_c.Call.Return(_a0, _a1)
 	return _c
 }
 
-func (_c *IDCache_Get_Call) RunAndReturn(run func(context.Context, string, string) (string, bool)) *IDCache_Get_Call {
+func (_c *IDCache_Get_Call) RunAndReturn(run func(context.Context, string, string) (string, error)) *IDCache_Get_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
 // GetByPath provides a mock function with given fields: ctx, path
-func (_m *IDCache) GetByPath(ctx context.Context, path string) (string, string, bool) {
+func (_m *IDCache) GetByPath(ctx context.Context, path string) (string, string, error) {
 	ret := _m.Called(ctx, path)
 
 	if len(ret) == 0 {
@@ -249,8 +249,8 @@ func (_m *IDCache) GetByPath(ctx context.Context, path string) (string, string, 
 
 	var r0 string
 	var r1 string
-	var r2 bool
-	if rf, ok := ret.Get(0).(func(context.Context, string) (string, string, bool)); ok {
+	var r2 error
+	if rf, ok := ret.Get(0).(func(context.Context, string) (string, string, error)); ok {
 		return rf(ctx, path)
 	}
 	if rf, ok := ret.Get(0).(func(context.Context, string) string); ok {
@@ -265,10 +265,10 @@ func (_m *IDCache) GetByPath(ctx context.Context, path string) (string, string, 
 		r1 = ret.Get(1).(string)
 	}
 
-	if rf, ok := ret.Get(2).(func(context.Context, string) bool); ok {
+	if rf, ok := ret.Get(2).(func(context.Context, string) error); ok {
 		r2 = rf(ctx, path)
 	} else {
-		r2 = ret.Get(2).(bool)
+		r2 = ret.Error(2)
 	}
 
 	return r0, r1, r2
@@ -293,12 +293,12 @@ func (_c *IDCache_GetByPath_Call) Run(run func(ctx context.Context, path string)
 	return _c
 }
 
-func (_c *IDCache_GetByPath_Call) Return(_a0 string, _a1 string, _a2 bool) *IDCache_GetByPath_Call {
+func (_c *IDCache_GetByPath_Call) Return(_a0 string, _a1 string, _a2 error) *IDCache_GetByPath_Call {
 	_c.Call.Return(_a0, _a1, _a2)
 	return _c
 }
 
-func (_c *IDCache_GetByPath_Call) RunAndReturn(run func(context.Context, string) (string, string, bool)) *IDCache_GetByPath_Call {
+func (_c *IDCache_GetByPath_Call) RunAndReturn(run func(context.Context, string) (string, string, error)) *IDCache_GetByPath_Call {
 	_c.Call.Return(run)
 	return _c
 }

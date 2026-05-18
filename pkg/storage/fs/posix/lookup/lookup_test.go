@@ -8,6 +8,7 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/test-go/testify/mock"
 
+	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
 	mocks "github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/lookup/mocks"
 	helpers "github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/testhelpers"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/node"
@@ -29,7 +30,7 @@ var _ = Describe("Lookup", func() {
 		mockCache = mocks.NewIDCache(GinkgoT())
 		env.Lookup.IDCache = mockCache
 
-		mockCache.EXPECT().GetByPath(mock.Anything, mock.Anything).Return("", "", false)
+		mockCache.EXPECT().GetByPath(mock.Anything, mock.Anything).Return("", "", errtypes.NotFound("cache miss"))
 		spaceID, err = env.Lookup.GenerateSpaceID("personal", env.Owner)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(spaceID).ToNot(BeEmpty())
@@ -64,7 +65,7 @@ var _ = Describe("Lookup", func() {
 			})
 
 			It("should not generate a new id but pick up the one from disk instead when reading from the cache fails", func() {
-				mockCache.EXPECT().GetByPath(mock.Anything, mock.Anything).Return("", "", false)
+				mockCache.EXPECT().GetByPath(mock.Anything, mock.Anything).Return("", "", errtypes.NotFound("cache miss"))
 
 				spaceID2, err := env.Lookup.GenerateSpaceID("personal", env.Owner)
 				Expect(err).ToNot(HaveOccurred())
@@ -84,7 +85,7 @@ var _ = Describe("Lookup", func() {
 			n = node.New(spaceID, "node-1", "", "", 0, "", providerv1beta1.ResourceType_RESOURCE_TYPE_FILE, nil, env.Lookup)
 		})
 		It("returns the lock file paths for a given node", func() {
-			mockCache.EXPECT().Get(mock.Anything, spaceID, n.ID).Return(filepath.Join(spaceRoot, "file"), true)
+			mockCache.EXPECT().Get(mock.Anything, spaceID, n.ID).Return(filepath.Join(spaceRoot, "file"), nil)
 
 			lockPaths := env.Lookup.LockfilePaths(n)
 			Expect(lockPaths).To(HaveLen(2))
@@ -95,7 +96,7 @@ var _ = Describe("Lookup", func() {
 		It("only returns the new lock file path in .oc-nodes if the internal path cannot be found", func() {
 			n.ID = "node-that-does-not-exist"
 
-			mockCache.EXPECT().Get(mock.Anything, spaceID, n.ID).Return("", false)
+			mockCache.EXPECT().Get(mock.Anything, spaceID, n.ID).Return("", errtypes.NotFound("node not found"))
 
 			lockPaths := env.Lookup.LockfilePaths(n)
 			Expect(lockPaths).To(HaveLen(1))
