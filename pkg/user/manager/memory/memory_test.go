@@ -31,10 +31,10 @@ var ctx = context.Background()
 
 func TestUserManager(t *testing.T) {
 	// get manager
-	manager, _ := New(map[string]interface{}{
-		"users": map[string]interface{}{
-			"4c510ada-c86b-4815-8820-42cdf82c3d51": map[string]interface{}{
-				"id": map[string]interface{}{
+	manager, _ := New(map[string]any{
+		"users": map[string]any{
+			"4c510ada-c86b-4815-8820-42cdf82c3d51": map[string]any{
+				"id": map[string]any{
 					"opaqueId": "4c510ada-c86b-4815-8820-42cdf82c3d51",
 					"idp":      "http://localhost:9998",
 					"type":     1, // user.UserType_USER_TYPE_PRIMARY
@@ -47,7 +47,7 @@ func TestUserManager(t *testing.T) {
 				"groups":       []string{"sailing-lovers", "violin-haters", "physics-lovers"},
 			},
 		},
-	})
+	}, nil)
 
 	// setup test data
 	uidEinstein := &userpb.UserId{Idp: "http://localhost:9998", OpaqueId: "4c510ada-c86b-4815-8820-42cdf82c3d51", Type: userpb.UserType_USER_TYPE_PRIMARY}
