@@ -75,7 +75,7 @@ require (
 	github.com/sercand/kuberesolver/v5 v5.1.1
 	github.com/sethvargo/go-diceware v0.5.0
 	github.com/sethvargo/go-password v0.3.1
-	github.com/shamaton/msgpack/v2 v2.4.0
+	github.com/shamaton/msgpack/v2 v2.4.1
 	github.com/shirou/gopsutil v3.21.11+incompatible
 	github.com/stretchr/testify v1.11.1
 	github.com/studio-b12/gowebdav v0.9.0
@@ -138,7 +138,7 @@ require (
 	github.com/go-asn1-ber/asn1-ber v1.5.8-0.20250403174932-29230038a667 // indirect
 	github.com/go-git/gcfg v1.5.1-0.20230307220236-3a3c6141e376 // indirect
 	github.com/go-git/go-billy/v5 v5.9.0 // indirect
-	github.com/go-git/go-git/v5 v5.19.0 // indirect
+	github.com/go-git/go-git/v5 v5.19.1 // indirect
 	github.com/go-ini/ini v1.67.0 // indirect
 	github.com/go-jose/go-jose/v4 v4.1.4 // indirect
 	github.com/go-kit/log v0.2.1 // indirect
