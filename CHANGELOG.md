@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.45.1](https://github.com/opencloud-eu/reva/releases/tag/v2.45.1) - 2026-05-20
+
+### 📦️ Dependencies
+
+- chore(deps): bump go.etcd.io/etcd/client/v3 from 3.6.10 to 3.6.11 [[#631](https://github.com/opencloud-eu/reva/pull/631)]
+- chore(deps): bump the go_modules group across 1 directory with 2 updates [[#636](https://github.com/opencloud-eu/reva/pull/636)]
+
 ## [2.45.0](https://github.com/opencloud-eu/reva/releases/tag/v2.45.0) - 2026-05-18
 
 ### ❤️ Thanks to all contributors! ❤️
