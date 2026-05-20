@@ -2,7 +2,9 @@ package idcache_test
 
 import (
 	"context"
+	"errors"
 
+	"github.com/nats-io/nats.go/jetstream"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/cache"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/idcache"
 	helpers "github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/testhelpers"
@@ -10,6 +12,52 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
+
+type mockKV struct {
+	jetstream.KeyValue
+	failCount int
+	calls     map[string]int
+}
+
+func newMockKV(kv jetstream.KeyValue, failCount int) *mockKV {
+	return &mockKV{
+		KeyValue:  kv,
+		failCount: failCount,
+		calls:     make(map[string]int),
+	}
+}
+
+func (m *mockKV) Get(ctx context.Context, key string) (jetstream.KeyValueEntry, error) {
+	m.calls["Get"]++
+	if m.calls["Get"] <= m.failCount {
+		return nil, errors.New("mock transient error")
+	}
+	return m.KeyValue.Get(ctx, key)
+}
+
+func (m *mockKV) Put(ctx context.Context, key string, value []byte) (uint64, error) {
+	m.calls["Put"]++
+	if m.calls["Put"] <= m.failCount {
+		return 0, errors.New("mock transient error")
+	}
+	return m.KeyValue.Put(ctx, key, value)
+}
+
+func (m *mockKV) Purge(ctx context.Context, key string, opts ...jetstream.KVDeleteOpt) error {
+	m.calls["Purge"]++
+	if m.calls["Purge"] <= m.failCount {
+		return errors.New("mock transient error")
+	}
+	return m.KeyValue.Purge(ctx, key, opts...)
+}
+
+func (m *mockKV) Watch(ctx context.Context, keys string, opts ...jetstream.WatchOpt) (jetstream.KeyWatcher, error) {
+	m.calls["Watch"]++
+	if m.calls["Watch"] <= m.failCount {
+		return nil, errors.New("mock transient error")
+	}
+	return m.KeyValue.Watch(ctx, keys, opts...)
+}
 
 var _ = Describe("IDCache", func() {
 	var (
@@ -97,5 +145,55 @@ var _ = Describe("IDCache", func() {
 				Expect(err).To(HaveOccurred())
 			})
 		})
+
+		Describe("Retries", func() {
+			It("should retry operations and succeed if transient errors resolve", func() {
+				_, js, _, err := helpers.NewInProcessNATSServer()
+				Expect(err).ToNot(HaveOccurred())
+
+				conf := cache.Config{Database: "test-id-cache-retry"}
+				origKV, err := cache.NewNatsKeyValueFromJetStream(conf, js)
+				Expect(err).ToNot(HaveOccurred())
+
+				// configure it to fail 2 times
+				mkv := newMockKV(origKV, 2)
+				retryCache, err := idcache.NewStoreIDCache(mkv)
+				Expect(err).ToNot(HaveOccurred())
+
+				// Set triggers Put (which fails twice, then succeeds)
+				err = retryCache.Set(context.TODO(), "spaceIDRetry", "nodeIDRetry", "pathRetry")
+				Expect(err).ToNot(HaveOccurred())
+				Expect(mkv.calls["Put"]).To(Equal(4)) // 2 times for first key,
+
+				// Get triggers Get
+				val, err := retryCache.Get(context.TODO(), "spaceIDRetry", "nodeIDRetry")
+				Expect(err).ToNot(HaveOccurred())
+				Expect(val).To(Equal("pathRetry"))
+				Expect(mkv.calls["Get"]).To(BeNumerically(">", 2)) // 2 failed, on succeeded
+
+				// Delete triggers Get and Purge
+				err = retryCache.Delete(context.TODO(), "spaceIDRetry", "nodeIDRetry")
+				Expect(err).ToNot(HaveOccurred())
+				Expect(mkv.calls["Purge"]).To(BeNumerically(">", 2)) // 2 times for first key, 2 times for reverse key
+			})
+
+			It("should fail if transient errors persist", func() {
+				_, js, _, err := helpers.NewInProcessNATSServer()
+				Expect(err).ToNot(HaveOccurred())
+
+				conf := cache.Config{Database: "test-id-cache-retry-fail"}
+				origKV, err := cache.NewNatsKeyValueFromJetStream(conf, js)
+				Expect(err).ToNot(HaveOccurred())
+
+				// configure it to fail 10 times (more than 5 retries)
+				mkv := newMockKV(origKV, 10)
+				retryCache, err := idcache.NewStoreIDCache(mkv)
+				Expect(err).ToNot(HaveOccurred())
+
+				err = retryCache.Set(context.TODO(), "spaceIDRetry", "nodeIDRetry", "pathRetry")
+				Expect(err).To(HaveOccurred())
+			})
+		})
+
 	})
 })
