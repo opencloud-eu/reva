@@ -21,9 +21,12 @@ package idcache
 import (
 	"context"
 	"encoding/base32"
+	"errors"
 	"path/filepath"
 	"strings"
+	"time"
 
+	"github.com/cenkalti/backoff"
 	"github.com/nats-io/nats.go/jetstream"
 	"github.com/opencloud-eu/reva/v2/pkg/appctx"
 	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
@@ -198,11 +201,17 @@ func reverseCacheKey(path string) string {
 func retry[T any](ctx context.Context, f func() (T, error)) (T, error) {
 	var v T
 	var err error
+	b := backoff.NewExponentialBackOff()
 	for range 5 {
 		v, err = f()
 		if err == nil || err == jetstream.ErrKeyNotFound {
 			return v, err
 		}
+
+		if !errors.Is(err, context.DeadlineExceeded) {
+			time.Sleep(b.NextBackOff())
+		}
+
 		appctx.GetLogger(ctx).Error().Err(err).Msg("error in jetstream kv operation, retrying")
 	}
 	return v, err
@@ -210,11 +219,17 @@ func retry[T any](ctx context.Context, f func() (T, error)) (T, error) {
 
 func retryErr(ctx context.Context, f func() error) error {
 	var err error
+	b := backoff.NewExponentialBackOff()
 	for range 5 {
 		err = f()
 		if err == nil || err == jetstream.ErrKeyNotFound {
 			return err
 		}
+
+		if !errors.Is(err, context.DeadlineExceeded) {
+			time.Sleep(b.NextBackOff())
+		}
+
 		appctx.GetLogger(ctx).Error().Err(err).Msg("error in jetstream kv operation, retrying")
 	}
 	return err
