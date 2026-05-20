@@ -2,6 +2,14 @@
 
 ## [2.45.1](https://github.com/opencloud-eu/reva/releases/tag/v2.45.1) - 2026-05-20
 
+### ❤️ Thanks to all contributors! ❤️
+
+@rhafer
+
+### 🐛 Bug Fixes
+
+- ldap: Set a default request timeout [[#637](https://github.com/opencloud-eu/reva/pull/637)]
+
 ### 📦️ Dependencies
 
 - chore(deps): bump go.etcd.io/etcd/client/v3 from 3.6.10 to 3.6.11 [[#631](https://github.com/opencloud-eu/reva/pull/631)]
