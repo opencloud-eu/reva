@@ -34,7 +34,7 @@ var ctx = context.Background()
 
 func TestUserManager(t *testing.T) {
 	// get manager
-	manager, _ := New(nil)
+	manager, _ := New(nil, nil)
 
 	// setup test data
 	uidEinstein := &userpb.UserId{

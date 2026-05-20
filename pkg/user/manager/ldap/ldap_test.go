@@ -26,17 +26,17 @@ import (
 
 func TestUserManager(t *testing.T) {
 	// negative test for parseConfig
-	_, err := New(map[string]interface{}{"uri": 42})
+	_, err := New(map[string]any{"uri": 42}, nil)
 	if err == nil {
 		t.Fatal("expected error but got none")
 	}
 	defaults := ldapIdentity.New()
-	internal := map[string]interface{}{
+	internal := map[string]any{
 		"mail": "email",
 		"dn":   "dn",
 	}
 
-	con := map[string]interface{}{
+	con := map[string]any{
 		"user_schema": internal,
 	}
 
@@ -61,7 +61,7 @@ func TestUserManager(t *testing.T) {
 	}
 
 	// positive tests for New
-	_, err = New(map[string]interface{}{})
+	_, err = New(map[string]any{}, nil)
 	if err != nil {
 		t.Fatal(err.Error())
 	}
