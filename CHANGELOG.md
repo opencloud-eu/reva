@@ -8,6 +8,8 @@
 
 ### 🐛 Bug Fixes
 
+- fix(sharing/jsoncs3): Reject Write Requests while migration is running [[#642](https://github.com/opencloud-eu/reva/pull/642)]
+- Revert "Fall back to disk if ids aren't available from the cache" [[#644](https://github.com/opencloud-eu/reva/pull/644)]
 - Log nats connection issues and trigger a shutdown if reconnecting failed [[#640](https://github.com/opencloud-eu/reva/pull/640)]
 - ldap: Set a default request timeout [[#637](https://github.com/opencloud-eu/reva/pull/637)]
 
