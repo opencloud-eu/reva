@@ -219,13 +219,18 @@ var _ = Describe("CreateStorageSpace", func() {
 				DeleteStorageSpace(mock.Anything, mock.Anything, mock.Anything).
 				Return(&provider.DeleteStorageSpaceResponse{
 					Status: status.NewOK(ctx),
+				}, nil).Twice()
+
+			collaborationMock.EXPECT().
+				ListShares(mock.Anything, mock.Anything).
+				Return(&collaborationv1beta1.ListSharesResponse{
+					Status: status.NewOK(ctx),
 				}, nil).Once()
 
 			resp, err := s.CreateStorageSpace(ctx, req)
 
 			Expect(err).ToNot(HaveOccurred())
 			Expect(resp.GetStatus().GetCode()).To(Equal(rpcv1beta1.Code_CODE_INTERNAL))
-			spacesMock.AssertNumberOfCalls(GinkgoT(), "DeleteStorageSpace", 1)
 		})
 
 		It("rolls back the space and returns an error when CreateShare returns a non-OK status", func() {
@@ -239,6 +244,12 @@ var _ = Describe("CreateStorageSpace", func() {
 				DeleteStorageSpace(mock.Anything, mock.Anything, mock.Anything).
 				Return(&provider.DeleteStorageSpaceResponse{
 					Status: status.NewOK(ctx),
+				}, nil).Twice()
+
+			collaborationMock.EXPECT().
+				ListShares(mock.Anything, mock.Anything).
+				Return(&collaborationv1beta1.ListSharesResponse{
+					Status: status.NewOK(ctx),
 				}, nil).Once()
 
 			resp, err := s.CreateStorageSpace(ctx, req)
@@ -247,7 +258,6 @@ var _ = Describe("CreateStorageSpace", func() {
 			Expect(resp.GetStatus().GetCode()).To(Equal(rpcv1beta1.Code_CODE_INTERNAL))
 			// The status message should be propagated from the share response.
 			Expect(resp.GetStatus().GetMessage()).To(ContainSubstring("share store full"))
-			spacesMock.AssertNumberOfCalls(GinkgoT(), "DeleteStorageSpace", 1)
 		})
 
 		It("still returns an error even if the rollback DeleteStorageSpace also fails", func() {
