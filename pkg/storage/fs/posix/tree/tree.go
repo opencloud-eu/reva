@@ -43,7 +43,7 @@ import (
 	"github.com/opencloud-eu/reva/v2/pkg/appctx"
 	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
 	"github.com/opencloud-eu/reva/v2/pkg/events"
-	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/blobstore"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/ignore"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/lookup"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/options"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/trashbin"
@@ -84,6 +84,7 @@ type Tree struct {
 	options            *options.Options
 	personalSpacesRoot string
 	projectSpacesRoot  string
+	Ignorer            *ignore.Ignorer
 
 	userMapper    usermapper.Mapper
 	idCache       store.Store
@@ -119,6 +120,7 @@ func New(lu node.PathLookup, bs node.Blobstore, um usermapper.Mapper, trashbin *
 		log:                log,
 		personalSpacesRoot: filepath.Clean(filepath.Join(o.Root, templates.Base(o.PersonalSpacePathTemplate))),
 		projectSpacesRoot:  filepath.Clean(filepath.Join(o.Root, templates.Base(o.GeneralSpacePathTemplate))),
+		Ignorer:            ignore.NewIgnorer(o, log),
 	}
 	if err := t.checkStorage(); err != nil {
 		return nil, errors.Wrap(err, "tree: unfit storage '"+o.Root+"'")
@@ -468,7 +470,7 @@ func (t *Tree) ListFolder(ctx context.Context, n *node.Node) ([]*node.Node, erro
 	g.Go(func() error {
 		defer close(work)
 		for _, name := range names {
-			if t.isInternal(name) || isLockFile(name) || isTrash(name) {
+			if t.Ignorer.IsInternal(name) || ignore.IsLockFile(name) || ignore.IsTrash(name) {
 				continue
 			}
 
@@ -729,57 +731,4 @@ func (t *Tree) createDirNode(ctx context.Context, n *node.Node) (err error) {
 		attributes[prefixes.PropagationAttr] = []byte("1") // mark the node for propagation
 	}
 	return n.SetXattrsWithContext(ctx, attributes, false)
-}
-
-func (t *Tree) isIgnored(path string) bool {
-	return isLockFile(path) || isTrash(path) || t.isUpload(path) || t.isInternal(path) || t.isRootPath(path) || t.isSpaceRoot(path)
-}
-
-func (t *Tree) isUpload(path string) bool {
-	return strings.HasPrefix(path, t.options.UploadDirectory)
-}
-
-func (t *Tree) isIndex(path string) bool {
-	return strings.HasPrefix(path, filepath.Join(t.options.Root, "indexes"))
-}
-
-func (t *Tree) isTemporary(path string) bool {
-	if filepath.IsAbs(path) {
-		tmpDirPattern := filepath.Join(t.options.Root, "*", "*", blobstore.TMPDir)
-		isTempDir, err := filepath.Match(tmpDirPattern, path)
-		if err != nil {
-			t.log.Error().Err(err).Str("pattern", tmpDirPattern).Str("path", path).Msg("error matching temporary path")
-			return false
-		}
-		isTempParentDir, err := filepath.Match(tmpDirPattern, filepath.Dir(path))
-		if err != nil {
-			t.log.Error().Err(err).Str("pattern", tmpDirPattern).Str("path", filepath.Dir(path)).Msg("error matching temporary path")
-			return false
-		}
-		return isTempDir || isTempParentDir
-	}
-	return path == blobstore.TMPDir || filepath.Dir(path) == blobstore.TMPDir
-}
-
-func (t *Tree) isRootPath(path string) bool {
-	return path == t.options.Root ||
-		path == t.personalSpacesRoot ||
-		path == t.projectSpacesRoot
-}
-
-func (t *Tree) isSpaceRoot(path string) bool {
-	parent := filepath.Dir(path)
-	return parent == t.personalSpacesRoot || parent == t.projectSpacesRoot
-}
-
-func (t *Tree) isInternal(path string) bool {
-	return t.isIndex(path) || strings.Contains(path, lookup.MetadataDir) || t.isTemporary(path)
-}
-
-func isLockFile(path string) bool {
-	return strings.HasSuffix(path, ".flock") || strings.HasSuffix(path, ".mlock")
-}
-
-func isTrash(path string) bool {
-	return strings.HasSuffix(path, ".trashinfo") || strings.HasSuffix(path, ".trashitem") || strings.Contains(path, ".Trash")
 }

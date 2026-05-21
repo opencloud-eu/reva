@@ -39,6 +39,7 @@ import (
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/opencloud-eu/reva/v2/pkg/events"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/ignore"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata/prefixes"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/node"
@@ -679,7 +680,7 @@ assimilate:
 		// The Space's name attribute might not match the directory name. Use the name as
 		// it was set before. Also the space root doesn't have a 'type' attribute
 		// currently so only set it for normal directories.
-		if t.isSpaceRoot(path) {
+		if t.Ignorer.IsSpaceRoot(path) {
 			if previousAttribs != nil && previousAttribs[prefixes.NameAttr] != nil {
 				attributes[prefixes.NameAttr] = previousAttribs[prefixes.NameAttr]
 			}
@@ -830,14 +831,14 @@ func (t *Tree) WarmupIDCache(root string, assimilate, onlyDirty bool) error {
 		}
 
 		// skip irrelevant files
-		if t.isInternal(path) ||
-			isLockFile(path) ||
-			isTrash(path) ||
-			t.isUpload(path) ||
-			t.isIndex(path) {
+		if t.Ignorer.IsInternal(path) ||
+			ignore.IsLockFile(path) ||
+			ignore.IsTrash(path) ||
+			t.Ignorer.IsUpload(path) ||
+			t.Ignorer.IsIndex(path) {
 			return nil
 		}
-		if t.isRootPath(path) {
+		if t.Ignorer.IsRootPath(path) {
 			return nil // ignore the root paths
 		}
 
@@ -935,7 +936,7 @@ func (t *Tree) WarmupIDCache(root string, assimilate, onlyDirty bool) error {
 	})
 
 	for dir, size := range sizes {
-		if t.isRootPath(dir) {
+		if t.Ignorer.IsRootPath(dir) {
 			continue
 		}
 		spaceID, id, err := t.lookup.IDsForPath(context.Background(), dir)
