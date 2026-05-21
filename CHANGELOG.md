@@ -1,5 +1,27 @@
 # Changelog
 
+## [2.46.0](https://github.com/opencloud-eu/reva/releases/tag/v2.46.0) - 2026-05-21
+
+### ❤️ Thanks to all contributors! ❤️
+
+@aduffeck, @rhafer
+
+### 🐛 Bug Fixes
+
+- fix(sharing/jsoncs3): Reject Write Requests while migration is running [[#642](https://github.com/opencloud-eu/reva/pull/642)]
+- Revert "Fall back to disk if ids aren't available from the cache" [[#644](https://github.com/opencloud-eu/reva/pull/644)]
+- Log nats connection issues and trigger a shutdown if reconnecting failed [[#640](https://github.com/opencloud-eu/reva/pull/640)]
+- ldap: Set a default request timeout [[#637](https://github.com/opencloud-eu/reva/pull/637)]
+
+### 📈 Enhancement
+
+- Retry nats requests in the id cache [[#641](https://github.com/opencloud-eu/reva/pull/641)]
+
+### 📦️ Dependencies
+
+- chore(deps): bump go.etcd.io/etcd/client/v3 from 3.6.10 to 3.6.11 [[#631](https://github.com/opencloud-eu/reva/pull/631)]
+- chore(deps): bump the go_modules group across 1 directory with 2 updates [[#636](https://github.com/opencloud-eu/reva/pull/636)]
+
 ## [2.45.0](https://github.com/opencloud-eu/reva/releases/tag/v2.45.0) - 2026-05-18
 
 ### ❤️ Thanks to all contributors! ❤️
