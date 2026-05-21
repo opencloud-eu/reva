@@ -22,7 +22,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
+	"os"
+	"strconv"
 	"time"
 
 	"regexp"
@@ -260,21 +263,58 @@ func (s *svc) Handler() http.Handler {
 
 		s.log.Debug().Msg("Requested the following resources to archive: " + render.Render(resources))
 
-		rw.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", archName))
-		rw.Header().Set("Content-Transfer-Encoding", "binary")
-
-		// create the archive
-		var closeArchive func()
-		if format == "tar" {
-			closeArchive, err = arch.CreateTar(ctx, rw)
-		} else {
-			closeArchive, err = arch.CreateZip(ctx, rw)
-		}
-		defer closeArchive()
-
+		tmpArchive, err := os.CreateTemp("", "opencloud-archive-*")
 		if err != nil {
 			s.writeHTTPError(rw, err)
 			return
+		}
+		defer func() {
+			_ = tmpArchive.Close()
+			_ = os.Remove(tmpArchive.Name())
+		}()
+
+		// Create the archive on disk first so we can set a deterministic Content-Length.
+		var closeArchive func()
+		if format == "tar" {
+			closeArchive, err = arch.CreateTar(ctx, tmpArchive)
+		} else {
+			closeArchive, err = arch.CreateZip(ctx, tmpArchive)
+		}
+
+		if err != nil {
+			if closeArchive != nil {
+				closeArchive()
+			}
+			s.writeHTTPError(rw, err)
+			return
+		}
+
+		if closeArchive != nil {
+			closeArchive()
+		}
+
+		if err := tmpArchive.Sync(); err != nil {
+			s.writeHTTPError(rw, err)
+			return
+		}
+
+		archiveInfo, err := tmpArchive.Stat()
+		if err != nil {
+			s.writeHTTPError(rw, err)
+			return
+		}
+
+		if _, err := tmpArchive.Seek(0, io.SeekStart); err != nil {
+			s.writeHTTPError(rw, err)
+			return
+		}
+
+		rw.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", archName))
+		rw.Header().Set("Content-Transfer-Encoding", "binary")
+		rw.Header().Set("Content-Length", strconv.FormatInt(archiveInfo.Size(), 10))
+
+		if _, err := io.Copy(rw, tmpArchive); err != nil {
+			s.log.Error().Err(err).Msg("failed to write archive response")
 		}
 
 	})
