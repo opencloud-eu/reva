@@ -41,8 +41,8 @@ import (
 
 	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
 	"github.com/opencloud-eu/reva/v2/pkg/events"
-	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/blobstore"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/idcache"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/ignore"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/lookup"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/options"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/trashbin"
@@ -54,7 +54,6 @@ import (
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/permissions"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/tree/propagator"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/usermapper"
-	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/templates"
 	"github.com/opencloud-eu/reva/v2/pkg/utils"
 )
 
@@ -93,9 +92,8 @@ type Tree struct {
 	idResolver     IDResolver                // points at the lookup but can be overridden for testing
 	assimilateFunc func(item scanItem) error // function to call to assimilate a node, can be overridden for testing
 
-	options            *options.Options
-	personalSpacesRoot string
-	projectSpacesRoot  string
+	options *options.Options
+	Ignorer *ignore.Ignorer
 
 	userMapper    usermapper.Mapper
 	idCache       *idcache.IDCache
@@ -128,10 +126,9 @@ func New(lu node.PathLookup, bs node.Blobstore, um usermapper.Mapper, trashbin *
 		scanDebouncer: NewScanDebouncer(o.ScanDebounceDelay, func(item scanItem) {
 			scanQueue <- item
 		}),
-		es:                 es,
-		log:                log,
-		personalSpacesRoot: filepath.Clean(filepath.Join(o.Root, templates.Base(o.PersonalSpacePathTemplate))),
-		projectSpacesRoot:  filepath.Clean(filepath.Join(o.Root, templates.Base(o.GeneralSpacePathTemplate))),
+		es:      es,
+		log:     log,
+		Ignorer: ignore.NewIgnorer(o, log),
 	}
 	t.idResolver = t.lookup
 	t.assimilateFunc = t.assimilate
@@ -499,7 +496,7 @@ func (t *Tree) ListFolder(ctx context.Context, n *node.Node) ([]*node.Node, erro
 	g.Go(func() error {
 		defer close(work)
 		for _, name := range names {
-			if t.isInternal(name) || isLockFile(name) || isTrash(name) {
+			if t.Ignorer.IsInternal(name) || ignore.IsLockFile(name) || ignore.IsTrash(name) {
 				continue
 			}
 
@@ -775,57 +772,4 @@ func (t *Tree) createDirNode(ctx context.Context, n *node.Node) (err error) {
 		attributes[prefixes.PropagationAttr] = []byte("1") // mark the node for propagation
 	}
 	return n.SetXattrsWithContext(ctx, attributes, false)
-}
-
-func (t *Tree) isIgnored(path string) bool {
-	return isLockFile(path) || isTrash(path) || t.isUpload(path) || t.isInternal(path) || t.isRootPath(path) || t.isSpaceRoot(path)
-}
-
-func (t *Tree) isUpload(path string) bool {
-	return strings.HasPrefix(path, t.options.UploadDirectory)
-}
-
-func (t *Tree) isIndex(path string) bool {
-	return strings.HasPrefix(path, filepath.Join(t.options.Root, "indexes"))
-}
-
-func (t *Tree) isTemporary(path string) bool {
-	if filepath.IsAbs(path) {
-		tmpDirPattern := filepath.Join(t.options.Root, "*", "*", blobstore.TMPDir)
-		isTempDir, err := filepath.Match(tmpDirPattern, path)
-		if err != nil {
-			t.log.Error().Err(err).Str("pattern", tmpDirPattern).Str("path", path).Msg("error matching temporary path")
-			return false
-		}
-		isTempParentDir, err := filepath.Match(tmpDirPattern, filepath.Dir(path))
-		if err != nil {
-			t.log.Error().Err(err).Str("pattern", tmpDirPattern).Str("path", filepath.Dir(path)).Msg("error matching temporary path")
-			return false
-		}
-		return isTempDir || isTempParentDir
-	}
-	return path == blobstore.TMPDir || filepath.Dir(path) == blobstore.TMPDir
-}
-
-func (t *Tree) isRootPath(path string) bool {
-	return path == t.options.Root ||
-		path == t.personalSpacesRoot ||
-		path == t.projectSpacesRoot
-}
-
-func (t *Tree) isSpaceRoot(path string) bool {
-	parent := filepath.Dir(path)
-	return parent == t.personalSpacesRoot || parent == t.projectSpacesRoot
-}
-
-func (t *Tree) isInternal(path string) bool {
-	return t.isIndex(path) || strings.Contains(path, lookup.MetadataDir) || t.isTemporary(path)
-}
-
-func isLockFile(path string) bool {
-	return strings.HasSuffix(path, ".flock") || strings.HasSuffix(path, ".mlock")
-}
-
-func isTrash(path string) bool {
-	return strings.HasSuffix(path, ".trashinfo") || strings.HasSuffix(path, ".trashitem") || strings.Contains(path, ".Trash")
 }
