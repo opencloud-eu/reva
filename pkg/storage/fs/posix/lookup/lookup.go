@@ -81,6 +81,8 @@ type Lookup struct {
 	userMapper      usermapper.Mapper
 	tm              node.TimeManager
 	log             *zerolog.Logger
+
+	listDisabledSpaces bool
 }
 
 // New returns a new Lookup instance
@@ -186,6 +188,13 @@ func (lu *Lookup) NodeFromResource(ctx context.Context, ref *provider.Reference)
 	return nil, fmt.Errorf("invalid reference %+v. resource_id must be set", ref)
 }
 
+// WithDisabledSpaces returns a lookup that can list disabled spaces
+func (lu *Lookup) WithDisabledSpaces() node.PathLookup {
+	l := *lu
+	l.listDisabledSpaces = true
+	return &l
+}
+
 // NodeFromID returns the internal path for the id
 func (lu *Lookup) NodeFromID(ctx context.Context, id *provider.ResourceId) (n *node.Node, err error) {
 	ctx, span := tracer.Start(ctx, "NodeFromID")
@@ -197,7 +206,7 @@ func (lu *Lookup) NodeFromID(ctx context.Context, id *provider.ResourceId) (n *n
 		// The Resource references the root of a space
 		return lu.NodeFromSpaceID(ctx, id.SpaceId)
 	}
-	return node.ReadNode(ctx, lu, id.SpaceId, id.OpaqueId, "", false, nil, false)
+	return node.ReadNode(ctx, lu, id.SpaceId, id.OpaqueId, "", lu.listDisabledSpaces, nil, false)
 }
 
 // Pathify segments the beginning of a string into depth segments of width length
@@ -218,7 +227,7 @@ func Pathify(id string, depth, width int) string {
 
 // NodeFromSpaceID converts a resource id into a Node
 func (lu *Lookup) NodeFromSpaceID(ctx context.Context, spaceID string) (n *node.Node, err error) {
-	node, err := node.ReadNode(ctx, lu, spaceID, spaceID, "", false, nil, false)
+	node, err := node.ReadNode(ctx, lu, spaceID, spaceID, "", lu.listDisabledSpaces, nil, false)
 	if err != nil {
 		return nil, err
 	}

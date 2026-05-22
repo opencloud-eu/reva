@@ -225,6 +225,12 @@ func New(o *options.Options, stream events.Stream, cache, historyCache *idcache.
 	return fs, nil
 }
 
+func (fs *posixFS) WithDisabledSpaces() storage.FS {
+	f := *fs
+	f.FS = fs.FS.(storage.SpaceDisabledListableFS).WithDisabledSpaces()
+	return &f
+}
+
 // WarmupIDCache allows triggering a posix fs scan and id cache warmup manually.
 func (fs *posixFS) WarmupIDCache(root string, assimilate, onlyDirty bool) error {
 	return fs.tree.WarmupIDCache(root, assimilate, onlyDirty)
