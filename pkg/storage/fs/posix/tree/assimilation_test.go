@@ -23,6 +23,8 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/ignore"
+
 	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/options"
 	decomposedoptions "github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/options"
 )
@@ -57,9 +59,8 @@ func TestTree_findSpaceId(t *testing.T) {
 			path: "/foo/bar/baz",
 			err:  ErrRootReached,
 			tree: &Tree{
-				personalSpacesRoot: "/foo/bar/baz",
 				options: &options.Options{
-					Options: decomposedoptions.Options{},
+					Options: decomposedoptions.Options{Root: "/", PersonalSpacePathTemplate: "/foo/bar/baz"},
 				},
 			},
 		},
@@ -68,9 +69,8 @@ func TestTree_findSpaceId(t *testing.T) {
 			path: "/foo/bar/baz",
 			err:  ErrRootReached,
 			tree: &Tree{
-				projectSpacesRoot: "/foo/bar/baz",
 				options: &options.Options{
-					Options: decomposedoptions.Options{},
+					Options: decomposedoptions.Options{Root: "/", GeneralSpacePathTemplate: "/foo/bar/baz"},
 				},
 			},
 		},
@@ -90,6 +90,7 @@ func TestTree_findSpaceId(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			tt.tree.Ignorer = ignore.NewIgnorer(tt.tree.options, nil)
 			_, err := tt.tree.findSpaceId(tt.path)
 			switch {
 			case errors.Is(tt.err, ErrAny) && err != nil:

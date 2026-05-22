@@ -12,6 +12,7 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/ignore"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/mock"
 
@@ -71,6 +72,7 @@ var _ = Describe("Tree", func() {
 					},
 				},
 			}
+			t.Ignorer = ignore.NewIgnorer(t.options, t.log)
 			folder = node.New("spaceid", "nodeid", "parentid", "dir", 0, "",
 				provider.ResourceType_RESOURCE_TYPE_CONTAINER, nil, fakePathLookup{internalPath: dir})
 		})

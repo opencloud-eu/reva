@@ -12,6 +12,7 @@ import (
 	"github.com/fsnotify/fsnotify"
 	"github.com/rs/zerolog"
 
+	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/ignore"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/options"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/watcher"
 )
@@ -212,8 +213,8 @@ func isSubpath(root, p string) bool {
 // isIgnored checks if the path is ignored by its tree.
 func isPathIgnored(tree *Tree, path string) bool {
 
-	isLockFile := isLockFile(path)
-	isTrash := isTrash(path)
+	isLockFile := ignore.IsLockFile(path)
+	isTrash := ignore.IsTrash(path)
 	isUpload := tree.isUpload(path)
 	isInternal := tree.isInternal(path)
 

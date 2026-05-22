@@ -66,7 +66,7 @@ func (w *GpfsWatchFolderWatcher) Watch(topic string) {
 			continue
 		}
 
-		if w.tree.isIgnored(lwev.Path) {
+		if w.tree.Ignorer.IsIgnored(lwev.Path) {
 			continue
 		}
 
