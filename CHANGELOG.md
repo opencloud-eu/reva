@@ -4,9 +4,11 @@
 
 ### ❤️ Thanks to all contributors! ❤️
 
-@aduffeck
+@ScharfViktor, @aduffeck
 
+### 🐛 Bug Fixes
 
+- fix: added /dav/public-files/ to Unprotected routes [[#648](https://github.com/opencloud-eu/reva/pull/648)]
 
 ## [2.46.0](https://github.com/opencloud-eu/reva/releases/tag/v2.46.0) - 2026-05-21
 
