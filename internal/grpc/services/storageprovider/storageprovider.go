@@ -1045,7 +1045,16 @@ func (s *Service) PurgeRecycle(ctx context.Context, req *provider.PurgeRecycleRe
 }
 
 func (s *Service) ListGrants(ctx context.Context, req *provider.ListGrantsRequest) (*provider.ListGrantsResponse, error) {
-	grants, err := s.Storage.ListGrants(ctx, req.Ref)
+	fs := s.Storage
+	if req.Opaque != nil && req.Opaque.Map != nil {
+		if _, ok := req.Opaque.Map["with_disabled_spaces"]; ok {
+			if dsfs, ok := fs.(storage.SpaceDisabledListableFS); ok {
+				fs = dsfs.WithDisabledSpaces()
+			}
+		}
+	}
+
+	grants, err := fs.ListGrants(ctx, req.Ref)
 	if err != nil {
 		var st *rpc.Status
 		switch err.(type) {
