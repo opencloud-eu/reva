@@ -568,6 +568,13 @@ func (fs *Decomposedfs) Postprocessing(ch <-chan events.Event) {
 	}
 }
 
+// WithDisabledSpaces returns a filesystem that can list disabled spaces
+func (fs *Decomposedfs) WithDisabledSpaces() storage.FS {
+	f := *fs
+	f.lu = f.lu.WithDisabledSpaces()
+	return &f
+}
+
 // Shutdown shuts down the storage
 func (fs *Decomposedfs) Shutdown(ctx context.Context) error {
 	return nil

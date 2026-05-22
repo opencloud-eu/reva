@@ -152,6 +152,12 @@ type FS interface {
 	GetHome(ctx context.Context) (string, error)
 }
 
+// SpaceDisabledListableFS is the interface to implement for storage drivers that
+// can list resources in disabled spaces.
+type SpaceDisabledListableFS interface {
+	WithDisabledSpaces() FS
+}
+
 // UnscopeFunc is a function that unscopes a user
 type UnscopeFunc func()
 

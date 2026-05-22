@@ -148,6 +148,7 @@ type Tree interface {
 
 // PathLookup defines the interface for the lookup component
 type PathLookup interface {
+	WithDisabledSpaces() PathLookup
 	NodeFromSpaceID(ctx context.Context, spaceID string) (n *Node, err error)
 	NodeFromResource(ctx context.Context, ref *provider.Reference) (*Node, error)
 	NodeFromID(ctx context.Context, id *provider.ResourceId) (n *Node, err error)
