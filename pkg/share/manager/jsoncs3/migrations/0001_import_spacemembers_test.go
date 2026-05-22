@@ -48,11 +48,13 @@ import (
 // ProviderAPIClient mock.
 type mockStorageProvider struct {
 	grants []*provider.Grant
+	req    *provider.ListGrantsRequest
 	err    error
 	status *rpc.Status
 }
 
-func (s *mockStorageProvider) ListGrants(_ context.Context, _ *provider.ListGrantsRequest, _ ...grpc.CallOption) (*provider.ListGrantsResponse, error) {
+func (s *mockStorageProvider) ListGrants(_ context.Context, req *provider.ListGrantsRequest, _ ...grpc.CallOption) (*provider.ListGrantsResponse, error) {
+	s.req = req
 	if s.err != nil {
 		return nil, s.err
 	}
@@ -575,6 +577,55 @@ var _ = Describe("ImportSpaceMembersMigration.Migrate", func() {
 
 		It("propagates the loader error", func() {
 			Expect(m.Migrate()).To(MatchError("load failure"))
+		})
+	})
+
+	Context("migrates disabled spaces correctly", func() {
+		var mockSP *mockStorageProvider
+
+		BeforeEach(func() {
+			space := &provider.StorageSpace{
+				Id:   &provider.StorageSpaceId{OpaqueId: "disabled-space-1"},
+				Root: &provider.ResourceId{StorageId: "stor", SpaceId: "disabled-space-1", OpaqueId: "disabled-space-1"},
+			}
+			gwMock.On("ListStorageSpaces", mock.Anything, mock.Anything).Return(
+				&provider.ListStorageSpacesResponse{
+					Status:        &rpc.Status{Code: rpc.Code_CODE_OK},
+					StorageSpaces: []*provider.StorageSpace{space},
+				}, nil)
+
+			mockSP = &mockStorageProvider{
+				grants: []*provider.Grant{
+					{
+						Grantee: &provider.Grantee{
+							Type: provider.GranteeType_GRANTEE_TYPE_USER,
+							Id:   &provider.Grantee_UserId{UserId: &userpb.UserId{OpaqueId: "alice"}},
+						},
+						Permissions: &provider.ResourcePermissions{},
+						Creator:     &userpb.UserId{OpaqueId: "owner", Idp: "idp", Type: userpb.UserType_USER_TYPE_PRIMARY},
+					},
+				},
+			}
+			m.providerResolver = func(_ context.Context, _ *provider.StorageSpace) (storageProvider, error) {
+				return mockSP, nil
+			}
+
+			gwMock.On("GetUser", mock.Anything, mock.Anything).Return(&userpb.GetUserResponse{
+				Status: &rpc.Status{Code: rpc.Code_CODE_OK},
+				User:   &userpb.User{Id: &userpb.UserId{OpaqueId: "alice", Idp: "idp"}},
+			}, nil)
+			mgrMock.On("GetShare", mock.Anything, mock.Anything).Return(nil, errtypes.NotFound("not found"))
+		})
+
+		It("sets the unrestricted flag in ListGrantsRequest to retrieve grants for disabled spaces", func() {
+			Expect(m.Migrate()).To(Succeed())
+			Expect(loader.shares).To(HaveLen(1))
+
+			// Assert that the proper opaque flag was set on the ListGrants request
+			Expect(mockSP.req).NotTo(BeNil())
+			Expect(mockSP.req.Opaque).NotTo(BeNil())
+			Expect(mockSP.req.Opaque.Map).To(HaveKey("with_disabled_spaces"))
+			Expect(string(mockSP.req.Opaque.Map["with_disabled_spaces"].Value)).To(Equal("true"))
 		})
 	})
 })
