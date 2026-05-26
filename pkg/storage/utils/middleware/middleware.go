@@ -51,6 +51,13 @@ func NewFS(next storage.FS, hooks ...Hook) *FS {
 	}
 }
 
+// WithDisabledSpaces returns a filesystem that can list disabled spaces
+func (fs *FS) WithDisabledSpaces() storage.FS {
+	f := *fs
+	f.next = fs.next.(storage.SpaceDisabledListableFS).WithDisabledSpaces()
+	return &f
+}
+
 // ListUploadSessions returns the upload sessions matching the given filter
 func (f *FS) ListUploadSessions(ctx context.Context, filter storage.UploadSessionFilter) ([]storage.UploadSession, error) {
 	return f.next.(storage.UploadSessionLister).ListUploadSessions(ctx, filter)
