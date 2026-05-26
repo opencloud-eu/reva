@@ -79,7 +79,7 @@ func (m *ImportSpaceMembersMigration) Name() string {
 }
 
 func (m *ImportSpaceMembersMigration) Version() int {
-	return 1
+	return 2
 }
 
 func (m *ImportSpaceMembersMigration) Migrate() error {
