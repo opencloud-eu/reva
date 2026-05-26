@@ -1,6 +1,6 @@
 # Changelog
 
-## [2.46.1](https://github.com/opencloud-eu/reva/releases/tag/v2.46.1) - 2026-05-22
+## [2.46.1](https://github.com/opencloud-eu/reva/releases/tag/v2.46.1) - 2026-05-26
 
 ### ❤️ Thanks to all contributors! ❤️
 
@@ -8,6 +8,7 @@
 
 ### 🐛 Bug Fixes
 
+- Migrate disabled spaces [[#649](https://github.com/opencloud-eu/reva/pull/649)]
 - fix: added /dav/public-files/ to Unprotected routes [[#648](https://github.com/opencloud-eu/reva/pull/648)]
 
 ## [2.46.0](https://github.com/opencloud-eu/reva/releases/tag/v2.46.0) - 2026-05-21
