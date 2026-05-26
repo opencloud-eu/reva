@@ -79,7 +79,7 @@ func (m *ImportSpaceMembersMigration) Name() string {
 }
 
 func (m *ImportSpaceMembersMigration) Version() int {
-	return 1
+	return 2
 }
 
 func (m *ImportSpaceMembersMigration) Migrate() error {
@@ -162,7 +162,10 @@ func (m *ImportSpaceMembersMigration) migrateSpace(ctx context.Context, space *p
 	}
 
 	ref := &provider.Reference{ResourceId: space.GetRoot()}
-	grantsRes, err := spClient.ListGrants(ctx, &provider.ListGrantsRequest{Ref: ref})
+	grantsRes, err := spClient.ListGrants(ctx, &provider.ListGrantsRequest{
+		Ref:    ref,
+		Opaque: utils.AppendPlainToOpaque(nil, "with_disabled_spaces", "true"),
+	})
 	if err != nil {
 		return 0, err
 	}
