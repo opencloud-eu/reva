@@ -600,6 +600,175 @@ var _ = Describe("ocdav", func() {
 
 		})
 
+		Describe("LOCK", func() {
+
+			const lockBody = `<?xml version="1.0" encoding="utf-8"?>
+<d:lockinfo xmlns:d="DAV:"><d:lockscope><d:exclusive/></d:lockscope><d:locktype><d:write/></d:locktype><d:owner><d:href>principal</d:href></d:owner></d:lockinfo>`
+
+			BeforeEach(func() {
+				rr = httptest.NewRecorder()
+			})
+
+			When("locking an existing resource", func() {
+				It("returns 200 OK with a lock token", func() {
+					req, err = http.NewRequest("LOCK", "/dav/spaces/provider-1$userspace!root/existing.txt", strings.NewReader(lockBody))
+					Expect(err).ToNot(HaveOccurred())
+					req = req.WithContext(ctx)
+
+					client.On("SetLock", mock.Anything, mock.Anything).Return(&cs3storageprovider.SetLockResponse{
+						Status: status.NewOK(ctx),
+					}, nil).Once()
+
+					handler.Handler().ServeHTTP(rr, req)
+					Expect(rr).To(HaveHTTPStatus(http.StatusOK))
+					Expect(rr.Header().Get("Lock-Token")).ToNot(BeEmpty())
+					Expect(rr.Body.String()).To(ContainSubstring("<d:lockdiscovery>"))
+				})
+			})
+
+			When("locking a not-yet-existing resource", func() {
+				// RFC 4918 section 7.3: a LOCK on an unmapped URL creates an
+				// empty locked resource and returns 201 Created.
+				It("creates an empty resource and returns 201 Created", func() {
+					req, err = http.NewRequest("LOCK", "/dav/spaces/provider-1$userspace!root/newfile.txt", strings.NewReader(lockBody))
+					Expect(err).ToNot(HaveOccurred())
+					req = req.WithContext(ctx)
+
+					// the first lock attempt fails: the node does not exist yet
+					firstLock := client.On("SetLock", mock.Anything, mock.Anything).Return(&cs3storageprovider.SetLockResponse{
+						Status: status.NewNotFound(ctx, "not found"),
+					}, nil).Once()
+
+					// the handler creates the empty resource at the SAME reference
+					// the failed lock targeted ...
+					touch := client.On("TouchFile", mock.Anything, mock.MatchedBy(func(req *cs3storageprovider.TouchFileRequest) bool {
+						return utils.ResourceEqual(req.Ref, &cs3storageprovider.Reference{
+							ResourceId: userspace.Root,
+							Path:       "./newfile.txt",
+						})
+					})).Return(&cs3storageprovider.TouchFileResponse{
+						Status: status.NewOK(ctx),
+					}, nil).Once().NotBefore(firstLock)
+
+					// ... then retries the lock, which now succeeds
+					client.On("SetLock", mock.Anything, mock.Anything).Return(&cs3storageprovider.SetLockResponse{
+						Status: status.NewOK(ctx),
+					}, nil).Once().NotBefore(touch)
+
+					handler.Handler().ServeHTTP(rr, req)
+					Expect(rr).To(HaveHTTPStatus(http.StatusCreated))
+					Expect(rr.Header().Get("Lock-Token")).ToNot(BeEmpty())
+					Expect(rr.Body.String()).To(ContainSubstring("<d:lockdiscovery>"))
+					// the retry must have happened: SetLock called twice, TouchFile once
+					client.AssertNumberOfCalls(GinkgoT(), "SetLock", 2)
+					client.AssertNumberOfCalls(GinkgoT(), "TouchFile", 1)
+				})
+			})
+
+			When("the resource appears concurrently between the failed lock and the create", func() {
+				// TouchFile reports ALREADY_EXISTS: the resource was not created
+				// here, so the handler locks the existing one and returns 200, not 201.
+				It("returns 200 OK, not 201", func() {
+					req, err = http.NewRequest("LOCK", "/dav/spaces/provider-1$userspace!root/raced.txt", strings.NewReader(lockBody))
+					Expect(err).ToNot(HaveOccurred())
+					req = req.WithContext(ctx)
+
+					firstLock := client.On("SetLock", mock.Anything, mock.Anything).Return(&cs3storageprovider.SetLockResponse{
+						Status: status.NewNotFound(ctx, "not found"),
+					}, nil).Once()
+					touch := client.On("TouchFile", mock.Anything, mock.Anything).Return(&cs3storageprovider.TouchFileResponse{
+						Status: status.NewAlreadyExists(ctx, errors.New("already exists"), "already exists"),
+					}, nil).Once().NotBefore(firstLock)
+					client.On("SetLock", mock.Anything, mock.Anything).Return(&cs3storageprovider.SetLockResponse{
+						Status: status.NewOK(ctx),
+					}, nil).Once().NotBefore(touch)
+
+					handler.Handler().ServeHTTP(rr, req)
+					Expect(rr).To(HaveHTTPStatus(http.StatusOK))
+					Expect(rr.Header().Get("Lock-Token")).ToNot(BeEmpty())
+				})
+			})
+
+			When("the user may not create the resource", func() {
+				// createEmptyResource maps CODE_PERMISSION_DENIED to 403.
+				It("returns 403 Forbidden", func() {
+					req, err = http.NewRequest("LOCK", "/dav/spaces/provider-1$userspace!root/forbidden.txt", strings.NewReader(lockBody))
+					Expect(err).ToNot(HaveOccurred())
+					req = req.WithContext(ctx)
+
+					client.On("SetLock", mock.Anything, mock.Anything).Return(&cs3storageprovider.SetLockResponse{
+						Status: status.NewNotFound(ctx, "not found"),
+					}, nil).Once()
+					client.On("TouchFile", mock.Anything, mock.Anything).Return(&cs3storageprovider.TouchFileResponse{
+						Status: status.NewPermissionDenied(ctx, errors.New("permission denied"), "permission denied"),
+					}, nil).Once()
+
+					handler.Handler().ServeHTTP(rr, req)
+					Expect(rr).To(HaveHTTPStatus(http.StatusForbidden))
+				})
+			})
+
+			When("the resource gets locked by someone else between create and retry", func() {
+				// TouchFile succeeds but the retried lock hits an existing lock.
+				It("returns 423 Locked", func() {
+					req, err = http.NewRequest("LOCK", "/dav/spaces/provider-1$userspace!root/contended.txt", strings.NewReader(lockBody))
+					Expect(err).ToNot(HaveOccurred())
+					req = req.WithContext(ctx)
+
+					firstLock := client.On("SetLock", mock.Anything, mock.Anything).Return(&cs3storageprovider.SetLockResponse{
+						Status: status.NewNotFound(ctx, "not found"),
+					}, nil).Once()
+					touch := client.On("TouchFile", mock.Anything, mock.Anything).Return(&cs3storageprovider.TouchFileResponse{
+						Status: status.NewOK(ctx),
+					}, nil).Once().NotBefore(firstLock)
+					client.On("SetLock", mock.Anything, mock.Anything).Return(&cs3storageprovider.SetLockResponse{
+						Status: status.NewLocked(ctx, "locked"),
+					}, nil).Once().NotBefore(touch)
+
+					handler.Handler().ServeHTTP(rr, req)
+					Expect(rr).To(HaveHTTPStatus(http.StatusLocked))
+				})
+			})
+
+			When("creating the resource fails on the storage", func() {
+				// A transport error on TouchFile maps to 500.
+				It("returns 500 Internal Server Error", func() {
+					req, err = http.NewRequest("LOCK", "/dav/spaces/provider-1$userspace!root/broken.txt", strings.NewReader(lockBody))
+					Expect(err).ToNot(HaveOccurred())
+					req = req.WithContext(ctx)
+
+					client.On("SetLock", mock.Anything, mock.Anything).Return(&cs3storageprovider.SetLockResponse{
+						Status: status.NewNotFound(ctx, "not found"),
+					}, nil).Once()
+					client.On("TouchFile", mock.Anything, mock.Anything).Return(nil, errors.New("grpc transport error")).Once()
+
+					handler.Handler().ServeHTTP(rr, req)
+					Expect(rr).To(HaveHTTPStatus(http.StatusInternalServerError))
+				})
+			})
+
+			When("locking a not-yet-existing resource whose parent collection is missing", func() {
+				// RFC 4918 section 9.10.6: a missing intermediate collection
+				// maps to 409 Conflict, not 500.
+				It("returns 409 Conflict", func() {
+					req, err = http.NewRequest("LOCK", "/dav/spaces/provider-1$userspace!root/missing/newfile.txt", strings.NewReader(lockBody))
+					Expect(err).ToNot(HaveOccurred())
+					req = req.WithContext(ctx)
+
+					client.On("SetLock", mock.Anything, mock.Anything).Return(&cs3storageprovider.SetLockResponse{
+						Status: status.NewNotFound(ctx, "not found"),
+					}, nil).Once()
+					client.On("TouchFile", mock.Anything, mock.Anything).Return(&cs3storageprovider.TouchFileResponse{
+						Status: status.NewNotFound(ctx, "parent not found"),
+					}, nil).Once()
+
+					handler.Handler().ServeHTTP(rr, req)
+					Expect(rr).To(HaveHTTPStatus(http.StatusConflict))
+				})
+			})
+
+		})
+
 		Describe("MOVE", func() {
 
 			BeforeEach(func() {
