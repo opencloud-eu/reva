@@ -451,7 +451,11 @@ func (t *Tree) assimilate(item scanItem) error {
 		if err != nil {
 			return errors.Wrap(err, "failed to lock item for assimilation")
 		}
+		locked := true
 		defer func() {
+			if !locked {
+				return
+			}
 			_ = unlock()
 		}()
 
@@ -473,6 +477,11 @@ func (t *Tree) assimilate(item scanItem) error {
 				// this id clashes with an existing item -> clear metadata and re-assimilate
 				t.log.Debug().Str("path", item.Path).Msg("ID clash detected, purging metadata and re-assimilating")
 
+				err := unlock()
+				if err != nil {
+					t.log.Error().Err(err).Str("path", item.Path).Msg("could not unlock item for assimilation")
+				}
+				locked = false
 				if err := t.lookup.MetadataBackend().Purge(context.Background(), assimilationNode); err != nil {
 					t.log.Error().Err(err).Str("path", item.Path).Msg("could not purge metadata")
 				}
@@ -646,6 +655,8 @@ func (t *Tree) assimilate(item scanItem) error {
 	return nil
 }
 
+// updateFile updates the metadata of the given file and returns the new file info and attributes
+// The according file is supposed to be locked for assimilation already when calling this function
 func (t *Tree) updateFile(path, id, spaceID string, fi fs.FileInfo) (fs.FileInfo, node.Attributes, error) {
 	retries := 1
 	parentID := ""
@@ -690,7 +701,7 @@ assimilate:
 		}
 	}
 
-	attrs, err := t.lookup.MetadataBackend().All(context.Background(), bn)
+	attrs, err := t.lookup.MetadataBackend().AllWithLockedSource(context.Background(), bn, nil)
 	if err != nil && !metadata.IsAttrUnset(err) {
 		return nil, nil, errors.Wrap(err, "failed to get item attribs")
 	}
