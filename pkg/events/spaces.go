@@ -67,6 +67,7 @@ func (SpaceRenamed) Unmarshal(v []byte) (interface{}, error) {
 type SpaceDisabled struct {
 	Executant *user.UserId
 	ID        *provider.StorageSpaceId
+	Members   map[string]provider.ResourcePermissions
 	Timestamp time.Time
 }
 
@@ -82,6 +83,7 @@ type SpaceEnabled struct {
 	Executant *user.UserId
 	ID        *provider.StorageSpaceId
 	Owner     *user.UserId
+	Members   map[string]provider.ResourcePermissions
 	Timestamp *types.Timestamp
 }
 
