@@ -126,7 +126,6 @@ func (s *svc) Authenticate(ctx context.Context, req *gateway.AuthenticateRequest
 
 	// create home directory
 	if res.User.GetId().GetType() != userpb.UserType_USER_TYPE_SERVICE && res.User.GetId().GetType() != userpb.UserType_USER_TYPE_LIGHTWEIGHT {
-		//create home
 		createHomeRes, err := s.CreateHome(ctx, &storageprovider.CreateHomeRequest{})
 		if err != nil {
 			log.Err(err).Msg("error calling CreateHome")
