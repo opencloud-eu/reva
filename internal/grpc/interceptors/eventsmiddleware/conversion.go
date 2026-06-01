@@ -405,10 +405,13 @@ func SpaceUpdated(r *provider.UpdateStorageSpaceResponse, req *provider.UpdateSt
 
 // SpaceEnabled converts the response to an event
 func SpaceEnabled(r *provider.UpdateStorageSpaceResponse, req *provider.UpdateStorageSpaceRequest, executant *user.User) events.SpaceEnabled {
+	var grants map[string]provider.ResourcePermissions
+	_ = utils.ReadJSONFromOpaque(r.GetOpaque(), "grants", &grants)
 	return events.SpaceEnabled{
 		Executant: executant.GetId(),
 		ID:        r.StorageSpace.Id,
 		Owner:     extractOwner(r.StorageSpace.Owner),
+		Members:   grants,
 		Timestamp: utils.TSNow(),
 	}
 }
@@ -460,9 +463,12 @@ func SpaceUnshared(r *collaboration.RemoveShareResponse, req *collaboration.Remo
 
 // SpaceDisabled converts the response to an event
 func SpaceDisabled(r *provider.DeleteStorageSpaceResponse, req *provider.DeleteStorageSpaceRequest, executant *user.User) events.SpaceDisabled {
+	var grants map[string]provider.ResourcePermissions
+	_ = utils.ReadJSONFromOpaque(r.GetOpaque(), "grants", &grants)
 	return events.SpaceDisabled{
 		Executant: executant.GetId(),
 		ID:        req.Id,
+		Members:   grants,
 		Timestamp: time.Now(),
 	}
 }
