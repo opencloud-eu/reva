@@ -118,11 +118,15 @@ func (s *svc) CreateHome(ctx context.Context, req *provider.CreateHomeRequest) (
 	}
 
 	if u.GetId().GetType() == userpb.UserType_USER_TYPE_SERVICE {
-		return nil, errtypes.PermissionDenied("gateway: refusing to create home for service user")
+		return &provider.CreateHomeResponse{
+			Status: status.NewInvalid(ctx, "gateway: refusing to create home for service user"),
+		}, nil
 	}
 
 	if u.GetId().GetType() == userpb.UserType_USER_TYPE_LIGHTWEIGHT {
-		return nil, errtypes.PermissionDenied("gateway: refusing to create home for lightweight user")
+		return &provider.CreateHomeResponse{
+			Status: status.NewInvalid(ctx, "gateway: refusing to create home for lightweight user"),
+		}, nil
 	}
 
 	quotaStr := utils.ReadPlainFromOpaque(req.Opaque, "quota")
