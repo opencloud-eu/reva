@@ -1,6 +1,6 @@
 # Changelog
 
-## [2.46.1](https://github.com/opencloud-eu/reva/releases/tag/v2.46.1) - 2026-05-26
+## [2.46.1](https://github.com/opencloud-eu/reva/releases/tag/v2.46.1) - 2026-06-01
 
 ### ❤️ Thanks to all contributors! ❤️
 
@@ -10,6 +10,10 @@
 
 - Migrate disabled spaces [[#649](https://github.com/opencloud-eu/reva/pull/649)]
 - fix: added /dav/public-files/ to Unprotected routes [[#648](https://github.com/opencloud-eu/reva/pull/648)]
+
+### 📦️ Dependencies
+
+- chore(deps): bump golang.org/x/text from 0.36.0 to 0.37.0 [[#643](https://github.com/opencloud-eu/reva/pull/643)]
 
 ## [2.46.0](https://github.com/opencloud-eu/reva/releases/tag/v2.46.0) - 2026-05-21
 
