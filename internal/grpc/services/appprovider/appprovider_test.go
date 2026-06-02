@@ -22,7 +22,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/go-viper/mapstructure/v2"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -32,7 +31,7 @@ func Test_parseConfig(t *testing.T) {
 		name    string
 		m       map[string]interface{}
 		want    *config
-		wantErr interface{}
+		wantErr string
 	}{
 		{
 			name: "all configurations set for demo driver",
@@ -45,7 +44,7 @@ func Test_parseConfig(t *testing.T) {
 				Drivers:     map[string]map[string]interface{}{"demo": {"a": "b", "c": "d"}},
 				RefreshTime: 20 * time.Second,
 			},
-			wantErr: nil,
+			wantErr: "",
 		},
 		{
 			name: "all configurations set for wopi driver",
@@ -59,17 +58,13 @@ func Test_parseConfig(t *testing.T) {
 				Drivers:     map[string]map[string]interface{}{"wopi": {"iop_secret": "very-secret", "wopi_url": "https://my.wopi:9871"}},
 				RefreshTime: 10 * time.Second,
 			},
-			wantErr: nil,
+			wantErr: "",
 		},
 		{
-			name: "wrong type of setting",
-			m:    map[string]interface{}{"Driver": 123, "NonExistentField": 456},
-			want: nil,
-			wantErr: &mapstructure.Error{
-				Errors: []string{
-					"'driver' expected type 'string', got unconvertible type 'int', value: '123'",
-				},
-			},
+			name:    "wrong type of setting",
+			m:       map[string]interface{}{"Driver": 123, "NonExistentField": 456},
+			want:    nil,
+			wantErr: "decoding failed due to the following error(s):\n\n'driver' expected type 'string', got unconvertible type 'int'",
 		},
 		{
 			name: "undefined settings type",
@@ -79,14 +74,18 @@ func Test_parseConfig(t *testing.T) {
 				Drivers:     map[string]map[string]interface{}(nil),
 				RefreshTime: 20 * time.Second,
 			},
-			wantErr: nil,
+			wantErr: "",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := parseConfig(tt.m)
-			assert.Equal(t, tt.wantErr, err)
+			if tt.wantErr != "" {
+				assert.EqualError(t, err, tt.wantErr)
+			} else {
+				assert.NoError(t, err)
+			}
 			assert.Equal(t, tt.want, got)
 		})
 	}
