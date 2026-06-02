@@ -44,8 +44,8 @@ func TestGetManagerWithInvalidUser(t *testing.T) {
 		{
 			"Boolean in user",
 			false,
-			"error decoding conf: 1 error(s) decoding:\n\n* " +
-				"'users' expected type 'string', got unconvertible type 'bool', value: 'false'",
+			"error decoding conf: decoding failed due to the following error(s):\n\n" +
+				"'users' expected type 'string', got unconvertible type 'bool'",
 		},
 		{
 			"Nil in user",
