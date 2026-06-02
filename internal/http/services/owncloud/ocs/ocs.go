@@ -23,7 +23,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jellydator/ttlcache/v2"
-	"github.com/mitchellh/mapstructure"
+	"github.com/go-viper/mapstructure/v2"
 	"github.com/opencloud-eu/reva/v2/internal/http/services/owncloud/ocs/config"
 	"github.com/opencloud-eu/reva/v2/internal/http/services/owncloud/ocs/handlers/apps/sharing/sharees"
 	"github.com/opencloud-eu/reva/v2/internal/http/services/owncloud/ocs/handlers/apps/sharing/shares"

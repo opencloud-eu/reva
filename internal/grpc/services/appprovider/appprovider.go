@@ -29,7 +29,7 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/juliangruber/go-intersect"
-	"github.com/mitchellh/mapstructure"
+	"github.com/go-viper/mapstructure/v2"
 	"github.com/opencloud-eu/reva/v2/pkg/app"
 	"github.com/opencloud-eu/reva/v2/pkg/app/provider/registry"
 	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
