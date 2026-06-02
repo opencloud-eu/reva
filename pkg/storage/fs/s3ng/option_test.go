@@ -19,7 +19,7 @@
 package s3ng_test
 
 import (
-	"github.com/mitchellh/mapstructure"
+	"github.com/go-viper/mapstructure/v2"
 
 	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/s3ng"
 

@@ -34,7 +34,7 @@ import (
 	iso6391 "github.com/emvi/iso-639-1"
 	"github.com/go-chi/chi/v5"
 	ua "github.com/mileusna/useragent"
-	"github.com/mitchellh/mapstructure"
+	"github.com/go-viper/mapstructure/v2"
 	ctxpkg "github.com/opencloud-eu/reva/v2/pkg/ctx"
 	"github.com/opencloud-eu/reva/v2/pkg/rgrpc/status"
 	"github.com/opencloud-eu/reva/v2/pkg/rgrpc/todo/pool"
