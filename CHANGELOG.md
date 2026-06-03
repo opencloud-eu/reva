@@ -1,12 +1,20 @@
 # Changelog
 
+## [2.46.3](https://github.com/opencloud-eu/reva/releases/tag/v2.46.3) - 2026-06-03
+
+### ❤️ Thanks to all contributors! ❤️
+
+@michaelstingl
+
+### 🐛 Bug Fixes
+
+- fix(ocdav): create the file on LOCK of a non-existent path [[#652](https://github.com/opencloud-eu/reva/pull/652)]
+
 ## [2.46.2](https://github.com/opencloud-eu/reva/releases/tag/v2.46.2) - 2026-06-02
 
 ### ❤️ Thanks to all contributors! ❤️
 
 @dragonchaser
-
-
 
 ## [2.46.1](https://github.com/opencloud-eu/reva/releases/tag/v2.46.1) - 2026-06-01
 
