@@ -93,23 +93,11 @@ func (p SyncPropagator) propagateItem(ctx context.Context, n *node.Node, sTime t
 
 	// lock parent before reading treesize or tree time
 
-	_, subspan := tracer.Start(ctx, "lockedfile.OpenFile")
-	parentNode := node.NewBaseNode(n.SpaceID, n.ParentID, p.lookup)
-	unlock, err := p.lookup.MetadataBackend().Lock(parentNode)
-	subspan.End()
+	n, unlock, err := node.LockAndReadNode(ctx, p.lookup, n.SpaceID, n.ParentID, "", false, n.SpaceRoot, false)
 	if err != nil {
-		log.Error().Err(err).
-			Str("parent filename", parentNode.InternalPath()).
-			Msg("Propagation failed. Could not open metadata for parent with lock.")
 		return nil, true, err
 	}
 	defer func() { _ = unlock() }()
-
-	if n, err = n.Parent(ctx); err != nil {
-		log.Error().Err(err).
-			Msg("Propagation failed. Could not read parent node.")
-		return n, true, err
-	}
 
 	if !n.HasPropagation(ctx) {
 		log.Debug().Str("attr", prefixes.PropagationAttr).Msg("propagation attribute not set or unreadable, not propagating")
