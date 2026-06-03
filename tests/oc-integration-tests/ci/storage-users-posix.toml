@@ -32,7 +32,7 @@ generalspacepath_template = "projects/{{.SpaceId}}"
 watch_fs = true
 
 [grpc.services.storageprovider.drivers.posix.filemetadatacache]
-cache_store = "noop"
+cache_store = "memory"
 
 [grpc.services.storageprovider.drivers.posix.idcache]
 cache_store = "nats-js-kv"
@@ -59,4 +59,4 @@ cache_store = "nats-js-kv"
 cache_nodes = [ "nats:4222" ]
 
 [http.services.dataprovider.drivers.posix.filemetadatacache]
-cache_store = "noop"
+cache_store = "memory"
