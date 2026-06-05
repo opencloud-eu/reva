@@ -49,6 +49,10 @@ import (
 	"github.com/opencloud-eu/reva/v2/pkg/utils"
 )
 
+var (
+	_errSkipAlreadyKnown = errors.New("skip already known item")
+)
+
 type ScanDebouncer struct {
 	after      time.Duration
 	f          func(item scanItem)
@@ -168,8 +172,19 @@ func (t *Tree) workScanQueue() {
 
 				err := t.assimilate(item)
 				if err != nil {
+					if errors.Is(err, _errSkipAlreadyKnown) {
+						log.Trace().Err(err).Str("path", item.Path).Msg("skip already known item")
+						continue
+					}
 					log.Error().Err(err).Str("path", item.Path).Msg("failed to assimilate item")
 					continue
+				}
+
+				if item.RefreshParent {
+					err = t.WarmupIDCache(filepath.Dir(item.Path), true, true)
+					if err != nil {
+						log.Error().Err(err).Str("path", item.Path).Msg("failed to warmup id cache")
+					}
 				}
 
 				if item.Recurse {
@@ -195,17 +210,16 @@ func (t *Tree) Scan(path string, action watcher.EventAction, isDir bool) error {
 			//   -> scan parent directory recursively to update tree size and catch nodes that weren't covered by an event
 			AssimilationCounter.WithLabelValues(_labelFile, _labelAdded).Inc()
 			if !t.scanDebouncer.Pending(filepath.Dir(path)) {
+				// Use RefreshParent instead of scanning the parent recursively so that it can be skipped if
+				// the current state is already known (based on the mtime on disk vs. metadata)
 				t.scanDebouncer.Debounce(scanItem{
-					Path: path,
+					Path:          path,
+					RefreshParent: true,
 				})
 			}
 			if err := t.setDirty(filepath.Dir(path), true); err != nil {
 				t.log.Error().Err(err).Str("path", path).Bool("isDir", isDir).Msg("failed to mark directory as dirty")
 			}
-			t.scanDebouncer.Debounce(scanItem{
-				Path:    filepath.Dir(path),
-				Recurse: true,
-			})
 		} else {
 			// 2. New directory
 			//  -> scan directory
@@ -467,7 +481,7 @@ func (t *Tree) assimilate(item scanItem) error {
 		// compare metadata mtime with actual mtime. if it matches AND the path hasn't changed (move operation)
 		// we can skip the assimilation because the file was handled by us
 		if previousPath == item.Path && mtime.Equal(fi.ModTime()) {
-			return nil
+			return _errSkipAlreadyKnown
 		}
 
 		// was it moved or copied/restored with a clashing id?

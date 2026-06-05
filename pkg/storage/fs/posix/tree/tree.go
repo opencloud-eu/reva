@@ -77,8 +77,9 @@ type IDResolver interface {
 }
 
 type scanItem struct {
-	Path    string
-	Recurse bool
+	Path          string
+	Recurse       bool
+	RefreshParent bool
 }
 
 // Tree manages a hierarchical tree
