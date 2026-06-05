@@ -8,6 +8,7 @@
 
 ### 🐛 Bug Fixes
 
+- prevent unwanted binary decoding [[#664](https://github.com/opencloud-eu/reva/pull/664)]
 - fix(ocdav): encode oc:downloadURL path so filenames with "%" round-trip [[#653](https://github.com/opencloud-eu/reva/pull/653)]
 - fix(ocdav): create the file on LOCK of a non-existent path [[#652](https://github.com/opencloud-eu/reva/pull/652)]
 
