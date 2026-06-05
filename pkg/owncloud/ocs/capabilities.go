@@ -62,6 +62,7 @@ type Capabilities struct {
 	Theme          *CapabilitiesTheme          `json:"theme,omitempty" xml:"theme,omitempty" mapstructure:"theme"`
 	Notifications  *CapabilitiesNotifications  `json:"notifications,omitempty" xml:"notifications,omitempty"`
 	Groupware      *CapabilitiesGroupware      `json:"groupware,omitempty" xml:"groupware,omitempty" mapstructure:"groupware"`
+	OpenXchange    *CapabilitiesOpenXchange    `json:"open_xchange,omitempty" xml:"open_xchange,omitempty" mapstructure:"open_xchange"`
 }
 
 // CapabilitiesSearch holds the search capabilities
@@ -311,6 +312,12 @@ type CapabilitiesThemeLogo struct {
 // CapabilitiesGroupware holds groupware capabilities
 type CapabilitiesGroupware struct {
 	Enabled bool `json:"enabled,omitempty" xml:"enabled,omitempty" mapstructure:"enabled"`
+}
+
+// CapabilitiesOpenXchange holds Open-Xchange capabilities
+type CapabilitiesOpenXchange struct {
+	Enabled bool   `json:"enabled,omitempty" xml:"enabled,omitempty" mapstructure:"enabled"`
+	ApiUrl  string `json:"api_url,omitempty" xml:"api_url,omitempty" mapstructure:"api_url"`
 }
 
 // Version holds version information
