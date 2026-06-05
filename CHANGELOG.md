@@ -1,6 +1,6 @@
 # Changelog
 
-## [2.46.3](https://github.com/opencloud-eu/reva/releases/tag/v2.46.3) - 2026-06-03
+## [2.46.3](https://github.com/opencloud-eu/reva/releases/tag/v2.46.3) - 2026-06-05
 
 ### ❤️ Thanks to all contributors! ❤️
 
@@ -10,6 +10,10 @@
 
 - fix(ocdav): encode oc:downloadURL path so filenames with "%" round-trip [[#653](https://github.com/opencloud-eu/reva/pull/653)]
 - fix(ocdav): create the file on LOCK of a non-existent path [[#652](https://github.com/opencloud-eu/reva/pull/652)]
+
+### 📦️ Dependencies
+
+- chore(deps): bump github.com/go-playground/validator/v10 from 10.30.2 to 10.30.3 [[#662](https://github.com/opencloud-eu/reva/pull/662)]
 
 ## [2.46.2](https://github.com/opencloud-eu/reva/releases/tag/v2.46.2) - 2026-06-02
 
