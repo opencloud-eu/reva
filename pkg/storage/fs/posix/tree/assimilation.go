@@ -753,6 +753,7 @@ assimilate:
 		n = node.New(spaceID, id, parentID, filepath.Base(path), fi.Size(), blobID, provider.ResourceType_RESOURCE_TYPE_FILE, nil, t.lookup)
 		n.SpaceRoot = &node.Node{
 			BaseNode: *node.NewBaseNode(spaceID, spaceID, t.lookup),
+			Exists:   true,
 		}
 
 		prevBlobSize, err := previousAttribs.Int64(prefixes.BlobsizeAttr)
@@ -765,7 +766,10 @@ assimilate:
 	}
 	attributes.SetTime(prefixes.MTimeAttr, fi.ModTime())
 
-	n.SpaceRoot = &node.Node{BaseNode: *node.NewBaseNode(spaceID, spaceID, t.lookup)}
+	n.SpaceRoot = &node.Node{
+		BaseNode: *node.NewBaseNode(spaceID, spaceID, t.lookup),
+		Exists:   true,
+	}
 
 	if !fi.IsDir() && t.options.EnableFSRevisions {
 		go func() {
