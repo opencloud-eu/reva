@@ -710,6 +710,20 @@ func (t *Tree) InitNewNode(ctx context.Context, n *node.Node, fsize uint64) (met
 		}
 		return unlock, err
 	}
+
+	// Set known mtime from filesystem to metadata to preven re-assimilation
+	fi, err := h.Stat()
+	if err != nil {
+		return nil, err
+	}
+	mtime := fi.ModTime()
+	err = n.SetXattrsWithContext(ctx, map[string][]byte{
+		prefixes.MTimeAttr: []byte(mtime.UTC().Format(time.RFC3339Nano)),
+	}, false)
+	if err != nil {
+		t.log.Error().Err(err).Str("path", n.InternalPath()).Msg("could not set mtime attribute on new node")
+	}
+
 	_ = h.Close()
 
 	if _, err := node.CheckQuota(ctx, n.SpaceRoot, false, 0, fsize); err != nil {
