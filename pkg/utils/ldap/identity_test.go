@@ -187,6 +187,131 @@ func TestGetUserFindFilter(t *testing.T) {
 	}
 }
 
+func TestFilterEscapeAttribute(t *testing.T) {
+	tests := []struct {
+		name              string
+		userID            string
+		userIDIsOctetStr  bool
+		groupID           string
+		groupIDIsOctetStr bool
+		attribute         string
+		value             string
+		want              string
+		wantErr           bool
+	}{
+		{
+			name:              "user ID attribute octet string",
+			userID:            "objectGUID",
+			userIDIsOctetStr:  true,
+			groupID:           "gidNumber",
+			groupIDIsOctetStr: false,
+			attribute:         "objectGUID",
+			value:             "550e8400-e29b-41d4-a716-446655440000",
+			want:              "\\00\\84\\0e\\55\\9b\\e2\\d4\\41\\a7\\16\\44\\66\\55\\44\\00\\00",
+			wantErr:           false,
+		},
+		{
+			name:              "group ID attribute octet string",
+			userID:            "uid",
+			userIDIsOctetStr:  false,
+			groupID:           "objectGUID",
+			groupIDIsOctetStr: true,
+			attribute:         "objectGUID",
+			value:             "550e8400-e29b-41d4-a716-446655440000",
+			want:              "\\00\\84\\0e\\55\\9b\\e2\\d4\\41\\a7\\16\\44\\66\\55\\44\\00\\00",
+			wantErr:           false,
+		},
+		{
+			name:              "non-ID attribute with IDIsOctetString true falls through to EscapeFilter",
+			userID:            "objectGUID",
+			userIDIsOctetStr:  true,
+			groupID:           "gidNumber",
+			groupIDIsOctetStr: false,
+			attribute:         "mail",
+			value:             "test@example.com",
+			want:              "test@example.com",
+			wantErr:           false,
+		},
+		{
+			name:              "ID attribute with IDIsOctetString false uses EscapeFilter",
+			userID:            "uid",
+			userIDIsOctetStr:  false,
+			groupID:           "gidNumber",
+			groupIDIsOctetStr: false,
+			attribute:         "uid",
+			value:             "john",
+			want:              "john",
+			wantErr:           false,
+		},
+		{
+			name:              "normal attribute with special characters",
+			userID:            "uid",
+			userIDIsOctetStr:  false,
+			groupID:           "gidNumber",
+			groupIDIsOctetStr: false,
+			attribute:         "displayName",
+			value:             "test*(user)",
+			want:              "test\\2a\\28user\\29",
+			wantErr:           false,
+		},
+		{
+			name:              "invalid UUID on binary path returns error",
+			userID:            "objectGUID",
+			userIDIsOctetStr:  true,
+			groupID:           "gidNumber",
+			groupIDIsOctetStr: false,
+			attribute:         "objectGUID",
+			value:             "not-a-uuid",
+			want:              "",
+			wantErr:           true,
+		},
+		{
+			name:              "octet string non-objectGUID no byte swap",
+			userID:            "entryUUID",
+			userIDIsOctetStr:  true,
+			groupID:           "gidNumber",
+			groupIDIsOctetStr: false,
+			attribute:         "entryUUID",
+			value:             "550e8400-e29b-41d4-a716-446655440000",
+			want:              "\\55\\0e\\84\\00\\e2\\9b\\41\\d4\\a7\\16\\44\\66\\55\\44\\00\\00",
+			wantErr:           false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			i := &Identity{
+				User: userConfig{
+					Schema: userSchema{
+						ID:              tt.userID,
+						IDIsOctetString: tt.userIDIsOctetStr,
+					},
+				},
+				Group: groupConfig{
+					Schema: groupSchema{
+						ID:              tt.groupID,
+						IDIsOctetString: tt.groupIDIsOctetStr,
+					},
+				},
+			}
+
+			got, err := i.filterEscapeAttribute(tt.attribute, tt.value)
+			if tt.wantErr {
+				if err == nil {
+					t.Errorf("filterEscapeAttribute() expected error, got nil")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("filterEscapeAttribute() unexpected error: %v", err)
+			}
+			if got != tt.want {
+				t.Errorf("filterEscapeAttribute() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestFilterEscapeBinaryUUID(t *testing.T) {
 	tests := []struct {
 		name      string
