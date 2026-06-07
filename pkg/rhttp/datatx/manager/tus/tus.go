@@ -20,13 +20,17 @@ package tus
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"path"
 	"regexp"
 	"runtime"
 
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/go-viper/mapstructure/v2"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
@@ -35,6 +39,8 @@ import (
 
 	"github.com/opencloud-eu/reva/v2/internal/http/services/owncloud/ocdav/net"
 	"github.com/opencloud-eu/reva/v2/pkg/appctx"
+	"github.com/opencloud-eu/reva/v2/pkg/conversions"
+	ctxpkg "github.com/opencloud-eu/reva/v2/pkg/ctx"
 	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
 	"github.com/opencloud-eu/reva/v2/pkg/events"
 	"github.com/opencloud-eu/reva/v2/pkg/rhttp/datatx"
@@ -108,6 +114,9 @@ func (m *manager) Handler(fs storage.FS) (http.Handler, error) {
 		StoreComposer:         composer,
 		NotifyCompleteUploads: true,
 		Logger:                slog.New(tusdLogger{log: m.log}),
+		// Add the finalized resource's etag and permissions to the last chunk's response
+		// (see preFinishResponseCallback). https://github.com/opencloud-eu/opencloud/issues/2409
+		PreFinishResponseCallback: m.preFinishResponseCallback(fs),
 	}
 
 	if m.conf.CorsEnabled {
@@ -205,6 +214,83 @@ func (m *manager) Handler(fs storage.FS) (http.Handler, error) {
 	}))
 
 	return h, nil
+}
+
+// preFinishResponseCallback returns the tusd callback that runs when an upload completes. Before the
+// final response is written, it looks up the finalized resource and attaches its etag and WebDAV
+// permissions to the response headers, so clients do not need a follow-up PROPFIND after the last
+// chunk. It mirrors the etag and permissions the ocdav gateway already produces for the
+// creation-with-upload path. It is best-effort: it logs any lookup failure and still completes the
+// upload (the client falls back to a PROPFIND).
+// https://github.com/opencloud-eu/opencloud/issues/2409
+func (m *manager) preFinishResponseCallback(fs storage.FS) func(tusd.HookEvent) (tusd.HTTPResponse, error) {
+	return func(hook tusd.HookEvent) (tusd.HTTPResponse, error) {
+		resp := tusd.HTTPResponse{Header: tusd.HTTPHeader{}}
+
+		info := hook.Upload
+		ref := &provider.Reference{ResourceId: &provider.ResourceId{
+			StorageId: info.MetaData["providerID"],
+			SpaceId:   info.Storage["SpaceRoot"],
+			OpaqueId:  info.Storage["NodeId"],
+		}}
+
+		// The data path is authenticated by the reva transfer token, which carries no user
+		// identity, so a plain GetMD would be permission-gated to NotFound. Restore the upload's
+		// executant into the context the same way the decomposedfs upload session does, so the
+		// stat resolves with the executant's permissions.
+		ctx := ctxpkg.ContextSetUser(hook.Context, executantFromUploadInfo(info))
+
+		ri, err := fs.GetMD(ctx, ref, nil, nil)
+		if err != nil || ri == nil {
+			// Most often the upload token expired during a long upload; the client recovers with a
+			// PROPFIND, so this is a warning, not an error.
+			appctx.GetLogger(ctx).Warn().Err(err).Msg("could not stat finished upload, not setting etag/permission headers")
+			return resp, nil
+		}
+
+		if ri.GetEtag() != "" {
+			resp.Header[net.HeaderOCETag] = ri.GetEtag()
+			resp.Header[net.HeaderETag] = ri.GetEtag()
+		}
+
+		// derive the WebDAV permissions the same way the ocdav gateway does for the creation-with-upload path
+		isPublic := false
+		if o := ri.GetOpaque(); o != nil && o.Map != nil {
+			if e := o.Map["link-share"]; e != nil && e.Decoder == "json" {
+				ls := &link.PublicShare{}
+				_ = json.Unmarshal(e.Value, ls)
+				isPublic = ls != nil
+			}
+		}
+		isShared := !net.IsCurrentUserOwnerOrManager(ctx, ri.GetOwner(), ri)
+		role := conversions.RoleFromResourcePermissions(ri.GetPermissionSet(), isPublic)
+		resp.Header[net.HeaderOCPermissions] = role.WebDAVPermissions(
+			ri.GetType() == provider.ResourceType_RESOURCE_TYPE_CONTAINER,
+			isShared,
+			false,
+			isPublic,
+		)
+
+		return resp, nil
+	}
+}
+
+// executantFromUploadInfo reconstructs the user that initiated the upload from the tus session
+// info. It mirrors the decomposedfs upload session's executantUser so the finalize stat can run
+// with the executant's identity. The storage writes these keys when the upload is created.
+func executantFromUploadInfo(info tusd.FileInfo) *userpb.User {
+	var o *typespb.Opaque
+	_ = json.Unmarshal([]byte(info.Storage["UserOpaque"]), &o)
+	return &userpb.User{
+		Id: &userpb.UserId{
+			Type:     userpb.UserType(userpb.UserType_value[info.Storage["UserType"]]),
+			Idp:      info.Storage["Idp"],
+			OpaqueId: info.Storage["UserId"],
+		},
+		Username:    info.Storage["UserName"],
+		DisplayName: info.Storage["UserDisplayName"],
+		Opaque:      o,
+	}
 }
 
 func setHeaders(fs storage.FS, w http.ResponseWriter, r *http.Request) {
