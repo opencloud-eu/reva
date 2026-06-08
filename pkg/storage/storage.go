@@ -74,6 +74,10 @@ type FS interface {
 	InitiateUpload(ctx context.Context, ref *provider.Reference, uploadLength int64, metadata map[string]string) (map[string]string, error)
 	// Upload creates or updates a resource of type file with a new revision
 	Upload(ctx context.Context, req UploadRequest, uploadFunc UploadFinishedFunc) (*provider.ResourceInfo, error)
+	// MarkProcessing toggles a processing flag on the resource.
+	MarkProcessing(ctx context.Context, ref *provider.Reference, processing bool) error
+	// CommitUpload writes the staged bytes from source to the resource at ref.
+	CommitUpload(ctx context.Context, ref *provider.Reference, source UploadSource) (*provider.ResourceInfo, error)
 
 	// Revisions
 
@@ -156,6 +160,22 @@ type FS interface {
 // can list resources in disabled spaces.
 type SpaceDisabledListableFS interface {
 	WithDisabledSpaces() FS
+}
+
+// UploadChecksums holds pre-computed checksums for a CommitUpload call.
+// All three must be provided; the driver stores them as xattrs without recomputing.
+type UploadChecksums struct {
+	SHA1    []byte
+	MD5     []byte
+	Adler32 []byte
+}
+
+// UploadSource carries the staged bytes for a CommitUpload call.
+type UploadSource struct {
+	Body      io.ReadCloser
+	Length    int64
+	Metadata  map[string]string
+	Checksums UploadChecksums
 }
 
 // UnscopeFunc is a function that unscopes a user

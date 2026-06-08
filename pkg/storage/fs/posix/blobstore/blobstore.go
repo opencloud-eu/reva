@@ -188,6 +188,35 @@ func (bs *Blobstore) Upload(n *node.Node, source, copyTarget string) error {
 	return nil
 }
 
+// UploadFromReader stores data from a reader in the blobstore.
+func (bs *Blobstore) UploadFromReader(node *node.Node, r io.Reader, size int64) error {
+	path := node.InternalPath()
+
+	fi, _ := os.Stat(path)
+
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0700)
+	if err != nil {
+		return errors.Wrapf(err, "could not open blob '%s' for writing", path)
+	}
+	defer f.Close()
+
+	w := bufio.NewWriter(f)
+	if _, err = io.Copy(w, r); err != nil {
+		return errors.Wrapf(err, "could not write blob '%s'", path)
+	}
+	if err = w.Flush(); err != nil {
+		return errors.Wrapf(err, "could not flush blob '%s'", path)
+	}
+	if err = f.Sync(); err != nil {
+		return errors.Wrapf(err, "could not sync blob '%s' to disk", path)
+	}
+
+	if fi != nil {
+		return os.Chtimes(path, fi.ModTime(), fi.ModTime())
+	}
+	return nil
+}
+
 // Download retrieves a blob from the blobstore for reading
 func (bs *Blobstore) Download(node *node.Node) (io.ReadCloser, error) {
 	file, err := os.Open(node.InternalPath())

@@ -29,6 +29,7 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/decomposedfs/metadata/prefixes"
 	helpers "github.com/opencloud-eu/reva/v2/pkg/storage/utils/decomposedfs/testhelpers"
+	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
 	"github.com/stretchr/testify/mock"
 )
 
@@ -176,6 +177,58 @@ var _ = Describe("Grants", func() {
 				grants, err = env.Fs.ListGrants(env.Ctx, ref)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(grants)).To(Equal(0))
+			})
+		})
+	})
+
+	Context("on a node marked as processing", func() {
+		JustBeforeEach(func() {
+			env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(&provider.ResourcePermissions{
+				Stat:        true,
+				AddGrant:    true,
+				ListGrants:  true,
+				RemoveGrant: true,
+				UpdateGrant: true,
+			}, nil)
+		})
+
+		Describe("AddGrant", func() {
+			It("rejects with ResourceProcessing", func() {
+				Expect(env.Fs.MarkProcessing(env.Ctx, ref, true)).To(Succeed())
+
+				err := env.Fs.AddGrant(env.Ctx, ref, grant)
+
+				Expect(err).To(HaveOccurred())
+				_, ok := err.(errtypes.IsResourceProcessing)
+				Expect(ok).To(BeTrue(), "expected errtypes.ResourceProcessing, got %T: %v", err, err)
+			})
+		})
+
+		Describe("RemoveGrant", func() {
+			It("rejects with ResourceProcessing", func() {
+				// add a grant first so RemoveGrant reaches the processing guard (it bails early on missing grants)
+				Expect(env.Fs.AddGrant(env.Ctx, ref, grant)).To(Succeed())
+				Expect(env.Fs.MarkProcessing(env.Ctx, ref, true)).To(Succeed())
+
+				err := env.Fs.RemoveGrant(env.Ctx, ref, grant)
+
+				Expect(err).To(HaveOccurred())
+				_, ok := err.(errtypes.IsResourceProcessing)
+				Expect(ok).To(BeTrue(), "expected errtypes.ResourceProcessing, got %T: %v", err, err)
+			})
+		})
+
+		Describe("UpdateGrant", func() {
+			It("rejects with ResourceProcessing", func() {
+				// add a grant first so UpdateGrant reaches the processing guard (it bails early on missing grants)
+				Expect(env.Fs.AddGrant(env.Ctx, ref, grant)).To(Succeed())
+				Expect(env.Fs.MarkProcessing(env.Ctx, ref, true)).To(Succeed())
+
+				err := env.Fs.UpdateGrant(env.Ctx, ref, grant)
+
+				Expect(err).To(HaveOccurred())
+				_, ok := err.(errtypes.IsResourceProcessing)
+				Expect(ok).To(BeTrue(), "expected errtypes.ResourceProcessing, got %T: %v", err, err)
 			})
 		})
 	})

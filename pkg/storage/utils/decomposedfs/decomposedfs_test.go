@@ -172,5 +172,77 @@ var _ = Describe("Decomposed", func() {
 				env.Blobstore.AssertNotCalled(GinkgoT(), "Delete", mock.AnythingOfType("string"))
 			})
 		})
+
+		Context("on a node marked as processing", func() {
+			It("rejects with ResourceProcessing", func() {
+				fileRef := &provider.Reference{
+					ResourceId: env.SpaceRootRes,
+					Path:       "/dir1/file1",
+				}
+				env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(&provider.ResourcePermissions{
+					Stat:   true,
+					Delete: true,
+				}, nil)
+
+				Expect(env.Fs.MarkProcessing(env.Ctx, fileRef, true)).To(Succeed())
+
+				_, err := env.Fs.Delete(env.Ctx, fileRef)
+
+				Expect(err).To(HaveOccurred())
+				_, ok := err.(errtypes.IsResourceProcessing)
+				Expect(ok).To(BeTrue(), "expected errtypes.ResourceProcessing, got %T: %v", err, err)
+			})
+		})
+	})
+
+	Describe("Move", func() {
+		Context("on a source node marked as processing", func() {
+			It("rejects with ResourceProcessing", func() {
+				oldRef := &provider.Reference{
+					ResourceId: env.SpaceRootRes,
+					Path:       "/dir1/file1",
+				}
+				newRef := &provider.Reference{
+					ResourceId: env.SpaceRootRes,
+					Path:       "/dir1/file1-renamed",
+				}
+				env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(&provider.ResourcePermissions{
+					Stat:               true,
+					Move:               true,
+					InitiateFileUpload: true,
+				}, nil)
+
+				Expect(env.Fs.MarkProcessing(env.Ctx, oldRef, true)).To(Succeed())
+
+				_, err := env.Fs.Move(env.Ctx, oldRef, newRef)
+
+				Expect(err).To(HaveOccurred())
+				_, ok := err.(errtypes.IsResourceProcessing)
+				Expect(ok).To(BeTrue(), "expected errtypes.ResourceProcessing, got %T: %v", err, err)
+			})
+		})
+	})
+
+	Describe("Download", func() {
+		Context("on a node marked as processing", func() {
+			It("rejects with ResourceProcessing", func() {
+				fileRef := &provider.Reference{
+					ResourceId: env.SpaceRootRes,
+					Path:       "/dir1/file1",
+				}
+				env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(&provider.ResourcePermissions{
+					Stat:                 true,
+					InitiateFileDownload: true,
+				}, nil)
+
+				Expect(env.Fs.MarkProcessing(env.Ctx, fileRef, true)).To(Succeed())
+
+				_, _, err := env.Fs.Download(env.Ctx, fileRef, func(*provider.ResourceInfo) bool { return false })
+
+				Expect(err).To(HaveOccurred())
+				_, ok := err.(errtypes.IsResourceProcessing)
+				Expect(ok).To(BeTrue(), "expected errtypes.ResourceProcessing, got %T: %v", err, err)
+			})
+		})
 	})
 })

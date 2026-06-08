@@ -191,6 +191,54 @@ func (_c *Blobstore_Upload_Call) RunAndReturn(run func(*node.Node, string) error
 	return _c
 }
 
+// UploadFromReader provides a mock function with given fields: _a0, r, size
+func (_m *Blobstore) UploadFromReader(_a0 *node.Node, r io.Reader, size int64) error {
+	ret := _m.Called(_a0, r, size)
+
+	if len(ret) == 0 {
+		panic("no return value specified for UploadFromReader")
+	}
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(*node.Node, io.Reader, int64) error); ok {
+		r0 = rf(_a0, r, size)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+// Blobstore_UploadFromReader_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'UploadFromReader'
+type Blobstore_UploadFromReader_Call struct {
+	*mock.Call
+}
+
+// UploadFromReader is a helper method to define mock.On call
+//   - _a0 *node.Node
+//   - r io.Reader
+//   - size int64
+func (_e *Blobstore_Expecter) UploadFromReader(_a0 interface{}, r interface{}, size interface{}) *Blobstore_UploadFromReader_Call {
+	return &Blobstore_UploadFromReader_Call{Call: _e.mock.On("UploadFromReader", _a0, r, size)}
+}
+
+func (_c *Blobstore_UploadFromReader_Call) Run(run func(_a0 *node.Node, r io.Reader, size int64)) *Blobstore_UploadFromReader_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(*node.Node), args[1].(io.Reader), args[2].(int64))
+	})
+	return _c
+}
+
+func (_c *Blobstore_UploadFromReader_Call) Return(_a0 error) *Blobstore_UploadFromReader_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *Blobstore_UploadFromReader_Call) RunAndReturn(run func(*node.Node, io.Reader, int64) error) *Blobstore_UploadFromReader_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // NewBlobstore creates a new instance of Blobstore. It also registers a testing interface on the mock and a cleanup function to assert the mocks expectations.
 // The first argument is typically a *testing.T value.
 func NewBlobstore(t interface {

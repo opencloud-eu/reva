@@ -1,0 +1,148 @@
+// Copyright 2018-2021 CERN
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// In applying this license, CERN does not waive the privileges and immunities
+// granted to it by virtue of its status as an Intergovernmental Organization
+// or submit itself to any jurisdiction.
+
+package decomposedfs_test
+
+import (
+	"sync"
+
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/owncloud/reva/v2/pkg/errtypes"
+	helpers "github.com/owncloud/reva/v2/pkg/storage/utils/decomposedfs/testhelpers"
+
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+)
+
+var _ = Describe("MarkProcessing", func() {
+	var (
+		env *helpers.TestEnv
+
+		ref *provider.Reference
+	)
+
+	JustBeforeEach(func() {
+		var err error
+		env, err = helpers.NewTestEnv(nil)
+		Expect(err).ToNot(HaveOccurred())
+
+		ref = &provider.Reference{
+			ResourceId: env.SpaceRootRes,
+			Path:       "/dir1/file1",
+		}
+	})
+
+	AfterEach(func() {
+		if env != nil {
+			env.Cleanup()
+		}
+	})
+
+	// isProcessing reads the processing flag directly from the resolved node.
+	isProcessing := func() bool {
+		n, err := env.Lookup.NodeFromResource(env.Ctx, ref)
+		Expect(err).ToNot(HaveOccurred())
+		return n.IsProcessing(env.Ctx)
+	}
+
+	Context("on an unmarked node", func() {
+		It("sets the processing flag", func() {
+			Expect(isProcessing()).To(BeFalse())
+
+			err := env.Fs.MarkProcessing(env.Ctx, ref, true)
+
+			Expect(err).ToNot(HaveOccurred())
+			Expect(isProcessing()).To(BeTrue())
+		})
+
+		It("is a no-op when clearing", func() {
+			Expect(isProcessing()).To(BeFalse())
+
+			err := env.Fs.MarkProcessing(env.Ctx, ref, false)
+
+			Expect(err).ToNot(HaveOccurred())
+			Expect(isProcessing()).To(BeFalse())
+		})
+
+		It("allows only one concurrent mark", func() {
+			results := make([]error, 2)
+			ready := make(chan struct{})
+			var wg sync.WaitGroup
+			wg.Add(2)
+			for i := 0; i < 2; i++ {
+				i := i
+				go func() {
+					defer wg.Done()
+					<-ready
+					results[i] = env.Fs.MarkProcessing(env.Ctx, ref, true)
+				}()
+			}
+			close(ready)
+			wg.Wait()
+
+			nils := 0
+			for _, err := range results {
+				if err == nil {
+					nils++
+				} else {
+					_, ok := err.(errtypes.IsResourceProcessing)
+					Expect(ok).To(BeTrue(), "expected ResourceProcessing, got %T: %v", err, err)
+				}
+			}
+			Expect(nils).To(Equal(1))
+		})
+	})
+
+	Context("on an already-marked node", func() {
+		JustBeforeEach(func() {
+			Expect(env.Fs.MarkProcessing(env.Ctx, ref, true)).To(Succeed())
+		})
+
+		It("rejects a second mark with ResourceProcessing", func() {
+			err := env.Fs.MarkProcessing(env.Ctx, ref, true)
+
+			Expect(err).To(HaveOccurred())
+			_, ok := err.(errtypes.IsResourceProcessing)
+			Expect(ok).To(BeTrue(), "expected errtypes.ResourceProcessing, got %T: %v", err, err)
+		})
+
+		It("clears the processing flag", func() {
+			Expect(isProcessing()).To(BeTrue())
+
+			err := env.Fs.MarkProcessing(env.Ctx, ref, false)
+
+			Expect(err).ToNot(HaveOccurred())
+			Expect(isProcessing()).To(BeFalse())
+		})
+	})
+
+	Context("on a non-existent node", func() {
+		It("returns NotFound", func() {
+			missingRef := &provider.Reference{
+				ResourceId: env.SpaceRootRes,
+				Path:       "/dir1/does-not-exist",
+			}
+
+			err := env.Fs.MarkProcessing(env.Ctx, missingRef, true)
+
+			Expect(err).To(HaveOccurred())
+			_, ok := err.(errtypes.IsNotFound)
+			Expect(ok).To(BeTrue(), "expected errtypes.NotFound, got %T: %v", err, err)
+		})
+	})
+})
