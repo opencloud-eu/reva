@@ -423,38 +423,49 @@ func (t *Tree) Move(ctx context.Context, oldNode *node.Node, newNode *node.Node)
 
 	subspan.End()
 
-	_, subspan = tracer.Start(ctx, "warmup id cache for moved subtree")
-	// update id cache for the moved subtree.
-	if oldNode.IsDir(ctx) {
-		err = t.WarmupIDCache(filepath.Join(newNode.ParentPath(), newNode.Name), false, false)
+	// A pure rename within the same parent must not change treesize accounting.
+	if oldNode.ParentID == newNode.ParentID {
+		err = t.Propagate(ctx, newNode, 0)
 		if err != nil {
-			return err
+			t.log.Error().Err(err).Str("path", newNode.InternalPath()).Msg("could not propagate size changes for renamed node")
 		}
-	}
-	subspan.End()
-
-	// the size diff is the current treesize or blobsize of the old/source node
-	var sizeDiff int64
-	if oldNode.IsDir(ctx) {
-		treeSize, err := oldNode.GetTreeSize(ctx)
-		if err != nil {
-			return err
-		}
-		sizeDiff = int64(treeSize)
 	} else {
-		sizeDiff = oldNode.Blobsize
+		// the size diff is the current treesize or blobsize of the old/source node
+		var sizeDiff int64
+		if oldNode.IsDir(ctx) {
+			treeSize, err := oldNode.GetTreeSize(ctx)
+			if err != nil {
+				return err
+			}
+			sizeDiff = int64(treeSize)
+		} else {
+			sizeDiff = oldNode.Blobsize
+		}
+
+		_, subspan = tracer.Start(ctx, "propagate size changes")
+		err = t.Propagate(ctx, oldNode, -sizeDiff)
+		if err != nil {
+			t.log.Error().Err(err).Str("path", oldNode.InternalPath()).Msg("could not propagate size changes for old node")
+		}
+		err = t.Propagate(ctx, newNode, sizeDiff)
+		if err != nil {
+			t.log.Error().Err(err).Str("path", newNode.InternalPath()).Msg("could not propagate size changes for new node")
+		}
+		subspan.End()
 	}
 
-	_, subspan = tracer.Start(ctx, "propagate size changes")
-	err = t.Propagate(ctx, oldNode, -sizeDiff)
-	if err != nil {
-		return errors.Wrap(err, "posixfs: Move: could not propagate old node")
-	}
-	err = t.Propagate(ctx, newNode, sizeDiff)
-	if err != nil {
-		return errors.Wrap(err, "posixfs: Move: could not propagate new node")
-	}
-	subspan.End()
+	go func() {
+		_, subspan = tracer.Start(ctx, "warmup id cache for moved subtree")
+		// update id cache for the moved subtree.
+		if oldNode.IsDir(ctx) {
+			err = t.WarmupIDCache(filepath.Join(newNode.ParentPath(), newNode.Name), false, false)
+			if err != nil {
+				t.log.Error().Err(err).Str("path", filepath.Join(newNode.ParentPath(), newNode.Name)).Msg("failed to warmup id cache for moved subtree")
+			}
+		}
+		subspan.End()
+	}()
+
 	return nil
 }
 
