@@ -92,7 +92,6 @@ func (p SyncPropagator) propagateItem(ctx context.Context, n *node.Node, sTime t
 	attrs := node.Attributes{}
 
 	// lock parent before reading treesize or tree time
-
 	n, unlock, err := node.LockAndReadNode(ctx, p.lookup, n.SpaceID, n.ParentID, "", false, n.SpaceRoot, false)
 	if err != nil {
 		return nil, true, err
@@ -143,10 +142,21 @@ func (p SyncPropagator) propagateItem(ctx context.Context, n *node.Node, sTime t
 
 	// size accounting
 	if p.treeSizeAccounting && sizeDiff != 0 {
-		var newSize uint64
+		var (
+			newSize  uint64
+			treeSize uint64
+		)
 
 		// read treesize
-		treeSize, err := n.GetTreeSize(ctx)
+		if n.ID == n.SpaceID {
+			allAttrs, readErr := p.lookup.MetadataBackend().All(ctx, n)
+			if readErr == nil {
+				treeSize, readErr = node.Attributes(allAttrs).UInt64(prefixes.TreesizeAttr)
+			}
+			err = readErr
+		} else {
+			treeSize, err = n.GetTreeSize(ctx)
+		}
 		switch {
 		case metadata.IsAttrUnset(err):
 			// fallback to calculating the treesize
