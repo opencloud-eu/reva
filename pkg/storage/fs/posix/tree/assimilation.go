@@ -901,8 +901,7 @@ func (t *Tree) WarmupIDCache(root string, assimilate, onlyDirty bool) error {
 		if t.Ignorer.IsInternal(path) ||
 			ignore.IsLockFile(path) ||
 			ignore.IsTrash(path) ||
-			t.Ignorer.IsUpload(path) ||
-			t.Ignorer.IsIndex(path) {
+			t.Ignorer.IsUpload(path) {
 			if info.IsDir() {
 				return filepath.SkipDir
 			}
