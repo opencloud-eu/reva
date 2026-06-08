@@ -923,15 +923,17 @@ func (t *Tree) WarmupIDCache(root string, assimilate, onlyDirty bool) error {
 				dir = filepath.Clean(filepath.Dir(dir))
 				sizes[dir] += info.Size()
 			}
-		} else if onlyDirty {
-			dirty, err := t.isDirty(path)
-			if err != nil {
-				return err
-			}
-			if !dirty {
-				return filepath.SkipDir
-			}
+		} else {
 			sizes[path] += 0 // Make sure to set the size to 0 for empty directories
+			if onlyDirty {
+				dirty, err := t.isDirty(path)
+				if err != nil {
+					return err
+				}
+				if !dirty {
+					return filepath.SkipDir
+				}
+			}
 		}
 
 		nodeSpaceID, id, _, _, err := t.lookup.MetadataBackend().IdentifyPath(context.Background(), path)
