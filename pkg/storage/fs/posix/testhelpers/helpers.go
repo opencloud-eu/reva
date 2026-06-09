@@ -183,6 +183,10 @@ func NewTestEnv(config map[string]interface{}) (*TestEnv, error) {
 			"cache_store":    "nats-js-kv",
 			"cache_database": "ids-storage-users",
 		},
+		"filemetadata_cache": map[string]interface{}{
+			"cache_store":    "nats-js-kv",
+			"cache_database": "filemetadata-storage-users",
+		},
 	}
 	// make it possible to override single config values
 	maps.Copy(defaultConfig, config)
