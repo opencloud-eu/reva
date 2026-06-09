@@ -365,6 +365,7 @@ func LockAndReadNode(ctx context.Context, lu PathLookup, spaceID, nodeID, intern
 
 	n, err := ReadNode(ctx, lu, spaceID, nodeID, internalPath, canListDisabledSpace, spaceRoot, skipParentCheck)
 	if err != nil {
+		_ = unlock()
 		return nil, nil, err
 	}
 	if !n.Exists {
