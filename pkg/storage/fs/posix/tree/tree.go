@@ -445,10 +445,12 @@ func (t *Tree) Move(ctx context.Context, oldNode *node.Node, newNode *node.Node)
 		_, subspan = tracer.Start(ctx, "propagate size changes")
 		err = t.Propagate(ctx, oldNode, -sizeDiff)
 		if err != nil {
+			// log error but continue anyway. The move itself was successful and the treesize will self-heal during the next fs scan
 			t.log.Error().Err(err).Str("path", oldNode.InternalPath()).Msg("could not propagate size changes for old node")
 		}
 		err = t.Propagate(ctx, newNode, sizeDiff)
 		if err != nil {
+			// log error but continue anyway. The move itself was successful and the treesize will self-heal during the next fs scan
 			t.log.Error().Err(err).Str("path", newNode.InternalPath()).Msg("could not propagate size changes for new node")
 		}
 		subspan.End()
