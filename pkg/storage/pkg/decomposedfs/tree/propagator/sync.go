@@ -149,6 +149,9 @@ func (p SyncPropagator) propagateItem(ctx context.Context, n *node.Node, sTime t
 
 		// read treesize
 		if n.ID == n.SpaceID {
+			// Don't rely on node metadata for space root treesize. Space root nodes frequently get cached
+			// and passed around and might not be up to date
+			// Instead read all attributes directly from the backend and get the treesize from there.
 			allAttrs, readErr := p.lookup.MetadataBackend().All(ctx, n)
 			if readErr == nil {
 				treeSize, readErr = node.Attributes(allAttrs).UInt64(prefixes.TreesizeAttr)
