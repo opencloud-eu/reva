@@ -220,7 +220,7 @@ func (t *Tree) warmupSpaceRootCache(options *options.Options) error {
 		}
 		err = t.idCache.Set(context.TODO(), spaceID, spaceID, path)
 		if err != nil {
-			t.log.Error().Err(err).Str("spaceID", spaceID).Str("path", path).Msg("could not set space root id in cache")
+			return errors.Wrap(err, "could not cache space root path")
 		}
 	}
 	return nil
