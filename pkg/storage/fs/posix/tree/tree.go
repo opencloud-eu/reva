@@ -456,17 +456,17 @@ func (t *Tree) Move(ctx context.Context, oldNode *node.Node, newNode *node.Node)
 		subspan.End()
 	}
 
-	go func() {
-		_, subspan = tracer.Start(ctx, "warmup id cache for moved subtree")
-		// update id cache for the moved subtree.
-		if oldNode.IsDir(ctx) {
+	if oldNode.IsDir(ctx) {
+		go func() {
+			_, subspan = tracer.Start(ctx, "warmup id cache for moved subtree")
+			// update id cache for the moved subtree.
 			err = t.WarmupIDCache(filepath.Join(newNode.ParentPath(), newNode.Name), false, false)
 			if err != nil {
 				t.log.Error().Err(err).Str("path", filepath.Join(newNode.ParentPath(), newNode.Name)).Msg("failed to warmup id cache for moved subtree")
 			}
-		}
-		subspan.End()
-	}()
+			subspan.End()
+		}()
+	}
 
 	return nil
 }
