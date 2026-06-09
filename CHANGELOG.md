@@ -4,7 +4,7 @@
 
 ### ❤️ Thanks to all contributors! ❤️
 
-@aduffeck, @butonic, @michaelstingl, @rhafer
+@aduffeck, @butonic, @dragotin, @michaelstingl, @rhafer
 
 ### 🐛 Bug Fixes
 
