@@ -351,7 +351,7 @@ func (lu *Lookup) CopyMetadataWithSourceLock(ctx context.Context, sourceNode, ta
 		return errors.New("lockpath does not match filepath")
 	}
 
-	attrs, err := lu.metadataBackend.AllWithLockedSource(ctx, sourceNode, lockedSource)
+	attrs, err := lu.metadataBackend.All(ctx, sourceNode)
 	if err != nil {
 		return err
 	}
