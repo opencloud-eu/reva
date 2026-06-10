@@ -32,6 +32,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"github.com/pkg/xattr"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/rs/zerolog"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
@@ -178,7 +180,19 @@ func New(lu node.PathLookup, bs node.Blobstore, um usermapper.Mapper, trashbin *
 	}
 	if o.ScanFS {
 		go func() {
-			_ = t.WarmupIDCache(o.Root, true, false)
+			start := time.Now()
+			err := t.WarmupIDCache(o.Root, true, false)
+			if err != nil {
+				t.log.Error().Err(err).Msg("error during initial fs scan")
+			}
+			duration := time.Since(start)
+
+			scanDurationGauge := promauto.NewGauge(prometheus.GaugeOpts{
+				Name: "reva_fs_scan_duration_seconds",
+				Help: "Duration of the initial filesystem scan in seconds",
+			})
+			scanDurationGauge.Set(duration.Seconds())
+			t.log.Info().Dur("duration", duration).Msg("initial fs scan finished")
 		}()
 	}
 
