@@ -198,14 +198,14 @@ func (t *Tree) warmupSpaceRootCache(options *options.Options) error {
 
 	var paths []string
 	personalEntries, err := os.ReadDir(personalRoot)
-	if err != nil {
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return errors.Wrap(err, "could not read personal space root directory")
 	}
 	for _, entry := range personalEntries {
 		paths = append(paths, filepath.Join(personalRoot, entry.Name()))
 	}
 	projectEntries, err := os.ReadDir(projectRoot)
-	if err != nil {
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return errors.Wrap(err, "could not read project space root directory")
 	}
 	for _, entry := range projectEntries {
