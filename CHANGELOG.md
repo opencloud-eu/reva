@@ -1,6 +1,6 @@
 # Changelog
 
-## [2.46.3](https://github.com/opencloud-eu/reva/releases/tag/v2.46.3) - 2026-06-09
+## [2.46.3](https://github.com/opencloud-eu/reva/releases/tag/v2.46.3) - 2026-06-10
 
 ### ❤️ Thanks to all contributors! ❤️
 
@@ -8,6 +8,7 @@
 
 ### 🐛 Bug Fixes
 
+- fix: Add members to SpaceEnabled/Disabled Events [[#657](https://github.com/opencloud-eu/reva/pull/657)]
 - Improve apptoken jsoncs3 update behavior [[#663](https://github.com/opencloud-eu/reva/pull/663)]
 - prevent unwanted binary decoding [[#664](https://github.com/opencloud-eu/reva/pull/664)]
 - fix(ocdav): encode oc:downloadURL path so filenames with "%" round-trip [[#653](https://github.com/opencloud-eu/reva/pull/653)]
