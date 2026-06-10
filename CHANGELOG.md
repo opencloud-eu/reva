@@ -8,6 +8,7 @@
 
 ### 🐛 Bug Fixes
 
+- Warmup space root id cache during start up already [[#669](https://github.com/opencloud-eu/reva/pull/669)]
 - fix: Add members to SpaceEnabled/Disabled Events [[#657](https://github.com/opencloud-eu/reva/pull/657)]
 - Improve apptoken jsoncs3 update behavior [[#663](https://github.com/opencloud-eu/reva/pull/663)]
 - prevent unwanted binary decoding [[#664](https://github.com/opencloud-eu/reva/pull/664)]
