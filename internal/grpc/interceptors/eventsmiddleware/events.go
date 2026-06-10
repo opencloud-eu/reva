@@ -169,11 +169,12 @@ func NewUnary(m map[string]interface{}) (grpc.UnaryServerInterceptor, int, error
 		case *provider.UpdateStorageSpaceResponse:
 			if isSuccess(v) {
 				r := req.(*provider.UpdateStorageSpaceRequest)
-				if r.StorageSpace.Name != "" {
-					ev = SpaceRenamed(v, r, executant)
-				} else if utils.ExistsInOpaque(r.Opaque, "restore") {
+				switch {
+				case utils.ExistsInOpaque(r.Opaque, "restore"):
 					ev = SpaceEnabled(v, r, executant)
-				} else {
+				case r.StorageSpace.Name != "":
+					ev = SpaceRenamed(v, r, executant)
+				default:
 					ev = SpaceUpdated(v, r, executant)
 				}
 			}

@@ -608,6 +608,12 @@ func (s *Service) UpdateStorageSpace(ctx context.Context, req *provider.UpdateSt
 		return nil, err
 	}
 	s.addMissingStorageProviderID(res.GetStorageSpace().GetRoot(), res.GetStorageSpace().GetId())
+	if res.Opaque == nil {
+		res.Opaque = &typesv1beta1.Opaque{
+			Map: map[string]*typesv1beta1.OpaqueEntry{},
+		}
+	}
+	res.Opaque.Map["grants"] = res.StorageSpace.GetOpaque().GetMap()["grants"]
 	return res, nil
 }
 
