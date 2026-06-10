@@ -120,3 +120,60 @@ func TestSufficientPermissions(t *testing.T) {
 		assert.Equal(t, test.Sufficient, SufficientCS3Permissions(test.Existing, test.Requested))
 	}
 }
+
+func TestRolesWithVersions(t *testing.T) {
+	table := []struct {
+		name               string
+		role               *Role
+		expectedName       string
+		base               *Role
+		listFileVersions   bool
+		restoreFileVersion bool
+	}{
+		{
+			name:               "viewer-with-versions extends viewer with list versions",
+			role:               NewViewerWithVersionsRole(),
+			expectedName:       RoleViewerWithVersions,
+			base:               NewViewerRole(),
+			listFileVersions:   true,
+			restoreFileVersion: false,
+		},
+		{
+			name:               "editor-with-versions extends editor with list and restore versions",
+			role:               NewEditorWithVersionsRole(),
+			expectedName:       RoleEditorWithVersions,
+			base:               NewEditorRole(),
+			listFileVersions:   true,
+			restoreFileVersion: true,
+		},
+		{
+			name:               "file-editor-with-versions extends file-editor with list and restore versions",
+			role:               NewFileEditorWithVersionsRole(),
+			expectedName:       RoleFileEditorWithVersions,
+			base:               NewFileEditorRole(),
+			listFileVersions:   true,
+			restoreFileVersion: true,
+		},
+	}
+
+	for _, test := range table {
+		t.Run(test.name, func(t *testing.T) {
+			perms := test.role.CS3ResourcePermissions()
+
+			assert.Equal(t, test.expectedName, test.role.Name)
+
+			fromName := RoleFromName(test.expectedName)
+			assert.Equal(t, test.expectedName, fromName.Name)
+			assert.Equal(t, perms, fromName.CS3ResourcePermissions())
+
+			// the base role is a subset of the new role
+			basePerms := test.base.CS3ResourcePermissions()
+			assert.True(t, SufficientCS3Permissions(perms, basePerms),
+				"with-versions role should grant at least the base role's permissions")
+
+			// the base role has less permissions than the new role
+			assert.False(t, SufficientCS3Permissions(basePerms, perms),
+				"base role should not be sufficient for the with-versions role")
+		})
+	}
+}
