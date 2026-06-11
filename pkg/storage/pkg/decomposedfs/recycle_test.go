@@ -53,6 +53,7 @@ var _ = Describe("Recycle", func() {
 					registerPermissions(env.GetPermissions(), "25b69780-5f39-43be-a7ac-a9b9e9fe4230", &provider.ResourcePermissions{
 						InitiateFileUpload: true,
 						Delete:             true,
+						DeleteContainer:    true,
 						ListRecycle:        true,
 						PurgeRecycle:       true,
 						RestoreRecycleItem: true,
@@ -138,6 +139,7 @@ var _ = Describe("Recycle", func() {
 					registerPermissions(env.GetPermissions(), "25b69780-5f39-43be-a7ac-a9b9e9fe4230", &provider.ResourcePermissions{
 						InitiateFileUpload: true,
 						Delete:             true,
+						DeleteContainer:    true,
 						ListRecycle:        true,
 						PurgeRecycle:       true,
 						RestoreRecycleItem: true,
@@ -147,6 +149,7 @@ var _ = Describe("Recycle", func() {
 					registerPermissions(env.GetPermissions(), "anotheruserid", &provider.ResourcePermissions{
 						InitiateFileUpload: true,
 						Delete:             true,
+						DeleteContainer:    true,
 						ListRecycle:        true,
 						PurgeRecycle:       true,
 						RestoreRecycleItem: true,
@@ -249,6 +252,7 @@ var _ = Describe("Recycle", func() {
 						Stat:               true,
 						InitiateFileUpload: true,
 						Delete:             true,
+						DeleteContainer:    true,
 						ListRecycle:        true,
 						PurgeRecycle:       true,
 						RestoreRecycleItem: true,
@@ -322,6 +326,7 @@ var _ = Describe("Recycle", func() {
 					registerPermissions(env.GetPermissions(), "25b69780-5f39-43be-a7ac-a9b9e9fe4230", &provider.ResourcePermissions{
 						Stat:               true,
 						Delete:             true,
+						DeleteContainer:    true,
 						ListRecycle:        true,
 						PurgeRecycle:       true,
 						RestoreRecycleItem: true,
@@ -410,6 +415,7 @@ var _ = Describe("Recycle", func() {
 				registerPermissions(env.GetPermissions(), "25b69780-5f39-43be-a7ac-a9b9e9fe4230", &provider.ResourcePermissions{
 					Stat:               true,
 					Delete:             true,
+						DeleteContainer:    true,
 					ListRecycle:        true,
 					PurgeRecycle:       true,
 					RestoreRecycleItem: true,

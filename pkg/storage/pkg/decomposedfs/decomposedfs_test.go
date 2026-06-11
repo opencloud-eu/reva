@@ -133,6 +133,149 @@ var _ = Describe("Decomposed", func() {
 		})
 	})
 
+	Describe("Immutable", func() {
+		Context("Delete on immutable resource", func() {
+			It("denies deleting a frozen directory", func() {
+				env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(&provider.ResourcePermissions{
+					Stat:            true,
+					Delete:          true,
+					CreateContainer: true,
+				}, nil)
+
+				// Create and protect dir
+				dir := &provider.Reference{ResourceId: env.SpaceRootRes, Path: "/immdir"}
+				err := env.Fs.CreateDir(env.Ctx, dir)
+				Expect(err).ToNot(HaveOccurred())
+
+				n, err := env.Lookup.NodeFromResource(env.Ctx, dir)
+				Expect(err).ToNot(HaveOccurred())
+				err = n.ProtectContainer(env.Ctx)
+				Expect(err).ToNot(HaveOccurred())
+
+				// Delete should fail
+				err = env.Fs.Delete(env.Ctx, dir)
+				Expect(err).To(MatchError(ContainSubstring("permission denied")))
+			})
+
+			It("denies deleting a child in a protected directory", func() {
+				env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(&provider.ResourcePermissions{
+					Stat:            true,
+					Delete:          true,
+					CreateContainer: true,
+				}, nil)
+
+				// Protect dir1 (created by test env)
+				n, err := env.Lookup.NodeFromResource(env.Ctx, ref)
+				Expect(err).ToNot(HaveOccurred())
+				err = n.ProtectContainer(env.Ctx)
+				Expect(err).ToNot(HaveOccurred())
+
+				// Try to delete subdir1 inside dir1
+				child := &provider.Reference{ResourceId: env.SpaceRootRes, Path: "/dir1/subdir1"}
+				err = env.Fs.Delete(env.Ctx, child)
+				Expect(err).To(MatchError(ContainSubstring("permission denied")))
+			})
+		})
+
+		Context("CreateDir in immutable container", func() {
+			It("denies creating a subdirectory in a protected container", func() {
+				env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(&provider.ResourcePermissions{
+					Stat:            true,
+					CreateContainer: true,
+				}, nil)
+
+				// Protect dir1
+				n, err := env.Lookup.NodeFromResource(env.Ctx, ref)
+				Expect(err).ToNot(HaveOccurred())
+				err = n.ProtectContainer(env.Ctx)
+				Expect(err).ToNot(HaveOccurred())
+
+				// Try to create new dir inside
+				newDir := &provider.Reference{ResourceId: env.SpaceRootRes, Path: "/dir1/newdir"}
+				err = env.Fs.CreateDir(env.Ctx, newDir)
+				Expect(err).To(MatchError(ContainSubstring("permission denied")))
+			})
+		})
+
+		Context("Move on immutable resource", func() {
+			It("denies moving a frozen directory", func() {
+				env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(&provider.ResourcePermissions{
+					Stat:            true,
+					Move:            true,
+					CreateContainer: true,
+				}, nil)
+
+				// Protect dir1
+				n, err := env.Lookup.NodeFromResource(env.Ctx, ref)
+				Expect(err).ToNot(HaveOccurred())
+				err = n.ProtectContainer(env.Ctx)
+				Expect(err).ToNot(HaveOccurred())
+
+				// Try to rename dir1
+				newRef := &provider.Reference{ResourceId: env.SpaceRootRes, Path: "/dir1-renamed"}
+				err = env.Fs.Move(env.Ctx, ref, newRef)
+				Expect(err).To(MatchError(ContainSubstring("permission denied")))
+			})
+		})
+
+		Context("Upload in immutable container", func() {
+			It("denies uploading a new file into a protected directory", func() {
+				env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(&provider.ResourcePermissions{
+					Stat:               true,
+					CreateContainer:    true,
+					InitiateFileUpload: true,
+					GetQuota:           true,
+				}, nil)
+
+				// Protect dir1
+				n, err := env.Lookup.NodeFromResource(env.Ctx, ref)
+				Expect(err).ToNot(HaveOccurred())
+				err = n.ProtectContainer(env.Ctx)
+				Expect(err).ToNot(HaveOccurred())
+
+				// Try to upload new file into dir1
+				fileRef := &provider.Reference{ResourceId: env.SpaceRootRes, Path: "/dir1/newfile.txt"}
+				_, err = env.Fs.InitiateUpload(env.Ctx, fileRef, 10, map[string]string{})
+				Expect(err).To(MatchError(ContainSubstring("permission denied")))
+			})
+		})
+
+		Context("SetImmutable permissions", func() {
+			It("denies SetImmutable without SetImmutableContainer permission", func() {
+				env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(&provider.ResourcePermissions{
+					Stat:            true,
+					CreateContainer: true,
+				}, nil)
+
+				err := env.Fs.SetImmutable(env.Ctx, ref)
+				Expect(err).To(MatchError(ContainSubstring("permission denied")))
+			})
+
+			It("allows SetImmutable with SetImmutableContainer permission", func() {
+				env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(&provider.ResourcePermissions{
+					Stat:                  true,
+					CreateContainer:       true,
+					SetImmutableContainer: true,
+				}, nil)
+
+				err := env.Fs.SetImmutable(env.Ctx, ref)
+				Expect(err).ToNot(HaveOccurred())
+			})
+
+			It("denies UnsetImmutable on a file", func() {
+				env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(&provider.ResourcePermissions{
+					Stat:                  true,
+					SetImmutableContainer: true,
+					InitiateFileUpload:    true,
+				}, nil)
+
+				fileRef := &provider.Reference{ResourceId: env.SpaceRootRes, Path: "/dir1/file1"}
+				err := env.Fs.UnsetImmutable(env.Ctx, fileRef)
+				Expect(err).To(HaveOccurred())
+			})
+		})
+	})
+
 	Describe("Delete", func() {
 		Context("with no permissions", func() {
 			It("returns an error", func() {
@@ -160,8 +303,9 @@ var _ = Describe("Decomposed", func() {
 		Context("with sufficient permissions", func() {
 			JustBeforeEach(func() {
 				env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(&provider.ResourcePermissions{
-					Stat:   true,
-					Delete: true,
+					Stat:            true,
+					Delete:          true,
+					DeleteContainer: true,
 				}, nil)
 			})
 

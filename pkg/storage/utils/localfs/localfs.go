@@ -745,6 +745,14 @@ func (fs *localfs) Unlock(ctx context.Context, ref *provider.Reference, lock *pr
 	return errtypes.NotSupported("unimplemented")
 }
 
+func (fs *localfs) SetImmutable(ctx context.Context, ref *provider.Reference) error {
+	return errtypes.NotSupported("unimplemented")
+}
+
+func (fs *localfs) UnsetImmutable(ctx context.Context, ref *provider.Reference) error {
+	return errtypes.NotSupported("unimplemented")
+}
+
 func (fs *localfs) GetHome(ctx context.Context) (string, error) {
 	if fs.conf.DisableHome {
 		return "", errtypes.NotSupported("local: get home not supported")

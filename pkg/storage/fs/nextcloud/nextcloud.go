@@ -872,6 +872,14 @@ func (nc *StorageDriver) RemoveLabel(ctx context.Context, ref *provider.Referenc
 	return errtypes.NotSupported("RemoveLabel not implemented")
 }
 
+func (nc *StorageDriver) SetImmutable(ctx context.Context, ref *provider.Reference) error {
+	return errtypes.NotSupported("unimplemented")
+}
+
+func (nc *StorageDriver) UnsetImmutable(ctx context.Context, ref *provider.Reference) error {
+	return errtypes.NotSupported("unimplemented")
+}
+
 // ListStorageSpaces as defined in the storage.FS interface
 func (nc *StorageDriver) ListStorageSpaces(ctx context.Context, f []*provider.ListStorageSpacesRequest_Filter, unrestricted bool) ([]*provider.StorageSpace, error) {
 	bodyStr, _ := json.Marshal(f)

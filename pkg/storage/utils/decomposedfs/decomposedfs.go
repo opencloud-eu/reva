@@ -1241,6 +1241,14 @@ func (fs *Decomposedfs) RemoveLabel(ctx context.Context, ref *provider.Reference
 	return errtypes.NotSupported("RemoveLabel not implemented")
 }
 
+func (fs *Decomposedfs) SetImmutable(ctx context.Context, ref *provider.Reference) error {
+	return errtypes.NotSupported("use pkg/decomposedfs")
+}
+
+func (fs *Decomposedfs) UnsetImmutable(ctx context.Context, ref *provider.Reference) error {
+	return errtypes.NotSupported("use pkg/decomposedfs")
+}
+
 func (fs *Decomposedfs) ListRecycle(ctx context.Context, ref *provider.Reference, key, relativePath string) ([]*provider.RecycleItem, error) {
 	return fs.trashbin.ListRecycle(ctx, ref, key, relativePath)
 }

@@ -1136,6 +1136,17 @@ func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, p
 			false,
 			isPublic,
 		)
+		// Strip delete/move flags from permissions if resource is effectively immutable
+		isEffectivelyImmutable := md.Immutable
+		if !isEffectivelyImmutable && md.Opaque != nil {
+			if v, ok := md.Opaque.Map["immutable-state"]; ok && string(v.Value) == "protected" {
+				isEffectivelyImmutable = true
+			}
+		}
+		if isEffectivelyImmutable {
+			wdp = strings.ReplaceAll(wdp, "D", "")
+			wdp = strings.ReplaceAll(wdp, "NV", "")
+		}
 	}
 
 	// replace fileid of /public/{token} mountpoint with grant fileid
@@ -1227,6 +1238,15 @@ func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, p
 
 		if md.PermissionSet != nil {
 			appendToOK(prop.Escaped("oc:permissions", wdp))
+		}
+
+		// Immutable state — always return in allprops if set
+		if md.Immutable {
+			appendToOK(prop.Escaped("oc:immutable", "frozen"))
+		} else if md.Opaque != nil {
+			if v, ok := md.Opaque.Map["immutable-state"]; ok && string(v.Value) == "protected" {
+				appendToOK(prop.Escaped("oc:immutable", "protected"))
+			}
 		}
 
 		// always return size, well nearly always ... public link shares are a little weird
@@ -1362,6 +1382,18 @@ func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, p
 					// M = Mounted
 					// in contrast, the ocs:share-permissions further down below indicate clients the maximum permissions that can be granted
 					appendToOK(prop.Escaped("oc:permissions", wdp))
+				case "immutable":
+					if md.Immutable {
+						appendToOK(prop.Escaped("oc:immutable", "frozen"))
+					} else if md.Opaque != nil {
+						if v, ok := md.Opaque.Map["immutable-state"]; ok && string(v.Value) == "protected" {
+							appendToOK(prop.Escaped("oc:immutable", "protected"))
+						} else {
+							appendToNotFound(prop.NotFound("oc:immutable"))
+						}
+					} else {
+						appendToNotFound(prop.NotFound("oc:immutable"))
+					}
 				case "public-link-permission": // only on a share root node
 					if ls != nil && md.PermissionSet != nil {
 						appendToOK(prop.Escaped("oc:public-link-permission", role.OCSPermissions().String()))
