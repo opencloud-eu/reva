@@ -46,7 +46,6 @@ import (
 	cs3permissions "github.com/cs3org/go-cs3apis/cs3/permissions/v1beta1"
 	v1beta11 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	providerv1beta1 "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	ruser "github.com/opencloud-eu/reva/v2/pkg/ctx"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/node"
 	nodemocks "github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/node/mocks"
@@ -232,7 +231,7 @@ func NewTestEnv(config map[string]interface{}) (*DecomposedTestEnv, error) {
 	if err != nil {
 		return nil, err
 	}
-	ctx := ruser.ContextSetUser(context.Background(), owner)
+	ctx := ctxpkg.ContextSetUser(context.Background(), owner)
 
 	tmpFs, _ := fs.(*decomposedfs.Decomposedfs)
 
@@ -363,7 +362,7 @@ func (t *DecomposedTestEnv) CreateTestStorageSpace(typ string, quota *providerv1
 		return nil, err
 	}
 
-	t.Fs.AddGrant(t.Ctx, &providerv1beta1.Reference{
+	err = t.Fs.AddGrant(t.Ctx, &providerv1beta1.Reference{
 		ResourceId: space.StorageSpace.Root,
 	}, &providerv1beta1.Grant{
 		Grantee: &providerv1beta1.Grantee{
@@ -374,6 +373,9 @@ func (t *DecomposedTestEnv) CreateTestStorageSpace(typ string, quota *providerv1
 		},
 		Permissions: conv.NewManagerRole().CS3ResourcePermissions(),
 	})
+	if err != nil {
+		return nil, err
+	}
 
 	ref := buildRef(space.StorageSpace.Id.OpaqueId, "")
 
