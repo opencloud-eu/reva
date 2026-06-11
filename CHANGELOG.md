@@ -1,12 +1,29 @@
 # Changelog
 
+## [2.46.3](https://github.com/opencloud-eu/reva/releases/tag/v2.46.3) - 2026-06-10
+
+### ❤️ Thanks to all contributors! ❤️
+
+@aduffeck, @butonic, @dragotin, @michaelstingl, @rhafer
+
+### 🐛 Bug Fixes
+
+- Warmup space root id cache during start up already [[#669](https://github.com/opencloud-eu/reva/pull/669)]
+- fix: Add members to SpaceEnabled/Disabled Events [[#657](https://github.com/opencloud-eu/reva/pull/657)]
+- Improve apptoken jsoncs3 update behavior [[#663](https://github.com/opencloud-eu/reva/pull/663)]
+- prevent unwanted binary decoding [[#664](https://github.com/opencloud-eu/reva/pull/664)]
+- fix(ocdav): encode oc:downloadURL path so filenames with "%" round-trip [[#653](https://github.com/opencloud-eu/reva/pull/653)]
+- fix(ocdav): create the file on LOCK of a non-existent path [[#652](https://github.com/opencloud-eu/reva/pull/652)]
+
+### 📦️ Dependencies
+
+- chore(deps): bump github.com/go-playground/validator/v10 from 10.30.2 to 10.30.3 [[#662](https://github.com/opencloud-eu/reva/pull/662)]
+
 ## [2.46.2](https://github.com/opencloud-eu/reva/releases/tag/v2.46.2) - 2026-06-02
 
 ### ❤️ Thanks to all contributors! ❤️
 
 @dragonchaser
-
-
 
 ## [2.46.1](https://github.com/opencloud-eu/reva/releases/tag/v2.46.1) - 2026-06-01
 
