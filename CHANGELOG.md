@@ -4,7 +4,7 @@
 
 ### ❤️ Thanks to all contributors! ❤️
 
-@micbar
+@aduffeck, @micbar
 
 ### 📈 Enhancement
 
