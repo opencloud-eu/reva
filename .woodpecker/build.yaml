@@ -13,6 +13,7 @@ when:
     branch:
       - ${CI_REPO_DEFAULT_BRANCH}
       - feature/*
+      - stable-*
   - event: cron
   - event: pull_request
     evaluate: |

@@ -8,6 +8,7 @@ when:
     branch:
       - ${CI_REPO_DEFAULT_BRANCH}
       - feature/*
+      - stable-*
   - event:
       - pull_request
       - cron
