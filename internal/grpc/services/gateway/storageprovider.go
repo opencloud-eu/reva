@@ -725,46 +725,6 @@ func (s *svc) CreateContainer(ctx context.Context, req *provider.CreateContainer
 	return res, nil
 }
 
-func (s *svc) AddLabel(ctx context.Context, req *provider.AddLabelRequest) (*provider.AddLabelResponse, error) {
-	var c provider.ProviderAPIClient
-	var err error
-	c, _, req.Ref, err = s.findAndUnwrap(ctx, req.Ref)
-	if err != nil {
-		return &provider.AddLabelResponse{
-			Status: status.NewStatusFromErrType(ctx, fmt.Sprintf("gateway could not find space for ref=%+v", req.Ref), err),
-		}, nil
-	}
-
-	res, err := c.AddLabel(ctx, req)
-	if err != nil {
-		return &provider.AddLabelResponse{
-			Status: status.NewStatusFromErrType(ctx, "gateway could not call AddLabel", err),
-		}, nil
-	}
-
-	return res, nil
-}
-
-func (s *svc) RemoveLabel(ctx context.Context, req *provider.RemoveLabelRequest) (*provider.RemoveLabelResponse, error) {
-	var c provider.ProviderAPIClient
-	var err error
-	c, _, req.Ref, err = s.findAndUnwrap(ctx, req.Ref)
-	if err != nil {
-		return &provider.RemoveLabelResponse{
-			Status: status.NewStatusFromErrType(ctx, fmt.Sprintf("gateway could not find space for ref=%+v", req.Ref), err),
-		}, nil
-	}
-
-	res, err := c.RemoveLabel(ctx, req)
-	if err != nil {
-		return &provider.RemoveLabelResponse{
-			Status: status.NewStatusFromErrType(ctx, "gateway could not call RemoveLabel", err),
-		}, nil
-	}
-
-	return res, nil
-}
-
 func (s *svc) TouchFile(ctx context.Context, req *provider.TouchFileRequest) (*provider.TouchFileResponse, error) {
 	var c provider.ProviderAPIClient
 	var err error
