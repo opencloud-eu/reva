@@ -26,6 +26,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	conv "github.com/opencloud-eu/reva/v2/pkg/conversions"
+	ctxpkg "github.com/opencloud-eu/reva/v2/pkg/ctx"
 	"github.com/opencloud-eu/reva/v2/pkg/rgrpc/todo/pool"
 	"github.com/opencloud-eu/reva/v2/pkg/storage"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/timemanager"
@@ -73,6 +75,7 @@ type DecomposedTestEnv struct {
 	Permissions          *mocks.PermissionsChecker
 	Blobstore            *nodemocks.Blobstore
 	Owner                *userpb.User
+	SpaceManager         *userpb.User
 	DeleteAllSpacesUser  *userpb.User
 	DeleteHomeSpacesUser *userpb.User
 	Users                []*userpb.User
@@ -108,6 +111,7 @@ const (
 	OwnerID                = "25b69780-5f39-43be-a7ac-a9b9e9fe4230"
 	DeleteAllSpacesUserID  = "39885dbc-68c0-47c0-a873-9d5e5646dceb"
 	DeleteHomeSpacesUserID = "ca8c6bf1-36a7-4d10-87a5-a2806566f983"
+	ManagerID              = "c02cb356-9df3-429d-9e05-b74c14117a78"
 	User0ID                = "824385ae-8fc6-4896-8eb2-d1d171290bd0"
 	User1ID                = "693b0d96-80a2-4016-b53d-425ce4f66114"
 )
@@ -168,6 +172,14 @@ func NewTestEnv(config map[string]interface{}) (*DecomposedTestEnv, error) {
 			Type:     userpb.UserType_USER_TYPE_PRIMARY,
 		},
 		Username: "username",
+	}
+	spaceManager := &userpb.User{
+		Id: &userpb.UserId{
+			Idp:      "idp",
+			OpaqueId: ManagerID,
+			Type:     userpb.UserType_USER_TYPE_PRIMARY,
+		},
+		Username: "manager",
 	}
 	users := []*userpb.User{
 		{
@@ -232,6 +244,7 @@ func NewTestEnv(config map[string]interface{}) (*DecomposedTestEnv, error) {
 		Permissions:          pmock,
 		Blobstore:            bs,
 		Owner:                owner,
+		SpaceManager:         spaceManager,
 		DeleteAllSpacesUser:  deleteAllSpacesUser,
 		DeleteHomeSpacesUser: deleteHomeSpacesUser,
 		Users:                users,
@@ -325,10 +338,17 @@ func (t *DecomposedTestEnv) CreateTestStorageSpace(typ string, quota *providerv1
 		Status: &v1beta11.Status{Code: v1beta11.Code_CODE_OK},
 	}, nil)
 	// Permissions required for setup below
-	t.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(&providerv1beta1.ResourcePermissions{
-		Stat:     true,
-		AddGrant: true,
-	}, nil).Times(1) //
+	t.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(
+		func(ctx context.Context, n *node.Node) (*providerv1beta1.ResourcePermissions, error) {
+			id := ctxpkg.ContextMustGetUser(ctx).Id.GetOpaqueId()
+			switch id {
+			case t.Owner.GetId().GetOpaqueId(): // owner/admin
+				return node.OwnerPermissions(), nil
+			case t.SpaceManager.GetId().GetOpaqueId(): // space manager
+				return conv.NewManagerRole().CS3ResourcePermissions(), nil
+			}
+			return node.NoPermissions(), nil
+		}, nil)
 
 	var owner *userpb.User
 	if typ == "personal" {
@@ -342,6 +362,18 @@ func (t *DecomposedTestEnv) CreateTestStorageSpace(typ string, quota *providerv1
 	if err != nil {
 		return nil, err
 	}
+
+	t.Fs.AddGrant(t.Ctx, &providerv1beta1.Reference{
+		ResourceId: space.StorageSpace.Root,
+	}, &providerv1beta1.Grant{
+		Grantee: &providerv1beta1.Grantee{
+			Type: providerv1beta1.GranteeType_GRANTEE_TYPE_USER,
+			Id: &providerv1beta1.Grantee_UserId{
+				UserId: t.SpaceManager.Id,
+			},
+		},
+		Permissions: conv.NewManagerRole().CS3ResourcePermissions(),
+	})
 
 	ref := buildRef(space.StorageSpace.Id.OpaqueId, "")
 
