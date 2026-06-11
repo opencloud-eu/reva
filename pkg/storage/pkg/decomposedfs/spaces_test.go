@@ -213,7 +213,7 @@ var _ = Describe("Spaces", func() {
 				})
 				Expect(err).ToNot(HaveOccurred())
 				env.PermissionsClient.On("CheckPermission", mock.Anything, mock.Anything, mock.Anything).Return(&cs3permissions.CheckPermissionResponse{Status: &rpcv1beta1.Status{Code: rpcv1beta1.Code_CODE_OK}}, nil)
-				env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(&provider.ResourcePermissions{
+				env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything).Return(&provider.ResourcePermissions{
 					Stat:     true,
 					AddGrant: true,
 					GetQuota: true,
@@ -280,8 +280,8 @@ var _ = Describe("Spaces", func() {
 					}
 				}, nil)
 
-			env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Unset()
-			env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(
+			env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything).Unset()
+			env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything).Return(
 				func(ctx context.Context, n *node.Node) *provider.ResourcePermissions {
 					switch ctxpkg.ContextMustGetUser(ctx).GetId().GetOpaqueId() {
 					case manager.GetId().GetOpaqueId():

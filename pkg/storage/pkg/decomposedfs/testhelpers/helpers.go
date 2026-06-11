@@ -337,7 +337,7 @@ func (t *DecomposedTestEnv) CreateTestStorageSpace(typ string, quota *providerv1
 		Status: &v1beta11.Status{Code: v1beta11.Code_CODE_OK},
 	}, nil)
 	// Permissions required for setup below
-	t.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(
+	t.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything).Return(
 		func(ctx context.Context, n *node.Node) (*providerv1beta1.ResourcePermissions, error) {
 			id := ctxpkg.ContextMustGetUser(ctx).Id.GetOpaqueId()
 			switch id {
@@ -393,7 +393,7 @@ func (t *DecomposedTestEnv) CreateTestStorageSpace(typ string, quota *providerv1
 	}
 
 	// Create dir1
-	t.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(&providerv1beta1.ResourcePermissions{
+	t.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything).Return(&providerv1beta1.ResourcePermissions{
 		Stat:            true,
 		CreateContainer: true,
 	}, nil).Times(1) // Permissions required for setup below
@@ -409,7 +409,7 @@ func (t *DecomposedTestEnv) CreateTestStorageSpace(typ string, quota *providerv1
 	}
 
 	// Create subdir1 in dir1
-	t.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(&providerv1beta1.ResourcePermissions{
+	t.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything).Return(&providerv1beta1.ResourcePermissions{
 		Stat:            true,
 		CreateContainer: true,
 	}, nil).Times(1) // Permissions required for setup below
@@ -425,7 +425,7 @@ func (t *DecomposedTestEnv) CreateTestStorageSpace(typ string, quota *providerv1
 	}
 
 	// Create emptydir
-	t.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(&providerv1beta1.ResourcePermissions{
+	t.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything).Return(&providerv1beta1.ResourcePermissions{
 		Stat:            true,
 		CreateContainer: true,
 	}, nil).Times(1) // Permissions required for setup below
