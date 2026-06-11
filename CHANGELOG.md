@@ -1,5 +1,15 @@
 # Changelog
 
+## [2.47.0](https://github.com/opencloud-eu/reva/releases/tag/v2.47.0) - 2026-06-11
+
+### ❤️ Thanks to all contributors! ❤️
+
+@micbar
+
+### 📈 Enhancement
+
+- feat: add more roles [[#671](https://github.com/opencloud-eu/reva/pull/671)]
+
 ## [2.46.3](https://github.com/opencloud-eu/reva/releases/tag/v2.46.3) - 2026-06-10
 
 ### ❤️ Thanks to all contributors! ❤️
