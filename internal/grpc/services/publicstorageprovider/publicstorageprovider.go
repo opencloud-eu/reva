@@ -929,11 +929,11 @@ func (s *service) GetQuota(ctx context.Context, req *provider.GetQuotaRequest) (
 	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
 }
 
-func (s *service) AddLabel(ctx context.Context, req *provider.AddLabelRequest) (*provider.AddLabelResponse, error) {
+func (s *service) SetImmutable(ctx context.Context, req *provider.SetImmutableRequest) (*provider.SetImmutableResponse, error) {
 	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
 }
 
-func (s *service) RemoveLabel(ctx context.Context, req *provider.RemoveLabelRequest) (*provider.RemoveLabelResponse, error) {
+func (s *service) UnsetImmutable(ctx context.Context, req *provider.UnsetImmutableRequest) (*provider.UnsetImmutableResponse, error) {
 	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
 }
 

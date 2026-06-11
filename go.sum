@@ -239,8 +239,8 @@ github.com/cpuguy83/go-md2man/v2 v2.0.6 h1:XJtiaUW6dEEqVuZiMTn1ldk455QWwEIsMIJlo
 github.com/cpuguy83/go-md2man/v2 v2.0.6/go.mod h1:oOW0eioCTA6cOiMLiUPZOpcVxMig6NIQQ7OS05n1F4g=
 github.com/cs3org/cato v0.0.0-20200828125504-e418fc54dd5e h1:tqSPWQeueWTKnJVMJffz4pz0o1WuQxJ28+5x5JgaHD8=
 github.com/cs3org/cato v0.0.0-20200828125504-e418fc54dd5e/go.mod h1:XJEZ3/EQuI3BXTp/6DUzFr850vlxq11I6satRtz0YQ4=
-github.com/cs3org/go-cs3apis v0.0.0-20260424072047-8d9ef7076ae9 h1:8WtMb7TKKx1AJM3j+uR+H25y4v+b8o8GIQg/2ooCyRo=
-github.com/cs3org/go-cs3apis v0.0.0-20260424072047-8d9ef7076ae9/go.mod h1:DedpcqXl193qF/08Y04IO0PpxyyMu8+GrkD6kWK2MEQ=
+github.com/cs3org/go-cs3apis v0.0.0-20260604164754-c3fdb0aa5e9e h1:daOgm7xFqJi6LkKUBAENiHOy4IBVSlpculXLd1cPZWk=
+github.com/cs3org/go-cs3apis v0.0.0-20260604164754-c3fdb0aa5e9e/go.mod h1:DedpcqXl193qF/08Y04IO0PpxyyMu8+GrkD6kWK2MEQ=
 github.com/cyphar/filepath-securejoin v0.6.1 h1:5CeZ1jPXEiYt3+Z6zqprSAgSWiggmpVyciv8syjIpVE=
 github.com/cyphar/filepath-securejoin v0.6.1/go.mod h1:A8hd4EnAeyujCJRrICiOWqjS1AX0a9kM5XL+NwKoYSc=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
