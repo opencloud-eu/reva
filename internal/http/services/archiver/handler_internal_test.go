@@ -69,15 +69,16 @@ func TestResourceName(t *testing.T) {
 		statErr error
 		selErr  error
 		want    string
+		wantErr bool
 	}{
 		{name: "ok uses name", resp: ok(&provider.ResourceInfo{Name: "Documents"}), want: "Documents"},
 		{name: "empty name falls back to path base", resp: ok(&provider.ResourceInfo{Path: "/space/Reports"}), want: "Reports"},
 		{name: "name is sanitized", resp: ok(&provider.ResourceInfo{Name: `a"b/c`}), want: "abc"},
 		{name: "name sanitizing to empty keeps default", resp: ok(&provider.ResourceInfo{Name: "/"}), want: ""},
 		{name: "empty name and path keep default", resp: ok(&provider.ResourceInfo{}), want: ""},
-		{name: "stat error keeps default", statErr: errors.New("boom"), want: ""},
-		{name: "non-OK status keeps default", resp: &provider.StatResponse{Status: &rpc.Status{Code: rpc.Code_CODE_NOT_FOUND}}, want: ""},
-		{name: "selector error keeps default", selErr: errors.New("no gateway"), want: ""},
+		{name: "stat error returns error", statErr: errors.New("boom"), wantErr: true},
+		{name: "non-OK status keeps default", resp: &provider.StatResponse{Status: &rpc.Status{Code: rpc.Code_CODE_NOT_FOUND}}, want: "", wantErr: true},
+		{name: "selector error keeps default", selErr: errors.New("no gateway"), want: "", wantErr: true},
 	}
 
 	for _, tc := range cases {
@@ -89,7 +90,13 @@ func TestResourceName(t *testing.T) {
 			log := zerolog.Nop()
 			s := &svc{gatewaySelector: fakeSelector{client: gw, err: tc.selErr}, log: &log}
 
-			got := s.resourceName(context.Background(), &provider.ResourceId{OpaqueId: "x"})
+			got, err := s.resourceName(context.Background(), &provider.ResourceId{OpaqueId: "x"})
+			if tc.wantErr {
+				if err == nil {
+					t.Fatal("expected an error, got nil")
+				}
+				return
+			}
 			if got != tc.want {
 				t.Errorf("resourceName() = %q, want %q", got, tc.want)
 			}
