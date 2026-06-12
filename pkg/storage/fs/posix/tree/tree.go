@@ -850,6 +850,7 @@ func (t *Tree) createDirNode(ctx context.Context, n *node.Node) (err error) {
 	attributes := n.NodeMetadata(ctx)
 	attributes[prefixes.MTimeAttr] = []byte(mtime.UTC().Format(time.RFC3339Nano))
 	attributes[prefixes.IDAttr] = []byte(n.ID)
+	attributes[prefixes.SpaceIDAttr] = []byte(n.SpaceID)
 	attributes[prefixes.TreesizeAttr] = []byte("0") // initialize as empty, TODO why bother? if it is not set we could treat it as 0?
 
 	if t.options.TreeTimeAccounting || t.options.TreeSizeAccounting {
