@@ -206,11 +206,11 @@ func (s *svc) allAllowed(paths []string) error {
 // resourceName resolves the name of a single resource so the archive can be named after it instead
 // of the generic "download". It returns an empty string on any failure, so the caller keeps the
 // default name. The name is sanitized via sanitizeArchiveName.
-func (s *svc) resourceName(ctx context.Context, id *provider.ResourceId) string {
+func (s *svc) resourceName(ctx context.Context, id *provider.ResourceId) (string, error) {
 	gatewayClient, err := s.gatewaySelector.Next()
 	if err != nil {
 		s.log.Debug().Err(err).Msg("archiver: could not select gateway to resolve the archive name, using the default")
-		return ""
+		return "", err
 	}
 
 	res, err := gatewayClient.Stat(ctx, &provider.StatRequest{
@@ -218,18 +218,18 @@ func (s *svc) resourceName(ctx context.Context, id *provider.ResourceId) string 
 	})
 	if err != nil {
 		s.log.Debug().Err(err).Msg("archiver: stat failed while resolving the archive name, using the default")
-		return ""
+		return "", err
 	}
 	if code := res.GetStatus().GetCode(); code != rpc.Code_CODE_OK {
 		s.log.Debug().Str("code", code.String()).Msg("archiver: stat returned non-OK while resolving the archive name, using the default")
-		return ""
+		return "", fmt.Errorf("stat returned non-OK code %s", code.String())
 	}
 
 	name := res.GetInfo().GetName()
 	if name == "" {
 		name = path.Base(res.GetInfo().GetPath())
 	}
-	return sanitizeArchiveName(name)
+	return sanitizeArchiveName(name), nil
 }
 
 // sanitizeArchiveName removes characters that would break the Content-Disposition header (CR, LF,
@@ -311,8 +311,11 @@ func (s *svc) Handler() http.Handler {
 		// See https://github.com/opencloud-eu/reva/issues/308
 		archName := s.config.Name
 		if len(resources) == 1 {
-			if name := s.resourceName(ctx, resources[0]); name != "" {
+			if name, err := s.resourceName(ctx, resources[0]); name != "" && err == nil {
 				archName = name
+			} else {
+				s.log.Debug().Err(err).Msg("could not resolve the archive name, using the default")
+				archName = "download"
 			}
 		}
 		if format == "tar" {
