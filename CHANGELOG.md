@@ -1,10 +1,14 @@
 # Changelog
 
-## [2.47.0](https://github.com/opencloud-eu/reva/releases/tag/v2.47.0) - 2026-06-11
+## [2.47.0](https://github.com/opencloud-eu/reva/releases/tag/v2.47.0) - 2026-06-12
 
 ### ❤️ Thanks to all contributors! ❤️
 
-@aduffeck, @micbar
+@aduffeck, @micbar, @rhafer
+
+### 🐛 Bug Fixes
+
+- fix(tus): Upload checksum validation [[#677](https://github.com/opencloud-eu/reva/pull/677)]
 
 ### 📈 Enhancement
 
