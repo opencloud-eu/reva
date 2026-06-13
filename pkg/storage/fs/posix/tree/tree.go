@@ -183,7 +183,7 @@ func New(lu node.PathLookup, bs node.Blobstore, um usermapper.Mapper, trashbin *
 		// warmup the cache for all space roots right away so clients and migrations don't get confused when starting with a cold cache
 		err := t.warmupSpaceRootCache(o)
 		if err != nil {
-			return nil, errors.Wrap(err, "error warming up space root cache")
+			t.log.Error().Err(err).Msg("error warming up space root cache, continuing")
 		}
 
 		// scan the whole tree asynchronously to pick up new nodes
@@ -235,7 +235,7 @@ func (t *Tree) warmupSpaceRootCache(options *options.Options) error {
 		}
 		err = t.idCache.Set(context.TODO(), spaceID, spaceID, path)
 		if err != nil {
-			return errors.Wrap(err, "could not cache space root path")
+			t.log.Error().Err(err).Str("spaceID", spaceID).Str("path", path).Msg("could not cache space root path, continuing")
 		}
 	}
 	return nil
