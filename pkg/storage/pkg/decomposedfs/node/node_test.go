@@ -398,7 +398,7 @@ var _ = Describe("Node", func() {
 			err = n.ProtectContainer(env.Ctx)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(n.IsImmutable(env.Ctx)).To(BeTrue())
-			Expect(n.GetImmutableState(env.Ctx)).To(Equal(node.ImmutableFrozen))
+			Expect(n.GetImmutableState(env.Ctx)).To(Equal(node.ImmutableProtected))
 		})
 
 		It("can unprotect a container", func() {
