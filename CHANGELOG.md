@@ -1,10 +1,10 @@
 # Changelog
 
-## [2.47.0](https://github.com/opencloud-eu/reva/releases/tag/v2.47.0) - 2026-06-12
+## [2.47.0](https://github.com/opencloud-eu/reva/releases/tag/v2.47.0) - 2026-06-15
 
 ### ❤️ Thanks to all contributors! ❤️
 
-@aduffeck, @micbar, @rhafer
+@aduffeck, @micbar, @michaelstingl, @rhafer
 
 ### 🐛 Bug Fixes
 
