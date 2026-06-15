@@ -167,9 +167,9 @@ _The below features have been added after I last categorized them. AFAICT they a
 
 ### [COPY file/folder to same name is possible (but 500 code error for folder with spaces path)](https://github.com/owncloud/ocis/issues/8711)
 
-- [coreApiWebdavProperties/copyFile.feature:1094](https://github.com/opencloud-eu/opencloud/blob/main/tests/acceptance/features/coreApiWebdavProperties/copyFile.feature#L1094)
-- [coreApiWebdavProperties/copyFile.feature:1095](https://github.com/opencloud-eu/opencloud/blob/main/tests/acceptance/features/coreApiWebdavProperties/copyFile.feature#L1095)
-- [coreApiWebdavProperties/copyFile.feature:1096](https://github.com/opencloud-eu/opencloud/blob/main/tests/acceptance/features/coreApiWebdavProperties/copyFile.feature#L1096)
+- [coreApiWebdavCopyCreate/copyFile.feature:1094](https://github.com/opencloud-eu/opencloud/blob/main/tests/acceptance/features/coreApiWebdavCopyCreate/copyFile.feature#L1094)
+- [coreApiWebdavCopyCreate/copyFile.feature:1095](https://github.com/opencloud-eu/opencloud/blob/main/tests/acceptance/features/coreApiWebdavCopyCreate/copyFile.feature#L1095)
+- [coreApiWebdavCopyCreate/copyFile.feature:1096](https://github.com/opencloud-eu/opencloud/blob/main/tests/acceptance/features/coreApiWebdavCopyCreate/copyFile.feature#L1096)
 
 - Note: always have an empty line at the end of this file.
 The bash script that processes this file may not process a scenario reference on the last line.
