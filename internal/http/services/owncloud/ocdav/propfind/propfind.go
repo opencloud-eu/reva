@@ -1139,13 +1139,14 @@ func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, p
 		// Strip delete/move flags from permissions if resource is effectively immutable
 		isEffectivelyImmutable := md.Immutable
 		if !isEffectivelyImmutable && md.Opaque != nil {
-			if v, ok := md.Opaque.Map["immutable-state"]; ok && string(v.Value) == "protected" {
+			if _, ok := md.Opaque.Map["immutable-state"]; ok {
 				isEffectivelyImmutable = true
 			}
 		}
 		if isEffectivelyImmutable {
-			wdp = strings.ReplaceAll(wdp, "D", "")
-			wdp = strings.ReplaceAll(wdp, "NV", "")
+			wdp = strings.ReplaceAll(wdp, "D", "")  // no delete
+			wdp = strings.ReplaceAll(wdp, "NV", "") // no move
+			wdp = strings.ReplaceAll(wdp, "CK", "") // no create children
 		}
 	}
 
