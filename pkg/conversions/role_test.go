@@ -13,8 +13,8 @@ func TestContainerPermissionsInRoles(t *testing.T) {
 	editor := NewEditorRole().CS3ResourcePermissions()
 	assert.True(t, editor.DeleteContainer, "Editor should have DeleteContainer")
 	assert.True(t, editor.MoveContainer, "Editor should have MoveContainer")
-	assert.False(t, editor.SetImmutableFile, "Editor should not have SetImmutableFile")
-	assert.False(t, editor.SetImmutableContainer, "Editor should not have SetImmutableContainer")
+	assert.True(t, editor.SetImmutableFile, "Editor should have SetImmutableFile (freeze files)")
+	assert.False(t, editor.SetImmutableContainer, "Editor should not have SetImmutableContainer (only Manager)")
 
 	spaceEditor := NewSpaceEditorRole().CS3ResourcePermissions()
 	assert.True(t, spaceEditor.DeleteContainer, "SpaceEditor should have DeleteContainer")

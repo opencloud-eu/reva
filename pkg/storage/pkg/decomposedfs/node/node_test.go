@@ -476,7 +476,7 @@ var _ = Describe("Node", func() {
 
 			// Child itself is not immutable, but parent is
 			Expect(child.IsImmutable(env.Ctx)).To(BeFalse())
-			Expect(child.GetImmutableState(env.Ctx)).To(Equal(node.ImmutableProtected))
+			Expect(child.GetImmutableState(env.Ctx)).To(Equal(node.ImmutableShielded))
 		})
 	})
 })

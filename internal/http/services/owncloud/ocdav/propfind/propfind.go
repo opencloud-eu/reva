@@ -1240,13 +1240,13 @@ func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, p
 			appendToOK(prop.Escaped("oc:permissions", wdp))
 		}
 
-		// Immutable state — always return in allprops if set
-		if md.Immutable {
-			appendToOK(prop.Escaped("oc:immutable", "frozen"))
-		} else if md.Opaque != nil {
-			if v, ok := md.Opaque.Map["immutable-state"]; ok && string(v.Value) == "protected" {
-				appendToOK(prop.Escaped("oc:immutable", "protected"))
+		// Immutable state — use opaque immutable-state if available (distinguishes frozen/protected)
+		if md.Opaque != nil {
+			if v, ok := md.Opaque.Map["immutable-state"]; ok {
+				appendToOK(prop.Escaped("oc:immutable", string(v.Value)))
 			}
+		} else if md.Immutable {
+			appendToOK(prop.Escaped("oc:immutable", "frozen"))
 		}
 
 		// always return size, well nearly always ... public link shares are a little weird
@@ -1383,14 +1383,16 @@ func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, p
 					// in contrast, the ocs:share-permissions further down below indicate clients the maximum permissions that can be granted
 					appendToOK(prop.Escaped("oc:permissions", wdp))
 				case "immutable":
-					if md.Immutable {
-						appendToOK(prop.Escaped("oc:immutable", "frozen"))
-					} else if md.Opaque != nil {
-						if v, ok := md.Opaque.Map["immutable-state"]; ok && string(v.Value) == "protected" {
-							appendToOK(prop.Escaped("oc:immutable", "protected"))
+					if md.Opaque != nil {
+						if v, ok := md.Opaque.Map["immutable-state"]; ok {
+							appendToOK(prop.Escaped("oc:immutable", string(v.Value)))
+						} else if md.Immutable {
+							appendToOK(prop.Escaped("oc:immutable", "frozen"))
 						} else {
 							appendToNotFound(prop.NotFound("oc:immutable"))
 						}
+					} else if md.Immutable {
+						appendToOK(prop.Escaped("oc:immutable", "frozen"))
 					} else {
 						appendToNotFound(prop.NotFound("oc:immutable"))
 					}

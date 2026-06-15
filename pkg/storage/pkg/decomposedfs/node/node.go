@@ -774,14 +774,15 @@ type ImmutableState int
 const (
 	// ImmutableNone — resource is not immutable.
 	ImmutableNone ImmutableState = 0
-	// ImmutableProtected — resource is not self-immutable but its parent is.
-	// It cannot be deleted, modified or renamed, but if it is a container,
-	// entries inside it can still be added, removed or modified.
+	// ImmutableProtected — container has the immutable attribute set on itself.
+	// Structure is fixed, reversible by managers. Can be unprotected.
 	ImmutableProtected ImmutableState = 1
-	// ImmutableFrozen — resource has the immutable attribute set on itself.
-	// For files: content is fixed, irreversible.
-	// For containers: structure is fixed, reversible by managers.
-	ImmutableFrozen ImmutableState = 2
+	// ImmutableShielded — resource inherits protection from an immutable parent.
+	// Cannot be deleted/moved/modified. Cannot be unprotected (must unprotect parent).
+	ImmutableShielded ImmutableState = 2
+	// ImmutableFrozen — file has the immutable attribute set on itself.
+	// Content is fixed, irreversible. Cannot be unfrozen.
+	ImmutableFrozen ImmutableState = 3
 )
 
 // IsImmutable returns true if the node has the immutable attribute set (self).
@@ -795,13 +796,12 @@ func (n *Node) IsImmutable(ctx context.Context) bool {
 func (n *Node) GetImmutableState(ctx context.Context) ImmutableState {
 	if n.IsImmutable(ctx) {
 		if n.IsDir(ctx) {
-			// Directories are protected, not frozen
-			return ImmutableProtected
+			return ImmutableProtected // self-protected directory
 		}
-		return ImmutableFrozen
+		return ImmutableFrozen // self-frozen file
 	}
 	if parent, err := n.Parent(ctx); err == nil && parent.IsImmutable(ctx) {
-		return ImmutableProtected
+		return ImmutableShielded // inherited from parent
 	}
 	return ImmutableNone
 }
@@ -880,6 +880,8 @@ func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissi
 		ri.Opaque = utils.AppendPlainToOpaque(ri.Opaque, "immutable-state", "frozen")
 	case ImmutableProtected:
 		ri.Opaque = utils.AppendPlainToOpaque(ri.Opaque, "immutable-state", "protected")
+	case ImmutableShielded:
+		ri.Opaque = utils.AppendPlainToOpaque(ri.Opaque, "immutable-state", "shielded")
 	}
 
 	if n.IsProcessing(ctx) {
