@@ -254,6 +254,10 @@ func (t *Tree) GetMD(ctx context.Context, n *node.Node) (os.FileInfo, error) {
 
 // TouchFile creates a new empty file
 func (t *Tree) TouchFile(ctx context.Context, n *node.Node, markprocessing bool, mtime string) error {
+	if t.Ignorer.IsIgnored(filepath.Join(n.ParentPath(), n.Name)) {
+		return errtypes.PermissionDenied(n.ID)
+	}
+
 	if n.Exists {
 		if markprocessing {
 			return n.SetXattr(ctx, prefixes.StatusPrefix, []byte(node.ProcessingStatus))
@@ -650,6 +654,10 @@ func (t *Tree) ResolveSpaceIDIndexEntry(spaceID string) (string, error) {
 
 // InitNewNode initializes a new node
 func (t *Tree) InitNewNode(ctx context.Context, n *node.Node, fsize uint64) (metadata.UnlockFunc, error) {
+	if t.Ignorer.IsIgnored(filepath.Join(n.ParentPath(), n.Name)) {
+		return nil, errtypes.PermissionDenied(n.ID)
+	}
+
 	_, span := tracer.Start(ctx, "InitNewNode")
 	defer span.End()
 	// create folder structure (if needed)
@@ -682,6 +690,10 @@ func (t *Tree) InitNewNode(ctx context.Context, n *node.Node, fsize uint64) (met
 
 // TODO check if node exists?
 func (t *Tree) createDirNode(ctx context.Context, n *node.Node) (err error) {
+	if t.Ignorer.IsIgnored(filepath.Join(n.ParentPath(), n.Name)) {
+		return errtypes.PermissionDenied(n.ID)
+	}
+
 	ctx, span := tracer.Start(ctx, "createDirNode")
 	defer span.End()
 
