@@ -470,7 +470,7 @@ func (t *Tree) ListFolder(ctx context.Context, n *node.Node) ([]*node.Node, erro
 	g.Go(func() error {
 		defer close(work)
 		for _, name := range names {
-			if t.Ignorer.IsInternal(name) || ignore.IsLockFile(name) || ignore.IsTrash(name) {
+			if t.Ignorer.IsIgnored(filepath.Join(dir, name)) {
 				continue
 			}
 
