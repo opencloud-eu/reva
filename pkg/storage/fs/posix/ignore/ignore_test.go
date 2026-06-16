@@ -50,6 +50,13 @@ var _ = Describe("Ignore", func() {
 		Entry("does not match trash dir in other locations", filepath.Join("/storage", "users", "user1", "a", lookup.TrashDir), false),
 		Entry("does not match trash dir in other locations", filepath.Join("/storage", "users", "user1", "a", "foo.trashitem"), false),
 		Entry("does not match trash dir in other locations", filepath.Join("/storage", "users", "user1", "a", "foo.trashinfo"), false),
+
+		Entry("does not match metadata substring matches", filepath.Join("/storage", "users", "user1", "a"+lookup.MetadataDir), false),
+		Entry("does not match temporary substring matches", filepath.Join("/storage", "users", "user1", "a"+blobstore.TMPDir), false),
+		Entry("does not match trash substring matches", filepath.Join("/storage", "users", "user1", "a"+lookup.TrashDir), false),
+		Entry("does not match metadata substring matches", filepath.Join("/storage", "users", "user1", lookup.MetadataDir+"a"), false),
+		Entry("does not match temporary substring matches", filepath.Join("/storage", "users", "user1", blobstore.TMPDir+"a"), false),
+		Entry("does not match trash substring matches", filepath.Join("/storage", "users", "user1", lookup.TrashDir+"a"), false),
 	)
 
 })
