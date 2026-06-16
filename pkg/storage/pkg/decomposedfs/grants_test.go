@@ -27,6 +27,7 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/lookup"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata/prefixes"
 	helpers "github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/testhelpers"
 	"github.com/stretchr/testify/mock"
@@ -140,7 +141,7 @@ var _ = Describe("Grants", func() {
 				err := env.Fs.AddGrant(env.Ctx, ref, grant)
 				Expect(err).ToNot(HaveOccurred())
 
-				indexPath := filepath.Join(env.Root, "indexes", "by-type", "share.mpk")
+				indexPath := filepath.Join(env.Root, lookup.IndexesDir, "by-type", "share.mpk")
 				_, err = os.Stat(indexPath)
 				Expect(err).ToNot(HaveOccurred())
 			})
