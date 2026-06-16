@@ -7,6 +7,7 @@ import (
 	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/blobstore"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/lookup"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/options"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/tree/propagator"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/templates"
 	"github.com/rs/zerolog"
 )
@@ -43,11 +44,11 @@ func (i *Ignorer) IsIgnored(path string) bool {
 }
 
 func (i *Ignorer) IsChanges(path string) bool {
-	return strings.HasPrefix(path, filepath.Join(i.options.Root, "changes"))
+	return strings.HasPrefix(path, filepath.Join(i.options.Root, propagator.ChangesDir))
 }
 
 func (i *Ignorer) IsIndex(path string) bool {
-	return strings.HasPrefix(path, filepath.Join(i.options.Root, "indexes"))
+	return strings.HasPrefix(path, filepath.Join(i.options.Root, lookup.IndexesDir))
 }
 
 func (i *Ignorer) IsUpload(path string) bool {
