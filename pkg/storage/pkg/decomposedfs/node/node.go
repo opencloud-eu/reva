@@ -61,6 +61,15 @@ func init() {
 	tracer = otel.Tracer("github.com/opencloud-eu/reva/v2/pkg/storage/utils/decomposedfs/node")
 }
 
+// parentImmutableKey is a context key for caching the parent's immutable state
+// during ListFolder, avoiding redundant xattr reads per child.
+type parentImmutableKey struct{}
+
+// ContextWithParentImmutable returns a context carrying the parent's immutable flag.
+func ContextWithParentImmutable(ctx context.Context, immutable bool) context.Context {
+	return context.WithValue(ctx, parentImmutableKey{}, immutable)
+}
+
 // Define keys and values used in the node metadata
 const (
 	LockdiscoveryKey = "lockdiscovery"
@@ -799,6 +808,13 @@ func (n *Node) GetImmutableState(ctx context.Context) ImmutableState {
 			return ImmutableProtected // self-protected directory
 		}
 		return ImmutableFrozen // self-frozen file
+	}
+	// Check context cache first (set by ListFolder to avoid per-child Parent() calls)
+	if cached, ok := ctx.Value(parentImmutableKey{}).(bool); ok {
+		if cached {
+			return ImmutableShielded
+		}
+		return ImmutableNone
 	}
 	if parent, err := n.Parent(ctx); err == nil && parent.IsImmutable(ctx) {
 		return ImmutableShielded // inherited from parent
