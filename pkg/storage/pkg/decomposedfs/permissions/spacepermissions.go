@@ -144,6 +144,11 @@ func (p Permissions) checkPermission(ctx context.Context, perm string, ref *prov
 	return checkRes.Status.Code == v1beta11.Code_CODE_OK
 }
 
+// ManageImmutable returns true when the user has the global permission to manage immutable resources
+func (p Permissions) ManageImmutable(ctx context.Context) bool {
+	return p.checkPermission(ctx, "Drives.ManageImmutable", nil)
+}
+
 // IsManager returns true if the given resource permissions evaluate the user as "manager"
 func IsManager(rp *provider.ResourcePermissions) bool {
 	return rp.RemoveGrant

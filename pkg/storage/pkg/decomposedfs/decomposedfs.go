@@ -1228,8 +1228,11 @@ func (fs *Decomposedfs) SetImmutable(ctx context.Context, ref *provider.Referenc
 		return err
 	}
 
+	// Global "Drives.ManageImmutable" permission overrides space-level ACE
+	globalManage := fs.p.ManageImmutable(ctx)
+
 	if n.IsDir(ctx) {
-		if !rp.SetImmutableContainer {
+		if !rp.SetImmutableContainer && !globalManage {
 			f, _ := storagespace.FormatReference(ref)
 			return errtypes.PermissionDenied(f)
 		}
@@ -1237,7 +1240,7 @@ func (fs *Decomposedfs) SetImmutable(ctx context.Context, ref *provider.Referenc
 	}
 
 	// File
-	if !rp.SetImmutableFile {
+	if !rp.SetImmutableFile && !globalManage {
 		f, _ := storagespace.FormatReference(ref)
 		return errtypes.PermissionDenied(f)
 	}
@@ -1263,7 +1266,7 @@ func (fs *Decomposedfs) UnsetImmutable(ctx context.Context, ref *provider.Refere
 	if err != nil {
 		return err
 	}
-	if !rp.SetImmutableContainer {
+	if !rp.SetImmutableContainer && !fs.p.ManageImmutable(ctx) {
 		f, _ := storagespace.FormatReference(ref)
 		return errtypes.PermissionDenied(f)
 	}
