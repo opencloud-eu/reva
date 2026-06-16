@@ -67,8 +67,11 @@ var _ = Describe("Tree", func() {
 				log: &logger,
 				options: &options.Options{
 					Options: decomposedoptions.Options{
-						Root:           dir,
-						MaxConcurrency: 1,
+						Root:                      dir,
+						MaxConcurrency:            1,
+						PersonalSpacePathTemplate: "users/{{.User.Id.OpaqueId}}",
+						GeneralSpacePathTemplate:  "shares/{{.SpaceId}}",
+						UploadDirectory:           filepath.Join(dir, "uploads"),
 					},
 				},
 			}
