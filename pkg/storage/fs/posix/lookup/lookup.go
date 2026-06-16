@@ -47,7 +47,10 @@ import (
 
 var tracer trace.Tracer
 
-const MetadataDir = ".oc-nodes"
+const (
+	MetadataDir = ".oc-nodes"
+	TrashDir    = ".Trash"
+)
 
 var _spaceTypePersonal = "personal"
 var _spaceTypeProject = "project"
