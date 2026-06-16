@@ -1172,6 +1172,15 @@ func (fs *Decomposedfs) Delete(ctx context.Context, ref *provider.Reference) (er
 		f, _ := storagespace.FormatReference(ref)
 		return errtypes.PermissionDenied(f)
 	}
+	// Reva deletes directories recursively (move entire subtree to trash).
+	// Without this check a frozen file inside a normal folder would be
+	// silently trashed together with its parent, bypassing immutability.
+	if node.IsDir(ctx) {
+		if has, err := fs.hasImmutableDescendant(ctx, node); err == nil && has {
+			f, _ := storagespace.FormatReference(ref)
+			return errtypes.PermissionDenied(f)
+		}
+	}
 
 	// Set space owner in context
 	storagespace.ContextSendSpaceOwnerID(ctx, node.SpaceOwnerOrManager(ctx))
@@ -1181,6 +1190,27 @@ func (fs *Decomposedfs) Delete(ctx context.Context, ref *provider.Reference) (er
 	}
 
 	return fs.tp.Delete(ctx, node)
+}
+
+// hasImmutableDescendant recursively checks if any child of a directory node is immutable.
+// This is needed because Reva deletes directories by moving the entire subtree to trash,
+// which would silently remove frozen/protected children. The scan aborts on first match.
+func (fs *Decomposedfs) hasImmutableDescendant(ctx context.Context, n *node.Node) (bool, error) {
+	children, err := fs.tp.ListFolder(ctx, n)
+	if err != nil {
+		return false, err
+	}
+	for _, child := range children {
+		if child.IsImmutable(ctx) {
+			return true, nil
+		}
+		if child.IsDir(ctx) {
+			if has, err := fs.hasImmutableDescendant(ctx, child); err == nil && has {
+				return true, nil
+			}
+		}
+	}
+	return false, nil
 }
 
 // SetImmutable sets the immutable attribute on a resource.
