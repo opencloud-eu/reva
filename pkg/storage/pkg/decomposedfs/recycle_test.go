@@ -134,8 +134,13 @@ var _ = Describe("Recycle", func() {
 						Username: "anotherusername",
 					})
 
+					// Clear the initial mock setup
+					env.GetPermissions().On("AssemblePermissions", mock.Anything, mock.Anything).Unset()
+					env.GetPermissions().On("AssembleTrashPermissions", mock.Anything, mock.Anything).Unset()
+
 					// in this scenario user "25b69780-5f39-43be-a7ac-a9b9e9fe4230" has this permissions:
 					registerPermissions(env.GetPermissions(), "25b69780-5f39-43be-a7ac-a9b9e9fe4230", &provider.ResourcePermissions{
+						Stat:               true,
 						InitiateFileUpload: true,
 						Delete:             true,
 						ListRecycle:        true,
@@ -145,6 +150,7 @@ var _ = Describe("Recycle", func() {
 
 					// and user "anotheruserid" has the same permissions:
 					registerPermissions(env.GetPermissions(), "anotheruserid", &provider.ResourcePermissions{
+						Stat:               true,
 						InitiateFileUpload: true,
 						Delete:             true,
 						ListRecycle:        true,
@@ -317,6 +323,10 @@ var _ = Describe("Recycle", func() {
 						},
 						Username: "readusername",
 					})
+
+					// Clear the initial mock setup
+					env.GetPermissions().On("AssemblePermissions", mock.Anything, mock.Anything).Unset()
+					env.GetPermissions().On("AssembleTrashPermissions", mock.Anything, mock.Anything).Unset()
 
 					// in this scenario user "25b69780-5f39-43be-a7ac-a9b9e9fe4230" has this permissions:
 					registerPermissions(env.GetPermissions(), "25b69780-5f39-43be-a7ac-a9b9e9fe4230", &provider.ResourcePermissions{

@@ -59,12 +59,6 @@ var _ = Describe("Spaces", func() {
 					return &cs3permissions.CheckPermissionResponse{Status: &rpcv1beta1.Status{Code: rpcv1beta1.Code_CODE_PERMISSION_DENIED}}
 				},
 				nil)
-			env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(func(ctx context.Context, n *node.Node) *provider.ResourcePermissions {
-				if ctxpkg.ContextMustGetUser(ctx).Id.GetOpaqueId() == "25b69780-5f39-43be-a7ac-a9b9e9fe4230" {
-					return node.OwnerPermissions() // id of owner/admin
-				}
-				return node.NoPermissions()
-			}, nil)
 		})
 
 		AfterEach(func() {
@@ -85,7 +79,6 @@ var _ = Describe("Spaces", func() {
 		})
 		Context("when creating a space", func() {
 			It("project space is created", func() {
-				env.Owner = nil
 				resp, err := env.Fs.CreateStorageSpace(env.Ctx, &provider.CreateStorageSpaceRequest{Name: "Mission to Mars", Type: "project"})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(resp.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
@@ -198,9 +191,10 @@ var _ = Describe("Spaces", func() {
 				err := env.Fs.DeleteStorageSpace(ctx, delReq)
 				Expect(err).To(Not(HaveOccurred()))
 			})
-			It("succeeds as the space owner", func() {
-				err := env.Fs.DeleteStorageSpace(env.Ctx, delReq)
-				Expect(err).To(Not(HaveOccurred()))
+			It("fails as a space manager", func() {
+				ctx := ctxpkg.ContextSetUser(context.Background(), env.SpaceManager)
+				err := env.Fs.DeleteStorageSpace(ctx, delReq)
+				Expect(err).To(HaveOccurred())
 			})
 		})
 	})
@@ -219,7 +213,7 @@ var _ = Describe("Spaces", func() {
 				})
 				Expect(err).ToNot(HaveOccurred())
 				env.PermissionsClient.On("CheckPermission", mock.Anything, mock.Anything, mock.Anything).Return(&cs3permissions.CheckPermissionResponse{Status: &rpcv1beta1.Status{Code: rpcv1beta1.Code_CODE_OK}}, nil)
-				env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(&provider.ResourcePermissions{
+				env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything).Return(&provider.ResourcePermissions{
 					Stat:     true,
 					AddGrant: true,
 					GetQuota: true,
@@ -241,7 +235,6 @@ var _ = Describe("Spaces", func() {
 			})
 			Context("creating a space", func() {
 				It("project space is created with custom alias", func() {
-					env.Owner = nil
 					resp, err := env.Fs.CreateStorageSpace(env.Ctx, &provider.CreateStorageSpaceRequest{Name: "Mission to Venus", Type: "project"})
 					Expect(err).ToNot(HaveOccurred())
 					Expect(resp.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
@@ -287,7 +280,8 @@ var _ = Describe("Spaces", func() {
 					}
 				}, nil)
 
-			env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(
+			env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything).Unset()
+			env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything).Return(
 				func(ctx context.Context, n *node.Node) *provider.ResourcePermissions {
 					switch ctxpkg.ContextMustGetUser(ctx).GetId().GetOpaqueId() {
 					case manager.GetId().GetOpaqueId():
