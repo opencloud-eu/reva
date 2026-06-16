@@ -73,6 +73,8 @@ type IDCache interface {
 	DeleteByPath(ctx context.Context, path string) error
 
 	DeletePath(ctx context.Context, path string) error
+
+	MovePath(ctx context.Context, oldPath, newPath string) error
 }
 
 // Lookup implements transformations from filepath to node and back

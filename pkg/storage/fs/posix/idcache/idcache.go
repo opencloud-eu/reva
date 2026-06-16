@@ -129,6 +129,72 @@ func (c *IDCache) DeletePath(ctx context.Context, path string) error {
 	})
 }
 
+// MovePath recursively re-keys all cache entries living under oldPath so that
+// they live under newPath instead.
+func (c *IDCache) MovePath(ctx context.Context, oldPath, newPath string) error {
+	oldPath = filepath.Clean(oldPath)
+	newPath = filepath.Clean(newPath)
+
+	moveEntry := func(reverseKey string) error {
+		spaceID, nodeID, err := c.getByReverseCacheKey(ctx, reverseKey)
+		if err != nil {
+			if _, ok := err.(errtypes.NotFound); ok {
+				// the entry was already moved/removed, nothing to do
+				return nil
+			}
+			return err
+		}
+
+		currentPath, err := c.Get(ctx, spaceID, nodeID)
+		if err != nil {
+			if _, ok := err.(errtypes.NotFound); ok {
+				return nil
+			}
+			return err
+		}
+
+		// defensively make sure the entry really lives under oldPath
+		if currentPath != oldPath && !strings.HasPrefix(currentPath, oldPath+string(filepath.Separator)) {
+			return nil
+		}
+
+		updatedPath := newPath + strings.TrimPrefix(currentPath, oldPath)
+
+		// Set writes the new forward (id -> path) and reverse (path -> id)
+		// entries. The forward entry is overwritten in place, the now stale
+		// reverse entry for the old path is purged afterwards.
+		if err := c.Set(ctx, spaceID, nodeID, updatedPath); err != nil {
+			return err
+		}
+		return retryErr(ctx, func() error {
+			return c.kv.Purge(ctx, reverseKey)
+		})
+	}
+
+	// move the entry for the moved node itself first
+	if err := moveEntry(reverseCacheKey(oldPath)); err != nil {
+		return err
+	}
+
+	// then move all of its descendants
+	baseKey := reverseCacheKey(oldPath)
+	watcher, err := retry(ctx, func() (jetstream.KeyWatcher, error) { return c.kv.Watch(ctx, baseKey+".>") })
+	if err != nil {
+		return err
+	}
+	defer func() { _ = watcher.Stop() }()
+
+	for update := range watcher.Updates() {
+		if update == nil {
+			break
+		}
+		if err := moveEntry(update.Key()); err != nil {
+			appctx.GetLogger(ctx).Error().Err(err).Str("record", update.Key()).Msg("could not move cache entry")
+		}
+	}
+	return nil
+}
+
 // Set adds a new entry to the cache
 func (c *IDCache) Set(ctx context.Context, spaceID, nodeID, val string) error {
 	_, err := retry(ctx, func() (uint64, error) {
