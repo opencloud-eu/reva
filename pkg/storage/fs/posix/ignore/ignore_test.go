@@ -10,6 +10,7 @@ import (
 	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/lookup"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/options"
 	decomposedoptions "github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/options"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/tree/propagator"
 	"github.com/rs/zerolog"
 )
 
@@ -29,8 +30,8 @@ var _ = Describe("Ignore", func() {
 		func(path string, want bool) {
 			Expect(ignorer.IsIgnored(path)).To(Equal(want))
 		},
-		Entry("matches index paths", filepath.Join("/storage", "indexes", "something"), true),
-		Entry("matches changes paths", filepath.Join("/storage", "changes", "node1"), true),
+		Entry("matches index paths", filepath.Join("/storage", lookup.IndexesDir, "something"), true),
+		Entry("matches changes paths", filepath.Join("/storage", propagator.ChangesDir, "node1"), true),
 		Entry("matches upload directory", filepath.Join("/storage", "uploads", "upload.bin"), true),
 		Entry("matches metadata dir", filepath.Join("/storage", "users", "user1", lookup.MetadataDir), true),
 		Entry("matches metadata dir child", filepath.Join("/storage", "users", "user1", lookup.MetadataDir, "a"), true),
