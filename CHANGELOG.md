@@ -16,6 +16,7 @@
 
 ### 📦️ Dependencies
 
+- chore(deps): bump go.opentelemetry.io/otel from 1.43.0 to 1.44.0 [[#667](https://github.com/opencloud-eu/reva/pull/667)]
 - chore(deps): bump github.com/fsnotify/fsnotify from 1.8.0 to 1.10.1 [[#630](https://github.com/opencloud-eu/reva/pull/630)]
 
 ## [2.46.3](https://github.com/opencloud-eu/reva/releases/tag/v2.46.3) - 2026-06-10
