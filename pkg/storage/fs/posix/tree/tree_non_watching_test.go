@@ -6,6 +6,9 @@ import (
 	"time"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/lookup"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/node"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -101,5 +104,73 @@ var _ = Describe("Non-watching tree", func() {
 			g.Expect(err).ToNot(HaveOccurred())
 			g.Expect(newSize).To(Equal(initialSize + fileSize))
 		}).Should(Succeed())
+	})
+
+	It("rejects creation of internal paths", func() {
+		spaceRoot := non_watching_env.Root + "/users/" + non_watching_env.Owner.Username
+
+		ignoredParentPath := filepath.Join(spaceRoot, lookup.MetadataDir)
+		err := non_watching_env.Lookup.CacheID(non_watching_env.Ctx, non_watching_env.SpaceRootRes.SpaceId, "ignored-parent-id", ignoredParentPath)
+		Expect(err).ToNot(HaveOccurred())
+
+		// Test TouchFile and InitNewNode on a file inside the metadata folder
+		ignoredFileNode := node.New(
+			non_watching_env.SpaceRootRes.SpaceId,
+			"some-ignored-file-id",
+			"ignored-parent-id",
+			"some-file.txt",
+			0,
+			"",
+			provider.ResourceType_RESOURCE_TYPE_FILE,
+			non_watching_env.Owner.Id,
+			non_watching_env.Lookup,
+		)
+
+		// 1. Verify that InitNewNode fails on ignored file node with PermissionDenied
+		_, err = non_watching_env.Tree.InitNewNode(non_watching_env.Ctx, ignoredFileNode, 0)
+		Expect(err).To(HaveOccurred())
+		_, ok := err.(errtypes.IsPermissionDenied)
+		Expect(ok).To(BeTrue())
+
+		// 2. Verify that TouchFile fails on ignored file node with PermissionDenied
+		err = non_watching_env.Tree.TouchFile(non_watching_env.Ctx, ignoredFileNode, false, "")
+		Expect(err).To(HaveOccurred())
+		_, ok = err.(errtypes.IsPermissionDenied)
+		Expect(ok).To(BeTrue())
+
+		// Test TouchFile and InitNewNode on the metadata folder itself (substituting metadata folder as a node under spaceRoot)
+		// Cache the spaceRoot as a parent ID
+		err = non_watching_env.Lookup.CacheID(non_watching_env.Ctx, non_watching_env.SpaceRootRes.SpaceId, "space-root-id", spaceRoot)
+		Expect(err).ToNot(HaveOccurred())
+
+		ignoredFolderNode := node.New(
+			non_watching_env.SpaceRootRes.SpaceId,
+			"some-ignored-folder-id",
+			"space-root-id",
+			lookup.MetadataDir,
+			0,
+			"",
+			provider.ResourceType_RESOURCE_TYPE_CONTAINER,
+			non_watching_env.Owner.Id,
+			non_watching_env.Lookup,
+		)
+
+		// 3. Verify that InitNewNode fails on ignored folder node with PermissionDenied
+		_, err = non_watching_env.Tree.InitNewNode(non_watching_env.Ctx, ignoredFolderNode, 0)
+		Expect(err).To(HaveOccurred())
+		_, ok = err.(errtypes.IsPermissionDenied)
+		Expect(ok).To(BeTrue())
+
+		// 4. Verify that TouchFile fails on ignored folder node with PermissionDenied
+		err = non_watching_env.Tree.TouchFile(non_watching_env.Ctx, ignoredFolderNode, false, "")
+		Expect(err).To(HaveOccurred())
+		_, ok = err.(errtypes.IsPermissionDenied)
+		Expect(ok).To(BeTrue())
+
+		// 5. Verify that CreateDir fails on ignored folder node with PermissionDenied
+		err = non_watching_env.Tree.CreateDir(non_watching_env.Ctx, ignoredFolderNode)
+		Expect(err).To(HaveOccurred())
+		_, ok = err.(errtypes.IsPermissionDenied)
+		Expect(ok).To(BeTrue())
 	})
 })
