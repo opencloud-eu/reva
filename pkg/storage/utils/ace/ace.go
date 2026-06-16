@@ -344,7 +344,22 @@ func (e *ACE) grantPermissionSet() *provider.ResourcePermissions {
 	if strings.Contains(e.permissions, "d") {
 		p.Delete = true
 	}
-	// D ?
+	// D
+	if strings.Contains(e.permissions, "D") {
+		p.DeleteContainer = true
+	}
+	// m
+	if strings.Contains(e.permissions, "m") {
+		p.MoveContainer = true
+	}
+	// i
+	if strings.Contains(e.permissions, "i") {
+		p.SetImmutableFile = true
+	}
+	// I
+	if strings.Contains(e.permissions, "I") {
+		p.SetImmutableContainer = true
+	}
 
 	// sharing
 	if strings.Contains(e.permissions, "C") {
@@ -457,6 +472,18 @@ func getACEPerm(set *provider.ResourcePermissions) string {
 	}
 	if set.Delete {
 		b.WriteString("d")
+	}
+	if set.DeleteContainer {
+		b.WriteString("D")
+	}
+	if set.MoveContainer {
+		b.WriteString("m")
+	}
+	if set.SetImmutableFile {
+		b.WriteString("i")
+	}
+	if set.SetImmutableContainer {
+		b.WriteString("I")
 	}
 
 	// sharing
