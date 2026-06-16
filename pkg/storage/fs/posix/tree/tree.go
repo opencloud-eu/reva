@@ -466,14 +466,16 @@ func (t *Tree) Move(ctx context.Context, oldNode *node.Node, newNode *node.Node)
 	subspan.End()
 
 	_, subspan = tracer.Start(ctx, "update id cache and attributes")
-	// update the id cache
-	// invalidate old tree
-	err = t.lookup.IDCache.DeleteByPath(ctx, filepath.Join(oldNode.ParentPath(), oldNode.Name))
-	if err != nil {
+	oldPath := filepath.Join(oldNode.ParentPath(), oldNode.Name)
+	newPath := filepath.Join(newNode.ParentPath(), newNode.Name)
+
+	// update the id cache for the moved node itself. The whole subtree is
+	// re-keyed asynchronously below (for directories).
+	if err := t.lookup.IDCache.DeletePath(ctx, oldPath); err != nil {
 		return err
 	}
-	if err := t.lookup.CacheID(ctx, newNode.SpaceID, newNode.ID, filepath.Join(newNode.ParentPath(), newNode.Name)); err != nil {
-		t.log.Error().Err(err).Str("spaceID", newNode.SpaceID).Str("id", newNode.ID).Str("path", filepath.Join(newNode.ParentPath(), newNode.Name)).Msg("could not cache id")
+	if err := t.lookup.CacheID(ctx, newNode.SpaceID, newNode.ID, newPath); err != nil {
+		t.log.Error().Err(err).Str("spaceID", newNode.SpaceID).Str("id", newNode.ID).Str("path", newPath).Msg("could not cache id")
 	}
 
 	// update target parentid and name
@@ -521,13 +523,11 @@ func (t *Tree) Move(ctx context.Context, oldNode *node.Node, newNode *node.Node)
 
 	if oldNode.IsDir(ctx) {
 		go func() {
-			_, subspan = tracer.Start(ctx, "warmup id cache for moved subtree")
-			// update id cache for the moved subtree.
-			err = t.WarmupIDCache(filepath.Join(newNode.ParentPath(), newNode.Name), false, false)
-			if err != nil {
-				t.log.Error().Err(err).Str("path", filepath.Join(newNode.ParentPath(), newNode.Name)).Msg("failed to warmup id cache for moved subtree")
+			// Re-key the cached ids of the moved subtree instead of re-scanning it from disk. The node ids do not change on a move,
+			// only their paths do, so re-keying the existing cache entries is much cheaper than a full filesystem walk for large trees.
+			if err := t.lookup.IDCache.MovePath(context.Background(), oldPath, newPath); err != nil {
+				t.log.Error().Err(err).Str("oldPath", oldPath).Str("newPath", newPath).Msg("failed to move id cache for moved subtree")
 			}
-			subspan.End()
 		}()
 	}
 
