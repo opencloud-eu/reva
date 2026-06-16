@@ -12,6 +12,16 @@ import (
 	"github.com/rs/zerolog"
 )
 
+const (
+	// The needles include the separator at the beginning to avoid matching internal dir names in substrings
+	// The end segment boundary is checked in isInternalDir
+	trashNeedle    = needle(string(filepath.Separator) + lookup.TrashDir)
+	metadataNeedle = needle(string(filepath.Separator) + lookup.MetadataDir)
+	tmpNeedle      = needle(string(filepath.Separator) + blobstore.TMPDir)
+)
+
+type needle string
+
 // Ignorer handles checking if paths should be ignored in posix operations
 type Ignorer struct {
 	options            *options.Options
@@ -71,23 +81,28 @@ func IsLockFile(path string) bool {
 }
 
 func (i *Ignorer) IsMetadata(path string) bool {
-	return i.isInternalDir(path, lookup.MetadataDir)
+	return i.isInternalDir(path, metadataNeedle)
 }
 
 func (i *Ignorer) IsTemporary(path string) bool {
-	return i.isInternalDir(path, blobstore.TMPDir)
+	return i.isInternalDir(path, tmpNeedle)
 }
 
 func (i *Ignorer) IsTrash(path string) bool {
-	return i.isInternalDir(path, lookup.TrashDir)
+	return i.isInternalDir(path, trashNeedle)
 }
 
 // isInternalDir checks if the path contains the match dir and that the match lives
 // in the space root, e.g. "/storage/users/user1/.metadata/file" -> match is ".metadata",
 // parent dir is "/storage/users/user1" which is a space root, so this would return true
-func (i *Ignorer) isInternalDir(path, match string) bool {
-	idx := strings.Index(path, match)
+func (i *Ignorer) isInternalDir(path string, match needle) bool {
+	idx := strings.Index(path, string(match))
 	if idx <= 0 {
+		return false
+	}
+
+	// must end at a segment boundary (end of path or separator)
+	if length := idx + len(match); length != len(path) && path[length] != filepath.Separator {
 		return false
 	}
 
