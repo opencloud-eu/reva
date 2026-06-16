@@ -21,7 +21,7 @@ require (
 	github.com/dgraph-io/ristretto v0.2.0
 	github.com/emvi/iso-639-1 v1.1.1
 	github.com/eventials/go-tus v0.0.0-20220610120217-05d0564bb571
-	github.com/fsnotify/fsnotify v1.8.0
+	github.com/fsnotify/fsnotify v1.10.1
 	github.com/gdexlab/go-render v1.0.1
 	github.com/go-chi/chi/v5 v5.2.5
 	github.com/go-ldap/ldap/v3 v3.4.12
