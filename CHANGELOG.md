@@ -8,6 +8,7 @@
 
 ### 🐛 Bug Fixes
 
+- Prevent access to internal files and folders [[#681](https://github.com/opencloud-eu/reva/pull/681)]
 - fix(tus): Upload checksum validation [[#677](https://github.com/opencloud-eu/reva/pull/677)]
 
 ### 📈 Enhancement
