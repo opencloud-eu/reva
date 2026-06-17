@@ -139,6 +139,14 @@ func TestRolesWithVersions(t *testing.T) {
 			restoreFileVersion: false,
 		},
 		{
+			name:               "space-viewer-with-versions extends space-viewer with list versions",
+			role:               NewSpaceViewerWithVersionsRole(),
+			expectedName:       RoleSpaceViewerWithVersions,
+			base:               NewSpaceViewerRole(),
+			listFileVersions:   true,
+			restoreFileVersion: false,
+		},
+		{
 			name:               "editor-with-versions extends editor with list and restore versions",
 			role:               NewEditorWithVersionsRole(),
 			expectedName:       RoleEditorWithVersions,
