@@ -469,11 +469,6 @@ func (t *Tree) Move(ctx context.Context, oldNode *node.Node, newNode *node.Node)
 	oldPath := filepath.Join(oldNode.ParentPath(), oldNode.Name)
 	newPath := filepath.Join(newNode.ParentPath(), newNode.Name)
 
-	// update the id cache for the moved node itself. The whole subtree is
-	// re-keyed asynchronously below (for directories).
-	if err := t.lookup.IDCache.DeletePath(ctx, oldPath); err != nil {
-		return err
-	}
 	if err := t.lookup.CacheID(ctx, newNode.SpaceID, newNode.ID, newPath); err != nil {
 		t.log.Error().Err(err).Str("spaceID", newNode.SpaceID).Str("id", newNode.ID).Str("path", newPath).Msg("could not cache id")
 	}
@@ -522,13 +517,13 @@ func (t *Tree) Move(ctx context.Context, oldNode *node.Node, newNode *node.Node)
 	}
 
 	if oldNode.IsDir(ctx) {
-		go func() {
-			// Re-key the cached ids of the moved subtree instead of re-scanning it from disk. The node ids do not change on a move,
-			// only their paths do, so re-keying the existing cache entries is much cheaper than a full filesystem walk for large trees.
-			if err := t.lookup.IDCache.MovePath(context.Background(), oldPath, newPath); err != nil {
-				t.log.Error().Err(err).Str("oldPath", oldPath).Str("newPath", newPath).Msg("failed to move id cache for moved subtree")
-			}
-		}()
+		// Re-key the cached ids of the moved subtree instead of re-scanning it from disk. The node ids do not change on a move,
+		// only their paths do, so re-keying the existing cache entries is much cheaper than a full filesystem walk for large trees.
+		start := time.Now()
+		if err := t.lookup.IDCache.MovePath(context.Background(), oldPath, newPath); err != nil {
+			t.log.Error().Err(err).Str("oldPath", oldPath).Str("newPath", newPath).Msg("failed to move id cache for moved subtree")
+		}
+		t.log.Info().Dur("duration", time.Since(start)).Str("oldPath", oldPath).Str("newPath", newPath).Msg("moved id cache for moved subtree")
 	}
 
 	return nil
