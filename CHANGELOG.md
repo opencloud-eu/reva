@@ -8,6 +8,7 @@
 
 ### 🐛 Bug Fixes
 
+- [stable-2.46] Backport #681 [[#686](https://github.com/opencloud-eu/reva/pull/686)]
 - Stable backports [[#679](https://github.com/opencloud-eu/reva/pull/679)]
 
 ## [2.46.3](https://github.com/opencloud-eu/reva/releases/tag/v2.46.3) - 2026-06-10
