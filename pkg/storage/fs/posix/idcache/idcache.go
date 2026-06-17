@@ -30,8 +30,20 @@ import (
 	"github.com/nats-io/nats.go/jetstream"
 	"github.com/opencloud-eu/reva/v2/pkg/appctx"
 	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
+	"golang.org/x/sync/errgroup"
 )
 
+// movePathConcurrency bounds the number of in-flight re-key operations when
+// moving a subtree. The work is network bound (NATS KV round-trips), so a
+// generous limit keeps the connection busy without overwhelming the server.
+const movePathConcurrency = 32
+
+type moveEntry struct {
+	reverseKey  string
+	spaceID     string
+	nodeID      string
+	currentPath string
+}
 type IDCache struct {
 	kv jetstream.KeyValue
 }
@@ -135,64 +147,84 @@ func (c *IDCache) MovePath(ctx context.Context, oldPath, newPath string) error {
 	oldPath = filepath.Clean(oldPath)
 	newPath = filepath.Clean(newPath)
 
-	moveEntry := func(reverseKey string) error {
-		spaceID, nodeID, err := c.getByReverseCacheKey(ctx, reverseKey)
+	// decode turns a KV record (reverse key + forward cache key value) into a
+	// moveEntry without issuing any additional Get calls.
+	decode := func(reverseKey string, value []byte) (moveEntry, error) {
+		spaceID, nodeID, err := decodeCacheKey(string(value))
 		if err != nil {
-			if _, ok := err.(errtypes.NotFound); ok {
-				// the entry was already moved/removed, nothing to do
-				return nil
-			}
-			return err
+			return moveEntry{}, err
 		}
-
-		currentPath, err := c.Get(ctx, spaceID, nodeID)
+		currentPath, err := pathFromReverseCacheKey(reverseKey)
 		if err != nil {
-			if _, ok := err.(errtypes.NotFound); ok {
-				return nil
-			}
-			return err
+			return moveEntry{}, err
 		}
-
-		// defensively make sure the entry really lives under oldPath
-		if currentPath != oldPath && !strings.HasPrefix(currentPath, oldPath+string(filepath.Separator)) {
-			return nil
-		}
-
-		updatedPath := newPath + strings.TrimPrefix(currentPath, oldPath)
-
-		// Set writes the new forward (id -> path) and reverse (path -> id)
-		// entries. The forward entry is overwritten in place, the now stale
-		// reverse entry for the old path is purged afterwards.
-		if err := c.Set(ctx, spaceID, nodeID, updatedPath); err != nil {
-			return err
-		}
-		return retryErr(ctx, func() error {
-			return c.kv.Purge(ctx, reverseKey)
-		})
+		return moveEntry{
+			reverseKey:  reverseKey,
+			spaceID:     spaceID,
+			nodeID:      nodeID,
+			currentPath: currentPath,
+		}, nil
 	}
 
-	// move the entry for the moved node itself first
-	if err := moveEntry(reverseCacheKey(oldPath)); err != nil {
+	entries := make([]moveEntry, 0)
+	// the entry for the moved node itself
+	if record, err := retry(ctx, func() (jetstream.KeyValueEntry, error) {
+		return c.kv.Get(ctx, reverseCacheKey(oldPath))
+	}); err == nil {
+		if e, derr := decode(record.Key(), record.Value()); derr == nil {
+			entries = append(entries, e)
+		} else {
+			appctx.GetLogger(ctx).Error().Err(derr).Str("record", record.Key()).Msg("could not decode cache entry")
+		}
+	} else if err != jetstream.ErrKeyNotFound {
 		return err
 	}
-
-	// then move all of its descendants
+	// all of its descendants
 	baseKey := reverseCacheKey(oldPath)
-	watcher, err := retry(ctx, func() (jetstream.KeyWatcher, error) { return c.kv.Watch(ctx, baseKey+".>") })
+	watcher, err := retry(ctx, func() (jetstream.KeyWatcher, error) {
+		return c.kv.Watch(ctx, baseKey+".>", jetstream.IgnoreDeletes())
+	})
 	if err != nil {
 		return err
 	}
-	defer func() { _ = watcher.Stop() }()
-
 	for update := range watcher.Updates() {
 		if update == nil {
 			break
 		}
-		if err := moveEntry(update.Key()); err != nil {
-			appctx.GetLogger(ctx).Error().Err(err).Str("record", update.Key()).Msg("could not move cache entry")
+		e, derr := decode(update.Key(), update.Value())
+		if derr != nil {
+			appctx.GetLogger(ctx).Error().Err(derr).Str("record", update.Key()).Msg("could not decode cache entry")
+			continue
 		}
+		entries = append(entries, e)
 	}
-	return nil
+	_ = watcher.Stop()
+
+	// Re-key all collected entries concurrently. Each entry results in two Puts
+	// (forward + reverse) and one Purge of the stale reverse key.
+	g, gctx := errgroup.WithContext(ctx)
+	g.SetLimit(movePathConcurrency)
+	for _, e := range entries {
+		g.Go(func() error {
+			// defensively make sure the entry really lives under oldPath
+			if e.currentPath != oldPath && !strings.HasPrefix(e.currentPath, oldPath+string(filepath.Separator)) {
+				return nil
+			}
+
+			updatedPath := newPath + strings.TrimPrefix(e.currentPath, oldPath)
+
+			// Set writes the new forward (id -> path) and reverse (path -> id)
+			// entries. The forward entry is overwritten in place, the now stale
+			// reverse entry for the old path is purged afterwards.
+			if err := c.Set(gctx, e.spaceID, e.nodeID, updatedPath); err != nil {
+				return err
+			}
+			return retryErr(gctx, func() error {
+				return c.kv.Purge(gctx, e.reverseKey)
+			})
+		})
+	}
+	return g.Wait()
 }
 
 // Set adds a new entry to the cache
@@ -234,7 +266,13 @@ func (c *IDCache) getByReverseCacheKey(ctx context.Context, reverseKey string) (
 		}
 		return "", "", err
 	}
-	decoded, err := base32.StdEncoding.DecodeString(string(record.Value()))
+	return decodeCacheKey(string(record.Value()))
+}
+
+// decodeCacheKey decodes an encoded forward cache key (base32 of
+// "spaceID!nodeID") back into its spaceID and nodeID parts.
+func decodeCacheKey(encoded string) (string, string, error) {
+	decoded, err := base32.StdEncoding.DecodeString(encoded)
 	if err != nil {
 		return "", "", err
 	}
@@ -262,6 +300,21 @@ func reverseCacheKey(path string) string {
 	}
 
 	return strings.Join(encoded, ".")
+}
+
+// pathFromReverseCacheKey reverses reverseCacheKey, decoding an encoded reverse
+// cache key back into the absolute filesystem path it represents.
+func pathFromReverseCacheKey(reverseKey string) (string, error) {
+	parts := strings.Split(reverseKey, ".")
+	decoded := make([]string, len(parts))
+	for i, p := range parts {
+		b, err := base32.StdEncoding.DecodeString(p)
+		if err != nil {
+			return "", err
+		}
+		decoded[i] = string(b)
+	}
+	return string(filepath.Separator) + strings.Join(decoded, string(filepath.Separator)), nil
 }
 
 func retry[T any](ctx context.Context, f func() (T, error)) (T, error) {
