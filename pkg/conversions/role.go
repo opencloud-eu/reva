@@ -24,6 +24,7 @@ import (
 	"strings"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+
 	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/grants"
 )
 
@@ -41,6 +42,8 @@ const (
 	RoleViewerWithVersions = "viewer-with-versions"
 	// RoleViewerListGrants grants non-editor role on a resource.
 	RoleViewerListGrants = "viewer-list-grants"
+	// RoleSpaceViewerWithVersions grants non-editor role on a space, including list/restore versions.
+	RoleSpaceViewerWithVersions = "spaceviewer-with-versions"
 	// RoleSpaceViewer grants non-editor role on a space.
 	RoleSpaceViewer = "spaceviewer"
 	// RoleEditor grants editor permission on a resource, including folders.
@@ -175,6 +178,8 @@ func RoleFromName(name string) *Role {
 		return NewViewerListGrantsRole()
 	case RoleSpaceViewer:
 		return NewSpaceViewerRole()
+	case RoleSpaceViewerWithVersions:
+		return NewSpaceViewerWithVersionsRole()
 	case RoleEditor:
 		return NewEditorRole()
 	case RoleEditorWithVersions:
@@ -267,6 +272,14 @@ func NewSpaceViewerRole() *Role {
 		},
 		ocsPermissions: PermissionRead,
 	}
+}
+
+// NewSpaceViewerWithVersionsRole creates a spaceviewer role which enables listing of file versions
+func NewSpaceViewerWithVersionsRole() *Role {
+	role := NewSpaceViewerRole()
+	role.Name = RoleSpaceViewerWithVersions
+	role.cS3ResourcePermissions.ListFileVersions = true
+	return role
 }
 
 // NewEditorRole creates an editor role. `sharing` indicates if sharing permission should be added
