@@ -947,7 +947,8 @@ func requiresExplicitFetching(n *xml.Name) bool {
 		case "favorite", "share-types", "checksums", "size", "tags", "audio", "location", "image", "photo":
 			return true
 		default:
-			return false
+			// allow fetching arbitrary oc: properties from metadata
+			return true
 		}
 	case net.NsOCS:
 		return false
@@ -1881,6 +1882,12 @@ func metadataKeyOf(n *xml.Name) string {
 	case "share-types", "tags", "lockdiscovery":
 		return n.Local
 	default:
+		// For oc: namespace, use the local name directly as the metadata key.
+		// This matches how the Graph Metadata API stores arbitrary metadata
+		// (e.g. "oy.fileReference") without namespace URI prefix.
+		if n.Space == net.NsOwncloud {
+			return n.Local
+		}
 		return fmt.Sprintf("%s/%s", n.Space, n.Local)
 	}
 }
