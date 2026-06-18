@@ -352,13 +352,6 @@ func (fs *Decomposedfs) MarkProcessing(ctx context.Context, ref *provider.Refere
 		return errtypes.NotFound(ref.String())
 	}
 
-	if !processing {
-		if !n.IsProcessing(ctx) {
-			return nil
-		}
-		return n.RemoveXattr(ctx, prefixes.StatusPrefix, true)
-	}
-
 	// Early lock, so MarkProcessing is atomic.
 	unlock, err := fs.lu.MetadataBackend().Lock(n.InternalPath())
 	if err != nil {
@@ -368,6 +361,13 @@ func (fs *Decomposedfs) MarkProcessing(ctx context.Context, ref *provider.Refere
 
 	// Evict the node's in-process xattr cache so IsProcessing reads from disk while we hold the lock.
 	n.ResetXattrsCache()
+
+	if !processing {
+		if !n.IsProcessing(ctx) {
+			return nil
+		}
+		return n.RemoveXattr(ctx, prefixes.StatusPrefix, false) // gst
+	}
 
 	if n.IsProcessing(ctx) {
 		return errtypes.ResourceProcessing(ref.String())
