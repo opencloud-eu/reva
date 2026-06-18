@@ -1317,6 +1317,21 @@ func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, p
 			appendMetadataProp(k, "oc", "location", "libre.graph.location", locationKeys)
 			appendMetadataProp(k, "oc", "image", "libre.graph.image", imageKeys)
 			appendMetadataProp(k, "oc", "photo", "libre.graph.photo", photoKeys)
+
+			// include arbitrary custom metadata (keys not handled above)
+			knownPrefixes := []string{"tags", "libre.graph.audio.", "libre.graph.location.", "libre.graph.image.", "libre.graph.photo."}
+			for key, val := range k {
+				isKnown := false
+				for _, prefix := range knownPrefixes {
+					if key == prefix || strings.HasPrefix(key, prefix) {
+						isKnown = true
+						break
+					}
+				}
+				if !isKnown && val != "" {
+					appendToOK(prop.EscapedNS(net.NsOwncloud, key, val))
+				}
+			}
 		}
 
 		if md.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
