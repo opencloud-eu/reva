@@ -401,7 +401,7 @@ func (nc *StorageDriver) InitiateUpload(ctx context.Context, ref *provider.Refer
 }
 
 // MarkProcessing as defined in the storage.FS interface
-func (nc *StorageDriver) MarkProcessing(ctx context.Context, ref *provider.Reference, processing bool) error {
+func (nc *StorageDriver) MarkProcessing(ctx context.Context, ref *provider.Reference, processing bool, sessionID string) error {
 	return errtypes.NotSupported("nextcloud: mark processing not supported")
 }
 

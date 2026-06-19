@@ -184,7 +184,7 @@ var _ = Describe("Decomposed", func() {
 					Delete: true,
 				}, nil)
 
-				Expect(env.Fs.MarkProcessing(env.Ctx, fileRef, true)).To(Succeed())
+				Expect(env.Fs.MarkProcessing(env.Ctx, fileRef, true, "test-session")).To(Succeed())
 
 				_, err := env.Fs.Delete(env.Ctx, fileRef)
 
@@ -212,7 +212,7 @@ var _ = Describe("Decomposed", func() {
 					InitiateFileUpload: true,
 				}, nil)
 
-				Expect(env.Fs.MarkProcessing(env.Ctx, oldRef, true)).To(Succeed())
+				Expect(env.Fs.MarkProcessing(env.Ctx, oldRef, true, "test-session")).To(Succeed())
 
 				_, err := env.Fs.Move(env.Ctx, oldRef, newRef)
 
@@ -235,7 +235,7 @@ var _ = Describe("Decomposed", func() {
 					InitiateFileDownload: true,
 				}, nil)
 
-				Expect(env.Fs.MarkProcessing(env.Ctx, fileRef, true)).To(Succeed())
+				Expect(env.Fs.MarkProcessing(env.Ctx, fileRef, true, "test-session")).To(Succeed())
 
 				_, _, err := env.Fs.Download(env.Ctx, fileRef, func(*provider.ResourceInfo) bool { return false })
 

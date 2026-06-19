@@ -343,7 +343,7 @@ func (fs *Decomposedfs) InitiateUpload(ctx context.Context, ref *provider.Refere
 }
 
 // MarkProcessing toggles a processing flag on the resource.
-func (fs *Decomposedfs) MarkProcessing(ctx context.Context, ref *provider.Reference, processing bool) error {
+func (fs *Decomposedfs) MarkProcessing(ctx context.Context, ref *provider.Reference, processing bool, sessionID string) error {
 	n, err := fs.lu.NodeFromResource(ctx, ref)
 	if err != nil {
 		return err
@@ -366,14 +366,18 @@ func (fs *Decomposedfs) MarkProcessing(ctx context.Context, ref *provider.Refere
 		if !n.IsProcessing(ctx) {
 			return nil
 		}
-		return n.RemoveXattr(ctx, prefixes.StatusPrefix, false) // gst
+		id, _ := n.ProcessingID(ctx)
+		if id != sessionID {
+			return nil // owned by a different session, do not clear
+		}
+		return n.RemoveXattr(ctx, prefixes.StatusPrefix, false)
 	}
 
 	if n.IsProcessing(ctx) {
 		return errtypes.ResourceProcessing(ref.String())
 	}
 	return n.SetXattrsWithContext(ctx, node.Attributes{
-		prefixes.StatusPrefix: []byte(node.ProcessingStatus),
+		prefixes.StatusPrefix: []byte(node.ProcessingStatus + sessionID),
 	}, false) // acquireLock=false, because outer lock already held
 }
 

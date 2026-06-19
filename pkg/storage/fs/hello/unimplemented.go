@@ -86,7 +86,7 @@ func (fs *hellofs) InitiateUpload(ctx context.Context, ref *provider.Reference, 
 }
 
 // MarkProcessing toggles a processing flag on the resource.
-func (fs *hellofs) MarkProcessing(ctx context.Context, ref *provider.Reference, processing bool) error {
+func (fs *hellofs) MarkProcessing(ctx context.Context, ref *provider.Reference, processing bool, sessionID string) error {
 	return errtypes.NotSupported("hellofs: mark processing not supported")
 }
 

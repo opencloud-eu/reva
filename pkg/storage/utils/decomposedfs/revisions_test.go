@@ -145,7 +145,7 @@ var _ = Describe("Revisions", func() {
 
 	Context("RestoreRevision on a node marked as processing", func() {
 		It("rejects with ResourceProcessing", func() {
-			Expect(env.Fs.MarkProcessing(env.Ctx, fileRef, true)).To(Succeed())
+			Expect(env.Fs.MarkProcessing(env.Ctx, fileRef, true, "revision-test")).To(Succeed())
 
 			revisionKey := file.ID + node.RevisionIDDelimiter + rev1
 			err := env.Fs.RestoreRevision(env.Ctx, fileRef, revisionKey)

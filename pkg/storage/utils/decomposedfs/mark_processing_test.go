@@ -64,7 +64,7 @@ var _ = Describe("MarkProcessing", func() {
 		It("sets the processing flag", func() {
 			Expect(isProcessing()).To(BeFalse())
 
-			err := env.Fs.MarkProcessing(env.Ctx, ref, true)
+			err := env.Fs.MarkProcessing(env.Ctx, ref, true, "test-session")
 
 			Expect(err).ToNot(HaveOccurred())
 			Expect(isProcessing()).To(BeTrue())
@@ -73,7 +73,7 @@ var _ = Describe("MarkProcessing", func() {
 		It("is a no-op when clearing", func() {
 			Expect(isProcessing()).To(BeFalse())
 
-			err := env.Fs.MarkProcessing(env.Ctx, ref, false)
+			err := env.Fs.MarkProcessing(env.Ctx, ref, false, "test-session")
 
 			Expect(err).ToNot(HaveOccurred())
 			Expect(isProcessing()).To(BeFalse())
@@ -89,7 +89,7 @@ var _ = Describe("MarkProcessing", func() {
 				go func() {
 					defer wg.Done()
 					<-ready
-					results[i] = env.Fs.MarkProcessing(env.Ctx, ref, true)
+					results[i] = env.Fs.MarkProcessing(env.Ctx, ref, true, "test-session")
 				}()
 			}
 			close(ready)
@@ -110,11 +110,11 @@ var _ = Describe("MarkProcessing", func() {
 
 	Context("on an already-marked node", func() {
 		JustBeforeEach(func() {
-			Expect(env.Fs.MarkProcessing(env.Ctx, ref, true)).To(Succeed())
+			Expect(env.Fs.MarkProcessing(env.Ctx, ref, true, "test-session")).To(Succeed())
 		})
 
 		It("rejects a second mark with ResourceProcessing", func() {
-			err := env.Fs.MarkProcessing(env.Ctx, ref, true)
+			err := env.Fs.MarkProcessing(env.Ctx, ref, true, "test-session")
 
 			Expect(err).To(HaveOccurred())
 			_, ok := err.(errtypes.IsResourceProcessing)
@@ -124,10 +124,19 @@ var _ = Describe("MarkProcessing", func() {
 		It("clears the processing flag", func() {
 			Expect(isProcessing()).To(BeTrue())
 
-			err := env.Fs.MarkProcessing(env.Ctx, ref, false)
+			err := env.Fs.MarkProcessing(env.Ctx, ref, false, "test-session")
 
 			Expect(err).ToNot(HaveOccurred())
 			Expect(isProcessing()).To(BeFalse())
+		})
+
+		It("does not clear when session ID does not match", func() {
+			Expect(isProcessing()).To(BeTrue())
+
+			err := env.Fs.MarkProcessing(env.Ctx, ref, false, "other-session")
+
+			Expect(err).ToNot(HaveOccurred())
+			Expect(isProcessing()).To(BeTrue())
 		})
 	})
 
@@ -138,7 +147,7 @@ var _ = Describe("MarkProcessing", func() {
 				Path:       "/dir1/does-not-exist",
 			}
 
-			err := env.Fs.MarkProcessing(env.Ctx, missingRef, true)
+			err := env.Fs.MarkProcessing(env.Ctx, missingRef, true, "test-session")
 
 			Expect(err).To(HaveOccurred())
 			_, ok := err.(errtypes.IsNotFound)

@@ -99,7 +99,7 @@ func (fs *eosfs) InitiateUpload(ctx context.Context, ref *provider.Reference, up
 	}, nil
 }
 
-func (fs *eosfs) MarkProcessing(ctx context.Context, ref *provider.Reference, processing bool) error {
+func (fs *eosfs) MarkProcessing(ctx context.Context, ref *provider.Reference, processing bool, sessionID string) error {
 	return errtypes.NotSupported("op not supported")
 }
 

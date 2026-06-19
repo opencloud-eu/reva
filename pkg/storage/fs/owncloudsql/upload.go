@@ -169,7 +169,7 @@ func (fs *owncloudsqlfs) InitiateUpload(ctx context.Context, ref *provider.Refer
 	}, nil
 }
 
-func (fs *owncloudsqlfs) MarkProcessing(ctx context.Context, ref *provider.Reference, processing bool) error {
+func (fs *owncloudsqlfs) MarkProcessing(ctx context.Context, ref *provider.Reference, processing bool, sessionID string) error {
 	return errtypes.NotSupported("op not supported")
 }
 

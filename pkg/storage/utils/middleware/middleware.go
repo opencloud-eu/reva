@@ -381,7 +381,7 @@ func (f *FS) Upload(ctx context.Context, req storage.UploadRequest, uploadFunc s
 	return res0, res1
 }
 
-func (f *FS) MarkProcessing(ctx context.Context, ref *provider.Reference, processing bool) error {
+func (f *FS) MarkProcessing(ctx context.Context, ref *provider.Reference, processing bool, sessionID string) error {
 	var (
 		err     error
 		unhook  UnHook
@@ -397,7 +397,7 @@ func (f *FS) MarkProcessing(ctx context.Context, ref *provider.Reference, proces
 		}
 	}
 
-	res := f.next.MarkProcessing(ctx, ref, processing)
+	res := f.next.MarkProcessing(ctx, ref, processing, sessionID)
 
 	for _, unhook := range unhooks {
 		if err := unhook(); err != nil {

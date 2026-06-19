@@ -151,7 +151,7 @@ func (fs *localfs) InitiateUpload(ctx context.Context, ref *provider.Reference, 
 	}, nil
 }
 
-func (fs *localfs) MarkProcessing(ctx context.Context, ref *provider.Reference, processing bool) error {
+func (fs *localfs) MarkProcessing(ctx context.Context, ref *provider.Reference, processing bool, sessionID string) error {
 	return errtypes.NotSupported("op not supported")
 }
 

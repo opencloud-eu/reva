@@ -194,7 +194,7 @@ var _ = Describe("Grants", func() {
 
 		Describe("AddGrant", func() {
 			It("rejects with ResourceProcessing", func() {
-				Expect(env.Fs.MarkProcessing(env.Ctx, ref, true)).To(Succeed())
+				Expect(env.Fs.MarkProcessing(env.Ctx, ref, true, "test-session")).To(Succeed())
 
 				err := env.Fs.AddGrant(env.Ctx, ref, grant)
 
@@ -208,7 +208,7 @@ var _ = Describe("Grants", func() {
 			It("rejects with ResourceProcessing", func() {
 				// add a grant first so RemoveGrant reaches the processing guard (it bails early on missing grants)
 				Expect(env.Fs.AddGrant(env.Ctx, ref, grant)).To(Succeed())
-				Expect(env.Fs.MarkProcessing(env.Ctx, ref, true)).To(Succeed())
+				Expect(env.Fs.MarkProcessing(env.Ctx, ref, true, "test-session")).To(Succeed())
 
 				err := env.Fs.RemoveGrant(env.Ctx, ref, grant)
 
@@ -222,7 +222,7 @@ var _ = Describe("Grants", func() {
 			It("rejects with ResourceProcessing", func() {
 				// add a grant first so UpdateGrant reaches the processing guard (it bails early on missing grants)
 				Expect(env.Fs.AddGrant(env.Ctx, ref, grant)).To(Succeed())
-				Expect(env.Fs.MarkProcessing(env.Ctx, ref, true)).To(Succeed())
+				Expect(env.Fs.MarkProcessing(env.Ctx, ref, true, "test-session")).To(Succeed())
 
 				err := env.Fs.UpdateGrant(env.Ctx, ref, grant)
 

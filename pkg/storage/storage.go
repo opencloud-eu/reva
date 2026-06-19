@@ -62,7 +62,7 @@ type FS interface {
 	// CreateDir creates a resource of type container
 	CreateDir(ctx context.Context, ref *provider.Reference) error
 	// TouchFile sets the mtime of a resource, creating an empty file if it does not exist
-	// FIXME the markprocessing flag is an implementation detail of decomposedfs, remove it from the function
+	// FIXME(OCISDEV-900) remove markprocessing bool: coordinator calls MarkProcessing(true) explicitly after TouchFile
 	// FIXME the mtime should either be a time.Time or a CS3 Timestamp, not a string
 	TouchFile(ctx context.Context, ref *provider.Reference, markprocessing bool, mtime string) error
 	// Delete deletes a resource.
@@ -75,7 +75,7 @@ type FS interface {
 	// Upload creates or updates a resource of type file with a new revision
 	Upload(ctx context.Context, req UploadRequest, uploadFunc UploadFinishedFunc) (*provider.ResourceInfo, error)
 	// MarkProcessing toggles a processing flag on the resource.
-	MarkProcessing(ctx context.Context, ref *provider.Reference, processing bool) error
+	MarkProcessing(ctx context.Context, ref *provider.Reference, processing bool, sessionID string) error
 	// CommitUpload writes the staged bytes from source to the resource at ref.
 	CommitUpload(ctx context.Context, ref *provider.Reference, source UploadSource) (*provider.ResourceInfo, error)
 
