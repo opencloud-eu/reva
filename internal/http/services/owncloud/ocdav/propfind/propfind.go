@@ -1618,7 +1618,16 @@ func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, p
 						hasPreview(md, appendToOK)
 					}
 				default:
-					appendToNotFound(prop.NotFound("oc:" + pf.Prop[i].Local))
+					// look up arbitrary oc: properties in metadata
+					if k := md.GetArbitraryMetadata(); k == nil {
+						appendToNotFound(prop.NotFound("oc:" + pf.Prop[i].Local))
+					} else if amd := k.GetMetadata(); amd == nil {
+						appendToNotFound(prop.NotFound("oc:" + pf.Prop[i].Local))
+					} else if v, ok := amd[metadataKeyOf(&pf.Prop[i])]; ok && v != "" {
+						appendToOK(prop.EscapedNS(pf.Prop[i].Space, pf.Prop[i].Local, v))
+					} else {
+						appendToNotFound(prop.NotFound("oc:" + pf.Prop[i].Local))
+					}
 				}
 			case net.NsDav:
 				switch pf.Prop[i].Local {
