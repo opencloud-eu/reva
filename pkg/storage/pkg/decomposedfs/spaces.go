@@ -751,13 +751,45 @@ func (fs *Decomposedfs) DeleteStorageSpace(ctx context.Context, req *provider.De
 			return errtypes.NewErrtypeFromStatus(status.NewInvalid(ctx, "can't purge enabled space"))
 		}
 
-		// TODO invalidate ALL indexes in msgpack, not only by type
 		spaceType, err := n.XattrString(ctx, prefixes.SpaceTypeAttr)
 		if err != nil {
 			return err
 		}
 		if err := fs.spaceTypeIndex.Remove(spaceType, spaceID); err != nil {
 			return err
+		}
+
+		// the by-type index is handled above; also remove the space from the user
+		// and group indexes for the owner and every grantee, or they keep stale
+		// entries pointing at the purged space. best effort, like the expired
+		// grant removal: log and continue.
+		// https://github.com/opencloud-eu/opencloud/issues/2985
+		sublog := appctx.GetLogger(ctx).With().Str("spaceid", spaceID).Logger()
+		if ownerID, err := n.XattrString(ctx, prefixes.OwnerIDAttr); err != nil {
+			sublog.Error().Err(err).Msg("could not read space owner")
+		} else if ownerID != "" {
+			// remove from user index
+			if err := fs.userSpaceIndex.Remove(ownerID, spaceID); err != nil {
+				sublog.Error().Err(err).Msg("could not remove owner from user index")
+			}
+		}
+		grants, err := n.ListGrants(ctx)
+		if err != nil {
+			sublog.Error().Err(err).Msg("could not list grants")
+		}
+		for _, g := range grants {
+			switch g.Grantee.Type {
+			case provider.GranteeType_GRANTEE_TYPE_USER:
+				// remove from user index
+				if err := fs.userSpaceIndex.Remove(g.Grantee.GetUserId().GetOpaqueId(), spaceID); err != nil {
+					sublog.Error().Err(err).Str("grantee", g.Grantee.GetUserId().GetOpaqueId()).Msg("could not remove user from user index")
+				}
+			case provider.GranteeType_GRANTEE_TYPE_GROUP:
+				// remove from group index
+				if err := fs.groupSpaceIndex.Remove(g.Grantee.GetGroupId().GetOpaqueId(), spaceID); err != nil {
+					sublog.Error().Err(err).Str("grantee", g.Grantee.GetGroupId().GetOpaqueId()).Msg("could not remove group from group index")
+				}
+			}
 		}
 
 		// invalidate cache
