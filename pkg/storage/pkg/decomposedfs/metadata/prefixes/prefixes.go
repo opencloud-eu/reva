@@ -103,6 +103,11 @@ const (
 	SpaceAliasAttr       string = OcPrefix + "space.alias"
 	SpaceTenantIDAttr    string = OcPrefix + "space.tenantid"
 
+	// ImmutableAttr marks a resource as immutable.
+	// On files: content is fixed, irreversible.
+	// On containers: structure is fixed, reversible by managers.
+	ImmutableAttr string = OcPrefix + "immutable"
+
 	UserAcePrefix  string = "u:"
 	GroupAcePrefix string = "g:"
 )

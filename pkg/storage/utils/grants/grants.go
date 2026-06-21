@@ -59,6 +59,26 @@ func GetACLPerm(set *provider.ResourcePermissions) (string, error) {
 		b.WriteString("!d")
 	}
 
+	if set.DeleteContainer {
+		b.WriteString("+dc")
+	} else {
+		b.WriteString("!dc")
+	}
+
+	if set.MoveContainer {
+		b.WriteString("+mc")
+	} else {
+		b.WriteString("!mc")
+	}
+
+	if set.SetImmutableFile {
+		b.WriteString("+if")
+	}
+
+	if set.SetImmutableContainer {
+		b.WriteString("+ic")
+	}
+
 	return b.String(), nil
 }
 
@@ -91,7 +111,29 @@ func GetGrantPermissionSet(perm string) *provider.ResourcePermissions {
 		rp.ListContainer = true
 	}
 
-	if strings.Contains(perm, "!d") {
+	// Container-specific flags use multi-char tokens (+dc, !dc, +mc, !mc).
+	// Parse them before single-char !d to avoid substring collision,
+	// then strip them from the string for the !d check.
+	if strings.Contains(perm, "+dc") {
+		rp.DeleteContainer = true
+	}
+
+	if strings.Contains(perm, "+mc") {
+		rp.MoveContainer = true
+	}
+
+	if strings.Contains(perm, "+if") {
+		rp.SetImmutableFile = true
+	}
+
+	if strings.Contains(perm, "+ic") {
+		rp.SetImmutableContainer = true
+	}
+
+	// Strip container flags before checking !d, because "!dc" contains "!d"
+	stripped := strings.ReplaceAll(perm, "!dc", "")
+	stripped = strings.ReplaceAll(stripped, "+dc", "")
+	if strings.Contains(stripped, "!d") {
 		rp.Delete = false
 		rp.PurgeRecycle = false
 	}

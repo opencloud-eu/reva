@@ -919,6 +919,40 @@ func (s *svc) Unlock(ctx context.Context, req *provider.UnlockRequest) (*provide
 	return res, nil
 }
 
+func (s *svc) SetImmutable(ctx context.Context, req *provider.SetImmutableRequest) (*provider.SetImmutableResponse, error) {
+	c, _, err := s.find(ctx, req.Ref)
+	if err != nil {
+		return &provider.SetImmutableResponse{
+			Status: status.NewStatusFromErrType(ctx, "SetImmutable ref="+req.Ref.String(), err),
+		}, nil
+	}
+	res, err := c.SetImmutable(ctx, req)
+	if err != nil {
+		if gstatus.Code(err) == codes.PermissionDenied {
+			return &provider.SetImmutableResponse{Status: &rpc.Status{Code: rpc.Code_CODE_PERMISSION_DENIED}}, nil
+		}
+		return nil, errors.Wrap(err, "gateway: error calling SetImmutable")
+	}
+	return res, nil
+}
+
+func (s *svc) UnsetImmutable(ctx context.Context, req *provider.UnsetImmutableRequest) (*provider.UnsetImmutableResponse, error) {
+	c, _, err := s.find(ctx, req.Ref)
+	if err != nil {
+		return &provider.UnsetImmutableResponse{
+			Status: status.NewStatusFromErrType(ctx, "UnsetImmutable ref="+req.Ref.String(), err),
+		}, nil
+	}
+	res, err := c.UnsetImmutable(ctx, req)
+	if err != nil {
+		if gstatus.Code(err) == codes.PermissionDenied {
+			return &provider.UnsetImmutableResponse{Status: &rpc.Status{Code: rpc.Code_CODE_PERMISSION_DENIED}}, nil
+		}
+		return nil, errors.Wrap(err, "gateway: error calling UnsetImmutable")
+	}
+	return res, nil
+}
+
 // Stat returns the Resoure info for a given resource by forwarding the request to the responsible provider.
 func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.StatResponse, error) {
 	c, _, ref, err := s.findAndUnwrap(ctx, req.Ref)

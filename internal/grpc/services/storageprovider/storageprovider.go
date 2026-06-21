@@ -325,14 +325,16 @@ func (s *Service) ListResourcesForLabel(ctx context.Context, req *labels.ListRes
 }
 
 func (s *Service) SetImmutable(ctx context.Context, req *provider.SetImmutableRequest) (*provider.SetImmutableResponse, error) {
+	err := s.Storage.SetImmutable(ctx, req.Ref)
 	return &provider.SetImmutableResponse{
-		Status: status.NewUnimplemented(ctx, nil, "SetImmutable not yet implemented"),
+		Status: status.NewStatusFromErrType(ctx, "set immutable", err),
 	}, nil
 }
 
 func (s *Service) UnsetImmutable(ctx context.Context, req *provider.UnsetImmutableRequest) (*provider.UnsetImmutableResponse, error) {
+	err := s.Storage.UnsetImmutable(ctx, req.Ref)
 	return &provider.UnsetImmutableResponse{
-		Status: status.NewUnimplemented(ctx, nil, "UnsetImmutable not yet implemented"),
+		Status: status.NewStatusFromErrType(ctx, "unset immutable", err),
 	}, nil
 }
 

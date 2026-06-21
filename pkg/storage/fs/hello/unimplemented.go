@@ -155,6 +155,18 @@ func (fs *hellofs) Unlock(ctx context.Context, ref *provider.Reference, lock *pr
 	return errtypes.NotSupported("unimplemented")
 }
 
+// immutable
+
+// SetImmutable sets the immutable attribute on a resource
+func (fs *hellofs) SetImmutable(ctx context.Context, ref *provider.Reference) error {
+	return errtypes.NotSupported("unimplemented")
+}
+
+// UnsetImmutable removes the immutable attribute from a container
+func (fs *hellofs) UnsetImmutable(ctx context.Context, ref *provider.Reference) error {
+	return errtypes.NotSupported("unimplemented")
+}
+
 // revisions
 
 // ListRevisions lists all revisions for the referenced resource

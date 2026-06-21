@@ -121,6 +121,14 @@ type FS interface {
 	AddLabel(ctx context.Context, ref *provider.Reference, userID *user.UserId, label string) error
 	// RemoveLabel removes a label from a resource
 	RemoveLabel(ctx context.Context, ref *provider.Reference, userID *user.UserId, label string) error
+	// Immutable
+
+	// SetImmutable sets the immutable attribute on a resource.
+	// For files (freeze): irreversible. For containers (protect): reversible.
+	SetImmutable(ctx context.Context, ref *provider.Reference) error
+	// UnsetImmutable removes the immutable attribute from a container.
+	// Returns an error for files (freeze is irreversible).
+	UnsetImmutable(ctx context.Context, ref *provider.Reference) error
 
 	// Locks
 

@@ -768,6 +768,65 @@ func (n *Node) IsDir(ctx context.Context) bool {
 	return attr == int32(provider.ResourceType_RESOURCE_TYPE_CONTAINER)
 }
 
+// ImmutableState represents the effective immutable status of a resource.
+type ImmutableState int
+
+const (
+	// ImmutableNone — resource is not immutable.
+	ImmutableNone ImmutableState = 0
+	// ImmutableProtected — resource is not self-immutable but its parent is.
+	// It cannot be deleted, modified or renamed, but if it is a container,
+	// entries inside it can still be added, removed or modified.
+	ImmutableProtected ImmutableState = 1
+	// ImmutableFrozen — resource has the immutable attribute set on itself.
+	// For files: content is fixed, irreversible.
+	// For containers: structure is fixed, reversible by managers.
+	ImmutableFrozen ImmutableState = 2
+)
+
+// IsImmutable returns true if the node has the immutable attribute set (self).
+func (n *Node) IsImmutable(ctx context.Context) bool {
+	val, err := n.XattrString(ctx, prefixes.ImmutableAttr)
+	return err == nil && val == "1"
+}
+
+// GetImmutableState returns the effective immutable state of the node,
+// considering both self and parent attributes.
+func (n *Node) GetImmutableState(ctx context.Context) ImmutableState {
+	if n.IsImmutable(ctx) {
+		return ImmutableFrozen
+	}
+	if parent, err := n.Parent(ctx); err == nil && parent.IsImmutable(ctx) {
+		return ImmutableProtected
+	}
+	return ImmutableNone
+}
+
+// FreezeFile sets the immutable attribute on a file. This is irreversible.
+func (n *Node) FreezeFile(ctx context.Context) error {
+	if n.IsDir(ctx) {
+		return errtypes.PreconditionFailed("cannot freeze a directory, use ProtectContainer")
+	}
+	return n.SetXattrString(ctx, prefixes.ImmutableAttr, "1")
+}
+
+// ProtectContainer sets the immutable attribute on a container.
+func (n *Node) ProtectContainer(ctx context.Context) error {
+	if !n.IsDir(ctx) {
+		return errtypes.PreconditionFailed("cannot protect a file, use FreezeFile")
+	}
+	return n.SetXattrString(ctx, prefixes.ImmutableAttr, "1")
+}
+
+// UnprotectContainer removes the immutable attribute from a container.
+// Files cannot be unfrozen — this only works on containers.
+func (n *Node) UnprotectContainer(ctx context.Context) error {
+	if !n.IsDir(ctx) {
+		return errtypes.PreconditionFailed("cannot unfreeze a file")
+	}
+	return n.RemoveXattr(ctx, prefixes.ImmutableAttr, false)
+}
+
 // AsResourceInfo return the node as CS3 ResourceInfo
 func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissions, mdKeys, fieldMask []string, returnBasename bool) (ri *provider.ResourceInfo, err error) {
 	sublog := appctx.GetLogger(ctx).With().Str("spaceid", n.SpaceID).Str("nodeid", n.ID).Logger()
@@ -808,6 +867,15 @@ func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissi
 			OpaqueId: n.ParentID,
 		},
 		Name: n.Name,
+	}
+
+	// Immutable attribute
+	ri.Immutable = n.IsImmutable(ctx)
+	switch n.GetImmutableState(ctx) {
+	case ImmutableFrozen:
+		ri.Opaque = utils.AppendPlainToOpaque(ri.Opaque, "immutable-state", "frozen")
+	case ImmutableProtected:
+		ri.Opaque = utils.AppendPlainToOpaque(ri.Opaque, "immutable-state", "protected")
 	}
 
 	if n.IsProcessing(ctx) {

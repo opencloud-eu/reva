@@ -63,25 +63,29 @@ func ShareFolderPermissions() *provider.ResourcePermissions {
 func OwnerPermissions() *provider.ResourcePermissions {
 	return &provider.ResourcePermissions{
 		// all permissions
-		AddGrant:             true,
-		CreateContainer:      true,
-		Delete:               true,
-		GetPath:              true,
-		GetQuota:             true,
-		InitiateFileDownload: true,
-		InitiateFileUpload:   true,
-		ListContainer:        true,
-		ListFileVersions:     true,
-		ListGrants:           true,
-		ListRecycle:          true,
-		Move:                 true,
-		PurgeRecycle:         true,
-		RemoveGrant:          true,
-		RestoreFileVersion:   true,
-		RestoreRecycleItem:   true,
-		Stat:                 true,
-		UpdateGrant:          true,
-		DenyGrant:            true,
+		AddGrant:              true,
+		CreateContainer:       true,
+		Delete:                true,
+		DeleteContainer:       true,
+		GetPath:               true,
+		GetQuota:              true,
+		InitiateFileDownload:  true,
+		InitiateFileUpload:    true,
+		ListContainer:         true,
+		ListFileVersions:      true,
+		ListGrants:            true,
+		ListRecycle:           true,
+		Move:                  true,
+		MoveContainer:         true,
+		PurgeRecycle:          true,
+		RemoveGrant:           true,
+		RestoreFileVersion:    true,
+		RestoreRecycleItem:    true,
+		Stat:                  true,
+		UpdateGrant:           true,
+		DenyGrant:             true,
+		SetImmutableFile:      true,
+		SetImmutableContainer: true,
 	}
 }
 
@@ -98,10 +102,15 @@ func ServiceAccountPermissions() *provider.ResourcePermissions {
 		ListRecycle:          true, // for purge-trash-bin command
 		PurgeRecycle:         true, // for purge-trash-bin command
 		RestoreRecycleItem:   true, // for cli restore command
-		Delete:               true, // for cli restore command with replace option
-		CreateContainer:      true, // for space provisioning
-		AddGrant:             true, // for initial project space member assignment
-		ListGrants:           true, // for initial project space member assignment
+		Delete:                true, // for cli restore command with replace option
+		DeleteContainer:       true, // for space provisioning and settings init
+		CreateContainer:       true, // for space provisioning
+		Move:                  true, // for internal operations
+		MoveContainer:         true, // for internal operations
+		AddGrant:              true, // for initial project space member assignment
+		ListGrants:            true, // for initial project space member assignment
+		SetImmutableFile:      true, // for service-level immutable operations
+		SetImmutableContainer: true, // for service-level immutable operations
 	}
 }
 
@@ -230,4 +239,8 @@ func AddPermissions(l *provider.ResourcePermissions, r *provider.ResourcePermiss
 	l.Stat = l.Stat || r.Stat
 	l.UpdateGrant = l.UpdateGrant || r.UpdateGrant
 	l.DenyGrant = l.DenyGrant || r.DenyGrant
+	l.DeleteContainer = l.DeleteContainer || r.DeleteContainer
+	l.MoveContainer = l.MoveContainer || r.MoveContainer
+	l.SetImmutableFile = l.SetImmutableFile || r.SetImmutableFile
+	l.SetImmutableContainer = l.SetImmutableContainer || r.SetImmutableContainer
 }
