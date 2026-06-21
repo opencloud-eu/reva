@@ -1009,6 +1009,9 @@ func (fs *Decomposedfs) ListFolder(ctx context.Context, ref *provider.Reference,
 		return nil, err
 	}
 
+	// Cache parent's immutable state in context so children skip redundant Parent() xattr reads
+	ctx = node.ContextWithParentImmutable(ctx, n.IsImmutable(ctx))
+
 	numWorkers := fs.o.MaxConcurrency
 	if len(children) < numWorkers {
 		numWorkers = len(children)
