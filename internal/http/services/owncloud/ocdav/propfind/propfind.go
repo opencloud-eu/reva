@@ -1136,18 +1136,21 @@ func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, p
 			false,
 			isPublic,
 		)
-		// Strip delete/move flags from permissions if resource is effectively immutable
-		isEffectivelyImmutable := md.Immutable
-		if !isEffectivelyImmutable && md.Opaque != nil {
-			if _, ok := md.Opaque.Map["immutable-state"]; ok {
-				isEffectivelyImmutable = true
+		// Strip permissions based on immutable state
+		var immutableState string
+		if md.Opaque != nil {
+			if v, ok := md.Opaque.Map["immutable-state"]; ok {
+				immutableState = string(v.Value)
 			}
 		}
-		if isEffectivelyImmutable {
+		if md.Immutable || immutableState != "" {
 			wdp = strings.ReplaceAll(wdp, "D", "")  // no delete
 			wdp = strings.ReplaceAll(wdp, "NV", "") // no move
-			wdp = strings.ReplaceAll(wdp, "CK", "") // no create children
 		}
+		if immutableState == "protected" || immutableState == "frozen" {
+			wdp = strings.ReplaceAll(wdp, "CK", "") // no create children (only self-protected/frozen)
+		}
+		// shielded: D/NV stripped but CK kept (new children allowed in inherited protection)
 	}
 
 	// replace fileid of /public/{token} mountpoint with grant fileid
