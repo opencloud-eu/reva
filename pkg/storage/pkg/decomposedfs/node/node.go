@@ -794,6 +794,10 @@ func (n *Node) IsImmutable(ctx context.Context) bool {
 // considering both self and parent attributes.
 func (n *Node) GetImmutableState(ctx context.Context) ImmutableState {
 	if n.IsImmutable(ctx) {
+		if n.IsDir(ctx) {
+			// Directories are protected, not frozen
+			return ImmutableProtected
+		}
 		return ImmutableFrozen
 	}
 	if parent, err := n.Parent(ctx); err == nil && parent.IsImmutable(ctx) {
