@@ -30,6 +30,7 @@ import (
 	"strings"
 	"time"
 
+	labels "github.com/cs3org/go-cs3apis/cs3/labels/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
@@ -119,6 +120,7 @@ func (s *Service) UnprotectedEndpoints() []string { return []string{} }
 func (s *Service) Register(ss *grpc.Server) {
 	provider.RegisterProviderAPIServer(ss, s)
 	provider.RegisterSpacesAPIServer(ss, s)
+	labels.RegisterLabelsAPIServer(ss, s)
 }
 
 func parseXSTypes(xsTypes map[string]uint32) ([]*provider.ResourceChecksumPriority, error) {
@@ -283,6 +285,54 @@ func (s *Service) Unlock(ctx context.Context, req *provider.UnlockRequest) (*pro
 
 	return &provider.UnlockResponse{
 		Status: status.NewStatusFromErrType(ctx, "unlock", err),
+	}, nil
+}
+
+func (s *Service) AddLabel(ctx context.Context, req *labels.AddLabelRequest) (*labels.AddLabelResponse, error) {
+	err := s.Storage.AddLabel(ctx, req.Ref, req.UserId, req.Label)
+	if err != nil {
+		return &labels.AddLabelResponse{
+			Status: status.NewStatusFromErrType(ctx, "add label", err),
+		}, nil
+	}
+	return &labels.AddLabelResponse{
+		Status: status.NewOK(ctx),
+	}, nil
+}
+
+func (s *Service) RemoveLabel(ctx context.Context, req *labels.RemoveLabelRequest) (*labels.RemoveLabelResponse, error) {
+	err := s.Storage.RemoveLabel(ctx, req.Ref, req.UserId, req.Label)
+	if err != nil {
+		return &labels.RemoveLabelResponse{
+			Status: status.NewStatusFromErrType(ctx, "remove label", err),
+		}, nil
+	}
+	return &labels.RemoveLabelResponse{
+		Status: status.NewOK(ctx),
+	}, nil
+}
+
+func (s *Service) ListLabels(ctx context.Context, req *labels.ListLabelsRequest) (*labels.ListLabelsResponse, error) {
+	return &labels.ListLabelsResponse{
+		Status: status.NewUnimplemented(ctx, nil, "ListLabels not yet implemented"),
+	}, nil
+}
+
+func (s *Service) ListResourcesForLabel(ctx context.Context, req *labels.ListResourcesForLabelRequest) (*labels.ListResourcesForLabelResponse, error) {
+	return &labels.ListResourcesForLabelResponse{
+		Status: status.NewUnimplemented(ctx, nil, "ListResourcesForLabel not yet implemented"),
+	}, nil
+}
+
+func (s *Service) SetImmutable(ctx context.Context, req *provider.SetImmutableRequest) (*provider.SetImmutableResponse, error) {
+	return &provider.SetImmutableResponse{
+		Status: status.NewUnimplemented(ctx, nil, "SetImmutable not yet implemented"),
+	}, nil
+}
+
+func (s *Service) UnsetImmutable(ctx context.Context, req *provider.UnsetImmutableRequest) (*provider.UnsetImmutableResponse, error) {
+	return &provider.UnsetImmutableResponse{
+		Status: status.NewUnimplemented(ctx, nil, "UnsetImmutable not yet implemented"),
 	}, nil
 }
 
@@ -712,36 +762,6 @@ func (s *Service) TouchFile(ctx context.Context, req *provider.TouchFileRequest)
 
 	return &provider.TouchFileResponse{
 		Status: status.NewStatusFromErrType(ctx, "touch file", err),
-	}, nil
-}
-
-func (s *Service) AddLabel(ctx context.Context, req *provider.AddLabelRequest) (*provider.AddLabelResponse, error) {
-	appctx.GetLogger(ctx).Debug().Msg("AddLabel")
-
-	err := s.Storage.AddLabel(ctx, req.Ref, req.UserId, req.Label)
-	if err != nil {
-		return &provider.AddLabelResponse{
-			Status: status.NewStatusFromErrType(ctx, "add label", err),
-		}, nil
-	}
-
-	return &provider.AddLabelResponse{
-		Status: status.NewOK(ctx),
-	}, nil
-}
-
-func (s *Service) RemoveLabel(ctx context.Context, req *provider.RemoveLabelRequest) (*provider.RemoveLabelResponse, error) {
-	appctx.GetLogger(ctx).Debug().Msg("RemoveLabel")
-
-	err := s.Storage.RemoveLabel(ctx, req.Ref, req.UserId, req.Label)
-	if err != nil {
-		return &provider.RemoveLabelResponse{
-			Status: status.NewStatusFromErrType(ctx, "remove label", err),
-		}, nil
-	}
-
-	return &provider.RemoveLabelResponse{
-		Status: status.NewOK(ctx),
 	}, nil
 }
 
