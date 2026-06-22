@@ -1,6 +1,6 @@
 # Changelog
 
-## [2.47.0](https://github.com/opencloud-eu/reva/releases/tag/v2.47.0) - 2026-06-18
+## [2.47.0](https://github.com/opencloud-eu/reva/releases/tag/v2.47.0) - 2026-06-22
 
 ### ❤️ Thanks to all contributors! ❤️
 
@@ -18,6 +18,8 @@
 
 ### 📦️ Dependencies
 
+- chore(deps): bump go.mongodb.org/mongo-driver from 1.17.6 to 1.17.7 in the go_modules group across 1 directory [[#694](https://github.com/opencloud-eu/reva/pull/694)]
+- chore(deps): bump github.com/onsi/ginkgo/v2 from 2.28.1 to 2.31.0 [[#690](https://github.com/opencloud-eu/reva/pull/690)]
 - chore(deps): bump go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc from 1.43.0 to 1.44.0 [[#684](https://github.com/opencloud-eu/reva/pull/684)]
 - chore(deps): bump github.com/nats-io/nats-server/v2 from 2.14.0 to 2.14.2 [[#683](https://github.com/opencloud-eu/reva/pull/683)]
 - chore(deps): bump go.opentelemetry.io/otel from 1.43.0 to 1.44.0 [[#667](https://github.com/opencloud-eu/reva/pull/667)]
