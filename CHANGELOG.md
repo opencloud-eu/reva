@@ -6,7 +6,9 @@
 
 @rhafer
 
+### 🐛 Bug Fixes
 
+- [stable-2.46] fix: status codes on DeleteStorageSpace [[#692](https://github.com/opencloud-eu/reva/pull/692)]
 
 ## [2.46.4](https://github.com/opencloud-eu/reva/releases/tag/v2.46.4) - 2026-06-17
 
