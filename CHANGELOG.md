@@ -1,5 +1,15 @@
 # Changelog
 
+## [2.46.5](https://github.com/opencloud-eu/reva/releases/tag/v2.46.5) - 2026-06-22
+
+### ❤️ Thanks to all contributors! ❤️
+
+@rhafer
+
+### 🐛 Bug Fixes
+
+- [stable-2.46] fix: status codes on DeleteStorageSpace [[#692](https://github.com/opencloud-eu/reva/pull/692)]
+
 ## [2.46.4](https://github.com/opencloud-eu/reva/releases/tag/v2.46.4) - 2026-06-17
 
 ### ❤️ Thanks to all contributors! ❤️
