@@ -462,6 +462,73 @@ func (_c *Backend_Lock_Call) RunAndReturn(run func(metadata.MetadataNode) (metad
 	return _c
 }
 
+// LockAndRead provides a mock function with given fields: n
+func (_m *Backend) LockAndRead(n metadata.MetadataNode) (metadata.UnlockFunc, io.Reader, error) {
+	ret := _m.Called(n)
+
+	if len(ret) == 0 {
+		panic("no return value specified for LockAndRead")
+	}
+
+	var r0 metadata.UnlockFunc
+	var r1 io.Reader
+	var r2 error
+	if rf, ok := ret.Get(0).(func(metadata.MetadataNode) (metadata.UnlockFunc, io.Reader, error)); ok {
+		return rf(n)
+	}
+	if rf, ok := ret.Get(0).(func(metadata.MetadataNode) metadata.UnlockFunc); ok {
+		r0 = rf(n)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(metadata.UnlockFunc)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(metadata.MetadataNode) io.Reader); ok {
+		r1 = rf(n)
+	} else {
+		if ret.Get(1) != nil {
+			r1 = ret.Get(1).(io.Reader)
+		}
+	}
+
+	if rf, ok := ret.Get(2).(func(metadata.MetadataNode) error); ok {
+		r2 = rf(n)
+	} else {
+		r2 = ret.Error(2)
+	}
+
+	return r0, r1, r2
+}
+
+// Backend_LockAndRead_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'LockAndRead'
+type Backend_LockAndRead_Call struct {
+	*mock.Call
+}
+
+// LockAndRead is a helper method to define mock.On call
+//   - n metadata.MetadataNode
+func (_e *Backend_Expecter) LockAndRead(n interface{}) *Backend_LockAndRead_Call {
+	return &Backend_LockAndRead_Call{Call: _e.mock.On("LockAndRead", n)}
+}
+
+func (_c *Backend_LockAndRead_Call) Run(run func(n metadata.MetadataNode)) *Backend_LockAndRead_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(metadata.MetadataNode))
+	})
+	return _c
+}
+
+func (_c *Backend_LockAndRead_Call) Return(_a0 metadata.UnlockFunc, _a1 io.Reader, _a2 error) *Backend_LockAndRead_Call {
+	_c.Call.Return(_a0, _a1, _a2)
+	return _c
+}
+
+func (_c *Backend_LockAndRead_Call) RunAndReturn(run func(metadata.MetadataNode) (metadata.UnlockFunc, io.Reader, error)) *Backend_LockAndRead_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // LockfilePath provides a mock function with given fields: n
 func (_m *Backend) LockfilePath(n metadata.MetadataNode) string {
 	ret := _m.Called(n)
