@@ -18,6 +18,7 @@
 
 ### 📦️ Dependencies
 
+- chore(deps): bump github.com/rs/zerolog from 1.35.0 to 1.35.1 [[#699](https://github.com/opencloud-eu/reva/pull/699)]
 - chore(deps): bump github.com/ceph/go-ceph from 0.39.0 to 0.40.0 [[#689](https://github.com/opencloud-eu/reva/pull/689)]
 - chore(deps): bump go.mongodb.org/mongo-driver from 1.17.6 to 1.17.7 in the go_modules group across 1 directory [[#694](https://github.com/opencloud-eu/reva/pull/694)]
 - chore(deps): bump github.com/onsi/ginkgo/v2 from 2.28.1 to 2.31.0 [[#690](https://github.com/opencloud-eu/reva/pull/690)]
