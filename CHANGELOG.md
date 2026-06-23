@@ -1,5 +1,15 @@
 # Changelog
 
+## [2.46.6](https://github.com/opencloud-eu/reva/releases/tag/v2.46.6) - 2026-06-23
+
+### ❤️ Thanks to all contributors! ❤️
+
+@aduffeck
+
+### 🐛 Bug Fixes
+
+- Backport the LockAndRead change from #701 [[#702](https://github.com/opencloud-eu/reva/pull/702)]
+
 ## [2.46.5](https://github.com/opencloud-eu/reva/releases/tag/v2.46.5) - 2026-06-22
 
 ### ❤️ Thanks to all contributors! ❤️
