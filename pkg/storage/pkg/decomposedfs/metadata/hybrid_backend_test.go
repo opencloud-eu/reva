@@ -2,6 +2,7 @@ package metadata_test
 
 import (
 	"context"
+	"io"
 	"os"
 	"path"
 
@@ -301,6 +302,33 @@ var _ = Describe("HybridBackend", func() {
 
 			_, err = backend.Get(context.Background(), n, nonOffloadingKey)
 			Expect(err).To(HaveOccurred())
+		})
+	})
+
+	Describe("LockAndRead", func() {
+		It("acquires a lock and returns a reader", func() {
+			unlock, reader, err := backend.LockAndRead(n)
+			Expect(err).ToNot(HaveOccurred())
+			defer func() {
+				err = unlock()
+				Expect(err).ToNot(HaveOccurred())
+			}()
+
+			data, err := io.ReadAll(reader)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(len(data)).To(Equal(0))
+		})
+
+		It("releases the lock after unlock is called", func() {
+			unlock1, _, err := backend.LockAndRead(n)
+			Expect(err).ToNot(HaveOccurred())
+			err = unlock1()
+			Expect(err).ToNot(HaveOccurred())
+
+			unlock2, _, err := backend.LockAndRead(n)
+			Expect(err).ToNot(HaveOccurred())
+			err = unlock2()
+			Expect(err).ToNot(HaveOccurred())
 		})
 	})
 })
