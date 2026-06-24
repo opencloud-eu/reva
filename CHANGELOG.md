@@ -1,6 +1,6 @@
 # Changelog
 
-## [2.47.0](https://github.com/opencloud-eu/reva/releases/tag/v2.47.0) - 2026-06-23
+## [2.47.0](https://github.com/opencloud-eu/reva/releases/tag/v2.47.0) - 2026-06-24
 
 ### ❤️ Thanks to all contributors! ❤️
 
@@ -18,6 +18,7 @@
 
 ### 📦️ Dependencies
 
+- chore(deps): bump golang.org/x/text from 0.37.0 to 0.38.0 [[#705](https://github.com/opencloud-eu/reva/pull/705)]
 - chore(deps): bump github.com/rs/zerolog from 1.35.0 to 1.35.1 [[#699](https://github.com/opencloud-eu/reva/pull/699)]
 - chore(deps): bump github.com/ceph/go-ceph from 0.39.0 to 0.40.0 [[#689](https://github.com/opencloud-eu/reva/pull/689)]
 - chore(deps): bump go.mongodb.org/mongo-driver from 1.17.6 to 1.17.7 in the go_modules group across 1 directory [[#694](https://github.com/opencloud-eu/reva/pull/694)]
