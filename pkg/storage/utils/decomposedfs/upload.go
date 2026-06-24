@@ -383,6 +383,9 @@ func (fs *Decomposedfs) MarkProcessing(ctx context.Context, ref *provider.Refere
 
 // CommitUpload writes the staged bytes from source to the resource at ref.
 func (fs *Decomposedfs) CommitUpload(ctx context.Context, ref *provider.Reference, source storage.UploadSource) (*provider.ResourceInfo, error) {
+	if source.Body == nil {
+		return nil, errtypes.BadRequest("Decomposedfs: source body is nil")
+	}
 	defer source.Body.Close()
 	n, err := fs.lu.NodeFromResource(ctx, ref)
 	if err != nil {
@@ -392,7 +395,7 @@ func (fs *Decomposedfs) CommitUpload(ctx context.Context, ref *provider.Referenc
 		return nil, errtypes.NotFound(ref.String())
 	}
 	if len(source.Checksums.SHA1) == 0 || len(source.Checksums.MD5) == 0 || len(source.Checksums.Adler32) == 0 {
-		return nil, errtypes.BadRequest("CommitUpload: pre-computed checksums missing from source")
+		return nil, errtypes.BadRequest("Decomposedfs: pre-computed checksums missing from source")
 	}
 	attrs := node.Attributes{
 		prefixes.ChecksumPrefix + "sha1":    source.Checksums.SHA1,
