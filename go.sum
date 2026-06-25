@@ -780,8 +780,8 @@ github.com/samber/slog-common v0.21.0 h1:Wo2hTly1Br5RjYqX/BTWJJeDnTE85oWk/7vqlpZ
 github.com/samber/slog-common v0.21.0/go.mod h1:d/6OaSlzdkl9PFpfRLgn8FwY1OW6EFmPtBpsHX4MrU0=
 github.com/samber/slog-zerolog/v2 v2.9.2 h1:DIFzfzDTxHeRyGlfg/D7b2by7VVzcsBTybRPrzjWF4c=
 github.com/samber/slog-zerolog/v2 v2.9.2/go.mod h1:2q6cYK2OcN6YfQE/WyCnUtigc+yYf3ozqGsGmRwZR6I=
-github.com/segmentio/kafka-go v0.4.50 h1:mcyC3tT5WeyWzrFbd6O374t+hmcu1NKt2Pu1L3QaXmc=
-github.com/segmentio/kafka-go v0.4.50/go.mod h1:Y1gn60kzLEEaW28YshXyk2+VCUKbJ3Qr6DrnT3i4+9E=
+github.com/segmentio/kafka-go v0.4.51 h1:JgDPPG75tC1rWIS2Me6MwcvXJ6f49UQ4HjAOef71Hno=
+github.com/segmentio/kafka-go v0.4.51/go.mod h1:Y1gn60kzLEEaW28YshXyk2+VCUKbJ3Qr6DrnT3i4+9E=
 github.com/sercand/kuberesolver/v5 v5.1.1 h1:CYH+d67G0sGBj7q5wLK61yzqJJ8gLLC8aeprPTHb6yY=
 github.com/sercand/kuberesolver/v5 v5.1.1/go.mod h1:Fs1KbKhVRnB2aDWN12NjKCB+RgYMWZJ294T3BtmVCpQ=
 github.com/sergi/go-diff v1.3.2-0.20230802210424-5b0b94c5c0d3 h1:n661drycOFuPLCN3Uc8sB6B/s6Z4t2xvBgU1htSHuq8=
