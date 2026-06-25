@@ -23,10 +23,12 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	identityUser "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	"github.com/go-ldap/ldap/v3"
 	"github.com/google/uuid"
+	"github.com/hashicorp/golang-lru/v2/expirable"
 	"github.com/opencloud-eu/reva/v2/pkg/appctx"
 	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
 	"github.com/opencloud-eu/reva/v2/pkg/sharedconf"
@@ -38,12 +40,21 @@ import (
 
 // Identity provides methods to query users and groups from an LDAP server
 type Identity struct {
-	User   userConfig   `mapstructure:",squash"`
-	Group  groupConfig  `mapstructure:",squash"`
-	Tenant tenantConfig `mapstructure:",squash"`
+	User           userConfig   `mapstructure:",squash"`
+	Group          groupConfig  `mapstructure:",squash"`
+	Tenant         tenantConfig `mapstructure:",squash"`
+	LookupCacheTTL string       `mapstructure:"lookup_cache_ttl"`
+
+	lookupCache *expirable.LRU[string, *ldap.Entry]
 }
 
-const tracerName = "pkg/utils/ldap"
+const (
+	tracerName = "pkg/utils/ldap"
+
+	lookupCacheDefaultTTL       = 10 * time.Second
+	lookupCacheDefaultTTLString = "10s"
+	lookupCacheSize             = 1024
+)
 
 type userConfig struct {
 	BaseDN              string `mapstructure:"user_base_dn"`
@@ -168,9 +179,12 @@ var tenantDefaults = tenantConfig{
 // New initializes the default config
 func New() Identity {
 	return Identity{
-		User:   userDefaults,
-		Group:  groupDefaults,
-		Tenant: tenantDefaults,
+		User:           userDefaults,
+		Group:          groupDefaults,
+		Tenant:         tenantDefaults,
+		LookupCacheTTL: lookupCacheDefaultTTLString,
+
+		lookupCache: expirable.NewLRU[string, *ldap.Entry](lookupCacheSize, nil, lookupCacheDefaultTTL),
 	}
 }
 
@@ -223,6 +237,21 @@ func (i *Identity) Setup() error {
 		}
 	}
 
+	if i.LookupCacheTTL != "" {
+		// Parse the TTL string if provided
+		parsedTTL, err := time.ParseDuration(i.LookupCacheTTL)
+		if err != nil {
+			return fmt.Errorf("error parsing lookup_cache_ttl %q: %w", i.LookupCacheTTL, err)
+		}
+		if parsedTTL < 0 {
+			return fmt.Errorf("error configuring lookup cache ttl: duration must be >= 0")
+		}
+		i.lookupCache = expirable.NewLRU[string, *ldap.Entry](lookupCacheSize, nil, parsedTTL)
+	} else {
+		// Use default TTL if not provided
+		i.lookupCache = expirable.NewLRU[string, *ldap.Entry](lookupCacheSize, nil, lookupCacheDefaultTTL)
+	}
+
 	return nil
 }
 
@@ -254,6 +283,12 @@ func (i *Identity) GetLDAPUserByFilter(ctx context.Context, lc ldap.Client, filt
 	log := appctx.GetLogger(ctx)
 	_, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "GetLDAPUserByFilter")
 	defer span.End()
+
+	cacheKey := fmt.Sprintf("user:filter:%s", filter)
+	if cached, ok := i.lookupCache.Get(cacheKey); ok {
+		return cached, nil
+	}
+
 	searchRequest := ldap.NewSearchRequest(
 		i.User.BaseDN, i.User.scopeVal, ldap.NeverDerefAliases, 1, 0, false,
 		filter,
@@ -275,6 +310,7 @@ func (i *Identity) GetLDAPUserByFilter(ctx context.Context, lc ldap.Client, filt
 		return nil, errtypes.NotFound(filter)
 	}
 	span.SetStatus(codes.Ok, "")
+	i.lookupCache.Add(cacheKey, res.Entries[0])
 
 	return res.Entries[0], nil
 }
@@ -285,6 +321,11 @@ func (i *Identity) GetLDAPUserByDN(ctx context.Context, lc ldap.Client, dn strin
 	log := appctx.GetLogger(ctx)
 	_, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "GetLDAPUserByDN")
 	defer span.End()
+
+	cacheKey := fmt.Sprintf("user:dn:%s", dn)
+	if cached, ok := i.lookupCache.Get(cacheKey); ok {
+		return cached, nil
+	}
 
 	filter := fmt.Sprintf("(objectclass=%s)", i.User.Objectclass)
 	if i.User.Filter != "" {
@@ -310,6 +351,7 @@ func (i *Identity) GetLDAPUserByDN(ctx context.Context, lc ldap.Client, dn strin
 	if len(res.Entries) == 0 {
 		return nil, errtypes.NotFound(dn)
 	}
+	i.lookupCache.Add(cacheKey, res.Entries[0])
 
 	return res.Entries[0], nil
 }
@@ -483,6 +525,12 @@ func (i *Identity) GetLDAPGroupByFilter(ctx context.Context, lc ldap.Client, fil
 	ctx, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "GetLDAPGroupByFilter")
 	defer span.End()
 	log := appctx.GetLogger(ctx)
+
+	cacheKey := fmt.Sprintf("group:filter:%s", filter)
+	if cached, ok := i.lookupCache.Get(cacheKey); ok {
+		return cached, nil
+	}
+
 	searchRequest := ldap.NewSearchRequest(
 		i.Group.BaseDN, i.Group.scopeVal, ldap.NeverDerefAliases, 1, 0, false,
 		filter,
@@ -511,6 +559,7 @@ func (i *Identity) GetLDAPGroupByFilter(ctx context.Context, lc ldap.Client, fil
 		return nil, errtypes.NotFound(filter)
 	}
 	span.SetStatus(codes.Ok, "")
+	i.lookupCache.Add(cacheKey, res.Entries[0])
 	return res.Entries[0], nil
 }
 
@@ -901,6 +950,12 @@ func (i *Identity) GetLDAPTenantByFilter(ctx context.Context, lc ldap.Client, fi
 	log := appctx.GetLogger(ctx)
 	_, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "GetLDAPTenantByFilter")
 	defer span.End()
+
+	cacheKey := fmt.Sprintf("tenant:filter:%s", filter)
+	if cached, ok := i.lookupCache.Get(cacheKey); ok {
+		return cached, nil
+	}
+
 	searchRequest := ldap.NewSearchRequest(
 		i.Tenant.BaseDN, i.Tenant.scopeVal, ldap.NeverDerefAliases, 1, 0, false,
 		filter,
@@ -922,6 +977,7 @@ func (i *Identity) GetLDAPTenantByFilter(ctx context.Context, lc ldap.Client, fi
 		return nil, errtypes.NotFound(filter)
 	}
 	span.SetStatus(codes.Ok, "")
+	i.lookupCache.Add(cacheKey, res.Entries[0])
 
 	return res.Entries[0], nil
 }
