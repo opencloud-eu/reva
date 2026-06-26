@@ -1,12 +1,10 @@
 # Changelog
 
-We are using [calens](https://github.com/restic/calens) to properly generate a
-changelog before we are tagging a new release. 
+This directory only contains the **historic, per-release changelog archives**
+(the `<version>_<date>/` folders) from when Reva generated its changelog with
+[calens](https://github.com/restic/calens). It is kept for reference only.
 
-## Create Changelog items
-Create a file according to the [template](TEMPLATE) for each 
-changelog in the [unreleased](./unreleased) folder. The following change types are possible: `Bugfix, Change, Enhancement, Security`.
-
-## Generate the Changelog 
-- execute `go run tools/prepare-release/main.go -version 10.0.0 -commit -tag` 
-in the root folder of the project.
+Reva no longer uses calens or `changelog/unreleased/` fragments. The changelog
+(`CHANGELOG.md`) is now generated automatically at release time from merged pull
+request titles and their `Type:*` labels. See the
+[Changelog section in CONTRIBUTING.md](../CONTRIBUTING.md#changelog) for details.
