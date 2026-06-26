@@ -20,7 +20,9 @@ package decomposedfs_test
 
 import (
 	"context"
+	"path/filepath"
 
+	grouppb "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	cs3permissions "github.com/cs3org/go-cs3apis/cs3/permissions/v1beta1"
 	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
@@ -30,7 +32,9 @@ import (
 	. "github.com/onsi/gomega"
 	ctxpkg "github.com/opencloud-eu/reva/v2/pkg/ctx"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/node"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/spaceidindex"
 	helpers "github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/testhelpers"
+	"github.com/opencloud-eu/reva/v2/pkg/storagespace"
 	"github.com/stretchr/testify/mock"
 	"google.golang.org/grpc"
 )
@@ -195,6 +199,115 @@ var _ = Describe("Spaces", func() {
 				ctx := ctxpkg.ContextSetUser(context.Background(), env.SpaceManager)
 				err := env.Fs.DeleteStorageSpace(ctx, delReq)
 				Expect(err).To(HaveOccurred())
+			})
+			// Reproducer for opencloud-eu/opencloud#2985: purging a space must
+			// invalidate ALL of its msgpack indexes, not only the by-type index.
+			// The by-user-id index keeps a stale entry pointing at the purged
+			// space, which is exactly the reporter's "stale references in
+			// indexes/by-user-id/*.mpk".
+			It("removes the space from the by-user-id index", func() {
+				_, spaceID, _, err := storagespace.SplitID(delReq.Id.GetOpaqueId())
+				Expect(err).ToNot(HaveOccurred())
+
+				// load via a fresh index instance each time: spaceidindex caches by
+				// mtime, and the purge rewrites the file within the same mtime tick.
+				loadOwnerIndex := func() map[string]string {
+					idx := spaceidindex.New(filepath.Join(env.Root, "indexes"), "by-user-id")
+					Expect(idx.Init()).To(Succeed())
+					m, lerr := idx.Load(helpers.OwnerID)
+					Expect(lerr).ToNot(HaveOccurred())
+					return m
+				}
+
+				// precondition: the owner's by-user-id index references the space
+				Expect(loadOwnerIndex()).To(HaveKey(spaceID))
+
+				// purge as the space owner
+				Expect(env.Fs.DeleteStorageSpace(env.Ctx, delReq)).To(Succeed())
+
+				// the by-user-id index entry must be gone after the purge
+				Expect(loadOwnerIndex()).ToNot(HaveKey(spaceID))
+			})
+			// Reproducer for the grantee side of opencloud-eu/opencloud#2985:
+			// the purge must also remove the space from a user grantee's
+			// by-user-id index and a group grantee's by-group-id index.
+			It("removes the space from the by-user-id and by-group indexes for grantees", func() {
+				resp, err := env.Fs.CreateStorageSpace(env.Ctx, &provider.CreateStorageSpaceRequest{Name: "Shared Space", Type: "project"})
+				Expect(err).ToNot(HaveOccurred())
+				sid := resp.StorageSpace.GetId()
+				_, spaceID, _, err := storagespace.SplitID(sid.GetOpaqueId())
+				Expect(err).ToNot(HaveOccurred())
+				ref := &provider.Reference{ResourceId: resp.StorageSpace.GetRoot()}
+
+				userGrantee := helpers.User0ID
+				groupGrantee := "11111111-2222-3333-4444-555555555555"
+				Expect(env.Fs.AddGrant(env.Ctx, ref, &provider.Grant{
+					Grantee:     &provider.Grantee{Type: provider.GranteeType_GRANTEE_TYPE_USER, Id: &provider.Grantee_UserId{UserId: &userv1beta1.UserId{OpaqueId: userGrantee}}},
+					Permissions: &provider.ResourcePermissions{Stat: true},
+					Creator:     &userv1beta1.UserId{OpaqueId: helpers.OwnerID},
+				})).To(Succeed())
+				Expect(env.Fs.AddGrant(env.Ctx, ref, &provider.Grant{
+					Grantee:     &provider.Grantee{Type: provider.GranteeType_GRANTEE_TYPE_GROUP, Id: &provider.Grantee_GroupId{GroupId: &grouppb.GroupId{OpaqueId: groupGrantee}}},
+					Permissions: &provider.ResourcePermissions{Stat: true},
+					Creator:     &userv1beta1.UserId{OpaqueId: helpers.OwnerID},
+				})).To(Succeed())
+
+				// seed the grantee space-index entries. The real share flow writes
+				// these via a space-typed context; here we add them directly so the
+				// purge has grantee index entries to remove.
+				target := "../../../spaces/" + spaceID
+				userIdx := spaceidindex.New(filepath.Join(env.Root, "indexes"), "by-user-id")
+				Expect(userIdx.Init()).To(Succeed())
+				Expect(userIdx.Add(userGrantee, spaceID, target)).To(Succeed())
+				groupIdx := spaceidindex.New(filepath.Join(env.Root, "indexes"), "by-group-id")
+				Expect(groupIdx.Init()).To(Succeed())
+				Expect(groupIdx.Add(groupGrantee, spaceID, target)).To(Succeed())
+
+				load := func(indexName, key string) map[string]string {
+					idx := spaceidindex.New(filepath.Join(env.Root, "indexes"), indexName)
+					Expect(idx.Init()).To(Succeed())
+					m, lerr := idx.Load(key)
+					Expect(lerr).ToNot(HaveOccurred())
+					return m
+				}
+
+				// precondition: both grantee indexes reference the space
+				Expect(load("by-user-id", userGrantee)).To(HaveKey(spaceID))
+				Expect(load("by-group-id", groupGrantee)).To(HaveKey(spaceID))
+
+				// disable, then purge as the space owner
+				Expect(env.Fs.DeleteStorageSpace(env.Ctx, &provider.DeleteStorageSpaceRequest{Id: sid})).To(Succeed())
+				Expect(env.Fs.DeleteStorageSpace(env.Ctx, &provider.DeleteStorageSpaceRequest{
+					Opaque: &typesv1beta1.Opaque{Map: map[string]*typesv1beta1.OpaqueEntry{"purge": {Decoder: "plain", Value: []byte("true")}}},
+					Id:     sid,
+				})).To(Succeed())
+
+				// the grantee index entries must be gone after the purge
+				Expect(load("by-user-id", userGrantee)).ToNot(HaveKey(spaceID))
+				Expect(load("by-group-id", groupGrantee)).ToNot(HaveKey(spaceID))
+			})
+			// purging one space must remove only that space's entry: a sibling
+			// space of the same owner must stay in the by-user-id index.
+			It("keeps a sibling space in the by-user-id index when another is purged", func() {
+				_, purgedID, _, err := storagespace.SplitID(delReq.Id.GetOpaqueId())
+				Expect(err).ToNot(HaveOccurred())
+				resp, err := env.Fs.CreateStorageSpace(env.Ctx, &provider.CreateStorageSpaceRequest{Name: "Sibling Space", Type: "project"})
+				Expect(err).ToNot(HaveOccurred())
+				_, siblingID, _, err := storagespace.SplitID(resp.StorageSpace.GetId().GetOpaqueId())
+				Expect(err).ToNot(HaveOccurred())
+				loadOwnerIndex := func() map[string]string {
+					idx := spaceidindex.New(filepath.Join(env.Root, "indexes"), "by-user-id")
+					Expect(idx.Init()).To(Succeed())
+					m, lerr := idx.Load(helpers.OwnerID)
+					Expect(lerr).ToNot(HaveOccurred())
+					return m
+				}
+				Expect(loadOwnerIndex()).To(HaveKey(purgedID))
+				Expect(loadOwnerIndex()).To(HaveKey(siblingID))
+				Expect(env.Fs.DeleteStorageSpace(env.Ctx, delReq)).To(Succeed())
+				after := loadOwnerIndex()
+				Expect(after).ToNot(HaveKey(purgedID))
+				Expect(after).To(HaveKey(siblingID))
 			})
 		})
 	})
