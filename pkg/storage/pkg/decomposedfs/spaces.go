@@ -45,6 +45,7 @@ import (
 	"github.com/opencloud-eu/reva/v2/pkg/rgrpc/todo/pool"
 	sdk "github.com/opencloud-eu/reva/v2/pkg/sdk/common"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/lookup"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata/prefixes"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/node"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/permissions"
@@ -314,6 +315,14 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 		// try directly reading the node
 		n, err := node.ReadNode(ctx, fs.lu, spaceID, entry, "", true, nil, false) // permission to read disabled space is checked later
 		if err != nil {
+			if metadata.IsAttrUnset(err) {
+				// the node is partial, e.g. its owner/user was deleted and the name
+				// attribute is gone. treat it as non-existent instead of failing the
+				// whole listing, the same way the !n.Exists branch below does.
+				// https://github.com/opencloud-eu/opencloud/issues/1878
+				appctx.GetLogger(ctx).Debug().Err(err).Str("id", entry).Msg("node has no name attribute, treating as non-existent")
+				return spaces, nil
+			}
 			appctx.GetLogger(ctx).Error().Err(err).Str("id", entry).Msg("could not read node")
 			return nil, err
 		}
@@ -451,6 +460,14 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 
 				n, err := node.ReadNode(ctx, fs.lu, spaceID, spaceID, "", true, nil, true)
 				if err != nil {
+					if metadata.IsAttrUnset(err) {
+						// the node is partial, e.g. its owner/user was deleted and the
+						// name attribute is gone. skip it quietly instead of logging an
+						// error on every listing.
+						// https://github.com/opencloud-eu/opencloud/issues/1878
+						appctx.GetLogger(ctx).Debug().Err(err).Str("id", spaceID).Msg("node has no name attribute, skipping")
+						continue
+					}
 					appctx.GetLogger(ctx).Error().Err(err).Str("id", spaceID).Msg("could not read node, skipping")
 					continue
 				}

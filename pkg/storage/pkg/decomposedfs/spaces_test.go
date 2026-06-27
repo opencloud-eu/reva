@@ -31,6 +31,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	ctxpkg "github.com/opencloud-eu/reva/v2/pkg/ctx"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata/prefixes"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/node"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/spaceidindex"
 	helpers "github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/testhelpers"
@@ -153,6 +154,60 @@ var _ = Describe("Spaces", func() {
 					Id: resp[0].GetId(),
 				})
 				Expect(err).To(HaveOccurred())
+			})
+		})
+
+		// Reproducer for opencloud-eu/opencloud#1878: a ListStorageSpaces that
+		// resolves a node whose name attribute is gone (e.g. after the owning user
+		// was deleted) must skip it, not hard-fail the whole listing with code 15
+		// ("error listing spaces") or spam an error log on every call.
+		Context("when a space node's name attribute is unset", func() {
+			// orphanSpace creates a project space and removes its name attribute, so
+			// reading it returns ENOATTR ("no data available"), the exact #1878 state.
+			orphanSpace := func(name string) *provider.StorageSpace {
+				resp, err := env.Fs.CreateStorageSpace(env.Ctx, &provider.CreateStorageSpaceRequest{Name: name, Type: "project"})
+				Expect(err).ToNot(HaveOccurred())
+				root := resp.StorageSpace.GetRoot()
+				n, err := node.ReadNode(env.Ctx, env.Lookup, root.GetSpaceId(), root.GetOpaqueId(), "", true, nil, false)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(n.RemoveXattr(env.Ctx, prefixes.NameAttr, true)).To(Succeed())
+				return resp.StorageSpace
+			}
+
+			It("returns an empty result instead of failing for an id filter", func() {
+				space := orphanSpace("Nameless")
+				// the id filter (not the +grant type) is what routes the request into
+				// the direct-read branch; +grant mirrors the real caller from the issue.
+				filters := []*provider.ListStorageSpacesRequest_Filter{
+					{
+						Type: provider.ListStorageSpacesRequest_Filter_TYPE_ID,
+						Term: &provider.ListStorageSpacesRequest_Filter_Id{Id: &provider.StorageSpaceId{OpaqueId: storagespace.FormatResourceID(space.GetRoot())}},
+					},
+					{
+						Type: provider.ListStorageSpacesRequest_Filter_TYPE_SPACE_TYPE,
+						Term: &provider.ListStorageSpacesRequest_Filter_SpaceType{SpaceType: "+grant"},
+					},
+				}
+				spaces, err := env.Fs.ListStorageSpaces(env.Ctx, filters, false)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(spaces).To(BeEmpty())
+			})
+
+			It("skips the unreadable space but still returns the healthy ones for a list-all", func() {
+				healthy, err := env.Fs.CreateStorageSpace(env.Ctx, &provider.CreateStorageSpaceRequest{Name: "Healthy", Type: "project"})
+				Expect(err).ToNot(HaveOccurred())
+				orphan := orphanSpace("Nameless")
+
+				// list-all exercises the worker-loop path; it must skip the orphan and
+				// still return the healthy space, not truncate the whole result.
+				spaces, err := env.Fs.ListStorageSpaces(env.Ctx, nil, false)
+				Expect(err).ToNot(HaveOccurred())
+				ids := make([]string, 0, len(spaces))
+				for _, s := range spaces {
+					ids = append(ids, s.GetId().GetOpaqueId())
+				}
+				Expect(ids).To(ContainElement(healthy.StorageSpace.GetId().GetOpaqueId()))
+				Expect(ids).ToNot(ContainElement(orphan.GetId().GetOpaqueId()))
 			})
 		})
 
