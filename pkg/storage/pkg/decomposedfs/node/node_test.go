@@ -29,6 +29,7 @@ import (
 	. "github.com/onsi/gomega"
 	ocsconv "github.com/opencloud-eu/reva/v2/pkg/conversions"
 	ctxpkg "github.com/opencloud-eu/reva/v2/pkg/ctx"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata/prefixes"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/node"
 	helpers "github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/testhelpers"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/grants"
@@ -80,6 +81,21 @@ var _ = Describe("Node", func() {
 			n, err := node.ReadNode(env.Ctx, env.Lookup, lookupNode.SpaceID, lookupNode.ID, "", false, nil, false)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(n.BlobID).To(Equal("file1-blobid"))
+		})
+
+		It("treats a space root with an unset name attribute as nameless instead of failing", func() {
+			spaceRoot, err := env.Lookup.NodeFromSpaceID(env.Ctx, env.SpaceRootRes.SpaceId)
+			Expect(err).ToNot(HaveOccurred())
+
+			// simulate a half-deleted space root whose name attribute is gone
+			err = spaceRoot.RemoveXattr(env.Ctx, prefixes.NameAttr, true)
+			Expect(err).ToNot(HaveOccurred())
+
+			n, err := node.ReadNode(env.Ctx, env.Lookup, spaceRoot.SpaceID, spaceRoot.ID, "", false, nil, false)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(n).ToNot(BeNil())
+			Expect(n.Exists).To(BeTrue())
+			Expect(n.Name).To(Equal(""))
 		})
 	})
 

@@ -422,8 +422,14 @@ func readNode(ctx context.Context, lu PathLookup, spaceID, nodeID, internalPath 
 		spaceRoot.Exists = true
 
 		// lookup name in extended attributes
-		spaceRoot.Name, err = spaceRoot.XattrString(ctx, prefixes.NameAttr)
-		if err != nil {
+		var name string
+		name, err = spaceRoot.XattrString(ctx, prefixes.NameAttr)
+		switch {
+		case err == nil:
+			spaceRoot.Name = name
+		case metadata.IsAttrUnset(err):
+			// ignore
+		default:
 			return nil, err
 		}
 	}
