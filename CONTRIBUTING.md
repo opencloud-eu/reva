@@ -103,10 +103,10 @@ down to the following steps:
     automatically added to the pull request.
 
  7. If your pull request changes anything that users should be aware of (a
-    bugfix, a new feature, ...) please add an entry to the file
-    [CHANGELOG.md](CHANGELOG.md). It will be used in the announcement of the
-    next stable release. While writing, ask yourself: If I were the user, what
-    would I need to be aware of with this change.
+    bugfix, a new feature, ...) make sure it ends up in the changelog by giving
+    the PR a clear title and the right `Type:*` label. See the
+    [Changelog](#changelog) section below — there is no need to edit
+    `CHANGELOG.md` by hand.
 
  8. Once your code looks good and passes all the tests, we'll merge it. Thanks
     a lot for your contribution!
@@ -121,6 +121,35 @@ Every time you create a pull request, we'll run differents tests on Travis.
 We won't merge any code that doesn't pass the tests. If you need help to make the test
 pass don't hesitate to call for help! Having a PR with failing tests is nothing
 to be ashamed of, in the other hand, that happens regularly for all of us.
+
+Changelog
+=========
+
+The changelog (`CHANGELOG.md`) is generated automatically during the release
+process by [ready-release-go](https://github.com/woodpecker-plugins/ready-release-go)
+(see `.woodpecker/release.yaml` and `release-config.ts`).
+
+To get your change into the changelog:
+
+ 1. Give your pull request a clear, descriptive title — it becomes the changelog
+    line verbatim.
+ 2. Add the appropriate `Type:*` label so the change lands in the right section.
+
+The mapping between labels and changelog sections lives in `release-config.ts`.
+The relevant `Type:*` labels are:
+
+| Label                  | Section               | Version bump |
+| ---------------------- | --------------------- | ------------ |
+| `Type:Breaking-Change` | 💥 Breaking changes   | major        |
+| `Type:Security`        | 🔒 Security           | patch        |
+| `Type:Feature`         | ✨ Features           | minor        |
+| `Type:Enhancement`     | 📈 Enhancement        | minor        |
+| `Type:Bug`             | 🐛 Bug Fixes          | patch        |
+| `Type:Documentation`   | 📚 Documentation      | patch        |
+| `Type:Dependencies`    | 📦️ Dependencies      | patch        |
+
+The next version number is derived from the highest bump among the PRs included
+in the release.
 
 Git Commits
 -----------

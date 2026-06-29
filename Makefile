@@ -16,10 +16,9 @@ TESTS="basic http copymove props"
 
 TOOLCHAIN		?= $(CURDIR)/toolchain
 GOLANGCI_LINT	?= $(TOOLCHAIN)/golangci-lint
-CALENS			?= $(TOOLCHAIN)/calens
 
 .PHONY: toolchain
-toolchain: $(GOLANGCI_LINT) $(CALENS)
+toolchain: $(GOLANGCI_LINT)
 
 .PHONY: toolchain-clean
 toolchain-clean:
@@ -29,7 +28,7 @@ $(GOLANGCI_LINT):
 	@mkdir -p $(@D)
 	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | BINDIR=$(@D) sh -s v2.10.1
 
-.PHONY: check-changelog
+.PHONY: lint
 lint: $(GOLANGCI_LINT)
 	$(GOLANGCI_LINT) run --timeout 450s
 
@@ -37,22 +36,6 @@ lint: $(GOLANGCI_LINT)
 lint-fix: $(GOLANGCI_LINT)
 	gofmt -w .
 	$(GOLANGCI_LINT) run --fix
-
-CALENS_DIR := $(shell mktemp -d)
-$(CALENS):
-	@mkdir -p $(@D)
-	git clone --depth 1 --branch v0.2.0 -c advice.detachedHead=false https://github.com/restic/calens.git $(CALENS_DIR)
-	cd $(CALENS_DIR) && GOBIN=$(@D) go install
-	rm -rf $(CALENS_DIR)
-
-.PHONY: check-changelog
-check-changelog: $(CALENS)
-ifndef PR
-	$(error PR is not defined)
-else
-	$(CALENS) | sed -n '/^Changelog for reva unreleased (UNRELEASED)/,/^Details/p' | \
-		grep -E '^\*   [[:alpha:]]{3} #$(PR): '
-endif
 
 .PHONY: off
 off:
