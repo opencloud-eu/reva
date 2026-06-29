@@ -56,6 +56,9 @@ var _ = Describe("Spaces", func() {
 					if in.Permission == "Drives.DeleteProject" && ctxpkg.ContextMustGetUser(ctx).Id.GetOpaqueId() == env.DeleteAllSpacesUser.Id.OpaqueId {
 						return &cs3permissions.CheckPermissionResponse{Status: &rpcv1beta1.Status{Code: rpcv1beta1.Code_CODE_OK}}
 					}
+					if in.Permission == "Drives.ReadWriteEnabled" && ctxpkg.ContextMustGetUser(ctx).Id.GetOpaqueId() == env.DeleteAllSpacesUser.Id.OpaqueId {
+						return &cs3permissions.CheckPermissionResponse{Status: &rpcv1beta1.Status{Code: rpcv1beta1.Code_CODE_OK}}
+					}
 					if (in.Permission == "Drives.Create" || in.Permission == "Drives.List") && ctxpkg.ContextMustGetUser(ctx).Id.GetOpaqueId() == helpers.OwnerID {
 						return &cs3permissions.CheckPermissionResponse{Status: &rpcv1beta1.Status{Code: rpcv1beta1.Code_CODE_OK}}
 					}
@@ -206,6 +209,7 @@ var _ = Describe("Spaces", func() {
 			// space, which is exactly the reporter's "stale references in
 			// indexes/by-user-id/*.mpk".
 			It("removes the space from the by-user-id index", func() {
+				ctx := ctxpkg.ContextSetUser(context.Background(), env.DeleteAllSpacesUser)
 				_, spaceID, _, err := storagespace.SplitID(delReq.Id.GetOpaqueId())
 				Expect(err).ToNot(HaveOccurred())
 
@@ -222,8 +226,8 @@ var _ = Describe("Spaces", func() {
 				// precondition: the owner's by-user-id index references the space
 				Expect(loadOwnerIndex()).To(HaveKey(spaceID))
 
-				// purge as the space owner
-				Expect(env.Fs.DeleteStorageSpace(env.Ctx, delReq)).To(Succeed())
+				// purge as the space admin
+				Expect(env.Fs.DeleteStorageSpace(ctx, delReq)).To(Succeed())
 
 				// the by-user-id index entry must be gone after the purge
 				Expect(loadOwnerIndex()).ToNot(HaveKey(spaceID))
@@ -275,9 +279,10 @@ var _ = Describe("Spaces", func() {
 				Expect(load("by-user-id", userGrantee)).To(HaveKey(spaceID))
 				Expect(load("by-group-id", groupGrantee)).To(HaveKey(spaceID))
 
-				// disable, then purge as the space owner
-				Expect(env.Fs.DeleteStorageSpace(env.Ctx, &provider.DeleteStorageSpaceRequest{Id: sid})).To(Succeed())
-				Expect(env.Fs.DeleteStorageSpace(env.Ctx, &provider.DeleteStorageSpaceRequest{
+				// disable, then purge as the space admin
+				ctx := ctxpkg.ContextSetUser(context.Background(), env.DeleteAllSpacesUser)
+				Expect(env.Fs.DeleteStorageSpace(ctx, &provider.DeleteStorageSpaceRequest{Id: sid})).To(Succeed())
+				Expect(env.Fs.DeleteStorageSpace(ctx, &provider.DeleteStorageSpaceRequest{
 					Opaque: &typesv1beta1.Opaque{Map: map[string]*typesv1beta1.OpaqueEntry{"purge": {Decoder: "plain", Value: []byte("true")}}},
 					Id:     sid,
 				})).To(Succeed())
@@ -304,7 +309,8 @@ var _ = Describe("Spaces", func() {
 				}
 				Expect(loadOwnerIndex()).To(HaveKey(purgedID))
 				Expect(loadOwnerIndex()).To(HaveKey(siblingID))
-				Expect(env.Fs.DeleteStorageSpace(env.Ctx, delReq)).To(Succeed())
+				ctx := ctxpkg.ContextSetUser(context.Background(), env.DeleteAllSpacesUser)
+				Expect(env.Fs.DeleteStorageSpace(ctx, delReq)).To(Succeed())
 				after := loadOwnerIndex()
 				Expect(after).ToNot(HaveKey(purgedID))
 				Expect(after).To(HaveKey(siblingID))
