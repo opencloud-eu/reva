@@ -353,11 +353,15 @@ func (fs *Decomposedfs) MarkProcessing(ctx context.Context, ref *provider.Refere
 	}
 
 	// Early lock, so MarkProcessing is atomic.
-	unlock, err := fs.lu.MetadataBackend().Lock(n.InternalPath())
+	f, err := lockedfile.OpenFile(fs.lu.MetadataBackend().LockfilePath(n.InternalPath()), os.O_RDWR|os.O_CREATE, 0600)
 	if err != nil {
 		return err
 	}
-	defer unlock() //nolint:errcheck
+	defer func() {
+		if cerr := f.Close(); cerr != nil {
+			appctx.GetLogger(ctx).Error().Err(cerr).Str("nodeid", n.ID).Msg("could not close mark-processing lock")
+		}
+	}()
 
 	// Evict the node's in-process xattr cache so IsProcessing reads from disk while we hold the lock.
 	n.ResetXattrsCache()
@@ -464,7 +468,7 @@ func (fs *Decomposedfs) CommitUpload(ctx context.Context, ref *provider.Referenc
 	if err != nil {
 		return nil, errors.Wrap(err, "Decomposedfs: failed to read existing node")
 	}
-	if err := node.CheckDiskSpace(ctx, n.SpaceRoot, uint64(source.Length)); err != nil {
+	if _, err := node.CheckQuota(ctx, n.SpaceRoot, old.BlobID != "", uint64(old.Blobsize), uint64(source.Length)); err != nil {
 		return nil, err
 	}
 
@@ -546,16 +550,19 @@ func (fs *Decomposedfs) CommitUpload(ctx context.Context, ref *provider.Referenc
 	if err := n.SetXattrsWithContext(ctx, attrs, false); err != nil {
 		return nil, errors.Wrap(err, "Decomposedfs: failed to write metadata")
 	}
+	// Durable commit point: the node metadata now references the new blob.
+	// Past here the file is committed, so the orphaned-blob cleanup must no
+	// longer run - a failure in the post-commit steps below leaves the file
+	// intact and must not delete the referenced blob.
+	committed = true
 
 	if err := fs.tp.Propagate(ctx, n, sizeDiff); err != nil {
 		return nil, errors.Wrap(err, "Decomposedfs: failed to propagate")
 	}
-	etag, err := node.CalculateEtag(n.ID, mtime)
-	if err != nil {
-		return nil, errors.Wrap(err, "Decomposedfs: failed to calculate etag")
-	}
+	// etag is a best-effort, recomputable value; a failure here must not fail an
+	// already-committed upload (matches the legacy Upload path).
+	etag, _ := node.CalculateEtag(n.ID, mtime)
 
-	committed = true
 	return &provider.ResourceInfo{
 		Id: &provider.ResourceId{
 			StorageId: source.Metadata["providerID"],
