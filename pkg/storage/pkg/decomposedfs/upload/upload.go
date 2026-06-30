@@ -71,6 +71,10 @@ func (session *DecomposedFsSession) WriteChunk(ctx context.Context, _ int64, src
 		return 0, err
 	}
 	defer func() {
+		// sync the written chunk to disk. This ensures that the upload can be resumed,
+		// and helps to prevent issues with filesystem/journal freezes at the end of the upload
+		// when commiting a large fsync operation on slow disks.
+		_ = file.Sync()
 		_ = file.Close()
 	}()
 
