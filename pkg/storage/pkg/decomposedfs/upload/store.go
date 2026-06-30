@@ -100,6 +100,17 @@ func (store DecomposedFsStore) New(ctx context.Context) *DecomposedFsSession {
 	}
 }
 
+// SessionFromInfo wraps an existing tus FileInfo into an upload session without reading the
+// session store. It lets callers use an upload's session, e.g. its reference and
+// executant context, after the store entry has already been cleaned up, as happens for a
+// synchronous upload in its finish response callback.
+func (store DecomposedFsStore) SessionFromInfo(info tusd.FileInfo) *DecomposedFsSession {
+	return &DecomposedFsSession{
+		store: store,
+		info:  info,
+	}
+}
+
 // List lists all upload sessions
 func (store DecomposedFsStore) List(ctx context.Context) ([]*DecomposedFsSession, error) {
 	uploads := []*DecomposedFsSession{}
