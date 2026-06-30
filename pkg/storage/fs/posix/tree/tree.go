@@ -176,6 +176,9 @@ func New(lu node.PathLookup, bs node.Blobstore, um usermapper.Mapper, trashbin *
 			watchPath = o.Root
 		}
 
+		if o.ScanDebounceDelay == 0 {
+			log.Warn().Msg("'scan_debounce_delay' is set to 0. This is not recommended for production setups.")
+		}
 		go t.watcher.Watch(watchPath)
 		go t.workScanQueue()
 	}
