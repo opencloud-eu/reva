@@ -23,6 +23,7 @@
 
 ### 📦️ Dependencies
 
+- chore(deps): bump github.com/nats-io/nats.go from 1.51.0 to 1.52.0 [[#714](https://github.com/opencloud-eu/reva/pull/714)]
 - chore(deps): bump github.com/segmentio/kafka-go from 0.4.50 to 0.4.51 [[#706](https://github.com/opencloud-eu/reva/pull/706)]
 - chore(deps): bump github.com/onsi/gomega from 1.40.0 to 1.42.1 [[#704](https://github.com/opencloud-eu/reva/pull/704)]
 - chore(deps): bump golang.org/x/text from 0.37.0 to 0.38.0 [[#705](https://github.com/opencloud-eu/reva/pull/705)]
