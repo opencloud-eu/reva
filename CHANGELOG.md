@@ -1,20 +1,21 @@
 # Changelog
 
-## [2.47.0](https://github.com/opencloud-eu/reva/releases/tag/v2.47.0) - 2026-06-29
+## [2.47.0](https://github.com/opencloud-eu/reva/releases/tag/v2.47.0) - 2026-06-30
 
 ### ❤️ Thanks to all contributors! ❤️
 
 @aduffeck, @fschade, @micbar, @michaelstingl, @rhafer
 
-### 📚 Documentation
-
-- doc: Update docs related to how the changelog works [[#708](https://github.com/opencloud-eu/reva/pull/708)]
-
 ### 🐛 Bug Fixes
 
+- fix: space delete unit test [[#716](https://github.com/opencloud-eu/reva/pull/716)]
 - fix: status codes on DeleteStorageSpace [[#691](https://github.com/opencloud-eu/reva/pull/691)]
 - Prevent access to internal files and folders [[#681](https://github.com/opencloud-eu/reva/pull/681)]
 - fix(tus): Upload checksum validation [[#677](https://github.com/opencloud-eu/reva/pull/677)]
+
+### 📚 Documentation
+
+- doc: Update docs related to how the changelog works [[#708](https://github.com/opencloud-eu/reva/pull/708)]
 
 ### 📈 Enhancement
 
