@@ -46,6 +46,7 @@ import (
 	"github.com/opencloud-eu/reva/v2/pkg/events"
 	"github.com/opencloud-eu/reva/v2/pkg/rhttp/datatx/metrics"
 	"github.com/opencloud-eu/reva/v2/pkg/rhttp/datatx/utils/download"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/disk"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata/prefixes"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/node"
 	"github.com/opencloud-eu/reva/v2/pkg/utils"
@@ -74,7 +75,7 @@ func (session *DecomposedFsSession) WriteChunk(ctx context.Context, _ int64, src
 		// sync the written chunk to disk. This ensures that the upload can be resumed,
 		// and helps to prevent issues with filesystem/journal freezes at the end of the upload
 		// when commiting a large fsync operation on slow disks.
-		_ = file.Sync()
+		_ = disk.Fdatasync(file)
 		_ = file.Close()
 	}()
 
