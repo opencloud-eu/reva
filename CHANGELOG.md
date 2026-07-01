@@ -1,6 +1,6 @@
 # Changelog
 
-## [2.47.0](https://github.com/opencloud-eu/reva/releases/tag/v2.47.0) - 2026-06-30
+## [2.47.0](https://github.com/opencloud-eu/reva/releases/tag/v2.47.0) - 2026-07-01
 
 ### ❤️ Thanks to all contributors! ❤️
 
@@ -8,18 +8,20 @@
 
 ### 🐛 Bug Fixes
 
+- fix: retry xattr.List on ERANGE/E2BIG [[#717](https://github.com/opencloud-eu/reva/pull/717)]
 - fix: space delete unit test [[#716](https://github.com/opencloud-eu/reva/pull/716)]
 - fix: status codes on DeleteStorageSpace [[#691](https://github.com/opencloud-eu/reva/pull/691)]
 - Prevent access to internal files and folders [[#681](https://github.com/opencloud-eu/reva/pull/681)]
 - fix(tus): Upload checksum validation [[#677](https://github.com/opencloud-eu/reva/pull/677)]
 
+### 📈 Enhancement
+
+- Sync uploads incrementally to avoid fsync freezes [[#720](https://github.com/opencloud-eu/reva/pull/720)]
+- feat: add more roles [[#671](https://github.com/opencloud-eu/reva/pull/671)]
+
 ### 📚 Documentation
 
 - doc: Update docs related to how the changelog works [[#708](https://github.com/opencloud-eu/reva/pull/708)]
-
-### 📈 Enhancement
-
-- feat: add more roles [[#671](https://github.com/opencloud-eu/reva/pull/671)]
 
 ### 📦️ Dependencies
 
