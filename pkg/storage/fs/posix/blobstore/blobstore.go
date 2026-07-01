@@ -32,12 +32,14 @@ import (
 	"github.com/pkg/errors"
 	"github.com/pkg/xattr"
 
+	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/disk"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata/prefixes"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/node"
 )
 
 const (
-	TMPDir = ".oc-tmp"
+	TMPDir     = ".oc-tmp"
+	fsyncEvery = 16 << 20 // 16 MiB
 )
 
 // Blobstore provides an interface to an filesystem based blobstore
@@ -92,12 +94,8 @@ func (bs *Blobstore) Upload(n *node.Node, source, copyTarget string) error {
 			return fmt.Errorf("unable to create temp file '%s': %v", tempName, err)
 		}
 
-		if _, err := tempFile.ReadFrom(sourceFile); err != nil {
-			return fmt.Errorf("failed to write data from source file '%s' to temp file '%s' - %v", source, tempName, err)
-		}
-
-		if err := tempFile.Sync(); err != nil {
-			return fmt.Errorf("failed to sync temp file '%s' - %v", tempName, err)
+		if err := copyWithPeriodicSync(tempFile, sourceFile); err != nil {
+			return fmt.Errorf("failed to copy source file '%s' to temp file '%s' - %v", source, tempName, err)
 		}
 
 		if err := tempFile.Close(); err != nil {
@@ -176,7 +174,7 @@ func (bs *Blobstore) Upload(n *node.Node, source, copyTarget string) error {
 		_ = copyFile.Close()
 	}()
 
-	if _, err := copyFile.ReadFrom(sourceFile); err != nil {
+	if err := copyWithPeriodicSync(copyFile, sourceFile); err != nil {
 		return errors.Wrapf(err, "could not write blob copy of '%s' to '%s'", n.InternalPath(), copyTarget)
 	}
 
@@ -195,4 +193,22 @@ func (bs *Blobstore) Download(node *node.Node) (io.ReadCloser, error) {
 // Delete deletes a blob from the blobstore
 func (bs *Blobstore) Delete(node *node.Node) error {
 	return nil
+}
+
+func copyWithPeriodicSync(dst, src *os.File) error {
+	for {
+		n, err := io.CopyN(dst, src, fsyncEvery)
+		if n > 0 {
+			if serr := disk.Fdatasync(dst); serr != nil {
+				return serr
+			}
+		}
+		if err == io.EOF {
+			_ = dst.Sync()
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+	}
 }
