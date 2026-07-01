@@ -89,7 +89,7 @@ func (b XattrsBackend) GetInt64(ctx context.Context, n MetadataNode, key string)
 
 func (b XattrsBackend) list(ctx context.Context, n MetadataNode, acquireLock bool) (attribs []string, err error) {
 	filePath := n.InternalPath()
-	attrs, err := xattr.List(filePath)
+	attrs, err := listXattr(filePath)
 	if err == nil {
 		return attrs, nil
 	}
@@ -104,7 +104,7 @@ func (b XattrsBackend) list(ctx context.Context, n MetadataNode, acquireLock boo
 		defer f.Close()
 
 	}
-	return xattr.List(filePath)
+	return listXattr(filePath)
 }
 
 // All reads all extended attributes for a node, protected by a
