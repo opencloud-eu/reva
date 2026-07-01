@@ -114,7 +114,7 @@ func (b HybridBackend) list(ctx context.Context, n MetadataNode) (attribs []stri
 		return nil, &xattr.Error{Op: "HybridBackend.list", Path: n.InternalPath(), Err: syscall.ENOENT} // attribute not found
 	}
 
-	return xattr.List(filePath)
+	return listXattr(filePath)
 }
 
 // All reads all extended attributes for a node, protected by a
