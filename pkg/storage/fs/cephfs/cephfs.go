@@ -662,3 +662,11 @@ func (fs *cephfs) RefreshLock(ctx context.Context, ref *provider.Reference, lock
 func (fs *cephfs) Unlock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error {
 	return errtypes.NotSupported("unimplemented")
 }
+
+func (fs *cephfs) SetImmutable(ctx context.Context, ref *provider.Reference) error {
+	return errtypes.NotSupported("unimplemented")
+}
+
+func (fs *cephfs) UnsetImmutable(ctx context.Context, ref *provider.Reference) error {
+	return errtypes.NotSupported("unimplemented")
+}

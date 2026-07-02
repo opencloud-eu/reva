@@ -1136,6 +1136,21 @@ func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, p
 			false,
 			isPublic,
 		)
+		// Strip permissions based on immutable state
+		var immutableState string
+		if md.Opaque != nil {
+			if v, ok := md.Opaque.Map["immutable-state"]; ok {
+				immutableState = string(v.Value)
+			}
+		}
+		if md.Immutable || immutableState != "" {
+			wdp = strings.ReplaceAll(wdp, "D", "")  // no delete
+			wdp = strings.ReplaceAll(wdp, "NV", "") // no move
+		}
+		if immutableState == "protected" || immutableState == "frozen" {
+			wdp = strings.ReplaceAll(wdp, "CK", "") // no create children (only self-protected/frozen)
+		}
+		// shielded: D/NV stripped but CK kept (new children allowed in inherited protection)
 	}
 
 	// replace fileid of /public/{token} mountpoint with grant fileid
@@ -1227,6 +1242,15 @@ func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, p
 
 		if md.PermissionSet != nil {
 			appendToOK(prop.Escaped("oc:permissions", wdp))
+		}
+
+		// Immutable state — use opaque immutable-state if available (distinguishes frozen/protected)
+		if md.Opaque != nil {
+			if v, ok := md.Opaque.Map["immutable-state"]; ok {
+				appendToOK(prop.Escaped("oc:immutable", string(v.Value)))
+			}
+		} else if md.Immutable {
+			appendToOK(prop.Escaped("oc:immutable", "frozen"))
 		}
 
 		// always return size, well nearly always ... public link shares are a little weird
@@ -1362,6 +1386,20 @@ func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, p
 					// M = Mounted
 					// in contrast, the ocs:share-permissions further down below indicate clients the maximum permissions that can be granted
 					appendToOK(prop.Escaped("oc:permissions", wdp))
+				case "immutable":
+					if md.Opaque != nil {
+						if v, ok := md.Opaque.Map["immutable-state"]; ok {
+							appendToOK(prop.Escaped("oc:immutable", string(v.Value)))
+						} else if md.Immutable {
+							appendToOK(prop.Escaped("oc:immutable", "frozen"))
+						} else {
+							appendToNotFound(prop.NotFound("oc:immutable"))
+						}
+					} else if md.Immutable {
+						appendToOK(prop.Escaped("oc:immutable", "frozen"))
+					} else {
+						appendToNotFound(prop.NotFound("oc:immutable"))
+					}
 				case "public-link-permission": // only on a share root node
 					if ls != nil && md.PermissionSet != nil {
 						appendToOK(prop.Escaped("oc:public-link-permission", role.OCSPermissions().String()))

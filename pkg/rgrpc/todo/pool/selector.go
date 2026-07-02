@@ -29,6 +29,7 @@ import (
 	authProvider "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
 	authRegistry "github.com/cs3org/go-cs3apis/cs3/auth/registry/v1beta1"
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
+	labelsService "github.com/cs3org/go-cs3apis/cs3/labels/v1beta1"
 	identityGroup "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	identityTenant "github.com/cs3org/go-cs3apis/cs3/identity/tenant/v1beta1"
 	identityUser "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -201,6 +202,17 @@ func SpacesProviderSelector(id string, options ...Option) (*Selector[storageProv
 		"SpacesProviderSelector",
 		id,
 		storageProvider.NewSpacesAPIClient,
+		options...,
+	), nil
+}
+
+// LabelsProviderSelector returns a Selector[labelsService.LabelsAPIClient].
+// The LabelsAPI service is registered on the same GRPC server as the StorageProvider.
+func LabelsProviderSelector(id string, options ...Option) (*Selector[labelsService.LabelsAPIClient], error) {
+	return GetSelector[labelsService.LabelsAPIClient](
+		"LabelsProviderSelector",
+		id,
+		labelsService.NewLabelsAPIClient,
 		options...,
 	), nil
 }

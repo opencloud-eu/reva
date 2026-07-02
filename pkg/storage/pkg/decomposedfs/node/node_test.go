@@ -375,4 +375,108 @@ var _ = Describe("Node", func() {
 		})
 
 	})
+
+	Describe("Immutable", func() {
+		It("is not immutable by default", func() {
+			n, err := env.Lookup.NodeFromSpaceID(env.Ctx, env.SpaceRootRes.SpaceId)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(n.IsImmutable(env.Ctx)).To(BeFalse())
+			Expect(n.GetImmutableState(env.Ctx)).To(Equal(node.ImmutableNone))
+		})
+
+		It("can protect a container", func() {
+			env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(&provider.ResourcePermissions{
+				Stat: true, CreateContainer: true,
+			}, nil)
+			dirRef := &provider.Reference{ResourceId: env.SpaceRootRes, Path: "/testdir"}
+			err := env.Fs.CreateDir(env.Ctx, dirRef)
+			Expect(err).ToNot(HaveOccurred())
+
+			n, err := env.Lookup.NodeFromResource(env.Ctx, dirRef)
+			Expect(err).ToNot(HaveOccurred())
+
+			err = n.ProtectContainer(env.Ctx)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(n.IsImmutable(env.Ctx)).To(BeTrue())
+			Expect(n.GetImmutableState(env.Ctx)).To(Equal(node.ImmutableProtected))
+		})
+
+		It("can unprotect a container", func() {
+			env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(&provider.ResourcePermissions{
+				Stat: true, CreateContainer: true,
+			}, nil)
+			dirRef := &provider.Reference{ResourceId: env.SpaceRootRes, Path: "/testdir2"}
+			err := env.Fs.CreateDir(env.Ctx, dirRef)
+			Expect(err).ToNot(HaveOccurred())
+
+			n, err := env.Lookup.NodeFromResource(env.Ctx, dirRef)
+			Expect(err).ToNot(HaveOccurred())
+
+			err = n.ProtectContainer(env.Ctx)
+			Expect(err).ToNot(HaveOccurred())
+
+			err = n.UnprotectContainer(env.Ctx)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(n.IsImmutable(env.Ctx)).To(BeFalse())
+			Expect(n.GetImmutableState(env.Ctx)).To(Equal(node.ImmutableNone))
+		})
+
+		It("rejects FreezeFile on a directory", func() {
+			env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(&provider.ResourcePermissions{
+				Stat: true, CreateContainer: true,
+			}, nil)
+			dirRef := &provider.Reference{ResourceId: env.SpaceRootRes, Path: "/testdir3"}
+			err := env.Fs.CreateDir(env.Ctx, dirRef)
+			Expect(err).ToNot(HaveOccurred())
+
+			n, err := env.Lookup.NodeFromResource(env.Ctx, dirRef)
+			Expect(err).ToNot(HaveOccurred())
+
+			err = n.FreezeFile(env.Ctx)
+			Expect(err).To(HaveOccurred())
+		})
+
+		It("rejects UnprotectContainer on a file", func() {
+			// Get the space root node (a container) and create a dir + file inside it
+			env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(&provider.ResourcePermissions{
+				Stat:               true,
+				CreateContainer:    true,
+				InitiateFileUpload: true,
+			}, nil)
+			spaceRoot, err := env.Lookup.NodeFromSpaceID(env.Ctx, env.SpaceRootRes.SpaceId)
+			Expect(err).ToNot(HaveOccurred())
+
+			n, err := env.CreateTestFile("freeze-test.txt", "blob1", spaceRoot.ID, env.SpaceRootRes.SpaceId, 10)
+			Expect(err).ToNot(HaveOccurred())
+
+			err = n.UnprotectContainer(env.Ctx)
+			Expect(err).To(HaveOccurred())
+		})
+
+		It("returns Protected state for child of immutable parent", func() {
+			env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(&provider.ResourcePermissions{
+				Stat:               true,
+				CreateContainer:    true,
+				InitiateFileUpload: true,
+			}, nil)
+
+			// Create a dir and protect it
+			dirRef := &provider.Reference{ResourceId: env.SpaceRootRes, Path: "/protdir"}
+			err := env.Fs.CreateDir(env.Ctx, dirRef)
+			Expect(err).ToNot(HaveOccurred())
+
+			dirNode, err := env.Lookup.NodeFromResource(env.Ctx, dirRef)
+			Expect(err).ToNot(HaveOccurred())
+			err = dirNode.ProtectContainer(env.Ctx)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Create a file inside the protected dir
+			child, err := env.CreateTestFile("child.txt", "blob2", dirNode.ID, env.SpaceRootRes.SpaceId, 10)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Child itself is not immutable, but parent is
+			Expect(child.IsImmutable(env.Ctx)).To(BeFalse())
+			Expect(child.GetImmutableState(env.Ctx)).To(Equal(node.ImmutableShielded))
+		})
+	})
 })

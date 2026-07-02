@@ -517,6 +517,14 @@ func (d *driver) Unlock(ctx context.Context, ref *provider.Reference, lock *prov
 	return client.Unlock(rel, lock.GetLockId())
 }
 
+func (d *driver) SetImmutable(ctx context.Context, ref *provider.Reference) error {
+	return errtypes.NotSupported("unimplemented")
+}
+
+func (d *driver) UnsetImmutable(ctx context.Context, ref *provider.Reference) error {
+	return errtypes.NotSupported("unimplemented")
+}
+
 func (d *driver) ListStorageSpaces(ctx context.Context, filters []*provider.ListStorageSpacesRequest_Filter, _ bool) ([]*provider.StorageSpace, error) {
 	spaceTypes := map[string]struct{}{}
 	var exists = struct{}{}

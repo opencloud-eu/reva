@@ -42,6 +42,8 @@ import (
 
 	invitev1beta1 "github.com/cs3org/go-cs3apis/cs3/ocm/invite/v1beta1"
 
+	labelsv1beta1 "github.com/cs3org/go-cs3apis/cs3/labels/v1beta1"
+
 	linkv1beta1 "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 
 	mock "github.com/stretchr/testify/mock"
@@ -225,7 +227,7 @@ func (_c *GatewayAPIClient_AddAppProvider_Call) RunAndReturn(run func(context.Co
 }
 
 // AddLabel provides a mock function with given fields: ctx, in, opts
-func (_m *GatewayAPIClient) AddLabel(ctx context.Context, in *providerv1beta1.AddLabelRequest, opts ...grpc.CallOption) (*providerv1beta1.AddLabelResponse, error) {
+func (_m *GatewayAPIClient) AddLabel(ctx context.Context, in *labelsv1beta1.AddLabelRequest, opts ...grpc.CallOption) (*labelsv1beta1.AddLabelResponse, error) {
 	var tmpRet mock.Arguments
 	if len(opts) > 0 {
 		tmpRet = _m.Called(ctx, in, opts)
@@ -238,20 +240,20 @@ func (_m *GatewayAPIClient) AddLabel(ctx context.Context, in *providerv1beta1.Ad
 		panic("no return value specified for AddLabel")
 	}
 
-	var r0 *providerv1beta1.AddLabelResponse
+	var r0 *labelsv1beta1.AddLabelResponse
 	var r1 error
-	if rf, ok := ret.Get(0).(func(context.Context, *providerv1beta1.AddLabelRequest, ...grpc.CallOption) (*providerv1beta1.AddLabelResponse, error)); ok {
+	if rf, ok := ret.Get(0).(func(context.Context, *labelsv1beta1.AddLabelRequest, ...grpc.CallOption) (*labelsv1beta1.AddLabelResponse, error)); ok {
 		return rf(ctx, in, opts...)
 	}
-	if rf, ok := ret.Get(0).(func(context.Context, *providerv1beta1.AddLabelRequest, ...grpc.CallOption) *providerv1beta1.AddLabelResponse); ok {
+	if rf, ok := ret.Get(0).(func(context.Context, *labelsv1beta1.AddLabelRequest, ...grpc.CallOption) *labelsv1beta1.AddLabelResponse); ok {
 		r0 = rf(ctx, in, opts...)
 	} else {
 		if ret.Get(0) != nil {
-			r0 = ret.Get(0).(*providerv1beta1.AddLabelResponse)
+			r0 = ret.Get(0).(*labelsv1beta1.AddLabelResponse)
 		}
 	}
 
-	if rf, ok := ret.Get(1).(func(context.Context, *providerv1beta1.AddLabelRequest, ...grpc.CallOption) error); ok {
+	if rf, ok := ret.Get(1).(func(context.Context, *labelsv1beta1.AddLabelRequest, ...grpc.CallOption) error); ok {
 		r1 = rf(ctx, in, opts...)
 	} else {
 		r1 = ret.Error(1)
@@ -267,14 +269,14 @@ type GatewayAPIClient_AddLabel_Call struct {
 
 // AddLabel is a helper method to define mock.On call
 //   - ctx context.Context
-//   - in *providerv1beta1.AddLabelRequest
+//   - in *labelsv1beta1.AddLabelRequest
 //   - opts ...grpc.CallOption
 func (_e *GatewayAPIClient_Expecter) AddLabel(ctx interface{}, in interface{}, opts ...interface{}) *GatewayAPIClient_AddLabel_Call {
 	return &GatewayAPIClient_AddLabel_Call{Call: _e.mock.On("AddLabel",
 		append([]interface{}{ctx, in}, opts...)...)}
 }
 
-func (_c *GatewayAPIClient_AddLabel_Call) Run(run func(ctx context.Context, in *providerv1beta1.AddLabelRequest, opts ...grpc.CallOption)) *GatewayAPIClient_AddLabel_Call {
+func (_c *GatewayAPIClient_AddLabel_Call) Run(run func(ctx context.Context, in *labelsv1beta1.AddLabelRequest, opts ...grpc.CallOption)) *GatewayAPIClient_AddLabel_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		variadicArgs := make([]grpc.CallOption, len(args)-2)
 		for i, a := range args[2:] {
@@ -282,17 +284,17 @@ func (_c *GatewayAPIClient_AddLabel_Call) Run(run func(ctx context.Context, in *
 				variadicArgs[i] = a.(grpc.CallOption)
 			}
 		}
-		run(args[0].(context.Context), args[1].(*providerv1beta1.AddLabelRequest), variadicArgs...)
+		run(args[0].(context.Context), args[1].(*labelsv1beta1.AddLabelRequest), variadicArgs...)
 	})
 	return _c
 }
 
-func (_c *GatewayAPIClient_AddLabel_Call) Return(_a0 *providerv1beta1.AddLabelResponse, _a1 error) *GatewayAPIClient_AddLabel_Call {
+func (_c *GatewayAPIClient_AddLabel_Call) Return(_a0 *labelsv1beta1.AddLabelResponse, _a1 error) *GatewayAPIClient_AddLabel_Call {
 	_c.Call.Return(_a0, _a1)
 	return _c
 }
 
-func (_c *GatewayAPIClient_AddLabel_Call) RunAndReturn(run func(context.Context, *providerv1beta1.AddLabelRequest, ...grpc.CallOption) (*providerv1beta1.AddLabelResponse, error)) *GatewayAPIClient_AddLabel_Call {
+func (_c *GatewayAPIClient_AddLabel_Call) RunAndReturn(run func(context.Context, *labelsv1beta1.AddLabelRequest, ...grpc.CallOption) (*labelsv1beta1.AddLabelResponse, error)) *GatewayAPIClient_AddLabel_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -5188,6 +5190,79 @@ func (_c *GatewayAPIClient_ListInviteTokens_Call) RunAndReturn(run func(context.
 	return _c
 }
 
+// ListLabels provides a mock function with given fields: ctx, in, opts
+func (_m *GatewayAPIClient) ListLabels(ctx context.Context, in *labelsv1beta1.ListLabelsRequest, opts ...grpc.CallOption) (*labelsv1beta1.ListLabelsResponse, error) {
+	var tmpRet mock.Arguments
+	if len(opts) > 0 {
+		tmpRet = _m.Called(ctx, in, opts)
+	} else {
+		tmpRet = _m.Called(ctx, in)
+	}
+	ret := tmpRet
+
+	if len(ret) == 0 {
+		panic("no return value specified for ListLabels")
+	}
+
+	var r0 *labelsv1beta1.ListLabelsResponse
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, *labelsv1beta1.ListLabelsRequest, ...grpc.CallOption) (*labelsv1beta1.ListLabelsResponse, error)); ok {
+		return rf(ctx, in, opts...)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, *labelsv1beta1.ListLabelsRequest, ...grpc.CallOption) *labelsv1beta1.ListLabelsResponse); ok {
+		r0 = rf(ctx, in, opts...)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*labelsv1beta1.ListLabelsResponse)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, *labelsv1beta1.ListLabelsRequest, ...grpc.CallOption) error); ok {
+		r1 = rf(ctx, in, opts...)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// GatewayAPIClient_ListLabels_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListLabels'
+type GatewayAPIClient_ListLabels_Call struct {
+	*mock.Call
+}
+
+// ListLabels is a helper method to define mock.On call
+//   - ctx context.Context
+//   - in *labelsv1beta1.ListLabelsRequest
+//   - opts ...grpc.CallOption
+func (_e *GatewayAPIClient_Expecter) ListLabels(ctx interface{}, in interface{}, opts ...interface{}) *GatewayAPIClient_ListLabels_Call {
+	return &GatewayAPIClient_ListLabels_Call{Call: _e.mock.On("ListLabels",
+		append([]interface{}{ctx, in}, opts...)...)}
+}
+
+func (_c *GatewayAPIClient_ListLabels_Call) Run(run func(ctx context.Context, in *labelsv1beta1.ListLabelsRequest, opts ...grpc.CallOption)) *GatewayAPIClient_ListLabels_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		variadicArgs := make([]grpc.CallOption, len(args)-2)
+		for i, a := range args[2:] {
+			if a != nil {
+				variadicArgs[i] = a.(grpc.CallOption)
+			}
+		}
+		run(args[0].(context.Context), args[1].(*labelsv1beta1.ListLabelsRequest), variadicArgs...)
+	})
+	return _c
+}
+
+func (_c *GatewayAPIClient_ListLabels_Call) Return(_a0 *labelsv1beta1.ListLabelsResponse, _a1 error) *GatewayAPIClient_ListLabels_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *GatewayAPIClient_ListLabels_Call) RunAndReturn(run func(context.Context, *labelsv1beta1.ListLabelsRequest, ...grpc.CallOption) (*labelsv1beta1.ListLabelsResponse, error)) *GatewayAPIClient_ListLabels_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // ListOCMShares provides a mock function with given fields: ctx, in, opts
 func (_m *GatewayAPIClient) ListOCMShares(ctx context.Context, in *ocmv1beta1.ListOCMSharesRequest, opts ...grpc.CallOption) (*ocmv1beta1.ListOCMSharesResponse, error) {
 	var tmpRet mock.Arguments
@@ -5622,6 +5697,79 @@ func (_c *GatewayAPIClient_ListRecycleStream_Call) Return(_a0 gatewayv1beta1.Gat
 }
 
 func (_c *GatewayAPIClient_ListRecycleStream_Call) RunAndReturn(run func(context.Context, *providerv1beta1.ListRecycleStreamRequest, ...grpc.CallOption) (gatewayv1beta1.GatewayAPI_ListRecycleStreamClient, error)) *GatewayAPIClient_ListRecycleStream_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// ListResourcesForLabel provides a mock function with given fields: ctx, in, opts
+func (_m *GatewayAPIClient) ListResourcesForLabel(ctx context.Context, in *labelsv1beta1.ListResourcesForLabelRequest, opts ...grpc.CallOption) (*labelsv1beta1.ListResourcesForLabelResponse, error) {
+	var tmpRet mock.Arguments
+	if len(opts) > 0 {
+		tmpRet = _m.Called(ctx, in, opts)
+	} else {
+		tmpRet = _m.Called(ctx, in)
+	}
+	ret := tmpRet
+
+	if len(ret) == 0 {
+		panic("no return value specified for ListResourcesForLabel")
+	}
+
+	var r0 *labelsv1beta1.ListResourcesForLabelResponse
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, *labelsv1beta1.ListResourcesForLabelRequest, ...grpc.CallOption) (*labelsv1beta1.ListResourcesForLabelResponse, error)); ok {
+		return rf(ctx, in, opts...)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, *labelsv1beta1.ListResourcesForLabelRequest, ...grpc.CallOption) *labelsv1beta1.ListResourcesForLabelResponse); ok {
+		r0 = rf(ctx, in, opts...)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*labelsv1beta1.ListResourcesForLabelResponse)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, *labelsv1beta1.ListResourcesForLabelRequest, ...grpc.CallOption) error); ok {
+		r1 = rf(ctx, in, opts...)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// GatewayAPIClient_ListResourcesForLabel_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListResourcesForLabel'
+type GatewayAPIClient_ListResourcesForLabel_Call struct {
+	*mock.Call
+}
+
+// ListResourcesForLabel is a helper method to define mock.On call
+//   - ctx context.Context
+//   - in *labelsv1beta1.ListResourcesForLabelRequest
+//   - opts ...grpc.CallOption
+func (_e *GatewayAPIClient_Expecter) ListResourcesForLabel(ctx interface{}, in interface{}, opts ...interface{}) *GatewayAPIClient_ListResourcesForLabel_Call {
+	return &GatewayAPIClient_ListResourcesForLabel_Call{Call: _e.mock.On("ListResourcesForLabel",
+		append([]interface{}{ctx, in}, opts...)...)}
+}
+
+func (_c *GatewayAPIClient_ListResourcesForLabel_Call) Run(run func(ctx context.Context, in *labelsv1beta1.ListResourcesForLabelRequest, opts ...grpc.CallOption)) *GatewayAPIClient_ListResourcesForLabel_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		variadicArgs := make([]grpc.CallOption, len(args)-2)
+		for i, a := range args[2:] {
+			if a != nil {
+				variadicArgs[i] = a.(grpc.CallOption)
+			}
+		}
+		run(args[0].(context.Context), args[1].(*labelsv1beta1.ListResourcesForLabelRequest), variadicArgs...)
+	})
+	return _c
+}
+
+func (_c *GatewayAPIClient_ListResourcesForLabel_Call) Return(_a0 *labelsv1beta1.ListResourcesForLabelResponse, _a1 error) *GatewayAPIClient_ListResourcesForLabel_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *GatewayAPIClient_ListResourcesForLabel_Call) RunAndReturn(run func(context.Context, *labelsv1beta1.ListResourcesForLabelRequest, ...grpc.CallOption) (*labelsv1beta1.ListResourcesForLabelResponse, error)) *GatewayAPIClient_ListResourcesForLabel_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -6211,7 +6359,7 @@ func (_c *GatewayAPIClient_RefreshLock_Call) RunAndReturn(run func(context.Conte
 }
 
 // RemoveLabel provides a mock function with given fields: ctx, in, opts
-func (_m *GatewayAPIClient) RemoveLabel(ctx context.Context, in *providerv1beta1.RemoveLabelRequest, opts ...grpc.CallOption) (*providerv1beta1.RemoveLabelResponse, error) {
+func (_m *GatewayAPIClient) RemoveLabel(ctx context.Context, in *labelsv1beta1.RemoveLabelRequest, opts ...grpc.CallOption) (*labelsv1beta1.RemoveLabelResponse, error) {
 	var tmpRet mock.Arguments
 	if len(opts) > 0 {
 		tmpRet = _m.Called(ctx, in, opts)
@@ -6224,20 +6372,20 @@ func (_m *GatewayAPIClient) RemoveLabel(ctx context.Context, in *providerv1beta1
 		panic("no return value specified for RemoveLabel")
 	}
 
-	var r0 *providerv1beta1.RemoveLabelResponse
+	var r0 *labelsv1beta1.RemoveLabelResponse
 	var r1 error
-	if rf, ok := ret.Get(0).(func(context.Context, *providerv1beta1.RemoveLabelRequest, ...grpc.CallOption) (*providerv1beta1.RemoveLabelResponse, error)); ok {
+	if rf, ok := ret.Get(0).(func(context.Context, *labelsv1beta1.RemoveLabelRequest, ...grpc.CallOption) (*labelsv1beta1.RemoveLabelResponse, error)); ok {
 		return rf(ctx, in, opts...)
 	}
-	if rf, ok := ret.Get(0).(func(context.Context, *providerv1beta1.RemoveLabelRequest, ...grpc.CallOption) *providerv1beta1.RemoveLabelResponse); ok {
+	if rf, ok := ret.Get(0).(func(context.Context, *labelsv1beta1.RemoveLabelRequest, ...grpc.CallOption) *labelsv1beta1.RemoveLabelResponse); ok {
 		r0 = rf(ctx, in, opts...)
 	} else {
 		if ret.Get(0) != nil {
-			r0 = ret.Get(0).(*providerv1beta1.RemoveLabelResponse)
+			r0 = ret.Get(0).(*labelsv1beta1.RemoveLabelResponse)
 		}
 	}
 
-	if rf, ok := ret.Get(1).(func(context.Context, *providerv1beta1.RemoveLabelRequest, ...grpc.CallOption) error); ok {
+	if rf, ok := ret.Get(1).(func(context.Context, *labelsv1beta1.RemoveLabelRequest, ...grpc.CallOption) error); ok {
 		r1 = rf(ctx, in, opts...)
 	} else {
 		r1 = ret.Error(1)
@@ -6253,14 +6401,14 @@ type GatewayAPIClient_RemoveLabel_Call struct {
 
 // RemoveLabel is a helper method to define mock.On call
 //   - ctx context.Context
-//   - in *providerv1beta1.RemoveLabelRequest
+//   - in *labelsv1beta1.RemoveLabelRequest
 //   - opts ...grpc.CallOption
 func (_e *GatewayAPIClient_Expecter) RemoveLabel(ctx interface{}, in interface{}, opts ...interface{}) *GatewayAPIClient_RemoveLabel_Call {
 	return &GatewayAPIClient_RemoveLabel_Call{Call: _e.mock.On("RemoveLabel",
 		append([]interface{}{ctx, in}, opts...)...)}
 }
 
-func (_c *GatewayAPIClient_RemoveLabel_Call) Run(run func(ctx context.Context, in *providerv1beta1.RemoveLabelRequest, opts ...grpc.CallOption)) *GatewayAPIClient_RemoveLabel_Call {
+func (_c *GatewayAPIClient_RemoveLabel_Call) Run(run func(ctx context.Context, in *labelsv1beta1.RemoveLabelRequest, opts ...grpc.CallOption)) *GatewayAPIClient_RemoveLabel_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		variadicArgs := make([]grpc.CallOption, len(args)-2)
 		for i, a := range args[2:] {
@@ -6268,17 +6416,17 @@ func (_c *GatewayAPIClient_RemoveLabel_Call) Run(run func(ctx context.Context, i
 				variadicArgs[i] = a.(grpc.CallOption)
 			}
 		}
-		run(args[0].(context.Context), args[1].(*providerv1beta1.RemoveLabelRequest), variadicArgs...)
+		run(args[0].(context.Context), args[1].(*labelsv1beta1.RemoveLabelRequest), variadicArgs...)
 	})
 	return _c
 }
 
-func (_c *GatewayAPIClient_RemoveLabel_Call) Return(_a0 *providerv1beta1.RemoveLabelResponse, _a1 error) *GatewayAPIClient_RemoveLabel_Call {
+func (_c *GatewayAPIClient_RemoveLabel_Call) Return(_a0 *labelsv1beta1.RemoveLabelResponse, _a1 error) *GatewayAPIClient_RemoveLabel_Call {
 	_c.Call.Return(_a0, _a1)
 	return _c
 }
 
-func (_c *GatewayAPIClient_RemoveLabel_Call) RunAndReturn(run func(context.Context, *providerv1beta1.RemoveLabelRequest, ...grpc.CallOption) (*providerv1beta1.RemoveLabelResponse, error)) *GatewayAPIClient_RemoveLabel_Call {
+func (_c *GatewayAPIClient_RemoveLabel_Call) RunAndReturn(run func(context.Context, *labelsv1beta1.RemoveLabelRequest, ...grpc.CallOption) (*labelsv1beta1.RemoveLabelResponse, error)) *GatewayAPIClient_RemoveLabel_Call {
 	_c.Call.Return(run)
 	return _c
 }

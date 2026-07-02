@@ -290,6 +290,7 @@ func NewEditorRole() *Role {
 		cS3ResourcePermissions: &provider.ResourcePermissions{
 			CreateContainer:      true,
 			Delete:               true,
+			DeleteContainer:      true,
 			GetPath:              true,
 			GetQuota:             true,
 			InitiateFileDownload: true,
@@ -297,7 +298,9 @@ func NewEditorRole() *Role {
 			ListContainer:        true,
 			ListRecycle:          true,
 			Move:                 true,
+			MoveContainer:        true,
 			RestoreRecycleItem:   true,
+			SetImmutableFile:     true,
 			Stat:                 true,
 		},
 		ocsPermissions: p,
@@ -327,6 +330,7 @@ func NewSpaceEditorRole() *Role {
 		cS3ResourcePermissions: &provider.ResourcePermissions{
 			CreateContainer:      true,
 			Delete:               true,
+			DeleteContainer:      true,
 			GetPath:              true,
 			GetQuota:             true,
 			InitiateFileDownload: true,
@@ -336,8 +340,10 @@ func NewSpaceEditorRole() *Role {
 			ListGrants:           true,
 			ListRecycle:          true,
 			Move:                 true,
+			MoveContainer:        true,
 			RestoreFileVersion:   true,
 			RestoreRecycleItem:   true,
+			SetImmutableFile:     true,
 			Stat:                 true,
 		},
 		ocsPermissions: PermissionRead | PermissionCreate | PermissionWrite | PermissionDelete,
@@ -351,6 +357,7 @@ func NewSpaceEditorWithoutVersionsRole() *Role {
 		cS3ResourcePermissions: &provider.ResourcePermissions{
 			CreateContainer:      true,
 			Delete:               true,
+			DeleteContainer:      true,
 			GetPath:              true,
 			GetQuota:             true,
 			InitiateFileDownload: true,
@@ -359,7 +366,9 @@ func NewSpaceEditorWithoutVersionsRole() *Role {
 			ListGrants:           true,
 			ListRecycle:          true,
 			Move:                 true,
+			MoveContainer:        true,
 			RestoreRecycleItem:   true,
+			SetImmutableFile:     true,
 			Stat:                 true,
 		},
 		ocsPermissions: PermissionRead | PermissionCreate | PermissionWrite | PermissionDelete,
@@ -406,24 +415,28 @@ func NewCoownerRole() *Role {
 	return &Role{
 		Name: RoleCoowner,
 		cS3ResourcePermissions: &provider.ResourcePermissions{
-			GetPath:              true,
-			GetQuota:             true,
-			InitiateFileDownload: true,
-			ListGrants:           true,
-			ListContainer:        true,
-			ListFileVersions:     true,
-			ListRecycle:          true,
-			Stat:                 true,
-			InitiateFileUpload:   true,
-			RestoreFileVersion:   true,
-			RestoreRecycleItem:   true,
-			CreateContainer:      true,
-			Delete:               true,
-			Move:                 true,
-			PurgeRecycle:         true,
-			AddGrant:             true,
-			UpdateGrant:          true,
-			RemoveGrant:          true,
+			GetPath:               true,
+			GetQuota:              true,
+			InitiateFileDownload:  true,
+			ListGrants:            true,
+			ListContainer:         true,
+			ListFileVersions:      true,
+			ListRecycle:           true,
+			Stat:                  true,
+			InitiateFileUpload:    true,
+			RestoreFileVersion:    true,
+			RestoreRecycleItem:    true,
+			CreateContainer:       true,
+			Delete:                true,
+			DeleteContainer:       true,
+			Move:                  true,
+			MoveContainer:         true,
+			PurgeRecycle:          true,
+			AddGrant:              true,
+			UpdateGrant:           true,
+			RemoveGrant:           true,
+			SetImmutableFile:      true,
+			SetImmutableContainer: true,
 		},
 		ocsPermissions: PermissionAll,
 	}
@@ -486,15 +499,19 @@ func NewManagerRole() *Role {
 			RestoreFileVersion:   true,
 			RestoreRecycleItem:   true,
 			Move:                 true,
+			MoveContainer:        true,
 			CreateContainer:      true,
 			Delete:               true,
+			DeleteContainer:      true,
 			PurgeRecycle:         true,
 
 			// these permissions only make sense to enforce them in the root of the storage space.
-			AddGrant:    true, // managers can add users to the space
-			RemoveGrant: true, // managers can remove users from the space
-			UpdateGrant: true,
-			DenyGrant:   true, // managers can deny access to sub folders
+			AddGrant:              true, // managers can add users to the space
+			RemoveGrant:           true, // managers can remove users from the space
+			UpdateGrant:           true,
+			DenyGrant:             true, // managers can deny access to sub folders
+			SetImmutableFile:      true, // managers can freeze files
+			SetImmutableContainer: true, // managers can protect/unprotect containers
 		},
 		ocsPermissions: PermissionAll,
 	}

@@ -758,6 +758,12 @@ func (fs *Decomposedfs) CreateDir(ctx context.Context, ref *provider.Reference) 
 		return errtypes.NotFound(f)
 	}
 
+	// Immutable check: parent is protected → no new children
+	if n.IsImmutable(ctx) {
+		f, _ := storagespace.FormatReference(ref)
+		return errtypes.PermissionDenied(f)
+	}
+
 	// Set space owner in context
 	storagespace.ContextSendSpaceOwnerID(ctx, n.SpaceOwnerOrManager(ctx))
 
@@ -861,6 +867,25 @@ func (fs *Decomposedfs) Move(ctx context.Context, oldRef, newRef *provider.Refer
 		return errtypes.NotFound(f)
 	}
 
+	// Container-specific move check (cs3org/cs3apis#272).
+	if oldNode.IsDir(ctx) && !orp.MoveContainer {
+		f, _ := storagespace.FormatReference(oldRef)
+		if orp.Stat {
+			return errtypes.PermissionDenied(f)
+		}
+		return errtypes.NotFound(f)
+	}
+
+	// Immutable check on source: self or parent
+	if oldNode.IsImmutable(ctx) {
+		f, _ := storagespace.FormatReference(oldRef)
+		return errtypes.PermissionDenied(f)
+	}
+	if oldParent, err := oldNode.Parent(ctx); err == nil && oldParent.IsImmutable(ctx) {
+		f, _ := storagespace.FormatReference(oldRef)
+		return errtypes.PermissionDenied(f)
+	}
+
 	if newNode, err = fs.lu.NodeFromResource(ctx, newRef); err != nil {
 		return
 	}
@@ -885,6 +910,12 @@ func (fs *Decomposedfs) Move(ctx context.Context, oldRef, newRef *provider.Refer
 			return errtypes.PermissionDenied(f)
 		}
 		return errtypes.NotFound(f)
+	}
+
+	// Immutable check on target parent
+	if newParent, err := newNode.Parent(ctx); err == nil && newParent.IsImmutable(ctx) {
+		f, _ := storagespace.FormatReference(newRef)
+		return errtypes.PermissionDenied(f)
 	}
 
 	// Set space owner in context
@@ -977,6 +1008,9 @@ func (fs *Decomposedfs) ListFolder(ctx context.Context, ref *provider.Reference,
 	if err != nil {
 		return nil, err
 	}
+
+	// Cache parent's immutable state in context so children skip redundant Parent() xattr reads
+	ctx = node.ContextWithParentImmutable(ctx, n.IsImmutable(ctx))
 
 	numWorkers := fs.o.MaxConcurrency
 	if len(children) < numWorkers {
@@ -1120,6 +1154,34 @@ func (fs *Decomposedfs) Delete(ctx context.Context, ref *provider.Reference) (er
 		return errtypes.NotFound(f)
 	}
 
+	// Container-specific delete check (cs3org/cs3apis#272).
+	if node.IsDir(ctx) && !rp.DeleteContainer {
+		f, _ := storagespace.FormatReference(ref)
+		if rp.Stat {
+			return errtypes.PermissionDenied(f)
+		}
+		return errtypes.NotFound(f)
+	}
+
+	// Immutable check: frozen or protected resources cannot be deleted
+	if node.IsImmutable(ctx) {
+		f, _ := storagespace.FormatReference(ref)
+		return errtypes.PermissionDenied(f)
+	}
+	if p, perr := node.Parent(ctx); perr == nil && p.IsImmutable(ctx) {
+		f, _ := storagespace.FormatReference(ref)
+		return errtypes.PermissionDenied(f)
+	}
+	// Reva deletes directories recursively (move entire subtree to trash).
+	// Without this check a frozen file inside a normal folder would be
+	// silently trashed together with its parent, bypassing immutability.
+	if node.IsDir(ctx) {
+		if has, err := fs.hasImmutableDescendant(ctx, node); err == nil && has {
+			f, _ := storagespace.FormatReference(ref)
+			return errtypes.PermissionDenied(f)
+		}
+	}
+
 	// Set space owner in context
 	storagespace.ContextSendSpaceOwnerID(ctx, node.SpaceOwnerOrManager(ctx))
 
@@ -1128,6 +1190,89 @@ func (fs *Decomposedfs) Delete(ctx context.Context, ref *provider.Reference) (er
 	}
 
 	return fs.tp.Delete(ctx, node)
+}
+
+// hasImmutableDescendant recursively checks if any child of a directory node is immutable.
+// This is needed because Reva deletes directories by moving the entire subtree to trash,
+// which would silently remove frozen/protected children. The scan aborts on first match.
+func (fs *Decomposedfs) hasImmutableDescendant(ctx context.Context, n *node.Node) (bool, error) {
+	children, err := fs.tp.ListFolder(ctx, n)
+	if err != nil {
+		return false, err
+	}
+	for _, child := range children {
+		if child.IsImmutable(ctx) {
+			return true, nil
+		}
+		if child.IsDir(ctx) {
+			if has, err := fs.hasImmutableDescendant(ctx, child); err == nil && has {
+				return true, nil
+			}
+		}
+	}
+	return false, nil
+}
+
+// SetImmutable sets the immutable attribute on a resource.
+func (fs *Decomposedfs) SetImmutable(ctx context.Context, ref *provider.Reference) error {
+	n, err := fs.lu.NodeFromResource(ctx, ref)
+	if err != nil {
+		return err
+	}
+	if !n.Exists {
+		return errtypes.NotFound(filepath.Join(n.ParentID, n.Name))
+	}
+
+	rp, err := fs.p.AssemblePermissions(ctx, n)
+	if err != nil {
+		return err
+	}
+
+	if n.IsDir(ctx) {
+		if !rp.SetImmutableContainer {
+			f, _ := storagespace.FormatReference(ref)
+			return errtypes.PermissionDenied(f)
+		}
+		return n.ProtectContainer(ctx)
+	}
+
+	// File
+	if !rp.SetImmutableFile {
+		f, _ := storagespace.FormatReference(ref)
+		return errtypes.PermissionDenied(f)
+	}
+	return n.FreezeFile(ctx)
+}
+
+// UnsetImmutable removes the immutable attribute from a container resource.
+// Files cannot be unfrozen.
+func (fs *Decomposedfs) UnsetImmutable(ctx context.Context, ref *provider.Reference) error {
+	n, err := fs.lu.NodeFromResource(ctx, ref)
+	if err != nil {
+		return err
+	}
+	if !n.Exists {
+		return errtypes.NotFound(filepath.Join(n.ParentID, n.Name))
+	}
+
+	if !n.IsDir(ctx) {
+		return errtypes.PreconditionFailed("cannot unfreeze a file")
+	}
+
+	rp, err := fs.p.AssemblePermissions(ctx, n)
+	if err != nil {
+		return err
+	}
+	if !rp.SetImmutableContainer {
+		f, _ := storagespace.FormatReference(ref)
+		return errtypes.PermissionDenied(f)
+	}
+
+	if !n.IsImmutable(ctx) {
+		return errtypes.PreconditionFailed("resource is not immutable")
+	}
+
+	return n.UnprotectContainer(ctx)
 }
 
 // Download returns a reader to the specified resource

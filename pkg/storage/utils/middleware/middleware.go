@@ -986,6 +986,14 @@ func (f *FS) Unlock(ctx context.Context, ref *provider.Reference, lock *provider
 	return res0
 }
 
+func (f *FS) SetImmutable(ctx context.Context, ref *provider.Reference) error {
+	return f.next.SetImmutable(ctx, ref)
+}
+
+func (f *FS) UnsetImmutable(ctx context.Context, ref *provider.Reference) error {
+	return f.next.UnsetImmutable(ctx, ref)
+}
+
 func (f *FS) ListStorageSpaces(ctx context.Context, filter []*provider.ListStorageSpacesRequest_Filter, unrestricted bool) ([]*provider.StorageSpace, error) {
 	var (
 		err     error
