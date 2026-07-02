@@ -1,6 +1,6 @@
 # Changelog
 
-## [2.47.0](https://github.com/opencloud-eu/reva/releases/tag/v2.47.0) - 2026-07-01
+## [2.47.0](https://github.com/opencloud-eu/reva/releases/tag/v2.47.0) - 2026-07-02
 
 ### ❤️ Thanks to all contributors! ❤️
 
@@ -25,6 +25,7 @@
 
 ### 📦️ Dependencies
 
+- chore(deps): bump github.com/nats-io/nats-server/v2 from 2.14.2 to 2.14.3 [[#721](https://github.com/opencloud-eu/reva/pull/721)]
 - chore(deps): bump github.com/rogpeppe/go-internal from 1.14.1 to 1.15.0 [[#719](https://github.com/opencloud-eu/reva/pull/719)]
 - chore(deps): bump github.com/nats-io/nats.go from 1.51.0 to 1.52.0 [[#714](https://github.com/opencloud-eu/reva/pull/714)]
 - chore(deps): bump github.com/segmentio/kafka-go from 0.4.50 to 0.4.51 [[#706](https://github.com/opencloud-eu/reva/pull/706)]
