@@ -290,6 +290,32 @@ var _ = Describe("Node", func() {
 			expected := ocsconv.NewManagerRole().CS3ResourcePermissions()
 			Expect(grants.PermissionsEqual(perms, expected)).To(BeTrue())
 		})
+		It("Merges grants with the service account permissions for service accounts", func() {
+			pSpace, err := env.CreateTestStorageSpace("project", &provider.Quota{QuotaMaxBytes: 2000})
+			Expect(err).ToNot(HaveOccurred())
+			sa := &userpb.User{Id: &userpb.UserId{OpaqueId: "service-account", Type: userpb.UserType_USER_TYPE_SERVICE}}
+			env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(&provider.ResourcePermissions{
+				AddGrant: true,
+				Stat:     true,
+			}, nil).Times(1)
+			err = env.Fs.AddGrant(env.Ctx, &provider.Reference{
+				ResourceId: &provider.ResourceId{SpaceId: pSpace.SpaceId, OpaqueId: pSpace.OpaqueId},
+			}, &provider.Grant{
+				Grantee:     &provider.Grantee{Type: provider.GranteeType_GRANTEE_TYPE_USER, Id: &provider.Grantee_UserId{UserId: sa.Id}},
+				Permissions: ocsconv.NewEditorRole().CS3ResourcePermissions(),
+			})
+			Expect(err).ToNot(HaveOccurred())
+			// resolve as the service account: grant must be honored (not shadowed by an
+			// early return) and merged with, not replaced by, the service account defaults.
+			spaceRoot, err := env.Lookup.NodeFromSpaceID(env.Ctx, pSpace.SpaceId)
+			Expect(err).ToNot(HaveOccurred())
+			saCtx := ctxpkg.ContextSetUser(env.Ctx, sa)
+			perms, err := node.NewPermissions(env.Lookup).AssemblePermissions(saCtx, spaceRoot)
+			Expect(err).ToNot(HaveOccurred())
+			expected := ocsconv.NewEditorRole().CS3ResourcePermissions()
+			node.AddPermissions(expected, node.ServiceAccountPermissions())
+			Expect(grants.PermissionsEqual(perms, expected)).To(BeTrue())
+		})
 		It("Checks the Editor permissions on a project space and a denial", func() {
 			storageSpace, err := env.CreateTestStorageSpace("project", &provider.Quota{QuotaMaxBytes: 2000})
 			Expect(err).ToNot(HaveOccurred())
