@@ -35,7 +35,6 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/pkg/errors"
-	"github.com/rogpeppe/go-internal/lockedfile"
 	tusd "github.com/tus/tusd/v2/pkg/handler"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
@@ -313,16 +312,17 @@ func (session *DecomposedFsSession) Finalize(ctx context.Context) (err error) {
 		revisionNode.SpaceRoot = spaceRoot
 	}
 
-	// lock the node before writing the blob
-	lockedNode, err := lockedfile.OpenFile(session.store.lu.MetadataBackend().LockfilePath(revisionNode), os.O_RDWR|os.O_CREATE, 0600)
+	// lock the node before reading its metadata and writing the blob
+	unlock, err := session.store.lu.MetadataBackend().Lock(revisionNode)
 	if err != nil {
 		return err
 	}
 	defer func() {
-		_ = lockedNode.Close()
+		_ = unlock()
 	}()
 
-	attribs, err := revisionNode.XattrsWithReader(ctx, lockedNode)
+	// Read the node attributes while holding the lock acquired above.
+	attribs, err := revisionNode.XattrsWhileLocked(ctx)
 	if err != nil {
 		return err
 	}
@@ -338,7 +338,7 @@ func (session *DecomposedFsSession) Finalize(ctx context.Context) (err error) {
 		if err != nil || !existingRevisionNode.Exists {
 			// The revision node has not been created. Likely because the file on disk was modified externally and re-assilimated (watchfs == true)
 			// Let's create the revision node now and upload the blob to it.
-			revisionNode, err = session.createRevisionNodeForUpload(ctx, revisionNode, session.MTime().UTC().Format(time.RFC3339Nano), lockedNode)
+			revisionNode, err = session.createRevisionNodeForUpload(ctx, revisionNode, session.MTime().UTC().Format(time.RFC3339Nano))
 			if err != nil {
 				appctx.GetLogger(ctx).Debug().Err(err).Str("versionID", session.MTime().UTC().Format(time.RFC3339Nano)).Msg("failed to create revision node for upload finalization")
 				return err
@@ -366,10 +366,10 @@ func (session *DecomposedFsSession) Finalize(ctx context.Context) (err error) {
 	return nil
 }
 
-func (session *DecomposedFsSession) createRevisionNodeForUpload(ctx context.Context, baseNode *node.Node, rev string, lockedNode *lockedfile.File) (*node.Node, error) {
+func (session *DecomposedFsSession) createRevisionNodeForUpload(ctx context.Context, baseNode *node.Node, rev string) (*node.Node, error) {
 	versionID := baseNode.ID + node.RevisionIDDelimiter + rev
 	log := appctx.GetLogger(ctx)
-	_, err := session.store.tp.CreateRevision(ctx, baseNode, rev, lockedNode)
+	_, err := session.store.tp.CreateRevision(ctx, baseNode, rev)
 	if err != nil {
 		log.Error().Err(err).Str("versionID", versionID).Msg("failed to create revision node for upload")
 		return nil, err

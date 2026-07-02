@@ -20,7 +20,6 @@ package node
 
 import (
 	"context"
-	"io"
 	"io/fs"
 	"strconv"
 	"time"
@@ -115,26 +114,21 @@ func (n *Node) RemoveXattr(ctx context.Context, key string, acquireLock bool) er
 	return n.lu.MetadataBackend().Remove(ctx, n, key, acquireLock)
 }
 
-// XattrsWithReader returns the extended attributes of the node. If the attributes have already
-// been cached they are not read from disk again.
-func (n *Node) XattrsWithReader(ctx context.Context, r io.Reader) (Attributes, error) {
+// loadXattrs reads and caches the node's extended attributes using the given load
+// function. It centralizes the empty-node guard and the write-through caching that
+// is shared by all the Xattrs accessors below.
+func (n *Node) loadXattrs(load func() (Attributes, error)) (Attributes, error) {
 	if n.ID == "" {
 		// Do not try to read the attribute of an empty node. The InternalPath points to the
 		// base nodes directory in this case.
-		return Attributes{}, &xattr.Error{Op: "node.XattrsWithReader", Path: n.InternalPath(), Err: xattr.ENOATTR}
+		return Attributes{}, &xattr.Error{Op: "node.Xattrs", Path: n.InternalPath(), Err: xattr.ENOATTR}
 	}
 
 	if n.xattrsCache != nil {
 		return n.xattrsCache, nil
 	}
 
-	var attrs Attributes
-	var err error
-	if r != nil {
-		attrs, err = n.lu.MetadataBackend().AllWithLockedSource(ctx, n, r)
-	} else {
-		attrs, err = n.lu.MetadataBackend().All(ctx, n)
-	}
+	attrs, err := load()
 	if err != nil {
 		return nil, err
 	}
@@ -143,10 +137,24 @@ func (n *Node) XattrsWithReader(ctx context.Context, r io.Reader) (Attributes, e
 	return n.xattrsCache, nil
 }
 
-// Xattrs returns the extended attributes of the node. If the attributes have already
-// been cached they are not read from disk again.
+// XattrsWhileLocked returns the extended attributes of the node assuming the caller
+// already holds the node's metadata lock (e.g. acquired via MetadataBackend().Lock).
+//
+// It does not re-acquire the metadata lock, so it is safe to call while holding it:
+// re-locking might dead-lock backends that lock unconditionally.
+func (n *Node) XattrsWhileLocked(ctx context.Context) (Attributes, error) {
+	return n.loadXattrs(func() (Attributes, error) {
+		return n.lu.MetadataBackend().AllWhileLocked(ctx, n)
+	})
+}
+
+// Xattrs returns the extended attributes of the node, acquiring the metadata lock as
+// needed. If the attributes have already been cached they are not read from disk
+// again.
 func (n *Node) Xattrs(ctx context.Context) (Attributes, error) {
-	return n.XattrsWithReader(ctx, nil)
+	return n.loadXattrs(func() (Attributes, error) {
+		return n.lu.MetadataBackend().All(ctx, n)
+	})
 }
 
 // Xattr returns an extended attribute of the node. If the attributes have already

@@ -30,7 +30,6 @@ import (
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/pkg/errors"
-	"github.com/rogpeppe/go-internal/lockedfile"
 
 	"github.com/opencloud-eu/reva/v2/pkg/appctx"
 	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
@@ -45,8 +44,10 @@ import (
 // The `.REV.` indicates it is a revision and what follows is a timestamp, so multiple versions
 // can be kept in the same location.
 
-// CreateRevision creates a new version of the node
-func (tp *Tree) CreateRevision(ctx context.Context, n *node.Node, version string, f *lockedfile.File) (string, error) {
+// CreateRevision creates a new version of the node. The caller MUST already hold the
+// metadata lock of n, as the node's metadata is read (without re-locking) to copy the
+// blob metadata onto the new revision.
+func (tp *Tree) CreateRevision(ctx context.Context, n *node.Node, version string) (string, error) {
 	revNode := node.NewBaseNode(n.SpaceID, n.ID+node.RevisionIDDelimiter+version, tp.lookup)
 	versionPath := revNode.InternalPath()
 
@@ -125,7 +126,7 @@ func (tp *Tree) CreateRevision(ctx context.Context, n *node.Node, version string
 			attributeName == prefixes.BlobIDAttr ||
 			attributeName == prefixes.BlobsizeAttr ||
 			attributeName == prefixes.MTimeAttr
-	}, f, true); err != nil {
+	}, true); err != nil {
 		return "", err
 	}
 

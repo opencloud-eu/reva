@@ -3,7 +3,6 @@ package metadata
 import (
 	"context"
 	"fmt"
-	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -136,9 +135,9 @@ func (b HybridBackend) All(ctx context.Context, n MetadataNode) (map[string][]by
 	return b.getAll(ctx, n, false, false)
 }
 
-// AllWithLockedSource reads all extended attributes from the given reader.
-// The path argument is used for storing the data in the cache
-func (b HybridBackend) AllWithLockedSource(ctx context.Context, n MetadataNode, _ io.Reader) (map[string][]byte, error) {
+// AllWhileLocked reads all extended attributes assuming the caller already holds
+// the node's metadata lock. It does not acquire the lock again.
+func (b HybridBackend) AllWhileLocked(ctx context.Context, n MetadataNode) (map[string][]byte, error) {
 	attribs := map[string][]byte{}
 
 	err := b.metaCache.PullFromCache(b.cacheKey(n), &attribs)
@@ -504,11 +503,6 @@ func (b HybridBackend) LockfilePath(n MetadataNode) string {
 
 // Lock locks the metadata for the given path
 func (b HybridBackend) Lock(n MetadataNode) (UnlockFunc, error) {
-	f, _, err := b.LockAndRead(n)
-	return f, err
-}
-
-func (b HybridBackend) LockAndRead(n MetadataNode) (UnlockFunc, io.Reader, error) {
 	metaLockPath := b.LockfilePath(n)
 	mlock, err := lockedfile.OpenFile(metaLockPath, os.O_RDWR|os.O_CREATE, 0600)
 	if err != nil {
@@ -516,20 +510,20 @@ func (b HybridBackend) LockAndRead(n MetadataNode) (UnlockFunc, io.Reader, error
 			// create the parent directory
 			err = os.MkdirAll(filepath.Dir(metaLockPath), 0700)
 			if err != nil {
-				return nil, nil, err
+				return nil, err
 			}
 			mlock, err = lockedfile.OpenFile(metaLockPath, os.O_RDWR|os.O_CREATE, 0600)
 			if err != nil {
-				return nil, nil, err
+				return nil, err
 			}
 		} else {
-			return nil, nil, err
+			return nil, err
 		}
 	}
 	return func() error {
 		// Warning: do not remove the lockfile or we may lock the same file more than once, https://github.com/opencloud-eu/opencloud/issues/1793
 		return mlock.Close()
-	}, mlock, nil
+	}, nil
 }
 
 func (b HybridBackend) cacheKey(n MetadataNode) string {

@@ -20,7 +20,6 @@ package metadata
 
 import (
 	"context"
-	"io"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -286,24 +285,9 @@ func (b XattrsBackend) Lock(n MetadataNode) (UnlockFunc, error) {
 	}, nil
 }
 
-// LockAndRead locks the metadata for reading
-func (b XattrsBackend) LockAndRead(n MetadataNode) (UnlockFunc, io.Reader, error) {
-	unlock, err := b.Lock(n)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	f, err := os.Open(b.MetadataPath(n))
-	if err != nil {
-		_ = unlock()
-		return nil, nil, err
-	}
-	return unlock, f, nil
-}
-
-// AllWithLockedSource reads all extended attributes from the given reader.
-// The path argument is used for storing the data in the cache
-func (b XattrsBackend) AllWithLockedSource(ctx context.Context, n MetadataNode, _ io.Reader) (map[string][]byte, error) {
+// AllWhileLocked reads all extended attributes assuming the caller already holds
+// the node's metadata lock.
+func (b XattrsBackend) AllWhileLocked(ctx context.Context, n MetadataNode) (map[string][]byte, error) {
 	return b.All(ctx, n)
 }
 

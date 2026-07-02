@@ -714,7 +714,7 @@ assimilate:
 		}
 	}
 
-	attrs, err := t.lookup.MetadataBackend().AllWithLockedSource(context.Background(), bn, nil)
+	attrs, err := t.lookup.MetadataBackend().AllWhileLocked(context.Background(), bn)
 	if err != nil && !metadata.IsAttrUnset(err) {
 		return nil, nil, errors.Wrap(err, "failed to get item attribs")
 	}

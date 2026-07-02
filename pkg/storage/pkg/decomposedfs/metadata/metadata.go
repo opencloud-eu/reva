@@ -21,7 +21,6 @@ package metadata
 import (
 	"context"
 	"errors"
-	"io"
 	"time"
 
 	"go.opentelemetry.io/otel"
@@ -50,7 +49,10 @@ type Backend interface {
 	IdentifyPath(ctx context.Context, path string) (string, string, string, time.Time, error)
 
 	All(ctx context.Context, n MetadataNode) (map[string][]byte, error)
-	AllWithLockedSource(ctx context.Context, n MetadataNode, source io.Reader) (map[string][]byte, error)
+	// AllWhileLocked reads all extended attributes assuming the caller already holds
+	// the node's metadata lock. Unlike All it does not (re-)acquire the lock, so it is
+	// safe to call while holding it.
+	AllWhileLocked(ctx context.Context, n MetadataNode) (map[string][]byte, error)
 
 	Get(ctx context.Context, n MetadataNode, key string) ([]byte, error)
 	GetInt64(ctx context.Context, n MetadataNode, key string) (int64, error)
@@ -59,7 +61,6 @@ type Backend interface {
 	Remove(ctx context.Context, n MetadataNode, key string, acquireLock bool) error
 
 	Lock(n MetadataNode) (UnlockFunc, error)
-	LockAndRead(n MetadataNode) (UnlockFunc, io.Reader, error)
 	Purge(ctx context.Context, n MetadataNode) error
 	Rename(oldNode, newNode MetadataNode) error
 	MetadataPath(n MetadataNode) string
@@ -114,11 +115,6 @@ func (NullBackend) Lock(n MetadataNode) (UnlockFunc, error) {
 	return nil, nil
 }
 
-// LockAndRead locks the metadata for reading
-func (NullBackend) LockAndRead(n MetadataNode) (UnlockFunc, io.Reader, error) {
-	return nil, nil, nil
-}
-
 // IsMetaFile returns whether the given path represents a meta file
 func (NullBackend) IsMetaFile(path string) bool { return false }
 
@@ -134,8 +130,7 @@ func (NullBackend) MetadataPath(n MetadataNode) string { return "" }
 // LockfilePath returns the path of the lock file
 func (NullBackend) LockfilePath(n MetadataNode) string { return "" }
 
-// AllWithLockedSource reads all extended attributes from the given reader
-// The path argument is used for storing the data in the cache
-func (NullBackend) AllWithLockedSource(ctx context.Context, n MetadataNode, source io.Reader) (map[string][]byte, error) {
+// AllWhileLocked reads all extended attributes assuming the caller holds the lock
+func (NullBackend) AllWhileLocked(ctx context.Context, n MetadataNode) (map[string][]byte, error) {
 	return nil, errUnconfiguredError
 }

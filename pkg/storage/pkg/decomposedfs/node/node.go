@@ -50,7 +50,6 @@ import (
 	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/grants"
 	"github.com/opencloud-eu/reva/v2/pkg/utils"
 	"github.com/pkg/errors"
-	"github.com/rogpeppe/go-internal/lockedfile"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
 )
@@ -139,7 +138,7 @@ type Tree interface {
 	BuildSpaceIDIndexEntry(spaceID string) string
 	ResolveSpaceIDIndexEntry(spaceID string) (string, error)
 
-	CreateRevision(ctx context.Context, n *Node, version string, f *lockedfile.File) (string, error)
+	CreateRevision(ctx context.Context, n *Node, version string) (string, error)
 	ListRevisions(ctx context.Context, ref *provider.Reference) ([]*provider.FileVersion, error)
 	DownloadRevision(ctx context.Context, ref *provider.Reference, revisionKey string, openReaderFunc func(md *provider.ResourceInfo) bool) (*provider.ResourceInfo, io.ReadCloser, error)
 
@@ -166,7 +165,7 @@ type PathLookup interface {
 	MetadataBackend() metadata.Backend
 	TimeManager() TimeManager
 	ReadBlobIDAndSizeAttr(ctx context.Context, n metadata.MetadataNode, attrs Attributes) (string, int64, error)
-	CopyMetadataWithSourceLock(ctx context.Context, sourceNode, targetNode metadata.MetadataNode, filter func(attributeName string, value []byte) (newValue []byte, copy bool), lockedSource *lockedfile.File, acquireTargetLock bool) (err error)
+	CopyMetadataWithSourceLock(ctx context.Context, sourceNode, targetNode metadata.MetadataNode, filter func(attributeName string, value []byte) (newValue []byte, copy bool), acquireTargetLock bool) (err error)
 	CopyMetadata(ctx context.Context, sourceNode, targetNode metadata.MetadataNode, filter func(attributeName string, value []byte) (newValue []byte, copy bool), acquireTargetLock bool) (err error)
 
 	PurgeNode(n *Node) error
@@ -355,15 +354,15 @@ func LockAndReadNode(ctx context.Context, lu PathLookup, spaceID, nodeID, intern
 	ctx, span := tracer.Start(ctx, "LockAndReadNode")
 	defer span.End()
 
-	_, subspan := tracer.Start(ctx, "lockedfile.OpenFile")
+	_, subspan := tracer.Start(ctx, "MetadataBackend.Lock")
 	bn := NewBaseNode(spaceID, nodeID, lu)
-	unlock, r, err := lu.MetadataBackend().LockAndRead(bn)
+	unlock, err := lu.MetadataBackend().Lock(bn)
 	subspan.End()
 	if err != nil {
 		return nil, nil, err
 	}
 
-	n, err := readNode(ctx, lu, spaceID, nodeID, internalPath, canListDisabledSpace, spaceRoot, skipParentCheck, r)
+	n, err := readNode(ctx, lu, spaceID, nodeID, internalPath, canListDisabledSpace, spaceRoot, skipParentCheck, true)
 	if err != nil {
 		_ = unlock()
 		return nil, nil, err
@@ -378,12 +377,13 @@ func LockAndReadNode(ctx context.Context, lu PathLookup, spaceID, nodeID, intern
 
 // ReadNode creates a new instance from an id and checks if it exists
 func ReadNode(ctx context.Context, lu PathLookup, spaceID, nodeID, internalPath string, canListDisabledSpace bool, spaceRoot *Node, skipParentCheck bool) (*Node, error) {
-	return readNode(ctx, lu, spaceID, nodeID, internalPath, canListDisabledSpace, spaceRoot, skipParentCheck, nil)
+	return readNode(ctx, lu, spaceID, nodeID, internalPath, canListDisabledSpace, spaceRoot, skipParentCheck, false)
 }
 
-// readNode reads a node by its id. If a reader is provided, it will be passed to the metadata backend to read the metadata.
-// This is useful when the caller already holds a lock to prevent deadlocks when reading the metadata.
-func readNode(ctx context.Context, lu PathLookup, spaceID, nodeID, internalPath string, canListDisabledSpace bool, spaceRoot *Node, skipParentCheck bool, r io.Reader) (*Node, error) {
+// readNode reads a node by its id. When alreadyLocked is true the caller already
+// holds the node's metadata lock, so the attributes are read without re-acquiring it
+// (which would dead-lock e.g. the hybrid backend).
+func readNode(ctx context.Context, lu PathLookup, spaceID, nodeID, internalPath string, canListDisabledSpace bool, spaceRoot *Node, skipParentCheck bool, alreadyLocked bool) (*Node, error) {
 	ctx, span := tracer.Start(ctx, "ReadNode")
 	defer span.End()
 	var err error
@@ -402,8 +402,8 @@ func readNode(ctx context.Context, lu PathLookup, spaceID, nodeID, internalPath 
 		// If we hold the lock on the space root itself, prime its attribute cache
 		// through the no-lock path so the owner/name/disabled reads below do not try
 		// to re-acquire the already-held lock and self-deadlock.
-		if r != nil && nodeID == spaceID {
-			_, err = spaceRoot.XattrsWithReader(ctx, r)
+		if alreadyLocked && nodeID == spaceID {
+			_, err = spaceRoot.XattrsWhileLocked(ctx)
 			switch {
 			case metadata.IsNotExist(err):
 				return spaceRoot, nil // swallow not found, the node defaults to exists = false
@@ -477,7 +477,11 @@ func readNode(ctx context.Context, lu PathLookup, spaceID, nodeID, internalPath 
 	}()
 
 	var attrs Attributes
-	attrs, err = n.XattrsWithReader(ctx, r)
+	if alreadyLocked {
+		attrs, err = n.XattrsWhileLocked(ctx)
+	} else {
+		attrs, err = n.Xattrs(ctx)
+	}
 	switch {
 	case metadata.IsNotExist(err):
 		return n, nil // swallow not found, the node defaults to exists = false
@@ -570,9 +574,9 @@ func (n *Node) Child(ctx context.Context, name string) (*Node, error) {
 	return readNode, nil
 }
 
-// ParentWithReader returns the parent node
-func (n *Node) ParentWithReader(ctx context.Context, r io.Reader) (*Node, error) {
-	_, span := tracer.Start(ctx, "ParentWithReader")
+// Parent returns the parent node
+func (n *Node) Parent(ctx context.Context) (*Node, error) {
+	_, span := tracer.Start(ctx, "Parent")
 	defer span.End()
 	if n.ParentID == "" {
 		return nil, fmt.Errorf("decomposedfs: root has no parent")
@@ -586,8 +590,7 @@ func (n *Node) ParentWithReader(ctx context.Context, r io.Reader) (*Node, error)
 		SpaceRoot: n.SpaceRoot,
 	}
 
-	// fill metadata cache using the reader
-	attrs, err := p.XattrsWithReader(ctx, r)
+	attrs, err := p.Xattrs(ctx)
 	switch {
 	case metadata.IsNotExist(err):
 		return p, nil // swallow not found, the node defaults to exists = false
@@ -600,11 +603,6 @@ func (n *Node) ParentWithReader(ctx context.Context, r io.Reader) (*Node, error)
 	p.ParentID = attrs.String(prefixes.ParentidAttr)
 
 	return p, err
-}
-
-// Parent returns the parent node
-func (n *Node) Parent(ctx context.Context) (p *Node, err error) {
-	return n.ParentWithReader(ctx, nil)
 }
 
 // Owner returns the space owner
