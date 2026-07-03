@@ -1,6 +1,6 @@
 # Changelog
 
-## [2.47.0](https://github.com/opencloud-eu/reva/releases/tag/v2.47.0) - 2026-07-02
+## [2.47.0](https://github.com/opencloud-eu/reva/releases/tag/v2.47.0) - 2026-07-03
 
 ### ❤️ Thanks to all contributors! ❤️
 
@@ -25,6 +25,7 @@
 
 ### 📦️ Dependencies
 
+- chore(deps): bump github.com/tus/tusd/v2 from 2.9.2 to 2.10.0 [[#725](https://github.com/opencloud-eu/reva/pull/725)]
 - chore(deps): bump github.com/go-chi/chi/v5 from 5.2.5 to 5.3.0 [[#715](https://github.com/opencloud-eu/reva/pull/715)]
 - chore(deps): bump github.com/nats-io/nats-server/v2 from 2.14.2 to 2.14.3 [[#721](https://github.com/opencloud-eu/reva/pull/721)]
 - chore(deps): bump github.com/rogpeppe/go-internal from 1.14.1 to 1.15.0 [[#719](https://github.com/opencloud-eu/reva/pull/719)]
