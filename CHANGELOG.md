@@ -4,10 +4,11 @@
 
 ### ❤️ Thanks to all contributors! ❤️
 
-@aduffeck, @fschade, @micbar, @michaelstingl, @rhafer
+@aduffeck, @dschmidt, @fschade, @micbar, @michaelstingl, @rhafer
 
 ### 🐛 Bug Fixes
 
+- fix(decomposedfs): merge service account permissions with node grants [[#723](https://github.com/opencloud-eu/reva/pull/723)]
 - fix: retry xattr.List on ERANGE/E2BIG [[#717](https://github.com/opencloud-eu/reva/pull/717)]
 - fix: space delete unit test [[#716](https://github.com/opencloud-eu/reva/pull/716)]
 - fix: status codes on DeleteStorageSpace [[#691](https://github.com/opencloud-eu/reva/pull/691)]
