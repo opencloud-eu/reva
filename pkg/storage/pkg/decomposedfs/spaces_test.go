@@ -203,6 +203,17 @@ var _ = Describe("Spaces", func() {
 				err := env.Fs.DeleteStorageSpace(ctx, delReq)
 				Expect(err).To(HaveOccurred())
 			})
+			It("succeeds at disabling as a space manager", func() {
+				// The positive counterpart to the purge denial above: since #672
+				// a space manager may still disable (but not purge) a project
+				// space. delReq's space is pre-disabled in BeforeEach, so use a
+				// fresh one.
+				resp, err := env.Fs.CreateStorageSpace(env.Ctx, &provider.CreateStorageSpaceRequest{Name: "Manager Disables", Type: "project"})
+				Expect(err).ToNot(HaveOccurred())
+				ctx := ctxpkg.ContextSetUser(context.Background(), env.SpaceManager)
+				err = env.Fs.DeleteStorageSpace(ctx, &provider.DeleteStorageSpaceRequest{Id: resp.StorageSpace.GetId()})
+				Expect(err).To(Not(HaveOccurred()))
+			})
 			// Reproducer for opencloud-eu/opencloud#2985: purging a space must
 			// invalidate ALL of its msgpack indexes, not only the by-type index.
 			// The by-user-id index keeps a stale entry pointing at the purged
