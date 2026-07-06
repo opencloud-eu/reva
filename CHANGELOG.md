@@ -6,6 +6,12 @@
 
 @aduffeck, @dschmidt, @fschade, @micbar, @michaelstingl, @rhafer
 
+### 📈 Enhancement
+
+- feat(tus): return etag and permissions after the last TUS chunk [[#718](https://github.com/opencloud-eu/reva/pull/718)]
+- Sync uploads incrementally to avoid fsync freezes [[#720](https://github.com/opencloud-eu/reva/pull/720)]
+- feat: add more roles [[#671](https://github.com/opencloud-eu/reva/pull/671)]
+
 ### 🐛 Bug Fixes
 
 - fix(decomposedfs): merge service account permissions with node grants [[#723](https://github.com/opencloud-eu/reva/pull/723)]
@@ -14,11 +20,6 @@
 - fix: status codes on DeleteStorageSpace [[#691](https://github.com/opencloud-eu/reva/pull/691)]
 - Prevent access to internal files and folders [[#681](https://github.com/opencloud-eu/reva/pull/681)]
 - fix(tus): Upload checksum validation [[#677](https://github.com/opencloud-eu/reva/pull/677)]
-
-### 📈 Enhancement
-
-- Sync uploads incrementally to avoid fsync freezes [[#720](https://github.com/opencloud-eu/reva/pull/720)]
-- feat: add more roles [[#671](https://github.com/opencloud-eu/reva/pull/671)]
 
 ### 📚 Documentation
 
