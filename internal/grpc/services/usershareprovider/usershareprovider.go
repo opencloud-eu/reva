@@ -53,6 +53,7 @@ import (
 )
 
 const (
+	_fieldMaskPathExpiration  = "expiration"
 	_fieldMaskPathMountPoint  = "mount_point"
 	_fieldMaskPathPermissions = "permissions"
 	_fieldMaskPathState       = "state"
@@ -390,6 +391,15 @@ func (s *service) spaceRootHasRemainingManager(ctx context.Context, resourceID *
 	return false, nil
 }
 
+// mayRemoveLastPermanentManager returns true if an update of a space root share could leave the space
+// without a permanent manager, so the caller must ensure that another one remains. This is the case when
+// the new permissions drop the manager role or when the share is given an expiration, because an expiring
+// share does not count as a permanent manager (see spaceRootHasRemainingManager).
+func mayRemoveLastPermanentManager(newPermissions *provider.ResourcePermissions, newExpiration *typesv1beta1.Timestamp) bool {
+	dropsManagerRole := newPermissions != nil && (!newPermissions.GetAddGrant() || !newPermissions.GetRemoveGrant())
+	return dropsManagerRole || newExpiration != nil
+}
+
 func (s *service) RemoveShare(ctx context.Context, req *collaboration.RemoveShareRequest) (*collaboration.RemoveShareResponse, error) {
 	log := appctx.GetLogger(ctx)
 	user := ctxpkg.ContextMustGetUser(ctx)
@@ -606,9 +616,15 @@ func (s *service) UpdateShare(ctx context.Context, req *collaboration.UpdateShar
 		}, nil
 	}
 
-	// For space root shares, if the new permissions would strip AddGrant or RemoveGrant from this share,
-	// ensure at least one other share still has both so the space retains a manager.
-	if utils.IsSpaceRoot(sRes.GetInfo()) && newPermissions != nil && (!newPermissions.GetAddGrant() || !newPermissions.GetRemoveGrant()) {
+	// The expiration this update sets on the share, nil when it leaves the expiration alone or removes it.
+	var newExpiration *typesv1beta1.Timestamp
+	if slices.Contains(req.GetUpdateMask().GetPaths(), _fieldMaskPathExpiration) {
+		newExpiration = req.GetShare().GetExpiration()
+	}
+
+	// For space root shares, if the update would strip AddGrant or RemoveGrant from this share or give it
+	// an expiration, ensure at least one other permanent share still has both so the space retains a manager.
+	if utils.IsSpaceRoot(sRes.GetInfo()) && mayRemoveLastPermanentManager(newPermissions, newExpiration) {
 		if ok, err := s.spaceRootHasRemainingManager(ctx, currentShare.GetResourceId(), currentShare.GetId().GetOpaqueId()); err != nil {
 			return &collaboration.UpdateShareResponse{
 				Status: status.NewInternal(ctx, "failed to list shares for space root"),
