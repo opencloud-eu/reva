@@ -117,13 +117,13 @@ func (tp *Tree) CreateRevision(ctx context.Context, n *node.Node, version string
 	defer vf.Close()
 
 	// copy blob metadata to version node
-	if err := tp.lookup.CopyMetadataWithSourceLock(ctx, n, versionNode, func(attributeName string, value []byte) (newValue []byte, copy bool) {
+	if err := tp.lookup.CopyMetadata(ctx, n, versionNode, func(attributeName string, value []byte) (newValue []byte, copy bool) {
 		return value, strings.HasPrefix(attributeName, prefixes.ChecksumPrefix) ||
 			attributeName == prefixes.TypeAttr ||
 			attributeName == prefixes.BlobIDAttr ||
 			attributeName == prefixes.BlobsizeAttr ||
 			attributeName == prefixes.MTimeAttr
-	}, true); err != nil {
+	}); err != nil {
 		return "", err
 	}
 
@@ -337,7 +337,7 @@ func (tp *Tree) RestoreRevision(ctx context.Context, sourceNode, targetNode meta
 			attributeName == prefixes.TypeAttr ||
 			attributeName == prefixes.BlobIDAttr ||
 			attributeName == prefixes.BlobsizeAttr
-	}, false)
+	})
 	if err != nil {
 		return errtypes.InternalError("failed to copy blob xattrs to old revision to node: " + err.Error())
 	}
@@ -348,8 +348,7 @@ func (tp *Tree) RestoreRevision(ctx context.Context, sourceNode, targetNode meta
 	err = tp.lookup.MetadataBackend().SetMultiple(ctx, targetNode,
 		map[string][]byte{
 			prefixes.MTimeAttr: []byte(mtime.UTC().Format(time.RFC3339Nano)),
-		},
-		false)
+		})
 	if err != nil {
 		return errtypes.InternalError("failed to set mtime attribute on node: " + err.Error())
 	}

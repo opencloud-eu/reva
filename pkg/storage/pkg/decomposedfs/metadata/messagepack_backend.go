@@ -121,27 +121,20 @@ func (b MessagePackBackend) GetInt64(ctx context.Context, n MetadataNode, key st
 
 // Set sets one attribute for the given path
 func (b MessagePackBackend) Set(ctx context.Context, n MetadataNode, key string, val []byte) error {
-	return b.SetMultiple(ctx, n, map[string][]byte{key: val}, true)
+	return b.SetMultiple(ctx, n, map[string][]byte{key: val})
 }
 
 // SetMultiple sets a set of attribute for the given path
-func (b MessagePackBackend) SetMultiple(ctx context.Context, n MetadataNode, attribs map[string][]byte, acquireLock bool) error {
-	return b.saveAttributes(ctx, n, attribs, nil, acquireLock)
+func (b MessagePackBackend) SetMultiple(ctx context.Context, n MetadataNode, attribs map[string][]byte) error {
+	return b.saveAttributes(ctx, n, attribs, nil)
 }
 
 // Remove an extended attribute key
-func (b MessagePackBackend) Remove(ctx context.Context, n MetadataNode, key string, acquireLock bool) error {
-	return b.saveAttributes(ctx, n, nil, []string{key}, acquireLock)
+func (b MessagePackBackend) Remove(ctx context.Context, n MetadataNode, key string) error {
+	return b.saveAttributes(ctx, n, nil, []string{key})
 }
 
-// AllWhileLocked reads all extended attributes assuming the caller already holds
-// the node's metadata lock. It reads the metadata file directly and does not
-// acquire the lock again.
-func (b MessagePackBackend) AllWhileLocked(ctx context.Context, n MetadataNode) (map[string][]byte, error) {
-	return b.loadAttributes(ctx, n)
-}
-
-func (b MessagePackBackend) saveAttributes(ctx context.Context, n MetadataNode, setAttribs map[string][]byte, deleteAttribs []string, acquireLock bool) error {
+func (b MessagePackBackend) saveAttributes(ctx context.Context, n MetadataNode, setAttribs map[string][]byte, deleteAttribs []string) error {
 	var (
 		err error
 	)
@@ -156,7 +149,7 @@ func (b MessagePackBackend) saveAttributes(ctx context.Context, n MetadataNode, 
 	}()
 
 	metaPath := b.MetadataPath(n)
-	if acquireLock {
+	if !n.LockHeld() {
 		unlock, err := b.Lock(n)
 		if err != nil {
 			return err
@@ -307,12 +300,18 @@ func (MessagePackBackend) LockfilePath(n MetadataNode) string { return n.Interna
 
 // Lock locks the metadata for the given path
 func (b MessagePackBackend) Lock(n MetadataNode) (UnlockFunc, error) {
+	if n.LockHeld() {
+		return func() error { return nil }, nil
+	}
+
 	metaLockPath := b.LockfilePath(n)
 	mlock, err := lockedfile.OpenFile(metaLockPath, os.O_RDWR|os.O_CREATE, 0600)
 	if err != nil {
 		return nil, err
 	}
+	n.SetLockHeld(true)
 	return func() error {
+		n.SetLockHeld(false)
 		// Warning: do not remove the lockfile or we may lock the same file more than once, https://github.com/opencloud-eu/opencloud/issues/1793
 		return mlock.Close()
 	}, nil

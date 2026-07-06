@@ -313,35 +313,30 @@ func refFromCS3(b []byte) (*provider.Reference, error) {
 	}, nil
 }
 
-// CopyMetadata copies all extended attributes from source to target.
-// The optional filter function can be used to filter by attribute name, e.g. by checking a prefix
-// For the source file, the metadata lock is acquired for the duration of the copy.
-// NOTE: target resource will be write locked!
-func (lu *Lookup) CopyMetadata(ctx context.Context, sourceNode, targetNode metadata.MetadataNode, filter func(attributeName string, value []byte) (newValue []byte, copy bool), acquireTargetLock bool) (err error) {
-	// lock the source node before reading its metadata
-	unlock, err := lu.MetadataBackend().Lock(sourceNode)
-	if err != nil {
-		return errors.Wrap(err, "xattrs: Unable to lock source to read")
-	}
-	defer func() {
-		rerr := unlock()
-
-		// if err is non nil we do not overwrite that
-		if err == nil {
-			err = rerr
+// CopyMetadata copies all extended attributes from source to target. The optional filter
+// function can be used to filter by attribute name, e.g. by checking a prefix.
+//
+// Locking is derived from the nodes: the source's metadata lock is acquired for the duration
+// of the read unless the caller already holds it (sourceNode.LockHeld()), and the target is
+// write locked while its attributes are written unless the caller already holds its lock
+func (lu *Lookup) CopyMetadata(ctx context.Context, sourceNode, targetNode metadata.MetadataNode, filter func(attributeName string, value []byte) (newValue []byte, copy bool)) (err error) {
+	if !sourceNode.LockHeld() {
+		// lock the source node before reading its metadata
+		unlock, lerr := lu.MetadataBackend().Lock(sourceNode)
+		if lerr != nil {
+			return errors.Wrap(lerr, "xattrs: Unable to lock source to read")
 		}
-	}()
+		defer func() {
+			rerr := unlock()
 
-	return lu.CopyMetadataWithSourceLock(ctx, sourceNode, targetNode, filter, acquireTargetLock)
-}
+			// if err is non nil we do not overwrite that
+			if err == nil {
+				err = rerr
+			}
+		}()
+	}
 
-// CopyMetadataWithSourceLock copies all extended attributes from source to target.
-// The caller MUST already hold the source node's metadata lock (e.g. via
-// MetadataBackend().Lock); the source attributes are read without re-acquiring it.
-// The optional filter function can be used to filter by attribute name, e.g. by checking a prefix.
-// NOTE: target resource will be write locked when acquireTargetLock is set!
-func (lu *Lookup) CopyMetadataWithSourceLock(ctx context.Context, sourceNode, targetNode metadata.MetadataNode, filter func(attributeName string, value []byte) (newValue []byte, copy bool), acquireTargetLock bool) (err error) {
-	attrs, err := lu.metadataBackend.AllWhileLocked(ctx, sourceNode)
+	attrs, err := lu.metadataBackend.All(ctx, sourceNode)
 	if err != nil {
 		return err
 	}
@@ -357,7 +352,7 @@ func (lu *Lookup) CopyMetadataWithSourceLock(ctx context.Context, sourceNode, ta
 		newAttrs[attrName] = val
 	}
 
-	return lu.MetadataBackend().SetMultiple(ctx, targetNode, newAttrs, acquireTargetLock)
+	return lu.MetadataBackend().SetMultiple(ctx, targetNode, newAttrs)
 }
 
 func (lu *Lookup) PurgeNode(n *node.Node) error {

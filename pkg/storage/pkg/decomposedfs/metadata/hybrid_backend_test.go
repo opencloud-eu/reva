@@ -17,7 +17,7 @@ import (
 var _ = Describe("HybridBackend", func() {
 	var (
 		tmpdir string
-		n      testNode
+		n      *testNode
 
 		backend metadata.Backend
 
@@ -47,7 +47,7 @@ var _ = Describe("HybridBackend", func() {
 	})
 
 	JustBeforeEach(func() {
-		n = testNode{
+		n = &testNode{
 			spaceID: "123",
 			id:      "456",
 			path:    path.Join(tmpdir, "file"),
@@ -225,7 +225,7 @@ var _ = Describe("HybridBackend", func() {
 					keySmall:         dataSmall,
 					keyBig:           dataBig,
 					nonOffloadingKey: nonOffloadingData,
-				}, false)
+				})
 				Expect(err).ToNot(HaveOccurred())
 			})
 
@@ -261,7 +261,7 @@ var _ = Describe("HybridBackend", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(readData).To(Equal(nonOffloadingData))
 
-			err = backend.Remove(context.Background(), n, nonOffloadingKey, true)
+			err = backend.Remove(context.Background(), n, nonOffloadingKey)
 			Expect(err).ToNot(HaveOccurred())
 
 			_, err = backend.Get(context.Background(), n, nonOffloadingKey)
@@ -275,7 +275,7 @@ var _ = Describe("HybridBackend", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(readData).To(Equal(dataBig))
 
-			err = backend.Remove(context.Background(), n, keyBig, true)
+			err = backend.Remove(context.Background(), n, keyBig)
 			Expect(err).ToNot(HaveOccurred())
 
 			_, err = backend.Get(context.Background(), n, keyBig)
@@ -287,7 +287,7 @@ var _ = Describe("HybridBackend", func() {
 				keySmall:         dataSmall,
 				keyBig:           dataBig,
 				nonOffloadingKey: nonOffloadingData,
-			}, false)
+			})
 			Expect(err).ToNot(HaveOccurred())
 			readData, err := backend.Get(context.Background(), n, keyBig)
 			Expect(err).ToNot(HaveOccurred())
@@ -296,7 +296,7 @@ var _ = Describe("HybridBackend", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(readData).To(Equal(nonOffloadingData))
 
-			err = backend.Remove(context.Background(), n, nonOffloadingKey, true)
+			err = backend.Remove(context.Background(), n, nonOffloadingKey)
 			Expect(err).ToNot(HaveOccurred())
 
 			_, err = backend.Get(context.Background(), n, nonOffloadingKey)
@@ -313,9 +313,27 @@ var _ = Describe("HybridBackend", func() {
 				Expect(err).ToNot(HaveOccurred())
 			}()
 
-			attribs, err := backend.AllWhileLocked(context.Background(), n)
+			attribs, err := backend.All(context.Background(), n)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(attribs).ToNot(BeNil())
+		})
+
+		It("is a no-op when the node's lock is already held", func() {
+			unlock, err := backend.Lock(n)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(n.LockHeld()).To(BeTrue())
+			defer func() {
+				Expect(unlock()).ToNot(HaveOccurred())
+			}()
+
+			// Locking the same, already-locked node must not block or deadlock.
+			// It returns a no-op unlock that must not release the real lock.
+			unlock2, err := backend.Lock(n)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(unlock2()).ToNot(HaveOccurred())
+
+			// the real lock (and its held state) survives the no-op unlock
+			Expect(n.LockHeld()).To(BeTrue())
 		})
 
 		It("releases the lock after unlock is called", func() {

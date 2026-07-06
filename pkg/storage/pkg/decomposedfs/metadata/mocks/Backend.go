@@ -101,65 +101,6 @@ func (_c *Backend_All_Call) RunAndReturn(run func(context.Context, metadata.Meta
 	return _c
 }
 
-// AllWhileLocked provides a mock function with given fields: ctx, n
-func (_m *Backend) AllWhileLocked(ctx context.Context, n metadata.MetadataNode) (map[string][]byte, error) {
-	ret := _m.Called(ctx, n)
-
-	if len(ret) == 0 {
-		panic("no return value specified for AllWhileLocked")
-	}
-
-	var r0 map[string][]byte
-	var r1 error
-	if rf, ok := ret.Get(0).(func(context.Context, metadata.MetadataNode) (map[string][]byte, error)); ok {
-		return rf(ctx, n)
-	}
-	if rf, ok := ret.Get(0).(func(context.Context, metadata.MetadataNode) map[string][]byte); ok {
-		r0 = rf(ctx, n)
-	} else {
-		if ret.Get(0) != nil {
-			r0 = ret.Get(0).(map[string][]byte)
-		}
-	}
-
-	if rf, ok := ret.Get(1).(func(context.Context, metadata.MetadataNode) error); ok {
-		r1 = rf(ctx, n)
-	} else {
-		r1 = ret.Error(1)
-	}
-
-	return r0, r1
-}
-
-// Backend_AllWhileLocked_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'AllWhileLocked'
-type Backend_AllWhileLocked_Call struct {
-	*mock.Call
-}
-
-// AllWhileLocked is a helper method to define mock.On call
-//   - ctx context.Context
-//   - n metadata.MetadataNode
-func (_e *Backend_Expecter) AllWhileLocked(ctx interface{}, n interface{}) *Backend_AllWhileLocked_Call {
-	return &Backend_AllWhileLocked_Call{Call: _e.mock.On("AllWhileLocked", ctx, n)}
-}
-
-func (_c *Backend_AllWhileLocked_Call) Run(run func(ctx context.Context, n metadata.MetadataNode)) *Backend_AllWhileLocked_Call {
-	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(context.Context), args[1].(metadata.MetadataNode))
-	})
-	return _c
-}
-
-func (_c *Backend_AllWhileLocked_Call) Return(_a0 map[string][]byte, _a1 error) *Backend_AllWhileLocked_Call {
-	_c.Call.Return(_a0, _a1)
-	return _c
-}
-
-func (_c *Backend_AllWhileLocked_Call) RunAndReturn(run func(context.Context, metadata.MetadataNode) (map[string][]byte, error)) *Backend_AllWhileLocked_Call {
-	_c.Call.Return(run)
-	return _c
-}
-
 // Get provides a mock function with given fields: ctx, n, key
 func (_m *Backend) Get(ctx context.Context, n metadata.MetadataNode, key string) ([]byte, error) {
 	ret := _m.Called(ctx, n, key)
@@ -644,17 +585,17 @@ func (_c *Backend_Purge_Call) RunAndReturn(run func(context.Context, metadata.Me
 	return _c
 }
 
-// Remove provides a mock function with given fields: ctx, n, key, acquireLock
-func (_m *Backend) Remove(ctx context.Context, n metadata.MetadataNode, key string, acquireLock bool) error {
-	ret := _m.Called(ctx, n, key, acquireLock)
+// Remove provides a mock function with given fields: ctx, n, key
+func (_m *Backend) Remove(ctx context.Context, n metadata.MetadataNode, key string) error {
+	ret := _m.Called(ctx, n, key)
 
 	if len(ret) == 0 {
 		panic("no return value specified for Remove")
 	}
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func(context.Context, metadata.MetadataNode, string, bool) error); ok {
-		r0 = rf(ctx, n, key, acquireLock)
+	if rf, ok := ret.Get(0).(func(context.Context, metadata.MetadataNode, string) error); ok {
+		r0 = rf(ctx, n, key)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -671,14 +612,13 @@ type Backend_Remove_Call struct {
 //   - ctx context.Context
 //   - n metadata.MetadataNode
 //   - key string
-//   - acquireLock bool
-func (_e *Backend_Expecter) Remove(ctx interface{}, n interface{}, key interface{}, acquireLock interface{}) *Backend_Remove_Call {
-	return &Backend_Remove_Call{Call: _e.mock.On("Remove", ctx, n, key, acquireLock)}
+func (_e *Backend_Expecter) Remove(ctx interface{}, n interface{}, key interface{}) *Backend_Remove_Call {
+	return &Backend_Remove_Call{Call: _e.mock.On("Remove", ctx, n, key)}
 }
 
-func (_c *Backend_Remove_Call) Run(run func(ctx context.Context, n metadata.MetadataNode, key string, acquireLock bool)) *Backend_Remove_Call {
+func (_c *Backend_Remove_Call) Run(run func(ctx context.Context, n metadata.MetadataNode, key string)) *Backend_Remove_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(context.Context), args[1].(metadata.MetadataNode), args[2].(string), args[3].(bool))
+		run(args[0].(context.Context), args[1].(metadata.MetadataNode), args[2].(string))
 	})
 	return _c
 }
@@ -688,7 +628,7 @@ func (_c *Backend_Remove_Call) Return(_a0 error) *Backend_Remove_Call {
 	return _c
 }
 
-func (_c *Backend_Remove_Call) RunAndReturn(run func(context.Context, metadata.MetadataNode, string, bool) error) *Backend_Remove_Call {
+func (_c *Backend_Remove_Call) RunAndReturn(run func(context.Context, metadata.MetadataNode, string) error) *Backend_Remove_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -789,17 +729,17 @@ func (_c *Backend_Set_Call) RunAndReturn(run func(context.Context, metadata.Meta
 	return _c
 }
 
-// SetMultiple provides a mock function with given fields: ctx, n, attribs, acquireLock
-func (_m *Backend) SetMultiple(ctx context.Context, n metadata.MetadataNode, attribs map[string][]byte, acquireLock bool) error {
-	ret := _m.Called(ctx, n, attribs, acquireLock)
+// SetMultiple provides a mock function with given fields: ctx, n, attribs
+func (_m *Backend) SetMultiple(ctx context.Context, n metadata.MetadataNode, attribs map[string][]byte) error {
+	ret := _m.Called(ctx, n, attribs)
 
 	if len(ret) == 0 {
 		panic("no return value specified for SetMultiple")
 	}
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func(context.Context, metadata.MetadataNode, map[string][]byte, bool) error); ok {
-		r0 = rf(ctx, n, attribs, acquireLock)
+	if rf, ok := ret.Get(0).(func(context.Context, metadata.MetadataNode, map[string][]byte) error); ok {
+		r0 = rf(ctx, n, attribs)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -816,14 +756,13 @@ type Backend_SetMultiple_Call struct {
 //   - ctx context.Context
 //   - n metadata.MetadataNode
 //   - attribs map[string][]byte
-//   - acquireLock bool
-func (_e *Backend_Expecter) SetMultiple(ctx interface{}, n interface{}, attribs interface{}, acquireLock interface{}) *Backend_SetMultiple_Call {
-	return &Backend_SetMultiple_Call{Call: _e.mock.On("SetMultiple", ctx, n, attribs, acquireLock)}
+func (_e *Backend_Expecter) SetMultiple(ctx interface{}, n interface{}, attribs interface{}) *Backend_SetMultiple_Call {
+	return &Backend_SetMultiple_Call{Call: _e.mock.On("SetMultiple", ctx, n, attribs)}
 }
 
-func (_c *Backend_SetMultiple_Call) Run(run func(ctx context.Context, n metadata.MetadataNode, attribs map[string][]byte, acquireLock bool)) *Backend_SetMultiple_Call {
+func (_c *Backend_SetMultiple_Call) Run(run func(ctx context.Context, n metadata.MetadataNode, attribs map[string][]byte)) *Backend_SetMultiple_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(context.Context), args[1].(metadata.MetadataNode), args[2].(map[string][]byte), args[3].(bool))
+		run(args[0].(context.Context), args[1].(metadata.MetadataNode), args[2].(map[string][]byte))
 	})
 	return _c
 }
@@ -833,7 +772,7 @@ func (_c *Backend_SetMultiple_Call) Return(_a0 error) *Backend_SetMultiple_Call 
 	return _c
 }
 
-func (_c *Backend_SetMultiple_Call) RunAndReturn(run func(context.Context, metadata.MetadataNode, map[string][]byte, bool) error) *Backend_SetMultiple_Call {
+func (_c *Backend_SetMultiple_Call) RunAndReturn(run func(context.Context, metadata.MetadataNode, map[string][]byte) error) *Backend_SetMultiple_Call {
 	_c.Call.Return(run)
 	return _c
 }

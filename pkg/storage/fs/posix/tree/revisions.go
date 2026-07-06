@@ -44,9 +44,7 @@ import (
 // The `.REV.` indicates it is a revision and what follows is a timestamp, so multiple versions
 // can be kept in the same location.
 
-// CreateRevision creates a new version of the node. The caller MUST already hold the
-// metadata lock of n, as the node's metadata is read (without re-locking) to copy the
-// blob metadata onto the new revision.
+// CreateRevision creates a new version of the node
 func (tp *Tree) CreateRevision(ctx context.Context, n *node.Node, version string) (string, error) {
 	revNode := node.NewBaseNode(n.SpaceID, n.ID+node.RevisionIDDelimiter+version, tp.lookup)
 	versionPath := revNode.InternalPath()
@@ -120,13 +118,13 @@ func (tp *Tree) CreateRevision(ctx context.Context, n *node.Node, version string
 	}
 
 	// copy blob metadata to version node
-	if err := tp.lookup.CopyMetadataWithSourceLock(ctx, n, revNode, func(attributeName string, value []byte) (newValue []byte, copy bool) {
+	if err := tp.lookup.CopyMetadata(ctx, n, revNode, func(attributeName string, value []byte) (newValue []byte, copy bool) {
 		return value, strings.HasPrefix(attributeName, prefixes.ChecksumPrefix) ||
 			attributeName == prefixes.TypeAttr ||
 			attributeName == prefixes.BlobIDAttr ||
 			attributeName == prefixes.BlobsizeAttr ||
 			attributeName == prefixes.MTimeAttr
-	}, true); err != nil {
+	}); err != nil {
 		return "", err
 	}
 
@@ -301,7 +299,7 @@ func (tp *Tree) RestoreRevision(ctx context.Context, srcNode, targetNode metadat
 			attributeName == prefixes.TypeAttr ||
 			attributeName == prefixes.BlobIDAttr ||
 			attributeName == prefixes.BlobsizeAttr
-	}, false)
+	})
 	if err != nil {
 		return errtypes.InternalError("failed to copy blob xattrs to old revision to node: " + err.Error())
 	}
@@ -318,8 +316,7 @@ func (tp *Tree) RestoreRevision(ctx context.Context, srcNode, targetNode metadat
 	err = tp.lookup.MetadataBackend().SetMultiple(ctx, targetNode,
 		map[string][]byte{
 			prefixes.MTimeAttr: []byte(mtime.UTC().Format(time.RFC3339Nano)),
-		},
-		false)
+		})
 	if err != nil {
 		return errtypes.InternalError("failed to set mtime attribute on node: " + err.Error())
 	}
@@ -351,7 +348,7 @@ func (tp *Tree) RestoreRevision(ctx context.Context, srcNode, targetNode metadat
 				attributeName == prefixes.TypeAttr ||
 				attributeName == prefixes.BlobIDAttr ||
 				attributeName == prefixes.BlobsizeAttr
-		}, false)
+		})
 		if err != nil {
 			return errtypes.InternalError("failed to copy xattrs to 'current' file: " + err.Error())
 		}

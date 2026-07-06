@@ -71,7 +71,7 @@ func (md Attributes) SetTime(key string, t time.Time) {
 }
 
 // SetXattrs sets multiple extended attributes on the write-through cache/node
-func (n *Node) SetXattrsWithContext(ctx context.Context, attribs map[string][]byte, acquireLock bool) (err error) {
+func (n *Node) SetXattrsWithContext(ctx context.Context, attribs map[string][]byte) (err error) {
 	_, span := tracer.Start(ctx, "SetXattrsWithContext")
 	defer span.End()
 	if n.xattrsCache != nil {
@@ -80,12 +80,12 @@ func (n *Node) SetXattrsWithContext(ctx context.Context, attribs map[string][]by
 		}
 	}
 
-	return n.lu.MetadataBackend().SetMultiple(ctx, n, attribs, acquireLock)
+	return n.lu.MetadataBackend().SetMultiple(ctx, n, attribs)
 }
 
 // SetXattrs sets multiple extended attributes on the write-through cache/node
-func (n *Node) SetXattrs(attribs map[string][]byte, acquireLock bool) (err error) {
-	return n.SetXattrsWithContext(context.Background(), attribs, acquireLock)
+func (n *Node) SetXattrs(attribs map[string][]byte) (err error) {
+	return n.SetXattrsWithContext(context.Background(), attribs)
 }
 
 // SetXattr sets an extended attribute on the write-through cache/node
@@ -107,11 +107,11 @@ func (n *Node) SetXattrString(ctx context.Context, key, val string) (err error) 
 }
 
 // RemoveXattr removes an extended attribute from the write-through cache/node
-func (n *Node) RemoveXattr(ctx context.Context, key string, acquireLock bool) error {
+func (n *Node) RemoveXattr(ctx context.Context, key string) error {
 	if n.xattrsCache != nil {
 		delete(n.xattrsCache, key)
 	}
-	return n.lu.MetadataBackend().Remove(ctx, n, key, acquireLock)
+	return n.lu.MetadataBackend().Remove(ctx, n, key)
 }
 
 // loadXattrs reads and caches the node's extended attributes using the given load
@@ -137,17 +137,6 @@ func (n *Node) loadXattrs(load func() (Attributes, error)) (Attributes, error) {
 	return n.xattrsCache, nil
 }
 
-// XattrsWhileLocked returns the extended attributes of the node assuming the caller
-// already holds the node's metadata lock (e.g. acquired via MetadataBackend().Lock).
-//
-// It does not re-acquire the metadata lock, so it is safe to call while holding it:
-// re-locking might dead-lock backends that lock unconditionally.
-func (n *Node) XattrsWhileLocked(ctx context.Context) (Attributes, error) {
-	return n.loadXattrs(func() (Attributes, error) {
-		return n.lu.MetadataBackend().AllWhileLocked(ctx, n)
-	})
-}
-
 // Xattrs returns the extended attributes of the node, acquiring the metadata lock as
 // needed. If the attributes have already been cached they are not read from disk
 // again.
@@ -161,27 +150,19 @@ func (n *Node) Xattrs(ctx context.Context) (Attributes, error) {
 // been cached it is not read from disk again.
 func (n *Node) Xattr(ctx context.Context, key string) ([]byte, error) {
 	path := n.InternalPath()
-
 	if path == "" {
-		// Do not try to read the attribute of an non-existing node
+		// Do not try to read the attribute of a non-existing node
 		return []byte{}, fs.ErrNotExist
 	}
 
-	if n.ID == "" {
-		// Do not try to read the attribute of an empty node. The InternalPath points to the
-		// base nodes directory in this case.
-		return []byte{}, &xattr.Error{Op: "node.Xattr", Path: path, Name: key, Err: xattr.ENOATTR}
+	attrs, err := n.loadXattrs(func() (Attributes, error) {
+		return n.lu.MetadataBackend().All(ctx, n)
+	})
+	if err != nil {
+		return nil, err
 	}
 
-	if n.xattrsCache == nil {
-		attrs, err := n.lu.MetadataBackend().All(ctx, n)
-		if err != nil {
-			return []byte{}, err
-		}
-		n.xattrsCache = attrs
-	}
-
-	if val, ok := n.xattrsCache[key]; ok {
+	if val, ok := attrs[key]; ok {
 		return val, nil
 	}
 	// wrap the error as xattr does

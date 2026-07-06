@@ -69,9 +69,10 @@ type queueItem struct {
 const dirtyFlag = prefixes.OcPrefix + "dirty"
 
 type assimilationNode struct {
-	path    string
-	nodeId  string
-	spaceID string
+	path     string
+	nodeId   string
+	spaceID  string
+	lockHeld bool
 }
 
 func (d assimilationNode) GetID() string {
@@ -84,6 +85,14 @@ func (d assimilationNode) GetSpaceID() string {
 
 func (d assimilationNode) InternalPath() string {
 	return d.path
+}
+
+func (d *assimilationNode) LockHeld() bool {
+	return d.lockHeld
+}
+
+func (d *assimilationNode) SetLockHeld(held bool) {
+	d.lockHeld = held
 }
 
 // NewScanDebouncer returns a new SpaceDebouncer instance
@@ -673,7 +682,8 @@ func (t *Tree) assimilate(item scanItem) error {
 func (t *Tree) updateFile(path, id, spaceID string, fi fs.FileInfo) (fs.FileInfo, node.Attributes, error) {
 	retries := 1
 	parentID := ""
-	bn := assimilationNode{spaceID: spaceID, nodeId: id, path: path}
+	bn := &assimilationNode{spaceID: spaceID, nodeId: id, path: path}
+	bn.SetLockHeld(true)
 assimilate:
 	if id != spaceID {
 		// read parent
@@ -714,7 +724,7 @@ assimilate:
 		}
 	}
 
-	attrs, err := t.lookup.MetadataBackend().AllWhileLocked(context.Background(), bn)
+	attrs, err := t.lookup.MetadataBackend().All(context.Background(), bn)
 	if err != nil && !metadata.IsAttrUnset(err) {
 		return nil, nil, errors.Wrap(err, "failed to get item attribs")
 	}
@@ -788,6 +798,8 @@ assimilate:
 		go func() {
 			// Copy the previous current version to a revision
 			currentNode := node.NewBaseNode(n.SpaceID, n.ID+node.CurrentIDDelimiter, t.lookup)
+			currentNode.SetLockHeld(true)
+
 			currentPath := currentNode.InternalPath()
 			stat, err := os.Stat(currentPath)
 			if err == nil {
@@ -834,7 +846,7 @@ assimilate:
 					attributeName == prefixes.TypeAttr ||
 					attributeName == prefixes.BlobIDAttr ||
 					attributeName == prefixes.BlobsizeAttr
-			}, false)
+			})
 			if err != nil {
 				t.log.Error().Err(err).Str("currentPath", currentPath).Str("path", path).Msg("failed to copy xattrs to 'current' file")
 				return
@@ -848,7 +860,7 @@ assimilate:
 	}
 
 	t.log.Debug().Str("path", path).Interface("attributes", attributes).Msg("setting attributes")
-	err = t.lookup.MetadataBackend().SetMultiple(context.Background(), bn, attributes, false)
+	err = t.lookup.MetadataBackend().SetMultiple(context.Background(), bn, attributes)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "failed to set attributes")
 	}
@@ -856,7 +868,7 @@ assimilate:
 	// clear the status attribute if it was set before, if there was any upload to this file in progress
 	// it needs notice that this file was changes meanwhile.
 	if _, ok := previousAttribs[prefixes.StatusPrefix]; ok {
-		err = t.lookup.MetadataBackend().Remove(context.Background(), bn, prefixes.StatusPrefix, false)
+		err = t.lookup.MetadataBackend().Remove(context.Background(), bn, prefixes.StatusPrefix)
 		if err != nil {
 			return nil, nil, errors.Wrap(err, "failed to clear status attribute")
 		}

@@ -385,7 +385,7 @@ func (p AsyncPropagator) propagate(ctx context.Context, pn PropagationNode, reca
 		log.Debug().Uint64("newSize", newSize).Msg("updated treesize of node")
 	}
 
-	if err = n.SetXattrsWithContext(ctx, attrs, false); err != nil {
+	if err = n.SetXattrsWithContext(ctx, attrs); err != nil {
 		log.Error().Err(err).Msg("Failed to update extend attributes of node")
 		cleanup()
 		return

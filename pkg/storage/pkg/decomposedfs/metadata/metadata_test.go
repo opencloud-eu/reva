@@ -30,9 +30,10 @@ import (
 )
 
 type testNode struct {
-	spaceID string
-	id      string
-	path    string
+	spaceID  string
+	id       string
+	path     string
+	lockHeld bool
 }
 
 func (t testNode) GetSpaceID() string {
@@ -47,10 +48,18 @@ func (t testNode) InternalPath() string {
 	return t.path
 }
 
+func (t *testNode) LockHeld() bool {
+	return t.lockHeld
+}
+
+func (t *testNode) SetLockHeld(held bool) {
+	t.lockHeld = held
+}
+
 var _ = Describe("Backend", func() {
 	var (
 		tmpdir string
-		n      testNode
+		n      *testNode
 
 		backend metadata.Backend
 	)
@@ -62,7 +71,7 @@ var _ = Describe("Backend", func() {
 	})
 
 	JustBeforeEach(func() {
-		n = testNode{
+		n = &testNode{
 			spaceID: "123",
 			id:      "456",
 			path:    path.Join(tmpdir, "file"),
@@ -130,7 +139,7 @@ var _ = Describe("Backend", func() {
 		Describe("SetMultiple", func() {
 			It("sets attributes", func() {
 				data := map[string][]byte{"foo": []byte("bar"), "baz": []byte("qux")}
-				err := backend.SetMultiple(context.Background(), n, data, true)
+				err := backend.SetMultiple(context.Background(), n, data)
 				Expect(err).ToNot(HaveOccurred())
 
 				readData, err := backend.All(context.Background(), n)
@@ -143,7 +152,7 @@ var _ = Describe("Backend", func() {
 
 				data := map[string][]byte{"foo": []byte("bar"), "baz": []byte("qux")}
 				Expect(err).ToNot(HaveOccurred())
-				err = backend.SetMultiple(context.Background(), n, data, true)
+				err = backend.SetMultiple(context.Background(), n, data)
 				Expect(err).ToNot(HaveOccurred())
 
 				readData, err := backend.All(context.Background(), n)
@@ -155,7 +164,7 @@ var _ = Describe("Backend", func() {
 		Describe("All", func() {
 			It("returns the entries", func() {
 				data := map[string][]byte{"foo": []byte("123"), "bar": []byte("baz")}
-				err := backend.SetMultiple(context.Background(), n, data, true)
+				err := backend.SetMultiple(context.Background(), n, data)
 				Expect(err).ToNot(HaveOccurred())
 
 				v, err := backend.All(context.Background(), n)
@@ -174,7 +183,7 @@ var _ = Describe("Backend", func() {
 		Describe("Get", func() {
 			It("returns the attribute", func() {
 				data := map[string][]byte{"foo": []byte("bar")}
-				err := backend.SetMultiple(context.Background(), n, data, true)
+				err := backend.SetMultiple(context.Background(), n, data)
 				Expect(err).ToNot(HaveOccurred())
 
 				v, err := backend.Get(context.Background(), n, "foo")
@@ -191,7 +200,7 @@ var _ = Describe("Backend", func() {
 		Describe("GetInt64", func() {
 			It("returns the attribute", func() {
 				data := map[string][]byte{"foo": []byte("123")}
-				err := backend.SetMultiple(context.Background(), n, data, true)
+				err := backend.SetMultiple(context.Background(), n, data)
 				Expect(err).ToNot(HaveOccurred())
 
 				v, err := backend.GetInt64(context.Background(), n, "foo")
@@ -208,14 +217,14 @@ var _ = Describe("Backend", func() {
 		Describe("Remove", func() {
 			It("deletes an attribute", func() {
 				data := map[string][]byte{"foo": []byte("bar")}
-				err := backend.SetMultiple(context.Background(), n, data, true)
+				err := backend.SetMultiple(context.Background(), n, data)
 				Expect(err).ToNot(HaveOccurred())
 
 				v, err := backend.Get(context.Background(), n, "foo")
 				Expect(err).ToNot(HaveOccurred())
 				Expect(v).To(Equal([]byte("bar")))
 
-				err = backend.Remove(context.Background(), n, "foo", true)
+				err = backend.Remove(context.Background(), n, "foo")
 				Expect(err).ToNot(HaveOccurred())
 
 				_, err = backend.Get(context.Background(), n, "foo")

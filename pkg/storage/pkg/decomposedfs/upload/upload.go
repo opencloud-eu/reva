@@ -322,7 +322,7 @@ func (session *DecomposedFsSession) Finalize(ctx context.Context) (err error) {
 	}()
 
 	// Read the node attributes while holding the lock acquired above.
-	attribs, err := revisionNode.XattrsWhileLocked(ctx)
+	attribs, err := revisionNode.Xattrs(ctx)
 	if err != nil {
 		return err
 	}
@@ -399,7 +399,10 @@ func (session *DecomposedFsSession) createRevisionNodeForUpload(ctx context.Cont
 		if err != nil {
 			return nil, errors.Wrap(err, "Decomposedfs: failed to set the mtime")
 		}
-		err = revisionNode.SetXattrsWithContext(ctx, attrs, false)
+		// The revision node was just created and is not shared yet, so no metadata lock
+		// needs to be acquired for the write below.
+		revisionNode.SetLockHeld(true)
+		err = revisionNode.SetXattrsWithContext(ctx, attrs)
 		if err != nil {
 			return nil, errors.Wrap(err, "Decomposedfs: failed to set node attributes")
 		}

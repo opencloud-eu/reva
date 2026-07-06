@@ -285,7 +285,7 @@ func (store DecomposedFsStore) CreateNodeForUpload(ctx context.Context, session 
 	}
 
 	// update node metadata with new blobid etc
-	err = n.SetXattrsWithContext(ctx, initAttrs, false)
+	err = n.SetXattrsWithContext(ctx, initAttrs)
 	if err != nil {
 		return nil, errors.Wrap(err, "Decomposedfs: could not write metadata")
 	}

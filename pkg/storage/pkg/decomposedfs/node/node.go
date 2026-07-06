@@ -165,8 +165,7 @@ type PathLookup interface {
 	MetadataBackend() metadata.Backend
 	TimeManager() TimeManager
 	ReadBlobIDAndSizeAttr(ctx context.Context, n metadata.MetadataNode, attrs Attributes) (string, int64, error)
-	CopyMetadataWithSourceLock(ctx context.Context, sourceNode, targetNode metadata.MetadataNode, filter func(attributeName string, value []byte) (newValue []byte, copy bool), acquireTargetLock bool) (err error)
-	CopyMetadata(ctx context.Context, sourceNode, targetNode metadata.MetadataNode, filter func(attributeName string, value []byte) (newValue []byte, copy bool), acquireTargetLock bool) (err error)
+	CopyMetadata(ctx context.Context, sourceNode, targetNode metadata.MetadataNode, filter func(attributeName string, value []byte) (newValue []byte, copy bool)) (err error)
 
 	PurgeNode(n *Node) error
 }
@@ -179,6 +178,10 @@ type IDCacher interface {
 type BaseNode struct {
 	SpaceID string
 	ID      string
+
+	// lockHeld records that the caller already holds this node's metadata lock, so
+	// the metadata backend must not (re-)acquire it when reading attributes.
+	lockHeld bool
 
 	lu             PathLookup
 	internalPathID string
@@ -195,6 +198,14 @@ func NewBaseNode(spaceID, nodeID string, lu PathLookup) *BaseNode {
 
 func (n *BaseNode) GetSpaceID() string { return n.SpaceID }
 func (n *BaseNode) GetID() string      { return n.ID }
+
+// LockHeld reports whether the caller already holds this node's metadata lock.
+func (n *BaseNode) LockHeld() bool { return n.lockHeld }
+
+// SetLockHeld records whether the caller holds this node's metadata lock. The
+// metadata backend uses LockHeld to decide whether to (re-)acquire the lock when
+// reading attributes.
+func (n *BaseNode) SetLockHeld(held bool) { n.lockHeld = held }
 
 // InternalPath returns the internal path of the Node
 func (n *BaseNode) InternalPath() string {
@@ -372,7 +383,11 @@ func LockAndReadNode(ctx context.Context, lu PathLookup, spaceID, nodeID, intern
 		return n, nil, errtypes.NotFound(filepath.Join(n.ParentID, n.Name))
 	}
 
-	return n, unlock, nil
+	n.SetLockHeld(true)
+	return n, func() error {
+		n.SetLockHeld(false)
+		return unlock()
+	}, nil
 }
 
 // ReadNode creates a new instance from an id and checks if it exists
@@ -392,9 +407,10 @@ func readNode(ctx context.Context, lu PathLookup, spaceID, nodeID, internalPath 
 		// read space root
 		spaceRoot = &Node{
 			BaseNode: BaseNode{
-				SpaceID: spaceID,
-				lu:      lu,
-				ID:      spaceID,
+				SpaceID:  spaceID,
+				lu:       lu,
+				ID:       spaceID,
+				lockHeld: alreadyLocked && nodeID == spaceID,
 			},
 		}
 		spaceRoot.SpaceRoot = spaceRoot
@@ -403,7 +419,7 @@ func readNode(ctx context.Context, lu PathLookup, spaceID, nodeID, internalPath 
 		// through the no-lock path so the owner/name/disabled reads below do not try
 		// to re-acquire the already-held lock and self-deadlock.
 		if alreadyLocked && nodeID == spaceID {
-			_, err = spaceRoot.XattrsWhileLocked(ctx)
+			_, err = spaceRoot.Xattrs(ctx)
 			switch {
 			case metadata.IsNotExist(err):
 				return spaceRoot, nil // swallow not found, the node defaults to exists = false
@@ -458,9 +474,10 @@ func readNode(ctx context.Context, lu PathLookup, spaceID, nodeID, internalPath 
 	// read node
 	n := &Node{
 		BaseNode: BaseNode{
-			SpaceID: spaceID,
-			lu:      lu,
-			ID:      nodeID,
+			SpaceID:  spaceID,
+			lu:       lu,
+			ID:       nodeID,
+			lockHeld: alreadyLocked,
 		},
 		SpaceRoot: spaceRoot,
 	}
@@ -477,11 +494,7 @@ func readNode(ctx context.Context, lu PathLookup, spaceID, nodeID, internalPath 
 	}()
 
 	var attrs Attributes
-	if alreadyLocked {
-		attrs, err = n.XattrsWhileLocked(ctx)
-	} else {
-		attrs, err = n.Xattrs(ctx)
-	}
+	attrs, err = n.Xattrs(ctx)
 	switch {
 	case metadata.IsNotExist(err):
 		return n, nil // swallow not found, the node defaults to exists = false
@@ -738,7 +751,7 @@ func (n *Node) SetMtimeString(ctx context.Context, mtime string) error {
 // SetMTime writes the UTC mtime to the extended attributes or removes the attribute if nil is passed
 func (n *Node) SetMtime(ctx context.Context, t *time.Time) (err error) {
 	if t == nil {
-		return n.RemoveXattr(ctx, prefixes.MTimeAttr, true)
+		return n.RemoveXattr(ctx, prefixes.MTimeAttr)
 	}
 	return n.SetXattrString(ctx, prefixes.MTimeAttr, t.UTC().Format(time.RFC3339Nano))
 }
@@ -778,7 +791,7 @@ func (n *Node) SetFavorite(ctx context.Context, uid *userpb.UserId) error {
 func (n *Node) UnsetFavorite(ctx context.Context, uid *userpb.UserId) error {
 	// the favorite flag is specific to the user, so we need to incorporate the userid
 	fa := prefixes.FavoriteKey(uid)
-	return n.RemoveXattr(ctx, fa, true)
+	return n.RemoveXattr(ctx, fa)
 }
 
 // IsDir returns true if the node is a directory
@@ -1115,7 +1128,7 @@ func (n *Node) SetChecksum(ctx context.Context, csType string, h hash.Hash) (err
 
 // UnsetTempEtag removes the temporary etag attribute
 func (n *Node) UnsetTempEtag(ctx context.Context) (err error) {
-	return n.RemoveXattr(ctx, prefixes.TmpEtagAttr, true)
+	return n.RemoveXattr(ctx, prefixes.TmpEtagAttr)
 }
 
 func isGrantExpired(g *provider.Grant) bool {
@@ -1276,7 +1289,7 @@ func (n *Node) ReadGrant(ctx context.Context, grantee string) (g *provider.Grant
 }
 
 // ReadGrant reads a CS3 grant
-func (n *Node) DeleteGrant(ctx context.Context, g *provider.Grant, acquireLock bool) (err error) {
+func (n *Node) DeleteGrant(ctx context.Context, g *provider.Grant) (err error) {
 
 	var attr string
 	if g.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_GROUP {
@@ -1285,7 +1298,7 @@ func (n *Node) DeleteGrant(ctx context.Context, g *provider.Grant, acquireLock b
 		attr = prefixes.GrantUserAcePrefix + g.Grantee.GetUserId().OpaqueId
 	}
 
-	if err = n.RemoveXattr(ctx, attr, acquireLock); err != nil {
+	if err = n.RemoveXattr(ctx, attr); err != nil {
 		return err
 	}
 
@@ -1377,7 +1390,7 @@ func (n *Node) UnmarkProcessing(ctx context.Context, uploadID string) error {
 		// file started another postprocessing later - do not remove
 		return nil
 	}
-	return n.RemoveXattr(ctx, prefixes.StatusPrefix, true)
+	return n.RemoveXattr(ctx, prefixes.StatusPrefix)
 }
 
 // IsProcessing returns true if the node is currently being processed
@@ -1402,7 +1415,7 @@ func (n *Node) SetScanData(ctx context.Context, info string, date time.Time) err
 	attribs := Attributes{}
 	attribs.SetString(prefixes.ScanStatusPrefix, info)
 	attribs.SetString(prefixes.ScanDatePrefix, date.Format(time.RFC3339Nano))
-	return n.SetXattrsWithContext(ctx, attribs, true)
+	return n.SetXattrsWithContext(ctx, attribs)
 }
 
 // ScanData returns scanning information of the node
