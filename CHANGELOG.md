@@ -6,20 +6,21 @@
 
 @aduffeck, @dschmidt, @fschade, @micbar, @michaelstingl, @rhafer
 
-### 📈 Enhancement
-
-- feat(tus): return etag and permissions after the last TUS chunk [[#718](https://github.com/opencloud-eu/reva/pull/718)]
-- Sync uploads incrementally to avoid fsync freezes [[#720](https://github.com/opencloud-eu/reva/pull/720)]
-- feat: add more roles [[#671](https://github.com/opencloud-eu/reva/pull/671)]
-
 ### 🐛 Bug Fixes
 
+- Fix warming up the id cache for the user storage [[#727](https://github.com/opencloud-eu/reva/pull/727)]
 - fix(decomposedfs): merge service account permissions with node grants [[#723](https://github.com/opencloud-eu/reva/pull/723)]
 - fix: retry xattr.List on ERANGE/E2BIG [[#717](https://github.com/opencloud-eu/reva/pull/717)]
 - fix: space delete unit test [[#716](https://github.com/opencloud-eu/reva/pull/716)]
 - fix: status codes on DeleteStorageSpace [[#691](https://github.com/opencloud-eu/reva/pull/691)]
 - Prevent access to internal files and folders [[#681](https://github.com/opencloud-eu/reva/pull/681)]
 - fix(tus): Upload checksum validation [[#677](https://github.com/opencloud-eu/reva/pull/677)]
+
+### 📈 Enhancement
+
+- feat(tus): return etag and permissions after the last TUS chunk [[#718](https://github.com/opencloud-eu/reva/pull/718)]
+- Sync uploads incrementally to avoid fsync freezes [[#720](https://github.com/opencloud-eu/reva/pull/720)]
+- feat: add more roles [[#671](https://github.com/opencloud-eu/reva/pull/671)]
 
 ### 📚 Documentation
 
