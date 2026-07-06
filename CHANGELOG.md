@@ -1,5 +1,15 @@
 # Changelog
 
+## [2.46.7](https://github.com/opencloud-eu/reva/releases/tag/v2.46.7) - 2026-07-06
+
+### ❤️ Thanks to all contributors! ❤️
+
+@v-scharf
+
+### 🐛 Bug Fixes
+
+- [stable-2.46] Fix warming up the id cache for the user storage [[#728](https://github.com/opencloud-eu/reva/pull/728)]
+
 ## [2.46.6](https://github.com/opencloud-eu/reva/releases/tag/v2.46.6) - 2026-06-23
 
 ### ❤️ Thanks to all contributors! ❤️
