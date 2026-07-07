@@ -1,6 +1,6 @@
 # Changelog
 
-## [2.47.0](https://github.com/opencloud-eu/reva/releases/tag/v2.47.0) - 2026-07-06
+## [2.47.0](https://github.com/opencloud-eu/reva/releases/tag/v2.47.0) - 2026-07-07
 
 ### ❤️ Thanks to all contributors! ❤️
 
@@ -28,6 +28,7 @@
 
 ### 📦️ Dependencies
 
+- chore(deps): bump github.com/prometheus/alertmanager from 0.31.1 to 0.33.1 [[#731](https://github.com/opencloud-eu/reva/pull/731)]
 - chore(deps): bump golang.org/x/image from 0.38.0 to 0.41.0 in the go_modules group across 1 directory [[#726](https://github.com/opencloud-eu/reva/pull/726)]
 - chore(deps): bump google.golang.org/grpc from 1.81.1 to 1.82.0 [[#724](https://github.com/opencloud-eu/reva/pull/724)]
 - chore(deps): bump github.com/tus/tusd/v2 from 2.9.2 to 2.10.0 [[#725](https://github.com/opencloud-eu/reva/pull/725)]
