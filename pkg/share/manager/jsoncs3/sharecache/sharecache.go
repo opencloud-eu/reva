@@ -22,6 +22,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math/rand"
 	"os"
 	"path"
 	"path/filepath"
@@ -132,18 +133,24 @@ func (c *Cache) Add(ctx context.Context, userid, shareID string) error {
 			span.SetStatus(codes.Ok, "")
 			return nil
 		case errtypes.Aborted:
-			log.Debug().Msg("aborted when persisting added share: etag changed. retrying...")
+			backoff := time.Duration(rand.Intn(1<<(min(7, 100-retries)))) * time.Millisecond
+			log.Debug().Dur("backoff", backoff).Msg("aborted when persisting added share: etag changed. retrying...")
 			// this is the expected status code from the server when the if-match etag check fails
 			// continue with sync below
+			time.Sleep(backoff)
 		case errtypes.PreconditionFailed:
-			log.Debug().Msg("precondition failed when persisting added share: etag changed. retrying...")
+			backoff := time.Duration(rand.Intn(1<<(min(7, 100-retries)))) * time.Millisecond
+			log.Debug().Dur("backoff", backoff).Msg("precondition failed when persisting added share: etag changed. retrying...")
 			// actually, this is the wrong status code and we treat it like errtypes.Aborted because of inconsistencies on the server side
 			// continue with sync below
+			time.Sleep(backoff)
 		case errtypes.AlreadyExists:
-			log.Debug().Msg("already exists when persisting added share. retrying...")
+			backoff := time.Duration(rand.Intn(1<<(min(7, 100-retries)))) * time.Millisecond
+			log.Debug().Dur("backoff", backoff).Msg("already exists when persisting added share. retrying...")
 			// CS3 uses an already exists error instead of precondition failed when using an If-None-Match=* header / IfExists flag in the InitiateFileUpload call.
 			// Thas happens when the cache thinks there is no file.
 			// continue with sync below
+			time.Sleep(backoff)
 		default:
 			span.SetStatus(codes.Error, fmt.Sprintf("persisting added share failed. giving up: %s", err.Error()))
 			log.Error().Err(err).Msg("persisting added share failed")
@@ -207,18 +214,24 @@ func (c *Cache) Remove(ctx context.Context, userid, shareID string) error {
 			span.SetStatus(codes.Ok, "")
 			return nil
 		case errtypes.Aborted:
-			log.Debug().Msg("aborted when persisting removed share: etag changed. retrying...")
+			backoff := time.Duration(rand.Intn(1<<(min(7, 100-retries)))) * time.Millisecond
+			log.Debug().Dur("backoff", backoff).Msg("aborted when persisting removed share: etag changed. retrying...")
 			// this is the expected status code from the server when the if-match etag check fails
 			// continue with sync below
+			time.Sleep(backoff)
 		case errtypes.PreconditionFailed:
-			log.Debug().Msg("precondition failed when persisting removed share: etag changed. retrying...")
+			backoff := time.Duration(rand.Intn(1<<(min(7, 100-retries)))) * time.Millisecond
+			log.Debug().Dur("backoff", backoff).Msg("precondition failed when persisting removed share: etag changed. retrying...")
 			// actually, this is the wrong status code and we treat it like errtypes.Aborted because of inconsistencies on the server side
 			// continue with sync below
+			time.Sleep(backoff)
 		case errtypes.AlreadyExists:
-			log.Debug().Msg("file already existed when persisting removed share. retrying...")
+			backoff := time.Duration(rand.Intn(1<<(min(7, 100-retries)))) * time.Millisecond
+			log.Debug().Dur("backoff", backoff).Msg("file already existed when persisting removed share. retrying...")
 			// CS3 uses an already exists error instead of precondition failed when using an If-None-Match=* header / IfExists flag in the InitiateFileUpload call.
 			// Thas happens when the cache thinks there is no file.
 			// continue with sync below
+			time.Sleep(backoff)
 		default:
 			span.SetStatus(codes.Error, fmt.Sprintf("persisting removed share failed. giving up: %s", err.Error()))
 			log.Error().Err(err).Msg("persisting removed share failed")
