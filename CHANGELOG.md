@@ -28,6 +28,7 @@
 
 ### 📦️ Dependencies
 
+- chore(deps): bump go.etcd.io/etcd/client/v3 from 3.6.11 to 3.6.13 [[#732](https://github.com/opencloud-eu/reva/pull/732)]
 - chore(deps): bump github.com/prometheus/alertmanager from 0.31.1 to 0.33.1 [[#731](https://github.com/opencloud-eu/reva/pull/731)]
 - chore(deps): bump golang.org/x/image from 0.38.0 to 0.41.0 in the go_modules group across 1 directory [[#726](https://github.com/opencloud-eu/reva/pull/726)]
 - chore(deps): bump google.golang.org/grpc from 1.81.1 to 1.82.0 [[#724](https://github.com/opencloud-eu/reva/pull/724)]
