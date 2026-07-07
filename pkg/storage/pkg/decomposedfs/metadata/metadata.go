@@ -48,14 +48,6 @@ type MetadataNode interface {
 	SetLockHeld(held bool)
 }
 
-// lockHeldNode wraps a MetadataNode and reports that its metadata lock is held.
-type lockHeldNode struct {
-	MetadataNode
-}
-
-// LockHeld always returns true.
-func (lockHeldNode) LockHeld() bool { return true }
-
 // Backend defines the interface for file attribute backends
 type Backend interface {
 	Name() string
