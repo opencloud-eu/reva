@@ -519,11 +519,19 @@ func (t *Tree) Move(ctx context.Context, oldNode *node.Node, newNode *node.Node)
 	if oldNode.IsDir(ctx) {
 		// Re-key the cached ids of the moved subtree instead of re-scanning it from disk. The node ids do not change on a move,
 		// only their paths do, so re-keying the existing cache entries is much cheaper than a full filesystem walk for large trees.
+		// MovePath also re-keys the moved node itself, which purges its now stale reverse (path -> id) cache entry for the old path.
 		start := time.Now()
 		if err := t.lookup.IDCache.MovePath(context.Background(), oldPath, newPath); err != nil {
 			t.log.Error().Err(err).Str("oldPath", oldPath).Str("newPath", newPath).Msg("failed to move id cache for moved subtree")
 		}
 		t.log.Info().Dur("duration", time.Since(start)).Str("oldPath", oldPath).Str("newPath", newPath).Msg("moved id cache for moved subtree")
+	} else {
+		// A file move has no subtree to re-key, but the now stale reverse (path -> id) cache entry for the old path must still be
+		// removed. Otherwise the old path keeps resolving to the moved node's id and, because InternalPath() recomputes the on-disk
+		// path from that id, the old path resolves to the moved (or a dangling) location instead of reporting the file as gone.
+		if err := t.lookup.IDCache.DeletePath(ctx, oldPath); err != nil {
+			t.log.Error().Err(err).Str("oldPath", oldPath).Msg("could not remove old path from id cache after move")
+		}
 	}
 
 	return nil

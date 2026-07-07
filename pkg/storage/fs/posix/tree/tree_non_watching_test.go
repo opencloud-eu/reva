@@ -106,6 +106,68 @@ var _ = Describe("Non-watching tree", func() {
 		}).Should(Succeed())
 	})
 
+	It("removes the old path from the id cache when moving a file", func() {
+		ctx := non_watching_env.Ctx
+
+		// the subtree directory has been created in the BeforeEach
+		parent, err := non_watching_env.Lookup.NodeFromResource(ctx, &provider.Reference{
+			ResourceId: non_watching_env.SpaceRootRes,
+			Path:       subtree,
+		})
+		Expect(err).ToNot(HaveOccurred())
+		Expect(parent.Exists).To(BeTrue())
+
+		// create the target subdirectory to move the file into
+		targetDir, err := non_watching_env.Lookup.NodeFromResource(ctx, &provider.Reference{
+			ResourceId: non_watching_env.SpaceRootRes,
+			Path:       subtree + "/subdir",
+		})
+		Expect(err).ToNot(HaveOccurred())
+		Expect(non_watching_env.Tree.CreateDir(ctx, targetDir)).To(Succeed())
+
+		// create the source file directly below the subtree
+		_, err = non_watching_env.CreateTestFile("source.txt", "source-blob", parent.ID, parent.SpaceID, 1)
+		Expect(err).ToNot(HaveOccurred())
+
+		oldPath := filepath.Join(root, "source.txt")
+
+		// sanity check: the old path is known to the id cache
+		_, _, err = non_watching_env.Lookup.IDCache.GetByPath(ctx, oldPath)
+		Expect(err).ToNot(HaveOccurred())
+
+		// resolve source and target nodes just like the fs Move does
+		oldNode, err := non_watching_env.Lookup.NodeFromResource(ctx, &provider.Reference{
+			ResourceId: non_watching_env.SpaceRootRes,
+			Path:       subtree + "/source.txt",
+		})
+		Expect(err).ToNot(HaveOccurred())
+		Expect(oldNode.Exists).To(BeTrue())
+
+		newNode, err := non_watching_env.Lookup.NodeFromResource(ctx, &provider.Reference{
+			ResourceId: non_watching_env.SpaceRootRes,
+			Path:       subtree + "/subdir/moved.txt",
+		})
+		Expect(err).ToNot(HaveOccurred())
+		Expect(newNode.Exists).To(BeFalse())
+
+		// move the file
+		Expect(non_watching_env.Tree.Move(ctx, oldNode, newNode)).To(Succeed())
+
+		// the stale reverse (path -> id) cache entry for the old path must be purged
+		_, _, err = non_watching_env.Lookup.IDCache.GetByPath(ctx, oldPath)
+		Expect(err).To(HaveOccurred())
+		_, ok := err.(errtypes.NotFound)
+		Expect(ok).To(BeTrue(), "old path should no longer resolve in the id cache after a move")
+
+		// resolving the old path must report the file as gone, not the moved node
+		stale, err := non_watching_env.Lookup.NodeFromResource(ctx, &provider.Reference{
+			ResourceId: non_watching_env.SpaceRootRes,
+			Path:       subtree + "/source.txt",
+		})
+		Expect(err).ToNot(HaveOccurred())
+		Expect(stale.Exists).To(BeFalse(), "old path must not resolve to the moved node")
+	})
+
 	It("rejects creation of internal paths", func() {
 		spaceRoot := non_watching_env.Root + "/users/" + non_watching_env.Owner.Username
 
