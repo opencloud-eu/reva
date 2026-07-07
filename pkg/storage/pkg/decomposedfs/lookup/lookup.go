@@ -320,22 +320,6 @@ func refFromCS3(b []byte) (*provider.Reference, error) {
 // of the read unless the caller already holds it (sourceNode.LockHeld()), and the target is
 // write locked while its attributes are written unless the caller already holds its lock
 func (lu *Lookup) CopyMetadata(ctx context.Context, sourceNode, targetNode metadata.MetadataNode, filter func(attributeName string, value []byte) (newValue []byte, copy bool)) (err error) {
-	if !sourceNode.LockHeld() {
-		// lock the source node before reading its metadata
-		unlock, lerr := lu.MetadataBackend().Lock(sourceNode)
-		if lerr != nil {
-			return errors.Wrap(lerr, "xattrs: Unable to lock source to read")
-		}
-		defer func() {
-			rerr := unlock()
-
-			// if err is non nil we do not overwrite that
-			if err == nil {
-				err = rerr
-			}
-		}()
-	}
-
 	attrs, err := lu.metadataBackend.All(ctx, sourceNode)
 	if err != nil {
 		return err
