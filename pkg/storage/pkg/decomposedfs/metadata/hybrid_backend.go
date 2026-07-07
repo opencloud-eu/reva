@@ -134,10 +134,10 @@ func (b HybridBackend) All(ctx context.Context, n MetadataNode) (map[string][]by
 		defer func() { _ = unlock() }()
 	}
 
-	return b.getAll(ctx, n, false, false)
+	return b.getAll(ctx, n, false)
 }
 
-func (b HybridBackend) getAll(ctx context.Context, n MetadataNode, skipCache, skipOffloaded bool) (map[string][]byte, error) {
+func (b HybridBackend) getAll(ctx context.Context, n MetadataNode, skipOffloaded bool) (map[string][]byte, error) {
 	attribs := map[string][]byte{}
 	attrNames, err := b.list(ctx, n)
 	if err != nil {
@@ -235,7 +235,7 @@ func (b HybridBackend) SetMultiple(ctx context.Context, n MetadataNode, attribs 
 				mdSize += len(attribs[key]) + len(key)
 			}
 		}
-		existingAttribs, err := b.getAll(ctx, n, true, true)
+		existingAttribs, err := b.getAll(ctx, n, true)
 		if err != nil {
 			return err
 		}
@@ -308,7 +308,7 @@ func (b HybridBackend) SetMultiple(ctx context.Context, n MetadataNode, attribs 
 	}
 
 	// Update the cache with the new values
-	_, err = b.getAll(ctx, n, true, false)
+	_, err = b.getAll(ctx, n, false)
 	return err
 }
 
@@ -319,7 +319,7 @@ func (b HybridBackend) offloadMetadata(ctx context.Context, n MetadataNode) erro
 	var xerr error
 
 	// collect attributes to move
-	existingAttribs, err := b.getAll(ctx, n, true, true)
+	existingAttribs, err := b.getAll(ctx, n, true)
 	if err != nil {
 		return err
 	}
@@ -432,7 +432,7 @@ func (b HybridBackend) Remove(ctx context.Context, n MetadataNode, key string) e
 	}
 
 	// Update the cache with the new values
-	_, err := b.getAll(ctx, n, true, false)
+	_, err := b.getAll(ctx, n, false)
 	return err
 }
 
@@ -450,7 +450,7 @@ func (b HybridBackend) Purge(ctx context.Context, n MetadataNode) error {
 		}
 		defer func() { _ = unlock() }()
 
-		attribs, err := b.getAll(ctx, n, true, false)
+		attribs, err := b.getAll(ctx, n, false)
 		if err == nil {
 			for attr := range attribs {
 				if strings.HasPrefix(attr, prefixes.OcPrefix) {
