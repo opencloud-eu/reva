@@ -24,7 +24,7 @@ require (
 	github.com/fsnotify/fsnotify v1.10.1
 	github.com/gdexlab/go-render v1.0.1
 	github.com/go-chi/chi/v5 v5.3.0
-	github.com/go-ldap/ldap/v3 v3.4.12
+	github.com/go-ldap/ldap/v3 v3.4.13
 	github.com/go-micro/plugins/v4/events/natsjs v1.2.2
 	github.com/go-micro/plugins/v4/server/http v1.2.2
 	github.com/go-micro/plugins/v4/store/nats-js v1.2.1
