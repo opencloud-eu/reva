@@ -28,6 +28,7 @@
 
 ### 📦️ Dependencies
 
+- chore(deps): bump github.com/go-ldap/ldap/v3 from 3.4.12 to 3.4.13 [[#733](https://github.com/opencloud-eu/reva/pull/733)]
 - chore(deps): bump github.com/minio/minio-go/v7 from 7.1.0 to 7.2.1 [[#734](https://github.com/opencloud-eu/reva/pull/734)]
 - chore(deps): bump go.etcd.io/etcd/client/v3 from 3.6.11 to 3.6.13 [[#732](https://github.com/opencloud-eu/reva/pull/732)]
 - chore(deps): bump github.com/prometheus/alertmanager from 0.31.1 to 0.33.1 [[#731](https://github.com/opencloud-eu/reva/pull/731)]
