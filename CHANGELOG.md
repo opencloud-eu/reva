@@ -1,6 +1,6 @@
 # Changelog
 
-## [2.47.0](https://github.com/opencloud-eu/reva/releases/tag/v2.47.0) - 2026-07-07
+## [2.47.0](https://github.com/opencloud-eu/reva/releases/tag/v2.47.0) - 2026-07-08
 
 ### ❤️ Thanks to all contributors! ❤️
 
@@ -28,6 +28,7 @@
 
 ### 📦️ Dependencies
 
+- chore(deps): bump github.com/minio/minio-go/v7 from 7.1.0 to 7.2.1 [[#734](https://github.com/opencloud-eu/reva/pull/734)]
 - chore(deps): bump go.etcd.io/etcd/client/v3 from 3.6.11 to 3.6.13 [[#732](https://github.com/opencloud-eu/reva/pull/732)]
 - chore(deps): bump github.com/prometheus/alertmanager from 0.31.1 to 0.33.1 [[#731](https://github.com/opencloud-eu/reva/pull/731)]
 - chore(deps): bump golang.org/x/image from 0.38.0 to 0.41.0 in the go_modules group across 1 directory [[#726](https://github.com/opencloud-eu/reva/pull/726)]
