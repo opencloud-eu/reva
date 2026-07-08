@@ -44,6 +44,7 @@ import (
 	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
 	"github.com/opencloud-eu/reva/v2/pkg/mime"
 	"github.com/opencloud-eu/reva/v2/pkg/rhttp/datatx/metrics"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/internal/goroutinelock"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata/prefixes"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/ace"
@@ -179,9 +180,11 @@ type BaseNode struct {
 	SpaceID string
 	ID      string
 
-	// lockHeld records that the caller already holds this node's metadata lock, so
-	// the metadata backend must not (re-)acquire it when reading attributes.
-	lockHeld bool
+	// lock records which goroutine (if any) holds this node's metadata lock, so the
+	// metadata backend must not (re-)acquire it when reading attributes. Ownership is
+	// scoped to the acquiring goroutine: a node leaked into another goroutine reports
+	// LockHeld() == false there and takes its own lock rather than riding a stale flag.
+	lock goroutinelock.Lock
 
 	lu             PathLookup
 	internalPathID string
@@ -199,13 +202,18 @@ func NewBaseNode(spaceID, nodeID string, lu PathLookup) *BaseNode {
 func (n *BaseNode) GetSpaceID() string { return n.SpaceID }
 func (n *BaseNode) GetID() string      { return n.ID }
 
-// LockHeld reports whether the caller already holds this node's metadata lock.
-func (n *BaseNode) LockHeld() bool { return n.lockHeld }
+// LockHeld reports whether the calling goroutine holds this node's metadata lock.
+func (n *BaseNode) LockHeld() bool { return n.lock.Held() }
 
-// SetLockHeld records whether the caller holds this node's metadata lock. The
-// metadata backend uses LockHeld to decide whether to (re-)acquire the lock when
-// reading attributes.
-func (n *BaseNode) SetLockHeld(held bool) { n.lockHeld = held }
+// SetLockHeld records whether the calling goroutine holds this node's metadata
+// lock
+func (n *BaseNode) SetLockHeld(held bool) {
+	if held {
+		n.lock.Hold()
+		return
+	}
+	n.lock.Release()
+}
 
 // InternalPath returns the internal path of the Node
 func (n *BaseNode) InternalPath() string {
@@ -407,13 +415,15 @@ func readNode(ctx context.Context, lu PathLookup, spaceID, nodeID, internalPath 
 		// read space root
 		spaceRoot = &Node{
 			BaseNode: BaseNode{
-				SpaceID:  spaceID,
-				lu:       lu,
-				ID:       spaceID,
-				lockHeld: alreadyLocked && nodeID == spaceID,
+				SpaceID: spaceID,
+				lu:      lu,
+				ID:      spaceID,
 			},
 		}
 		spaceRoot.SpaceRoot = spaceRoot
+		if alreadyLocked && nodeID == spaceID {
+			spaceRoot.SetLockHeld(true)
+		}
 
 		// If we hold the lock on the space root itself, prime its attribute cache
 		// through the no-lock path so the owner/name/disabled reads below do not try
@@ -474,12 +484,14 @@ func readNode(ctx context.Context, lu PathLookup, spaceID, nodeID, internalPath 
 	// read node
 	n := &Node{
 		BaseNode: BaseNode{
-			SpaceID:  spaceID,
-			lu:       lu,
-			ID:       nodeID,
-			lockHeld: alreadyLocked,
+			SpaceID: spaceID,
+			lu:      lu,
+			ID:      nodeID,
 		},
 		SpaceRoot: spaceRoot,
+	}
+	if alreadyLocked {
+		n.SetLockHeld(true)
 	}
 	if internalPath != "" {
 		n.internalPath = internalPath

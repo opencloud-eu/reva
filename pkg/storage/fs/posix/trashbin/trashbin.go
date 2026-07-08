@@ -40,6 +40,7 @@ import (
 	"github.com/opencloud-eu/reva/v2/pkg/storage"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/lookup"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/options"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/internal/goroutinelock"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata/prefixes"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/node"
 	"github.com/opencloud-eu/reva/v2/pkg/utils"
@@ -63,10 +64,10 @@ type Trashbin struct {
 
 // trashNode is a helper struct to make trash items available for manipulation in the metadata backend
 type trashNode struct {
-	spaceID  string
-	id       string
-	path     string
-	lockHeld bool
+	spaceID string
+	id      string
+	path    string
+	lock    goroutinelock.Lock
 }
 
 func (tn *trashNode) GetSpaceID() string {
@@ -82,11 +83,15 @@ func (tn *trashNode) InternalPath() string {
 }
 
 func (tn *trashNode) LockHeld() bool {
-	return tn.lockHeld
+	return tn.lock.Held()
 }
 
 func (tn *trashNode) SetLockHeld(held bool) {
-	tn.lockHeld = held
+	if held {
+		tn.lock.Hold()
+		return
+	}
+	tn.lock.Release()
 }
 
 const (

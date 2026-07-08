@@ -42,6 +42,7 @@ import (
 	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
 	"github.com/opencloud-eu/reva/v2/pkg/events"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/watcher"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/internal/goroutinelock"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata/prefixes"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/node"
@@ -69,10 +70,10 @@ type queueItem struct {
 const dirtyFlag = prefixes.OcPrefix + "dirty"
 
 type assimilationNode struct {
-	path     string
-	nodeId   string
-	spaceID  string
-	lockHeld bool
+	path    string
+	nodeId  string
+	spaceID string
+	lock    goroutinelock.Lock
 }
 
 func (d assimilationNode) GetID() string {
@@ -88,11 +89,15 @@ func (d assimilationNode) InternalPath() string {
 }
 
 func (d *assimilationNode) LockHeld() bool {
-	return d.lockHeld
+	return d.lock.Held()
 }
 
 func (d *assimilationNode) SetLockHeld(held bool) {
-	d.lockHeld = held
+	if held {
+		d.lock.Hold()
+		return
+	}
+	d.lock.Release()
 }
 
 // NewScanDebouncer returns a new SpaceDebouncer instance
