@@ -76,15 +76,15 @@ type assimilationNode struct {
 	lock    goroutinelock.Lock
 }
 
-func (d assimilationNode) GetID() string {
+func (d *assimilationNode) GetID() string {
 	return d.nodeId
 }
 
-func (d assimilationNode) GetSpaceID() string {
+func (d *assimilationNode) GetSpaceID() string {
 	return d.spaceID
 }
 
-func (d assimilationNode) InternalPath() string {
+func (d *assimilationNode) InternalPath() string {
 	return d.path
 }
 
