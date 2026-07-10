@@ -947,7 +947,8 @@ func requiresExplicitFetching(n *xml.Name) bool {
 		case "favorite", "share-types", "checksums", "size", "tags", "audio", "location", "image", "photo":
 			return true
 		default:
-			return false
+			// allow fetching arbitrary oc: properties from metadata
+			return true
 		}
 	case net.NsOCS:
 		return false
@@ -1292,6 +1293,21 @@ func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, p
 			appendMetadataProp(k, "oc", "location", "libre.graph.location", locationKeys)
 			appendMetadataProp(k, "oc", "image", "libre.graph.image", imageKeys)
 			appendMetadataProp(k, "oc", "photo", "libre.graph.photo", photoKeys)
+
+			// include arbitrary custom metadata (keys not handled above)
+			knownPrefixes := []string{"tags", "libre.graph.audio.", "libre.graph.location.", "libre.graph.image.", "libre.graph.photo."}
+			for key, val := range k {
+				isKnown := false
+				for _, prefix := range knownPrefixes {
+					if key == prefix || strings.HasPrefix(key, prefix) {
+						isKnown = true
+						break
+					}
+				}
+				if !isKnown && val != "" {
+					appendToOK(prop.EscapedNS(net.NsOwncloud, key, val))
+				}
+			}
 		}
 
 		if md.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
@@ -1602,7 +1618,16 @@ func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, p
 						hasPreview(md, appendToOK)
 					}
 				default:
-					appendToNotFound(prop.NotFound("oc:" + pf.Prop[i].Local))
+					// look up arbitrary oc: properties in metadata
+					if k := md.GetArbitraryMetadata(); k == nil {
+						appendToNotFound(prop.NotFound("oc:" + pf.Prop[i].Local))
+					} else if amd := k.GetMetadata(); amd == nil {
+						appendToNotFound(prop.NotFound("oc:" + pf.Prop[i].Local))
+					} else if v, ok := amd[metadataKeyOf(&pf.Prop[i])]; ok && v != "" {
+						appendToOK(prop.EscapedNS(pf.Prop[i].Space, pf.Prop[i].Local, v))
+					} else {
+						appendToNotFound(prop.NotFound("oc:" + pf.Prop[i].Local))
+					}
 				}
 			case net.NsDav:
 				switch pf.Prop[i].Local {
@@ -1881,6 +1906,12 @@ func metadataKeyOf(n *xml.Name) string {
 	case "share-types", "tags", "lockdiscovery":
 		return n.Local
 	default:
+		// For oc: namespace, use the local name directly as the metadata key.
+		// This matches how the Graph Metadata API stores arbitrary metadata
+		// (e.g. "oy.fileReference") without namespace URI prefix.
+		if n.Space == net.NsOwncloud {
+			return n.Local
+		}
 		return fmt.Sprintf("%s/%s", n.Space, n.Local)
 	}
 }
