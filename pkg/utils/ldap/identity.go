@@ -45,7 +45,32 @@ type Identity struct {
 	Tenant         tenantConfig `mapstructure:",squash"`
 	LookupCacheTTL string       `mapstructure:"lookup_cache_ttl"`
 
-	lookupCache *expirable.LRU[string, *ldap.Entry]
+	lookupCache entryCache
+}
+
+// entryCache is a small nil-safe wrapper around the expirable LRU used to cache
+// LDAP lookups. A zero-value entryCache (nil lru) is a valid, disabled cache:
+// Get always misses and Add is a no-op. This lets the cache be turned off
+// entirely (e.g. in acceptance tests) by configuring a lookup_cache_ttl of 0.
+type entryCache struct {
+	lru *expirable.LRU[string, *ldap.Entry]
+}
+
+// Get returns the cached entry for key. It reports a miss when the cache is
+// disabled (nil lru).
+func (c entryCache) Get(key string) (*ldap.Entry, bool) {
+	if c.lru == nil {
+		return nil, false
+	}
+	return c.lru.Get(key)
+}
+
+// Add stores entry under key. It is a no-op when the cache is disabled (nil lru).
+func (c entryCache) Add(key string, entry *ldap.Entry) {
+	if c.lru == nil {
+		return
+	}
+	c.lru.Add(key, entry)
 }
 
 const (
@@ -184,7 +209,7 @@ func New() Identity {
 		Tenant:         tenantDefaults,
 		LookupCacheTTL: lookupCacheDefaultTTLString,
 
-		lookupCache: expirable.NewLRU[string, *ldap.Entry](lookupCacheSize, nil, lookupCacheDefaultTTL),
+		lookupCache: entryCache{lru: expirable.NewLRU[string, *ldap.Entry](lookupCacheSize, nil, lookupCacheDefaultTTL)},
 	}
 }
 
@@ -243,13 +268,19 @@ func (i *Identity) Setup() error {
 		if err != nil {
 			return fmt.Errorf("error parsing lookup_cache_ttl %q: %w", i.LookupCacheTTL, err)
 		}
-		if parsedTTL < 0 {
+		switch {
+		case parsedTTL < 0:
 			return fmt.Errorf("error configuring lookup cache ttl: duration must be >= 0")
+		case parsedTTL == 0:
+			// A TTL of 0 disables the lookup cache entirely. A zero-value
+			// entryCache always misses and never stores anything.
+			i.lookupCache = entryCache{}
+		default:
+			i.lookupCache = entryCache{lru: expirable.NewLRU[string, *ldap.Entry](lookupCacheSize, nil, parsedTTL)}
 		}
-		i.lookupCache = expirable.NewLRU[string, *ldap.Entry](lookupCacheSize, nil, parsedTTL)
 	} else {
 		// Use default TTL if not provided
-		i.lookupCache = expirable.NewLRU[string, *ldap.Entry](lookupCacheSize, nil, lookupCacheDefaultTTL)
+		i.lookupCache = entryCache{lru: expirable.NewLRU[string, *ldap.Entry](lookupCacheSize, nil, lookupCacheDefaultTTL)}
 	}
 
 	return nil
