@@ -22,7 +22,6 @@ package mocks
 
 import (
 	context "context"
-	io "io"
 
 	metadata "github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata"
 	mock "github.com/stretchr/testify/mock"
@@ -98,66 +97,6 @@ func (_c *Backend_All_Call) Return(_a0 map[string][]byte, _a1 error) *Backend_Al
 }
 
 func (_c *Backend_All_Call) RunAndReturn(run func(context.Context, metadata.MetadataNode) (map[string][]byte, error)) *Backend_All_Call {
-	_c.Call.Return(run)
-	return _c
-}
-
-// AllWithLockedSource provides a mock function with given fields: ctx, n, source
-func (_m *Backend) AllWithLockedSource(ctx context.Context, n metadata.MetadataNode, source io.Reader) (map[string][]byte, error) {
-	ret := _m.Called(ctx, n, source)
-
-	if len(ret) == 0 {
-		panic("no return value specified for AllWithLockedSource")
-	}
-
-	var r0 map[string][]byte
-	var r1 error
-	if rf, ok := ret.Get(0).(func(context.Context, metadata.MetadataNode, io.Reader) (map[string][]byte, error)); ok {
-		return rf(ctx, n, source)
-	}
-	if rf, ok := ret.Get(0).(func(context.Context, metadata.MetadataNode, io.Reader) map[string][]byte); ok {
-		r0 = rf(ctx, n, source)
-	} else {
-		if ret.Get(0) != nil {
-			r0 = ret.Get(0).(map[string][]byte)
-		}
-	}
-
-	if rf, ok := ret.Get(1).(func(context.Context, metadata.MetadataNode, io.Reader) error); ok {
-		r1 = rf(ctx, n, source)
-	} else {
-		r1 = ret.Error(1)
-	}
-
-	return r0, r1
-}
-
-// Backend_AllWithLockedSource_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'AllWithLockedSource'
-type Backend_AllWithLockedSource_Call struct {
-	*mock.Call
-}
-
-// AllWithLockedSource is a helper method to define mock.On call
-//   - ctx context.Context
-//   - n metadata.MetadataNode
-//   - source io.Reader
-func (_e *Backend_Expecter) AllWithLockedSource(ctx interface{}, n interface{}, source interface{}) *Backend_AllWithLockedSource_Call {
-	return &Backend_AllWithLockedSource_Call{Call: _e.mock.On("AllWithLockedSource", ctx, n, source)}
-}
-
-func (_c *Backend_AllWithLockedSource_Call) Run(run func(ctx context.Context, n metadata.MetadataNode, source io.Reader)) *Backend_AllWithLockedSource_Call {
-	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(context.Context), args[1].(metadata.MetadataNode), args[2].(io.Reader))
-	})
-	return _c
-}
-
-func (_c *Backend_AllWithLockedSource_Call) Return(_a0 map[string][]byte, _a1 error) *Backend_AllWithLockedSource_Call {
-	_c.Call.Return(_a0, _a1)
-	return _c
-}
-
-func (_c *Backend_AllWithLockedSource_Call) RunAndReturn(run func(context.Context, metadata.MetadataNode, io.Reader) (map[string][]byte, error)) *Backend_AllWithLockedSource_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -462,73 +401,6 @@ func (_c *Backend_Lock_Call) RunAndReturn(run func(metadata.MetadataNode) (metad
 	return _c
 }
 
-// LockAndRead provides a mock function with given fields: n
-func (_m *Backend) LockAndRead(n metadata.MetadataNode) (metadata.UnlockFunc, io.Reader, error) {
-	ret := _m.Called(n)
-
-	if len(ret) == 0 {
-		panic("no return value specified for LockAndRead")
-	}
-
-	var r0 metadata.UnlockFunc
-	var r1 io.Reader
-	var r2 error
-	if rf, ok := ret.Get(0).(func(metadata.MetadataNode) (metadata.UnlockFunc, io.Reader, error)); ok {
-		return rf(n)
-	}
-	if rf, ok := ret.Get(0).(func(metadata.MetadataNode) metadata.UnlockFunc); ok {
-		r0 = rf(n)
-	} else {
-		if ret.Get(0) != nil {
-			r0 = ret.Get(0).(metadata.UnlockFunc)
-		}
-	}
-
-	if rf, ok := ret.Get(1).(func(metadata.MetadataNode) io.Reader); ok {
-		r1 = rf(n)
-	} else {
-		if ret.Get(1) != nil {
-			r1 = ret.Get(1).(io.Reader)
-		}
-	}
-
-	if rf, ok := ret.Get(2).(func(metadata.MetadataNode) error); ok {
-		r2 = rf(n)
-	} else {
-		r2 = ret.Error(2)
-	}
-
-	return r0, r1, r2
-}
-
-// Backend_LockAndRead_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'LockAndRead'
-type Backend_LockAndRead_Call struct {
-	*mock.Call
-}
-
-// LockAndRead is a helper method to define mock.On call
-//   - n metadata.MetadataNode
-func (_e *Backend_Expecter) LockAndRead(n interface{}) *Backend_LockAndRead_Call {
-	return &Backend_LockAndRead_Call{Call: _e.mock.On("LockAndRead", n)}
-}
-
-func (_c *Backend_LockAndRead_Call) Run(run func(n metadata.MetadataNode)) *Backend_LockAndRead_Call {
-	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(metadata.MetadataNode))
-	})
-	return _c
-}
-
-func (_c *Backend_LockAndRead_Call) Return(_a0 metadata.UnlockFunc, _a1 io.Reader, _a2 error) *Backend_LockAndRead_Call {
-	_c.Call.Return(_a0, _a1, _a2)
-	return _c
-}
-
-func (_c *Backend_LockAndRead_Call) RunAndReturn(run func(metadata.MetadataNode) (metadata.UnlockFunc, io.Reader, error)) *Backend_LockAndRead_Call {
-	_c.Call.Return(run)
-	return _c
-}
-
 // LockfilePath provides a mock function with given fields: n
 func (_m *Backend) LockfilePath(n metadata.MetadataNode) string {
 	ret := _m.Called(n)
@@ -713,17 +585,17 @@ func (_c *Backend_Purge_Call) RunAndReturn(run func(context.Context, metadata.Me
 	return _c
 }
 
-// Remove provides a mock function with given fields: ctx, n, key, acquireLock
-func (_m *Backend) Remove(ctx context.Context, n metadata.MetadataNode, key string, acquireLock bool) error {
-	ret := _m.Called(ctx, n, key, acquireLock)
+// Remove provides a mock function with given fields: ctx, n, key
+func (_m *Backend) Remove(ctx context.Context, n metadata.MetadataNode, key string) error {
+	ret := _m.Called(ctx, n, key)
 
 	if len(ret) == 0 {
 		panic("no return value specified for Remove")
 	}
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func(context.Context, metadata.MetadataNode, string, bool) error); ok {
-		r0 = rf(ctx, n, key, acquireLock)
+	if rf, ok := ret.Get(0).(func(context.Context, metadata.MetadataNode, string) error); ok {
+		r0 = rf(ctx, n, key)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -740,14 +612,13 @@ type Backend_Remove_Call struct {
 //   - ctx context.Context
 //   - n metadata.MetadataNode
 //   - key string
-//   - acquireLock bool
-func (_e *Backend_Expecter) Remove(ctx interface{}, n interface{}, key interface{}, acquireLock interface{}) *Backend_Remove_Call {
-	return &Backend_Remove_Call{Call: _e.mock.On("Remove", ctx, n, key, acquireLock)}
+func (_e *Backend_Expecter) Remove(ctx interface{}, n interface{}, key interface{}) *Backend_Remove_Call {
+	return &Backend_Remove_Call{Call: _e.mock.On("Remove", ctx, n, key)}
 }
 
-func (_c *Backend_Remove_Call) Run(run func(ctx context.Context, n metadata.MetadataNode, key string, acquireLock bool)) *Backend_Remove_Call {
+func (_c *Backend_Remove_Call) Run(run func(ctx context.Context, n metadata.MetadataNode, key string)) *Backend_Remove_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(context.Context), args[1].(metadata.MetadataNode), args[2].(string), args[3].(bool))
+		run(args[0].(context.Context), args[1].(metadata.MetadataNode), args[2].(string))
 	})
 	return _c
 }
@@ -757,7 +628,7 @@ func (_c *Backend_Remove_Call) Return(_a0 error) *Backend_Remove_Call {
 	return _c
 }
 
-func (_c *Backend_Remove_Call) RunAndReturn(run func(context.Context, metadata.MetadataNode, string, bool) error) *Backend_Remove_Call {
+func (_c *Backend_Remove_Call) RunAndReturn(run func(context.Context, metadata.MetadataNode, string) error) *Backend_Remove_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -858,17 +729,17 @@ func (_c *Backend_Set_Call) RunAndReturn(run func(context.Context, metadata.Meta
 	return _c
 }
 
-// SetMultiple provides a mock function with given fields: ctx, n, attribs, acquireLock
-func (_m *Backend) SetMultiple(ctx context.Context, n metadata.MetadataNode, attribs map[string][]byte, acquireLock bool) error {
-	ret := _m.Called(ctx, n, attribs, acquireLock)
+// SetMultiple provides a mock function with given fields: ctx, n, attribs
+func (_m *Backend) SetMultiple(ctx context.Context, n metadata.MetadataNode, attribs map[string][]byte) error {
+	ret := _m.Called(ctx, n, attribs)
 
 	if len(ret) == 0 {
 		panic("no return value specified for SetMultiple")
 	}
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func(context.Context, metadata.MetadataNode, map[string][]byte, bool) error); ok {
-		r0 = rf(ctx, n, attribs, acquireLock)
+	if rf, ok := ret.Get(0).(func(context.Context, metadata.MetadataNode, map[string][]byte) error); ok {
+		r0 = rf(ctx, n, attribs)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -885,14 +756,13 @@ type Backend_SetMultiple_Call struct {
 //   - ctx context.Context
 //   - n metadata.MetadataNode
 //   - attribs map[string][]byte
-//   - acquireLock bool
-func (_e *Backend_Expecter) SetMultiple(ctx interface{}, n interface{}, attribs interface{}, acquireLock interface{}) *Backend_SetMultiple_Call {
-	return &Backend_SetMultiple_Call{Call: _e.mock.On("SetMultiple", ctx, n, attribs, acquireLock)}
+func (_e *Backend_Expecter) SetMultiple(ctx interface{}, n interface{}, attribs interface{}) *Backend_SetMultiple_Call {
+	return &Backend_SetMultiple_Call{Call: _e.mock.On("SetMultiple", ctx, n, attribs)}
 }
 
-func (_c *Backend_SetMultiple_Call) Run(run func(ctx context.Context, n metadata.MetadataNode, attribs map[string][]byte, acquireLock bool)) *Backend_SetMultiple_Call {
+func (_c *Backend_SetMultiple_Call) Run(run func(ctx context.Context, n metadata.MetadataNode, attribs map[string][]byte)) *Backend_SetMultiple_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(context.Context), args[1].(metadata.MetadataNode), args[2].(map[string][]byte), args[3].(bool))
+		run(args[0].(context.Context), args[1].(metadata.MetadataNode), args[2].(map[string][]byte))
 	})
 	return _c
 }
@@ -902,7 +772,7 @@ func (_c *Backend_SetMultiple_Call) Return(_a0 error) *Backend_SetMultiple_Call 
 	return _c
 }
 
-func (_c *Backend_SetMultiple_Call) RunAndReturn(run func(context.Context, metadata.MetadataNode, map[string][]byte, bool) error) *Backend_SetMultiple_Call {
+func (_c *Backend_SetMultiple_Call) RunAndReturn(run func(context.Context, metadata.MetadataNode, map[string][]byte) error) *Backend_SetMultiple_Call {
 	_c.Call.Return(run)
 	return _c
 }
