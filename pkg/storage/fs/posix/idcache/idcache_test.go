@@ -146,6 +146,53 @@ var _ = Describe("IDCache", func() {
 			})
 		})
 
+		Describe("MovePath", func() {
+			It("re-keys the moved node and its whole subtree", func() {
+				Expect(c.Set(context.TODO(), "spaceID", "nodeID", "/path")).To(Succeed())
+				Expect(c.Set(context.TODO(), "spaceID", "nodeID2", "/path/child")).To(Succeed())
+				Expect(c.Set(context.TODO(), "spaceID", "nodeID3", "/path/child/grandchild")).To(Succeed())
+
+				err := c.MovePath(context.TODO(), "/path", "/newpath")
+				Expect(err).ToNot(HaveOccurred())
+
+				// forward lookups now resolve to the new paths
+				v, err := c.Get(context.TODO(), "spaceID", "nodeID")
+				Expect(err).ToNot(HaveOccurred())
+				Expect(v).To(Equal("/newpath"))
+				v, err = c.Get(context.TODO(), "spaceID", "nodeID2")
+				Expect(err).ToNot(HaveOccurred())
+				Expect(v).To(Equal("/newpath/child"))
+				v, err = c.Get(context.TODO(), "spaceID", "nodeID3")
+				Expect(err).ToNot(HaveOccurred())
+				Expect(v).To(Equal("/newpath/child/grandchild"))
+
+				// reverse lookups resolve under the new path
+				spaceID, nodeID, err := c.GetByPath(context.TODO(), "/newpath")
+				Expect(err).ToNot(HaveOccurred())
+				Expect(spaceID).To(Equal("spaceID"))
+				Expect(nodeID).To(Equal("nodeID"))
+				_, nodeID, err = c.GetByPath(context.TODO(), "/newpath/child")
+				Expect(err).ToNot(HaveOccurred())
+				Expect(nodeID).To(Equal("nodeID2"))
+				_, nodeID, err = c.GetByPath(context.TODO(), "/newpath/child/grandchild")
+				Expect(err).ToNot(HaveOccurred())
+				Expect(nodeID).To(Equal("nodeID3"))
+
+				// the old reverse lookups are gone
+				_, _, err = c.GetByPath(context.TODO(), "/path")
+				Expect(err).To(HaveOccurred())
+				_, _, err = c.GetByPath(context.TODO(), "/path/child")
+				Expect(err).To(HaveOccurred())
+				_, _, err = c.GetByPath(context.TODO(), "/path/child/grandchild")
+				Expect(err).To(HaveOccurred())
+			})
+
+			It("does not fail if the path does not exist", func() {
+				err := c.MovePath(context.TODO(), "/nonexistent", "/newpath")
+				Expect(err).ToNot(HaveOccurred())
+			})
+		})
+
 		Describe("Retries", func() {
 			It("should retry operations and succeed if transient errors resolve", func() {
 				_, js, _, err := helpers.NewInProcessNATSServer()
