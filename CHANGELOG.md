@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.47.1](https://github.com/opencloud-eu/reva/releases/tag/v2.47.1) - 2026-07-14
+
+### 📦️ Dependencies
+
+- chore(deps): bump golang.org/x/crypto from 0.53.0 to 0.54.0 [[#735](https://github.com/opencloud-eu/reva/pull/735)]
+
 ## [2.47.0](https://github.com/opencloud-eu/reva/releases/tag/v2.47.0) - 2026-07-14
 
 ### ❤️ Thanks to all contributors! ❤️
