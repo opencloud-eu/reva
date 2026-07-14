@@ -392,10 +392,12 @@ func (session *DecomposedFsSession) createRevisionNodeForUpload(ctx context.Cont
 
 		err = session.store.lu.TimeManager().OverrideMtime(ctx, revisionNode, &attrs, mtime)
 		if err != nil {
+			_ = unlock()
 			return nil, nil, errors.Wrap(err, "Decomposedfs: failed to set the mtime")
 		}
 		err = revisionNode.SetXattrsWithContext(ctx, attrs)
 		if err != nil {
+			_ = unlock()
 			return nil, nil, errors.Wrap(err, "Decomposedfs: failed to set node attributes")
 		}
 	}
