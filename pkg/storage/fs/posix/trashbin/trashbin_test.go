@@ -72,7 +72,7 @@ func TestTrashbin_RestoreRecycleItem(t *testing.T) {
 			return "", "parentID", "", time.Time{}, nil
 		}).Once()
 
-		backend.EXPECT().SetMultiple(mock.Anything, mock.Anything, mock.Anything, mock.Anything).RunAndReturn(func(_ context.Context, _ metadata.MetadataNode, m map[string][]byte, _ bool) error {
+		backend.EXPECT().SetMultiple(mock.Anything, mock.Anything, mock.Anything).RunAndReturn(func(_ context.Context, _ metadata.MetadataNode, m map[string][]byte) error {
 			nameAttr, ok := m[prefixes.NameAttr]
 			assert.True(t, ok)
 			assert.Equal(t, nameAttr, []byte("basename"))
@@ -102,7 +102,7 @@ func TestTrashbin_RestoreRecycleItem(t *testing.T) {
 			return "", "parentID", "", time.Time{}, nil
 		}).Once()
 
-		backend.EXPECT().SetMultiple(mock.Anything, mock.Anything, mock.Anything, mock.Anything).RunAndReturn(func(_ context.Context, _ metadata.MetadataNode, m map[string][]byte, _ bool) error {
+		backend.EXPECT().SetMultiple(mock.Anything, mock.Anything, mock.Anything).RunAndReturn(func(_ context.Context, _ metadata.MetadataNode, m map[string][]byte) error {
 			nameAttr, ok := m[prefixes.NameAttr]
 			assert.True(t, ok)
 			assert.Equal(t, nameAttr, []byte("BASENAME (1)"))
