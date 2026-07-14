@@ -418,7 +418,7 @@ func (t *TestEnv) CreateTestFile(name, blobID, parentID, spaceID string, blobSiz
 	}
 	attrs := n.NodeMetadata(t.Ctx)
 	attrs.SetString(prefixes.IDAttr, n.ID)
-	err = n.SetXattrs(attrs, true)
+	err = n.SetXattrs(attrs)
 	if err != nil {
 		return nil, err
 	}
