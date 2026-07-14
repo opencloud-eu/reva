@@ -1,6 +1,6 @@
 # Changelog
 
-## [2.47.0](https://github.com/opencloud-eu/reva/releases/tag/v2.47.0) - 2026-07-08
+## [2.47.0](https://github.com/opencloud-eu/reva/releases/tag/v2.47.0) - 2026-07-14
 
 ### ❤️ Thanks to all contributors! ❤️
 
@@ -8,6 +8,7 @@
 
 ### 🐛 Bug Fixes
 
+- Fix Metadata locking and Reading for decomposedfs and align defaults with OpenCloud [[#722](https://github.com/opencloud-eu/reva/pull/722)]
 - Fix warming up the id cache for the user storage [[#727](https://github.com/opencloud-eu/reva/pull/727)]
 - fix(decomposedfs): merge service account permissions with node grants [[#723](https://github.com/opencloud-eu/reva/pull/723)]
 - fix: retry xattr.List on ERANGE/E2BIG [[#717](https://github.com/opencloud-eu/reva/pull/717)]
@@ -28,6 +29,7 @@
 
 ### 📦️ Dependencies
 
+- chore(deps): bump go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc from 0.68.0 to 0.69.0 [[#736](https://github.com/opencloud-eu/reva/pull/736)]
 - chore(deps): bump github.com/go-ldap/ldap/v3 from 3.4.12 to 3.4.13 [[#733](https://github.com/opencloud-eu/reva/pull/733)]
 - chore(deps): bump github.com/minio/minio-go/v7 from 7.1.0 to 7.2.1 [[#734](https://github.com/opencloud-eu/reva/pull/734)]
 - chore(deps): bump go.etcd.io/etcd/client/v3 from 3.6.11 to 3.6.13 [[#732](https://github.com/opencloud-eu/reva/pull/732)]
