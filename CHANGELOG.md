@@ -1,5 +1,58 @@
 # Changelog
 
+## [2.47.0](https://github.com/opencloud-eu/reva/releases/tag/v2.47.0) - 2026-07-14
+
+### ❤️ Thanks to all contributors! ❤️
+
+@aduffeck, @dschmidt, @fschade, @micbar, @michaelstingl, @rhafer
+
+### 🐛 Bug Fixes
+
+- Fix Metadata locking and Reading for decomposedfs and align defaults with OpenCloud [[#722](https://github.com/opencloud-eu/reva/pull/722)]
+- Fix warming up the id cache for the user storage [[#727](https://github.com/opencloud-eu/reva/pull/727)]
+- fix(decomposedfs): merge service account permissions with node grants [[#723](https://github.com/opencloud-eu/reva/pull/723)]
+- fix: retry xattr.List on ERANGE/E2BIG [[#717](https://github.com/opencloud-eu/reva/pull/717)]
+- fix: space delete unit test [[#716](https://github.com/opencloud-eu/reva/pull/716)]
+- fix: status codes on DeleteStorageSpace [[#691](https://github.com/opencloud-eu/reva/pull/691)]
+- Prevent access to internal files and folders [[#681](https://github.com/opencloud-eu/reva/pull/681)]
+- fix(tus): Upload checksum validation [[#677](https://github.com/opencloud-eu/reva/pull/677)]
+
+### 📈 Enhancement
+
+- feat(tus): return etag and permissions after the last TUS chunk [[#718](https://github.com/opencloud-eu/reva/pull/718)]
+- Sync uploads incrementally to avoid fsync freezes [[#720](https://github.com/opencloud-eu/reva/pull/720)]
+- feat: add more roles [[#671](https://github.com/opencloud-eu/reva/pull/671)]
+
+### 📚 Documentation
+
+- doc: Update docs related to how the changelog works [[#708](https://github.com/opencloud-eu/reva/pull/708)]
+
+### 📦️ Dependencies
+
+- chore(deps): bump go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc from 0.68.0 to 0.69.0 [[#736](https://github.com/opencloud-eu/reva/pull/736)]
+- chore(deps): bump github.com/go-ldap/ldap/v3 from 3.4.12 to 3.4.13 [[#733](https://github.com/opencloud-eu/reva/pull/733)]
+- chore(deps): bump github.com/minio/minio-go/v7 from 7.1.0 to 7.2.1 [[#734](https://github.com/opencloud-eu/reva/pull/734)]
+- chore(deps): bump go.etcd.io/etcd/client/v3 from 3.6.11 to 3.6.13 [[#732](https://github.com/opencloud-eu/reva/pull/732)]
+- chore(deps): bump github.com/prometheus/alertmanager from 0.31.1 to 0.33.1 [[#731](https://github.com/opencloud-eu/reva/pull/731)]
+- chore(deps): bump golang.org/x/image from 0.38.0 to 0.41.0 in the go_modules group across 1 directory [[#726](https://github.com/opencloud-eu/reva/pull/726)]
+- chore(deps): bump google.golang.org/grpc from 1.81.1 to 1.82.0 [[#724](https://github.com/opencloud-eu/reva/pull/724)]
+- chore(deps): bump github.com/tus/tusd/v2 from 2.9.2 to 2.10.0 [[#725](https://github.com/opencloud-eu/reva/pull/725)]
+- chore(deps): bump github.com/go-chi/chi/v5 from 5.2.5 to 5.3.0 [[#715](https://github.com/opencloud-eu/reva/pull/715)]
+- chore(deps): bump github.com/nats-io/nats-server/v2 from 2.14.2 to 2.14.3 [[#721](https://github.com/opencloud-eu/reva/pull/721)]
+- chore(deps): bump github.com/rogpeppe/go-internal from 1.14.1 to 1.15.0 [[#719](https://github.com/opencloud-eu/reva/pull/719)]
+- chore(deps): bump github.com/nats-io/nats.go from 1.51.0 to 1.52.0 [[#714](https://github.com/opencloud-eu/reva/pull/714)]
+- chore(deps): bump github.com/segmentio/kafka-go from 0.4.50 to 0.4.51 [[#706](https://github.com/opencloud-eu/reva/pull/706)]
+- chore(deps): bump github.com/onsi/gomega from 1.40.0 to 1.42.1 [[#704](https://github.com/opencloud-eu/reva/pull/704)]
+- chore(deps): bump golang.org/x/text from 0.37.0 to 0.38.0 [[#705](https://github.com/opencloud-eu/reva/pull/705)]
+- chore(deps): bump github.com/rs/zerolog from 1.35.0 to 1.35.1 [[#699](https://github.com/opencloud-eu/reva/pull/699)]
+- chore(deps): bump github.com/ceph/go-ceph from 0.39.0 to 0.40.0 [[#689](https://github.com/opencloud-eu/reva/pull/689)]
+- chore(deps): bump go.mongodb.org/mongo-driver from 1.17.6 to 1.17.7 in the go_modules group across 1 directory [[#694](https://github.com/opencloud-eu/reva/pull/694)]
+- chore(deps): bump github.com/onsi/ginkgo/v2 from 2.28.1 to 2.31.0 [[#690](https://github.com/opencloud-eu/reva/pull/690)]
+- chore(deps): bump go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc from 1.43.0 to 1.44.0 [[#684](https://github.com/opencloud-eu/reva/pull/684)]
+- chore(deps): bump github.com/nats-io/nats-server/v2 from 2.14.0 to 2.14.2 [[#683](https://github.com/opencloud-eu/reva/pull/683)]
+- chore(deps): bump go.opentelemetry.io/otel from 1.43.0 to 1.44.0 [[#667](https://github.com/opencloud-eu/reva/pull/667)]
+- chore(deps): bump github.com/fsnotify/fsnotify from 1.8.0 to 1.10.1 [[#630](https://github.com/opencloud-eu/reva/pull/630)]
+
 ## [2.46.3](https://github.com/opencloud-eu/reva/releases/tag/v2.46.3) - 2026-06-10
 
 ### ❤️ Thanks to all contributors! ❤️
