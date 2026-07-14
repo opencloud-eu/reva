@@ -38,7 +38,7 @@ permissionssvc = "localhost:10000"
 "s3.bucket" = "test"
 "s3.access_key" = "testadmin"
 "s3.secret_key" = "testadmin"
-"metadata_backend" = "xattrs"
+"metadata_backend" = "messagepack"
 
 # we have a locally running dataprovider
 [http]
@@ -58,4 +58,4 @@ permissionssvc = "localhost:10000"
 "s3.bucket" = "test"
 "s3.access_key" = "testadmin"
 "s3.secret_key" = "testadmin"
-"metadata_backend" = "xattrs"
+"metadata_backend" = "messagepack"

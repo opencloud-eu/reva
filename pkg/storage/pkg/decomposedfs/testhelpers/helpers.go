@@ -308,7 +308,7 @@ func (t *DecomposedTestEnv) CreateTestFile(name, blobID, parentID, spaceID strin
 	if err != nil {
 		return nil, err
 	}
-	err = n.SetXattrs(n.NodeMetadata(t.Ctx), true)
+	err = n.SetXattrs(n.NodeMetadata(t.Ctx))
 	if err != nil {
 		return nil, err
 	}
