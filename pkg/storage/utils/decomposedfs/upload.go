@@ -393,7 +393,8 @@ func (fs *Decomposedfs) CommitUpload(ctx context.Context, ref *provider.Referenc
 	defer source.Body.Close()
 	n, err := fs.lu.NodeFromResource(ctx, ref)
 	if err != nil {
-		return nil, err
+		appctx.GetLogger(ctx).Error().Err(err).Msg("CommitUpload: unexpected NodeFromResource failure")
+		return nil, errtypes.InternalError("CommitUpload: node lookup failed unexpectedly")
 	}
 	if !n.Exists {
 		return nil, errtypes.NotFound(ref.String())
