@@ -1,5 +1,16 @@
 # Changelog
 
+## [2.46.8](https://github.com/opencloud-eu/reva/releases/tag/v2.46.8) - 2026-07-27
+
+### ❤️ Thanks to all contributors! ❤️
+
+@rhafer
+
+### 🐛 Bug Fixes
+
+- [stable-2.46] Fix Metadata locking and Reading for decomposedfs and align defaults with OpenCloud [[#744](https://github.com/opencloud-eu/reva/pull/744)]
+- [stable-2.46] Sync uploads incrementally to avoid fsync freezes [[#743](https://github.com/opencloud-eu/reva/pull/743)]
+
 ## [2.46.7](https://github.com/opencloud-eu/reva/releases/tag/v2.46.7) - 2026-07-06
 
 ### ❤️ Thanks to all contributors! ❤️
