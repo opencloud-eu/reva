@@ -1,9 +1,10 @@
 # Changelog
 
-## [2.47.1](https://github.com/opencloud-eu/reva/releases/tag/v2.47.1) - 2026-07-14
+## [2.47.1](https://github.com/opencloud-eu/reva/releases/tag/v2.47.1) - 2026-07-28
 
 ### 📦️ Dependencies
 
+- chore(deps): bump github.com/go-chi/chi/v5 from 5.3.0 to 5.3.1 [[#741](https://github.com/opencloud-eu/reva/pull/741)]
 - chore(deps): bump golang.org/x/crypto from 0.53.0 to 0.54.0 [[#735](https://github.com/opencloud-eu/reva/pull/735)]
 
 ## [2.47.0](https://github.com/opencloud-eu/reva/releases/tag/v2.47.0) - 2026-07-14
