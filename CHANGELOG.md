@@ -1,6 +1,14 @@
 # Changelog
 
-## [2.47.1](https://github.com/opencloud-eu/reva/releases/tag/v2.47.1) - 2026-07-28
+## [2.48.0](https://github.com/opencloud-eu/reva/releases/tag/v2.48.0) - 2026-07-29
+
+### ❤️ Thanks to all contributors! ❤️
+
+@rhafer
+
+### 📈 Enhancement
+
+- enhancement: Add database name to kv log output [[#748](https://github.com/opencloud-eu/reva/pull/748)]
 
 ### 📦️ Dependencies
 
