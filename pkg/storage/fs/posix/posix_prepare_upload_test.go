@@ -180,6 +180,31 @@ var _ = Describe("PrepareUpload on posix", func() {
 		})
 	})
 
+	It("restores the previous metadata and keeps the file on rollback", func() {
+		before, err := env.Lookup.NodeFromResource(env.Ctx, ref)
+		Expect(err).ToNot(HaveOccurred())
+
+		result, err := env.Fs.PrepareUpload(env.Ctx, ref, "session-1", storage.UploadInfo{
+			NodeExisted: true,
+			Size:        20,
+		})
+		Expect(err).ToNot(HaveOccurred())
+		Expect(result.SizeDiff).To(Equal(int64(9)))
+
+		Expect(env.Fs.MarkProcessing(env.Ctx, ref, true, "session-1")).To(Succeed())
+		Expect(env.Fs.RollbackUpload(env.Ctx, ref, "session-1", true, result.SizeDiff)).To(Succeed())
+
+		n, err := env.Lookup.NodeFromResource(env.Ctx, ref)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(n.BlobID).To(Equal(before.BlobID))
+		Expect(n.Blobsize).To(Equal(int64(11)))
+		Expect(os.ReadFile(n.InternalPath())).To(Equal(oldContent))
+
+		revisions, err := filepath.Glob(env.Lookup.VersionPath(n.SpaceID, n.ID, "*"))
+		Expect(err).ToNot(HaveOccurred())
+		Expect(revisions).To(BeEmpty())
+	})
+
 	It("leaves no revision behind when a precondition fails", func() {
 		_, err := env.Fs.PrepareUpload(env.Ctx, ref, "session-1", storage.UploadInfo{
 			NodeExisted: true,
