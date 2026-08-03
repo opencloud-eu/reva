@@ -18,6 +18,7 @@
 
 ### 📦️ Dependencies
 
+- chore(deps): bump github.com/coreos/go-oidc/v3 from 3.18.0 to 3.20.0 [[#755](https://github.com/opencloud-eu/reva/pull/755)]
 - chore(deps): bump github.com/cheggaaa/pb/v3 from 3.1.7 to 3.2.0 [[#754](https://github.com/opencloud-eu/reva/pull/754)]
 - chore(deps): bump github.com/onsi/ginkgo/v2 from 2.31.0 to 2.32.0 [[#753](https://github.com/opencloud-eu/reva/pull/753)]
 - chore(deps): bump github.com/prometheus/client_golang from 1.23.2 to 1.24.1 [[#749](https://github.com/opencloud-eu/reva/pull/749)]
