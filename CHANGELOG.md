@@ -4,7 +4,7 @@
 
 ### ❤️ Thanks to all contributors! ❤️
 
-@aduffeck, @rhafer
+@aduffeck, @rhafer, @v-scharf
 
 ### 📈 Enhancement
 
@@ -18,6 +18,7 @@
 
 ### 📦️ Dependencies
 
+- chore: bump go dependencies [[#757](https://github.com/opencloud-eu/reva/pull/757)]
 - chore(deps): bump github.com/coreos/go-oidc/v3 from 3.18.0 to 3.20.0 [[#755](https://github.com/opencloud-eu/reva/pull/755)]
 - chore(deps): bump github.com/cheggaaa/pb/v3 from 3.1.7 to 3.2.0 [[#754](https://github.com/opencloud-eu/reva/pull/754)]
 - chore(deps): bump github.com/onsi/ginkgo/v2 from 2.31.0 to 2.32.0 [[#753](https://github.com/opencloud-eu/reva/pull/753)]
