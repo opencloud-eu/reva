@@ -347,5 +347,39 @@ var _ = Describe("HybridBackend", func() {
 			err = unlock2()
 			Expect(err).ToNot(HaveOccurred())
 		})
+
+		It("does not create the space base directory when the space does not exist", func() {
+			missingSpaceRoot := path.Join(tmpdir, "missing-space")
+			missing := &testNode{
+				spaceID: "123",
+				id:      "456",
+				path:    path.Join(missingSpaceRoot, "file"),
+			}
+
+			_, err := backend.Lock(missing)
+			Expect(err).To(HaveOccurred())
+			Expect(metadata.IsNotExist(err)).To(BeTrue())
+
+			By("not resurrecting the space base directory")
+			_, err = os.Stat(missingSpaceRoot)
+			Expect(os.IsNotExist(err)).To(BeTrue())
+		})
+
+		It("creates the metadata directories when the space exists", func() {
+			existingSpaceRoot := path.Join(tmpdir, "existing-space")
+			Expect(os.MkdirAll(existingSpaceRoot, 0700)).To(Succeed())
+			existing := &testNode{
+				spaceID: "123",
+				id:      "456",
+				path:    path.Join(existingSpaceRoot, "file"),
+			}
+
+			unlock, err := backend.Lock(existing)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(unlock()).To(Succeed())
+
+			_, err = os.Stat(backend.LockfilePath(existing))
+			Expect(err).ToNot(HaveOccurred())
+		})
 	})
 })
