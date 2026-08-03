@@ -6,13 +6,15 @@
 
 @aduffeck, @rhafer
 
-### 🐛 Bug Fixes
-
-- fix(metadata/hybrid): Avoid resurrecting space root directory [[#739](https://github.com/opencloud-eu/reva/pull/739)]
-
 ### 📈 Enhancement
 
+- Add a helper which checks if a resource is still being processed [[#742](https://github.com/opencloud-eu/reva/pull/742)]
 - enhancement: Add database name to kv log output [[#748](https://github.com/opencloud-eu/reva/pull/748)]
+
+### 🐛 Bug Fixes
+
+- Do not disregard disabled spaces when propagating changes [[#751](https://github.com/opencloud-eu/reva/pull/751)]
+- fix(metadata/hybrid): Avoid resurrecting space root directory [[#739](https://github.com/opencloud-eu/reva/pull/739)]
 
 ### 📦️ Dependencies
 
