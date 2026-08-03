@@ -1,10 +1,14 @@
 # Changelog
 
-## [2.48.0](https://github.com/opencloud-eu/reva/releases/tag/v2.48.0) - 2026-07-29
+## [2.48.0](https://github.com/opencloud-eu/reva/releases/tag/v2.48.0) - 2026-08-03
 
 ### ❤️ Thanks to all contributors! ❤️
 
 @rhafer
+
+### 🐛 Bug Fixes
+
+- fix(metadata/hybrid): Avoid resurrecting space root directory [[#739](https://github.com/opencloud-eu/reva/pull/739)]
 
 ### 📈 Enhancement
 
