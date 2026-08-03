@@ -16,6 +16,7 @@
 
 ### 📦️ Dependencies
 
+- chore(deps): bump github.com/onsi/ginkgo/v2 from 2.31.0 to 2.32.0 [[#753](https://github.com/opencloud-eu/reva/pull/753)]
 - chore(deps): bump github.com/prometheus/client_golang from 1.23.2 to 1.24.1 [[#749](https://github.com/opencloud-eu/reva/pull/749)]
 - chore(deps): bump github.com/go-chi/chi/v5 from 5.3.0 to 5.3.1 [[#741](https://github.com/opencloud-eu/reva/pull/741)]
 - chore(deps): bump golang.org/x/crypto from 0.53.0 to 0.54.0 [[#735](https://github.com/opencloud-eu/reva/pull/735)]
