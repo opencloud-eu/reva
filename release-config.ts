@@ -34,6 +34,11 @@ export default {
       bump: "patch",
     },
     {
+      title: "✅ Tests",
+      labels: ["test", "tests", "Type:Test"],
+      bump: "patch",
+    },
+    {
       title: "📦️ Dependencies",
       labels: ["dependency", "dependencies", "Type:Dependencies"],
       bump: "patch",
