@@ -3,7 +3,11 @@ package decomposedfs_test
 import (
 	"bytes"
 	"context"
+	"crypto/md5"
+	"crypto/sha1"
+	"encoding/hex"
 	"fmt"
+	"hash/adler32"
 	"io"
 	"os"
 	"path/filepath"
@@ -95,6 +99,7 @@ func defineAsyncUploadTests(name string, usePosix bool) {
 			cs3permissionsclient *mocks.CS3PermissionsClient
 			permissionsSelector  pool.Selectable[cs3permissions.PermissionsAPIClient]
 			bs                   *nodemocks.Blobstore
+			blobs                map[string][]byte
 			natsConn             *nats.Conn
 			js                   jetstream.JetStream
 			cleanupNATS          func()
@@ -142,6 +147,36 @@ func defineAsyncUploadTests(name string, usePosix bool) {
 				revisions, err := fs.ListRevisions(ctx, ref)
 				Expect(err).ToNot(HaveOccurred())
 				return len(revisions)
+			}
+			fileAttributesMatchContents = func(downloadRef *provider.Reference) {
+				md, reader, err := fs.Download(ctx, downloadRef, func(*provider.ResourceInfo) bool { return true })
+				Expect(err).ToNot(HaveOccurred())
+				contents, err := io.ReadAll(reader)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(reader.Close()).To(Succeed())
+
+				sha1Sum := sha1.Sum(contents)
+				md5Sum := md5.Sum(contents)
+				adler32Sum := adler32.New()
+				_, err = adler32Sum.Write(contents)
+				Expect(err).ToNot(HaveOccurred())
+
+				Expect(md.Size).To(Equal(uint64(len(contents))))
+				Expect(md.GetChecksum().GetSum()).To(Equal(hex.EncodeToString(sha1Sum[:])))
+				Expect(utils.ReadPlainFromOpaque(md.Opaque, "md5")).To(Equal(hex.EncodeToString(md5Sum[:])))
+				Expect(utils.ReadPlainFromOpaque(md.Opaque, "adler32")).To(Equal(hex.EncodeToString(adler32Sum.Sum(nil))))
+			}
+			fileAndRevisionAttributesMatchContents = func() {
+				fileAttributesMatchContents(ref)
+
+				revisions, err := fs.ListRevisions(ctx, ref)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(revisions).To(HaveLen(1))
+				fileAttributesMatchContents(&provider.Reference{ResourceId: &provider.ResourceId{
+					StorageId: ref.ResourceId.StorageId,
+					SpaceId:   ref.ResourceId.SpaceId,
+					OpaqueId:  revisions[0].Key,
+				}})
 			}
 		)
 
@@ -230,14 +265,16 @@ func defineAsyncUploadTests(name string, usePosix bool) {
 				lu = lookup.New(metadata.NewMessagePackBackend(o.FileMetadataCache), o, &timemanager.Manager{})
 				pmock = &mocks.PermissionsChecker{}
 				bs = &nodemocks.Blobstore{}
+				blobs = map[string][]byte{}
 				p := permissions.NewPermissions(pmock, permissionsSelector)
 				pmock.On("AssemblePermissions", mock.Anything, mock.Anything).
 					Return(&provider.ResourcePermissions{
-						Stat:               true,
-						GetQuota:           true,
-						InitiateFileUpload: true,
-						ListContainer:      true,
-						ListFileVersions:   true,
+						Stat:                 true,
+						GetQuota:             true,
+						InitiateFileDownload: true,
+						InitiateFileUpload:   true,
+						ListContainer:        true,
+						ListFileVersions:     true,
 					}, nil)
 				tp := tree.New(lu, bs, o, p, store.Create(), &zerolog.Logger{})
 				aspects := aspects.Aspects{
@@ -268,7 +305,12 @@ func defineAsyncUploadTests(name string, usePosix bool) {
 						data, err := os.ReadFile(args.Get(1).(string))
 						Expect(err).ToNot(HaveOccurred())
 						Expect(len(data)).To(Equal(int(n.Blobsize)))
+						blobs[n.BlobID] = data
 					})
+				bs.On("Download", mock.AnythingOfType("*node.Node")).
+					Return(func(n *node.Node) io.ReadCloser {
+						return io.NopCloser(bytes.NewReader(blobs[n.BlobID]))
+					}, nil)
 			}
 
 			// start upload of a file
@@ -548,6 +590,7 @@ func defineAsyncUploadTests(name string, usePosix bool) {
 				// parent size should match second upload as well
 				Expect(parentSize()).To(Equal(len(secondContent)))
 
+				fileAttributesMatchContents(ref)
 				failPostprocessing(uploadID, events.PPOutcomeDelete)
 
 				// check processing status
@@ -557,6 +600,7 @@ func defineAsyncUploadTests(name string, usePosix bool) {
 
 				// parent size should still match second upload as well
 				Expect(parentSize()).To(Equal(len(secondContent)))
+				fileAndRevisionAttributesMatchContents()
 			})
 
 			It("the first can succeed before the second succeeds", func() {
@@ -585,6 +629,8 @@ func defineAsyncUploadTests(name string, usePosix bool) {
 
 				// file should have one revision
 				Expect(revisionCount()).To(Equal(1))
+
+				fileAndRevisionAttributesMatchContents()
 			})
 
 			It("the first can succeed after the second succeeds", func() {
@@ -612,6 +658,8 @@ func defineAsyncUploadTests(name string, usePosix bool) {
 
 				// file should have one revision
 				Expect(revisionCount()).To(Equal(1))
+
+				fileAndRevisionAttributesMatchContents()
 			})
 
 			It("the first can succeed before the second fails", func() {
@@ -639,6 +687,7 @@ func defineAsyncUploadTests(name string, usePosix bool) {
 
 				// file should not have any revisions
 				Expect(revisionCount()).To(Equal(0))
+				fileAndRevisionAttributesMatchContents()
 			})
 
 			It("the first can succeed after the second fails", func() {
