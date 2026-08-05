@@ -104,13 +104,13 @@ func TestResourceName(t *testing.T) {
 	}
 }
 
-// TestArchiveName pins the caller's side of the naming decision. TestResourceName above covers
-// what resourceName returns; this covers what the handler does with it — and that is where the
-// configured name can get lost, because every failure path funnels through one else-branch.
+// TestArchiveName covers what archiveName does with resourceName's result, which TestResourceName
+// above does not reach. archiveName maps several distinct failures onto one fallback, so a
+// regression in that fallback stays invisible to the callee's own tests.
 //
-// The contract asserted here is the one the neighbouring test names already state: cases like
-// "name sanitizing to empty keeps default" return ("", nil), so the caller is expected to KEEP
-// s.config.Name. An operator who configured a name must never silently receive a different one.
+// resourceName returns ("", nil) when the resource has no usable name; the caller must treat that
+// like an error and keep s.config.Name. A deployment that configured a name must never silently
+// receive a different one.
 func TestArchiveName(t *testing.T) {
 	const configured = "meinarchiv"
 	ok := func(info *provider.ResourceInfo) *provider.StatResponse {
