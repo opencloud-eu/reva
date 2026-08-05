@@ -232,6 +232,20 @@ func (s *svc) resourceName(ctx context.Context, id *provider.ResourceId) (string
 	return sanitizeArchiveName(name), nil
 }
 
+// archiveName returns the name the archive should carry: the resource's own name when a single
+// resource was requested and it could be resolved, and the configured default otherwise.
+func (s *svc) archiveName(ctx context.Context, resources []*provider.ResourceId) string {
+	if len(resources) != 1 {
+		return s.config.Name
+	}
+	if name, err := s.resourceName(ctx, resources[0]); name != "" && err == nil {
+		return name
+	} else {
+		s.log.Debug().Err(err).Msg("could not resolve the archive name, using the default")
+		return "download"
+	}
+}
+
 // sanitizeArchiveName removes characters that would break the Content-Disposition header (CR, LF,
 // double quote) or let the name act as a path (slash, backslash), plus all control characters
 // (C0, DEL and C1). It returns an empty string if nothing usable is left.
@@ -309,15 +323,7 @@ func (s *svc) Handler() http.Handler {
 		// Content-Disposition header below is written before CreateZip/CreateTar run, so the name
 		// the walker resolves while building the archive would come too late.
 		// See https://github.com/opencloud-eu/reva/issues/308
-		archName := s.config.Name
-		if len(resources) == 1 {
-			if name, err := s.resourceName(ctx, resources[0]); name != "" && err == nil {
-				archName = name
-			} else {
-				s.log.Debug().Err(err).Msg("could not resolve the archive name, using the default")
-				archName = "download"
-			}
-		}
+		archName := s.archiveName(ctx, resources)
 		if format == "tar" {
 			archName += ".tar"
 		} else {

@@ -104,6 +104,61 @@ func TestResourceName(t *testing.T) {
 	}
 }
 
+// TestArchiveName pins the caller's side of the naming decision. TestResourceName above covers
+// what resourceName returns; this covers what the handler does with it — and that is where the
+// configured name can get lost, because every failure path funnels through one else-branch.
+//
+// The contract asserted here is the one the neighbouring test names already state: cases like
+// "name sanitizing to empty keeps default" return ("", nil), so the caller is expected to KEEP
+// s.config.Name. An operator who configured a name must never silently receive a different one.
+func TestArchiveName(t *testing.T) {
+	const configured = "meinarchiv"
+	ok := func(info *provider.ResourceInfo) *provider.StatResponse {
+		return &provider.StatResponse{Status: &rpc.Status{Code: rpc.Code_CODE_OK}, Info: info}
+	}
+
+	cases := []struct {
+		name    string
+		single  bool
+		resp    *provider.StatResponse
+		statErr error
+		selErr  error
+		want    string
+	}{
+		{name: "resolved name wins", single: true, resp: ok(&provider.ResourceInfo{Name: "Documents"}), want: "Documents"},
+		{name: "stat error keeps the configured name", single: true, statErr: errors.New("boom"), want: configured},
+		{name: "non-OK status keeps the configured name", single: true, resp: &provider.StatResponse{Status: &rpc.Status{Code: rpc.Code_CODE_NOT_FOUND}}, want: configured},
+		{name: "selector error keeps the configured name", single: true, selErr: errors.New("no gateway"), want: configured},
+		{name: "name sanitizing to empty keeps the configured name", single: true, resp: ok(&provider.ResourceInfo{Name: "/"}), want: configured},
+		{name: "empty name and path keep the configured name", single: true, resp: ok(&provider.ResourceInfo{}), want: configured},
+		{name: "several resources keep the configured name", single: false, want: configured},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			gw := cs3mocks.NewGatewayAPIClient(t)
+			if tc.single && tc.selErr == nil {
+				gw.EXPECT().Stat(mock.Anything, mock.Anything).Return(tc.resp, tc.statErr).Once()
+			}
+			log := zerolog.Nop()
+			s := &svc{
+				gatewaySelector: fakeSelector{client: gw, err: tc.selErr},
+				log:             &log,
+				config:          &Config{Name: configured},
+			}
+
+			resources := []*provider.ResourceId{{OpaqueId: "x"}}
+			if !tc.single {
+				resources = append(resources, &provider.ResourceId{OpaqueId: "y"})
+			}
+
+			if got := s.archiveName(context.Background(), resources); got != tc.want {
+				t.Errorf("archiveName() = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
 func TestArchiveNameContentDisposition(t *testing.T) {
 	// A name with umlauts survives sanitization and still encodes correctly:
 	// net.ContentDispositionAttachment emits both the RFC 6266 filename* form and the raw filename.
