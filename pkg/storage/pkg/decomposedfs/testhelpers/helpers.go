@@ -123,8 +123,9 @@ const (
 //	/dir1/subdir1/
 //
 // The default config can be overridden by providing the strings to override
-// via map as a parameter
-func NewTestEnv(config map[string]interface{}) (*DecomposedTestEnv, error) {
+// via map as a parameter. withAspects mutators run just before the filesystem is
+// built, for settings drivers pass through the aspects rather than the config.
+func NewTestEnv(config map[string]interface{}, withAspects ...func(*aspects.Aspects)) (*DecomposedTestEnv, error) {
 	tmpRoot, err := helpers.TempDir("reva-unit-tests-*-root")
 	if err != nil {
 		return nil, err
@@ -226,6 +227,9 @@ func NewTestEnv(config map[string]interface{}) (*DecomposedTestEnv, error) {
 		Tree:        tree,
 		Permissions: permissions.NewPermissions(pmock, permissionsSelector),
 		Trashbin:    &decomposedfs.DecomposedfsTrashbin{},
+	}
+	for _, m := range withAspects {
+		m(&aspects)
 	}
 	fs, err := decomposedfs.New(o, aspects, log)
 	if err != nil {
