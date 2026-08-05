@@ -238,12 +238,12 @@ func (s *svc) archiveName(ctx context.Context, resources []*provider.ResourceId)
 	if len(resources) != 1 {
 		return s.config.Name
 	}
-	if name, err := s.resourceName(ctx, resources[0]); name != "" && err == nil {
-		return name
-	} else {
+	name, err := s.resourceName(ctx, resources[0])
+	if err != nil || name == "" {
 		s.log.Debug().Err(err).Msg("could not resolve the archive name, using the default")
-		return "download"
+		return s.config.Name
 	}
+	return name
 }
 
 // sanitizeArchiveName removes characters that would break the Content-Disposition header (CR, LF,
