@@ -159,6 +159,34 @@ func TestArchiveName(t *testing.T) {
 	}
 }
 
+// TestConfigNameSanitized pins that a configured archive name cannot break the
+// Content-Disposition header. archiveName returns s.config.Name on every fallback path, so the
+// value reaches the header unmodified unless it is sanitized once at config time.
+func TestConfigNameSanitized(t *testing.T) {
+	cases := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{"plain name kept", "meinarchiv", "meinarchiv"},
+		{"double quote removed", `my"archive`, "myarchive"},
+		{"crlf removed", "arch\r\nive", "archive"},
+		{"slashes removed", "a/b", "ab"},
+		{"unset falls back", "", "download"},
+		{"sanitizing to empty falls back", "/", "download"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			c := &Config{Name: tc.in}
+			c.init()
+			if c.Name != tc.want {
+				t.Errorf("Config.init() Name = %q, want %q", c.Name, tc.want)
+			}
+		})
+	}
+}
+
 func TestArchiveNameContentDisposition(t *testing.T) {
 	// A name with umlauts survives sanitization and still encodes correctly:
 	// net.ContentDispositionAttachment emits both the RFC 6266 filename* form and the raw filename.

@@ -114,6 +114,10 @@ func (c *Config) init() {
 		c.Prefix = "download_archive"
 	}
 
+	// Sanitize before the default so s.config.Name is always safe to put in a
+	// Content-Disposition header: net.ContentDispositionAttachment escapes the filename* form
+	// but emits filename="..." verbatim, and a configured name is not otherwise validated.
+	c.Name = sanitizeArchiveName(c.Name)
 	if c.Name == "" {
 		c.Name = "download"
 	}
