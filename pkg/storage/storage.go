@@ -213,6 +213,11 @@ type UploadSource struct {
 	// Path is the staged file, if the caller has one. Drivers may move it into
 	// place instead of copying Body; the file is gone after a successful commit.
 	Path string
+
+	// ScanResult is the antivirus verdict: empty means clean.
+	ScanResult string
+	// ScanDate is zero when the upload was not scanned.
+	ScanDate time.Time
 }
 
 // UnscopeFunc is a function that unscopes a user
