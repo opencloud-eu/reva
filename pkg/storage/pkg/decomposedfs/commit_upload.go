@@ -147,6 +147,14 @@ func (fs *Decomposedfs) CommitUpload(ctx context.Context, ref *provider.Referenc
 		return errors.Wrap(err, "Decomposedfs: failed to write blob")
 	}
 
+	// on the node that holds the content, not the session: the session is deleted when the
+	// upload finishes
+	if !source.ScanDate.IsZero() {
+		if err := target.SetScanData(ctx, source.ScanResult, source.ScanDate); err != nil {
+			appctx.GetLogger(ctx).Error().Err(err).Str("nodeid", target.ID).Msg("could not set scan results")
+		}
+	}
+
 	now := time.Now()
 	if p, err := n.Parent(ctx); err != nil {
 		appctx.GetLogger(ctx).Error().Err(err).Str("nodeid", n.ID).Msg("could not read parent for etag propagation")

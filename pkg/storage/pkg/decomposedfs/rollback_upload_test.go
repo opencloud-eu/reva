@@ -168,6 +168,32 @@ var _ = Describe("RollbackUpload", func() {
 		})
 	})
 
+	Context("new node created by the upload, session owns node", func() {
+		It("purges the node and reverts size propagation", func() {
+			parentRef := &provider.Reference{ResourceId: env.SpaceRootRes, Path: "/dir1"}
+			parentInfoBefore, err := env.Fs.GetMD(env.Ctx, parentRef, []string{}, []string{})
+			Expect(err).ToNot(HaveOccurred())
+
+			Expect(env.Fs.TouchFile(env.Ctx, ref, false, "")).To(Succeed())
+			result, err := env.Fs.PrepareUpload(env.Ctx, ref, "session-new", storage.UploadInfo{
+				NodeExisted: false,
+				Size:        10,
+			})
+			Expect(err).ToNot(HaveOccurred())
+
+			Expect(env.Fs.MarkProcessing(env.Ctx, ref, true, "session-new")).To(Succeed())
+			Expect(env.Fs.RollbackUpload(env.Ctx, ref, "session-new", false, result.SizeDiff)).To(Succeed())
+
+			n, err := env.Lookup.NodeFromResource(env.Ctx, ref)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(n.Exists).To(BeFalse())
+
+			parentInfoAfter, err := env.Fs.GetMD(env.Ctx, parentRef, []string{}, []string{})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(parentInfoAfter.Size).To(Equal(parentInfoBefore.Size))
+		})
+	})
+
 	Context("new node (NodeExists=false)", func() {
 		It("returns nil without error", func() {
 			missingRef := &provider.Reference{

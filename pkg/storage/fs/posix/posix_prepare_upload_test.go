@@ -205,6 +205,28 @@ var _ = Describe("PrepareUpload on posix", func() {
 		Expect(revisions).To(BeEmpty())
 	})
 
+	It("removes a file the upload created on rollback", func() {
+		newRef := &provider.Reference{ResourceId: env.SpaceRootRes, Path: "./new.txt"}
+		Expect(env.Fs.TouchFile(env.Ctx, newRef, false, "")).To(Succeed())
+		created, err := env.Lookup.NodeFromResource(env.Ctx, newRef)
+		Expect(err).ToNot(HaveOccurred())
+
+		result, err := env.Fs.PrepareUpload(env.Ctx, newRef, "session-new", storage.UploadInfo{
+			NodeExisted: false,
+			Size:        20,
+		})
+		Expect(err).ToNot(HaveOccurred())
+
+		Expect(env.Fs.MarkProcessing(env.Ctx, newRef, true, "session-new")).To(Succeed())
+		Expect(env.Fs.RollbackUpload(env.Ctx, newRef, "session-new", false, result.SizeDiff)).To(Succeed())
+
+		_, err = os.Stat(created.InternalPath())
+		Expect(os.IsNotExist(err)).To(BeTrue(), "the file created by the upload should be gone")
+		n, err := env.Lookup.NodeFromResource(env.Ctx, newRef)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(n.Exists).To(BeFalse())
+	})
+
 	It("leaves no revision behind when a precondition fails", func() {
 		_, err := env.Fs.PrepareUpload(env.Ctx, ref, "session-1", storage.UploadInfo{
 			NodeExisted: true,
