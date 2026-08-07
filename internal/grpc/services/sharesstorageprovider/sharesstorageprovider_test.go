@@ -883,7 +883,12 @@ var _ = Describe("Sharesstorageprovider", func() {
 
 		Describe("RestoreFileVersion", func() {
 			BeforeEach(func() {
-				gatewayClient.On("RestoreFileVersion", mock.Anything, mock.Anything).Return(
+				// might be redundant but it's better to ensure that we always propagate the key
+				gatewayClient.On("RestoreFileVersion", mock.Anything,
+					mock.MatchedBy(func(req *sprovider.RestoreFileVersionRequest) bool {
+						return req.GetKey() == "1"
+					}),
+				).Return(
 					&sprovider.RestoreFileVersionResponse{
 						Status: status.NewOK(ctx),
 					}, nil)
