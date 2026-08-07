@@ -1165,6 +1165,14 @@ func (fs *owncloudsqlfs) Unlock(ctx context.Context, ref *provider.Reference, lo
 	return errtypes.NotSupported("unimplemented")
 }
 
+func (fs *owncloudsqlfs) SetImmutable(ctx context.Context, ref *provider.Reference) error {
+	return errtypes.NotSupported("unimplemented")
+}
+
+func (fs *owncloudsqlfs) UnsetImmutable(ctx context.Context, ref *provider.Reference) error {
+	return errtypes.NotSupported("unimplemented")
+}
+
 // Delete is actually only a move to trash
 //
 // This is a first optimistic approach.

@@ -264,9 +264,9 @@ func (c *cachedAPIClient) GetHome(ctx context.Context, in *provider.GetHomeReque
 func (c *cachedAPIClient) TouchFile(ctx context.Context, in *provider.TouchFileRequest, opts ...grpc.CallOption) (*provider.TouchFileResponse, error) {
 	return c.c.TouchFile(ctx, in, opts...)
 }
-func (c *cachedAPIClient) AddLabel(ctx context.Context, in *provider.AddLabelRequest, opts ...grpc.CallOption) (*provider.AddLabelResponse, error) {
-	return c.c.AddLabel(ctx, in, opts...)
+func (c *cachedAPIClient) SetImmutable(ctx context.Context, in *provider.SetImmutableRequest, opts ...grpc.CallOption) (*provider.SetImmutableResponse, error) {
+	return c.c.SetImmutable(ctx, in, opts...)
 }
-func (c *cachedAPIClient) RemoveLabel(ctx context.Context, in *provider.RemoveLabelRequest, opts ...grpc.CallOption) (*provider.RemoveLabelResponse, error) {
-	return c.c.RemoveLabel(ctx, in, opts...)
+func (c *cachedAPIClient) UnsetImmutable(ctx context.Context, in *provider.UnsetImmutableRequest, opts ...grpc.CallOption) (*provider.UnsetImmutableResponse, error) {
+	return c.c.UnsetImmutable(ctx, in, opts...)
 }
