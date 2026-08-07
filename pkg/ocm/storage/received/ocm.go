@@ -218,7 +218,7 @@ func (d *driver) CreateDir(ctx context.Context, ref *provider.Reference) error {
 }
 
 func (d *driver) Delete(ctx context.Context, ref *provider.Reference) error {
-	client, _, rel, err := d.webdavClient(ctx, nil, ref)
+	client, _, rel, err := d.serviceWebdavClient(ctx, ref)
 	if err != nil {
 		return err
 	}
@@ -226,7 +226,7 @@ func (d *driver) Delete(ctx context.Context, ref *provider.Reference) error {
 }
 
 func (d *driver) TouchFile(ctx context.Context, ref *provider.Reference, markprocessing bool, mtime string) error {
-	client, _, rel, err := d.webdavClient(ctx, nil, ref)
+	client, _, rel, err := d.serviceWebdavClient(ctx, ref)
 	if err != nil {
 		return err
 	}
