@@ -67,7 +67,7 @@ require (
 	github.com/pkg/xattr v0.4.12
 	github.com/prometheus/alertmanager v0.33.1
 	github.com/prometheus/client_golang v1.24.1
-	github.com/rogpeppe/go-internal v1.15.0
+	github.com/rogpeppe/go-internal v1.16.0
 	github.com/rs/cors v1.11.1
 	github.com/rs/zerolog v1.35.1
 	github.com/samber/slog-zerolog/v2 v2.9.2
