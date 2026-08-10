@@ -191,7 +191,9 @@ func (session *DecomposedFsSession) FinishUploadDecomposed(ctx context.Context) 
 	n, err := session.store.CreateNodeForUpload(ctx, session, attrs)
 	if err != nil {
 		session.SetStatus(SessionStatusFailed, err.Error())
-		session.Persist(ctx)
+		if perr := session.Persist(ctx); perr != nil {
+			log.Error().Err(perr).Msg("failed to persist upload session after setting status to failed")
+		}
 		return err
 	}
 	// increase the processing counter for every started processing
@@ -242,7 +244,9 @@ func (session *DecomposedFsSession) FinishUploadDecomposed(ctx context.Context) 
 	}
 
 	session.SetStatus(SessionStatusProcessing, "")
-	session.Persist(ctx)
+	if err = session.Persist(ctx); err != nil {
+		log.Error().Err(err).Msg("failed to persist upload session after setting status to processing")
+	}
 	return session.store.tp.Propagate(ctx, n, session.SizeDiff())
 }
 
