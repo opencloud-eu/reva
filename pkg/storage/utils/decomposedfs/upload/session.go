@@ -339,7 +339,7 @@ func (s *OcisSession) ScanData() (string, time.Time) {
 }
 
 func (s *OcisSession) SetStatus(status string) {
-	s.info.MetaData["status"] = string(status)
+	s.info.MetaData["status"] = status
 }
 
 func (s *OcisSession) Status() string {
