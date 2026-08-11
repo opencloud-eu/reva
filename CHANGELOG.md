@@ -1,6 +1,14 @@
 # Changelog
 
-## [2.48.1](https://github.com/opencloud-eu/reva/releases/tag/v2.48.1) - 2026-08-10
+## [2.48.1](https://github.com/opencloud-eu/reva/releases/tag/v2.48.1) - 2026-08-11
+
+### ❤️ Thanks to all contributors! ❤️
+
+@maki5
+
+### 🐛 Bug Fixes
+
+- fix key propagation in for shared resources when restoring version [[#761](https://github.com/opencloud-eu/reva/pull/761)]
 
 ### 📦️ Dependencies
 
