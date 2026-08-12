@@ -555,10 +555,10 @@ func (m *Manager) GetShare(ctx context.Context, ref *collaboration.ShareReferenc
 		}
 		if s.ResourceId.SpaceId == s.ResourceId.OpaqueId {
 			if err := events.Publish(ctx, m.eventStream, events.SpaceMembershipExpired{
-				SpaceOwner:    s.GetOwner(),
-				SpaceID:       &provider.StorageSpaceId{OpaqueId: s.ResourceId.StorageId + "$" + s.ResourceId.SpaceId},
-				ExpiredAt:     time.Unix(int64(s.GetExpiration().GetSeconds()), int64(s.GetExpiration().GetNanos())),
-				GranteeUserID: s.GetGrantee().GetUserId(),
+				SpaceOwner:     s.GetOwner(),
+				SpaceID:        &provider.StorageSpaceId{OpaqueId: s.ResourceId.StorageId + "$" + s.ResourceId.SpaceId},
+				ExpiredAt:      time.Unix(int64(s.GetExpiration().GetSeconds()), int64(s.GetExpiration().GetNanos())),
+				GranteeUserID:  s.GetGrantee().GetUserId(),
 				GranteeGroupID: s.GetGrantee().GetGroupId(),
 			}); err != nil {
 				sublog.Error().Err(err).
@@ -1201,10 +1201,10 @@ func (m *Manager) getReceived(ctx context.Context, ref *collaboration.ShareRefer
 		}
 		if s.ResourceId.SpaceId == s.ResourceId.OpaqueId {
 			if err := events.Publish(ctx, m.eventStream, events.SpaceMembershipExpired{
-				SpaceOwner:    s.GetOwner(),
-				SpaceID:       &provider.StorageSpaceId{OpaqueId: s.ResourceId.StorageId + "$" + s.ResourceId.SpaceId},
-				ExpiredAt:     time.Unix(int64(s.GetExpiration().GetSeconds()), int64(s.GetExpiration().GetNanos())),
-				GranteeUserID: s.GetGrantee().GetUserId(),
+				SpaceOwner:     s.GetOwner(),
+				SpaceID:        &provider.StorageSpaceId{OpaqueId: s.ResourceId.StorageId + "$" + s.ResourceId.SpaceId},
+				ExpiredAt:      time.Unix(int64(s.GetExpiration().GetSeconds()), int64(s.GetExpiration().GetNanos())),
+				GranteeUserID:  s.GetGrantee().GetUserId(),
 				GranteeGroupID: s.GetGrantee().GetGroupId(),
 			}); err != nil {
 				sublog.Error().Err(err).

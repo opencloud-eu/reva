@@ -933,10 +933,10 @@ func (fs *Decomposedfs) StorageSpaceFromNode(ctx context.Context, n *node.Node, 
 						ExpiredAt:  time.Unix(int64(g.Expiration.Seconds), int64(g.Expiration.Nanos)),
 						Timestamp:  utils.TSNow(),
 					}
-					switch {
-					case g.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_USER:
+					switch g.Grantee.Type {
+					case provider.GranteeType_GRANTEE_TYPE_USER:
 						ev.GranteeUserID = g.Grantee.GetUserId()
-					case g.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_GROUP:
+					case provider.GranteeType_GRANTEE_TYPE_GROUP:
 						ev.GranteeGroupID = g.Grantee.GetGroupId()
 					}
 					if fs.stream != nil {
