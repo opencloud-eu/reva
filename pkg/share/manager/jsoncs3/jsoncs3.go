@@ -553,16 +553,29 @@ func (m *Manager) GetShare(ctx context.Context, ref *collaboration.ShareReferenc
 			sublog.Error().Err(err).
 				Msg("failed to unshare expired share")
 		}
-		if err := events.Publish(ctx, m.eventStream, events.ShareExpired{
-			ShareID:        s.GetId(),
-			ShareOwner:     s.GetOwner(),
-			ItemID:         s.GetResourceId(),
-			ExpiredAt:      time.Unix(int64(s.GetExpiration().GetSeconds()), int64(s.GetExpiration().GetNanos())),
-			GranteeUserID:  s.GetGrantee().GetUserId(),
-			GranteeGroupID: s.GetGrantee().GetGroupId(),
-		}); err != nil {
-			sublog.Error().Err(err).
-				Msg("failed to publish share expired event")
+		if s.ResourceId.SpaceId == s.ResourceId.OpaqueId {
+			if err := events.Publish(ctx, m.eventStream, events.SpaceMembershipExpired{
+				SpaceOwner:    s.GetOwner(),
+				SpaceID:       &provider.StorageSpaceId{OpaqueId: s.ResourceId.StorageId + "$" + s.ResourceId.SpaceId},
+				ExpiredAt:     time.Unix(int64(s.GetExpiration().GetSeconds()), int64(s.GetExpiration().GetNanos())),
+				GranteeUserID: s.GetGrantee().GetUserId(),
+				GranteeGroupID: s.GetGrantee().GetGroupId(),
+			}); err != nil {
+				sublog.Error().Err(err).
+					Msg("failed to publish space membership expired event")
+			}
+		} else {
+			if err := events.Publish(ctx, m.eventStream, events.ShareExpired{
+				ShareID:        s.GetId(),
+				ShareOwner:     s.GetOwner(),
+				ItemID:         s.GetResourceId(),
+				ExpiredAt:      time.Unix(int64(s.GetExpiration().GetSeconds()), int64(s.GetExpiration().GetNanos())),
+				GranteeUserID:  s.GetGrantee().GetUserId(),
+				GranteeGroupID: s.GetGrantee().GetGroupId(),
+			}); err != nil {
+				sublog.Error().Err(err).
+					Msg("failed to publish share expired event")
+			}
 		}
 	}
 	// check if we are the creator or the grantee
@@ -754,15 +767,28 @@ func (m *Manager) listSharesByIDs(ctx context.Context, user *userv1beta1.User, f
 						sublog.Error().Err(err).
 							Msg("failed to unshare expired share")
 					}
-					if err := events.Publish(ctx, m.eventStream, events.ShareExpired{
-						ShareOwner:     s.GetOwner(),
-						ItemID:         resourceID,
-						ExpiredAt:      time.Unix(int64(s.GetExpiration().GetSeconds()), int64(s.GetExpiration().GetNanos())),
-						GranteeUserID:  s.GetGrantee().GetUserId(),
-						GranteeGroupID: s.GetGrantee().GetGroupId(),
-					}); err != nil {
-						sublog.Error().Err(err).
-							Msg("failed to publish share expired event")
+					if s.ResourceId.SpaceId == s.ResourceId.OpaqueId {
+						if err := events.Publish(ctx, m.eventStream, events.SpaceMembershipExpired{
+							SpaceOwner:     s.GetOwner(),
+							SpaceID:        &provider.StorageSpaceId{OpaqueId: s.ResourceId.StorageId + "$" + s.ResourceId.SpaceId},
+							ExpiredAt:      time.Unix(int64(s.GetExpiration().GetSeconds()), int64(s.GetExpiration().GetNanos())),
+							GranteeUserID:  s.GetGrantee().GetUserId(),
+							GranteeGroupID: s.GetGrantee().GetGroupId(),
+						}); err != nil {
+							sublog.Error().Err(err).
+								Msg("failed to publish space membership expired event")
+						}
+					} else {
+						if err := events.Publish(ctx, m.eventStream, events.ShareExpired{
+							ShareOwner:     s.GetOwner(),
+							ItemID:         resourceID,
+							ExpiredAt:      time.Unix(int64(s.GetExpiration().GetSeconds()), int64(s.GetExpiration().GetNanos())),
+							GranteeUserID:  s.GetGrantee().GetUserId(),
+							GranteeGroupID: s.GetGrantee().GetGroupId(),
+						}); err != nil {
+							sublog.Error().Err(err).
+								Msg("failed to publish share expired event")
+						}
 					}
 					continue
 				}
@@ -872,15 +898,28 @@ func (m *Manager) listCreatedShares(ctx context.Context, user *userv1beta1.User,
 							sublog.Error().Err(err).
 								Msg("failed to unshare expired share")
 						}
-						if err := events.Publish(ctx, m.eventStream, events.ShareExpired{
-							ShareOwner:     s.GetOwner(),
-							ItemID:         s.GetResourceId(),
-							ExpiredAt:      time.Unix(int64(s.GetExpiration().GetSeconds()), int64(s.GetExpiration().GetNanos())),
-							GranteeUserID:  s.GetGrantee().GetUserId(),
-							GranteeGroupID: s.GetGrantee().GetGroupId(),
-						}); err != nil {
-							sublog.Error().Err(err).
-								Msg("failed to publish share expired event")
+						if s.ResourceId.SpaceId == s.ResourceId.OpaqueId {
+							if err := events.Publish(ctx, m.eventStream, events.SpaceMembershipExpired{
+								SpaceOwner:     s.GetOwner(),
+								SpaceID:        &provider.StorageSpaceId{OpaqueId: s.ResourceId.StorageId + "$" + s.ResourceId.SpaceId},
+								ExpiredAt:      time.Unix(int64(s.GetExpiration().GetSeconds()), int64(s.GetExpiration().GetNanos())),
+								GranteeUserID:  s.GetGrantee().GetUserId(),
+								GranteeGroupID: s.GetGrantee().GetGroupId(),
+							}); err != nil {
+								sublog.Error().Err(err).
+									Msg("failed to publish space membership expired event")
+							}
+						} else {
+							if err := events.Publish(ctx, m.eventStream, events.ShareExpired{
+								ShareOwner:     s.GetOwner(),
+								ItemID:         s.GetResourceId(),
+								ExpiredAt:      time.Unix(int64(s.GetExpiration().GetSeconds()), int64(s.GetExpiration().GetNanos())),
+								GranteeUserID:  s.GetGrantee().GetUserId(),
+								GranteeGroupID: s.GetGrantee().GetGroupId(),
+							}); err != nil {
+								sublog.Error().Err(err).
+									Msg("failed to publish share expired event")
+							}
 						}
 						continue
 					}
@@ -1044,15 +1083,28 @@ func (m *Manager) ListReceivedShares(ctx context.Context, filters []*collaborati
 							sublogr.Error().Err(err).
 								Msg("failed to unshare expired share")
 						}
-						if err := events.Publish(ctx, m.eventStream, events.ShareExpired{
-							ShareOwner:     s.GetOwner(),
-							ItemID:         s.GetResourceId(),
-							ExpiredAt:      time.Unix(int64(s.GetExpiration().GetSeconds()), int64(s.GetExpiration().GetNanos())),
-							GranteeUserID:  s.GetGrantee().GetUserId(),
-							GranteeGroupID: s.GetGrantee().GetGroupId(),
-						}); err != nil {
-							sublogr.Error().Err(err).
-								Msg("failed to publish share expired event")
+						if s.ResourceId.SpaceId == s.ResourceId.OpaqueId {
+							if err := events.Publish(ctx, m.eventStream, events.SpaceMembershipExpired{
+								SpaceOwner:     s.GetOwner(),
+								SpaceID:        &provider.StorageSpaceId{OpaqueId: s.ResourceId.StorageId + "$" + s.ResourceId.SpaceId},
+								ExpiredAt:      time.Unix(int64(s.GetExpiration().GetSeconds()), int64(s.GetExpiration().GetNanos())),
+								GranteeUserID:  s.GetGrantee().GetUserId(),
+								GranteeGroupID: s.GetGrantee().GetGroupId(),
+							}); err != nil {
+								sublogr.Error().Err(err).
+									Msg("failed to publish space membership expired event")
+							}
+						} else {
+							if err := events.Publish(ctx, m.eventStream, events.ShareExpired{
+								ShareOwner:     s.GetOwner(),
+								ItemID:         s.GetResourceId(),
+								ExpiredAt:      time.Unix(int64(s.GetExpiration().GetSeconds()), int64(s.GetExpiration().GetNanos())),
+								GranteeUserID:  s.GetGrantee().GetUserId(),
+								GranteeGroupID: s.GetGrantee().GetGroupId(),
+							}); err != nil {
+								sublogr.Error().Err(err).
+									Msg("failed to publish share expired event")
+							}
 						}
 						continue
 					}
@@ -1147,15 +1199,28 @@ func (m *Manager) getReceived(ctx context.Context, ref *collaboration.ShareRefer
 			sublog.Error().Err(err).
 				Msg("failed to unshare expired share")
 		}
-		if err := events.Publish(ctx, m.eventStream, events.ShareExpired{
-			ShareOwner:     s.GetOwner(),
-			ItemID:         s.GetResourceId(),
-			ExpiredAt:      time.Unix(int64(s.GetExpiration().GetSeconds()), int64(s.GetExpiration().GetNanos())),
-			GranteeUserID:  s.GetGrantee().GetUserId(),
-			GranteeGroupID: s.GetGrantee().GetGroupId(),
-		}); err != nil {
-			sublog.Error().Err(err).
-				Msg("failed to publish share expired event")
+		if s.ResourceId.SpaceId == s.ResourceId.OpaqueId {
+			if err := events.Publish(ctx, m.eventStream, events.SpaceMembershipExpired{
+				SpaceOwner:    s.GetOwner(),
+				SpaceID:       &provider.StorageSpaceId{OpaqueId: s.ResourceId.StorageId + "$" + s.ResourceId.SpaceId},
+				ExpiredAt:     time.Unix(int64(s.GetExpiration().GetSeconds()), int64(s.GetExpiration().GetNanos())),
+				GranteeUserID: s.GetGrantee().GetUserId(),
+				GranteeGroupID: s.GetGrantee().GetGroupId(),
+			}); err != nil {
+				sublog.Error().Err(err).
+					Msg("failed to publish space membership expired event")
+			}
+		} else {
+			if err := events.Publish(ctx, m.eventStream, events.ShareExpired{
+				ShareOwner:     s.GetOwner(),
+				ItemID:         s.GetResourceId(),
+				ExpiredAt:      time.Unix(int64(s.GetExpiration().GetSeconds()), int64(s.GetExpiration().GetNanos())),
+				GranteeUserID:  s.GetGrantee().GetUserId(),
+				GranteeGroupID: s.GetGrantee().GetGroupId(),
+			}); err != nil {
+				sublog.Error().Err(err).
+					Msg("failed to publish share expired event")
+			}
 		}
 	}
 	return m.convert(ctx, user.Id.GetOpaqueId(), s), nil
