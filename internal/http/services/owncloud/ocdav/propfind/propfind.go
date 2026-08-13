@@ -761,6 +761,14 @@ func (p *Handler) getResourceInfos(ctx context.Context, w http.ResponseWriter, r
 	return resourceInfos, sendTusHeaders, true
 }
 
+// writeWebdavError writes the http status code together with a webdav error body.
+// The caller is expected to have logged the underlying error already.
+func writeWebdavError(log *zerolog.Logger, w http.ResponseWriter, code int, message string) {
+	w.WriteHeader(code)
+	b, err := errors.Marshal(code, message, "", "")
+	errors.HandleWebdavError(log, w, b, err)
+}
+
 func (p *Handler) getSpaceResourceInfos(ctx context.Context, w http.ResponseWriter, r *http.Request, pf XML, ref *provider.Reference, requestPath string, depth net.Depth, log zerolog.Logger) ([]*provider.ResourceInfo, bool) {
 	ctx, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "get_space_resource_infos")
 	span.SetAttributes(attribute.KeyValue{Key: "requestPath", Value: attribute.StringValue(requestPath)})
@@ -770,7 +778,7 @@ func (p *Handler) getSpaceResourceInfos(ctx context.Context, w http.ResponseWrit
 	client, err := p.selector.Next()
 	if err != nil {
 		log.Error().Err(err).Msg("error getting grpc client")
-		w.WriteHeader(http.StatusInternalServerError)
+		writeWebdavError(&log, w, http.StatusInternalServerError, "error getting grpc client")
 		return nil, false
 	}
 
@@ -786,13 +794,18 @@ func (p *Handler) getSpaceResourceInfos(ctx context.Context, w http.ResponseWrit
 	res, err := client.ListContainer(ctx, req)
 	if err != nil {
 		log.Error().Err(err).Msg("error sending list container grpc request")
-		w.WriteHeader(http.StatusInternalServerError)
+		writeWebdavError(&log, w, http.StatusInternalServerError, "error listing container")
 		return nil, false
 	}
 
 	if res.Status.Code != rpc.Code_CODE_OK {
-		log.Debug().Interface("status", res.Status).Msg("List Container not ok, skipping")
-		w.WriteHeader(http.StatusInternalServerError)
+		// this aborts the propfind, the status has to be turned into a proper webdav
+		// error response. A NOT_FOUND for example is a 404 the client can act on, not
+		// a 500. Do not turn this into a `continue` like the sub-container listings
+		// below: this is the listing of the requested resource itself, skipping it
+		// would answer with a multistatus that silently omits all children.
+		lcLog := log.With().Str("rpc", "ListContainer").Logger()
+		errors.HandleWebdavErrorStatus(&lcLog, w, res.Status)
 		return nil, false
 	}
 	for _, info := range res.Infos {
@@ -820,7 +833,7 @@ func (p *Handler) getSpaceResourceInfos(ctx context.Context, w http.ResponseWrit
 			res, err := client.ListContainer(ctx, req) // FIXME public link depth infinity -> "gateway: could not find provider: gateway: error calling ListStorageProviders: rpc error: code = PermissionDenied desc = auth: core access token is invalid"
 			if err != nil {
 				log.Error().Err(err).Interface("info", info).Msg("error sending list container grpc request")
-				w.WriteHeader(http.StatusInternalServerError)
+				writeWebdavError(&log, w, http.StatusInternalServerError, "error listing container")
 				return nil, false
 			}
 			if res.Status.Code != rpc.Code_CODE_OK {
