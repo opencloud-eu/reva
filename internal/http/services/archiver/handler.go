@@ -114,6 +114,10 @@ func (c *Config) init() {
 		c.Prefix = "download_archive"
 	}
 
+	// Sanitize before the default so s.config.Name is always safe to put in a
+	// Content-Disposition header: net.ContentDispositionAttachment escapes the filename* form
+	// but emits filename="..." verbatim, and a configured name is not otherwise validated.
+	c.Name = sanitizeArchiveName(c.Name)
 	if c.Name == "" {
 		c.Name = "download"
 	}
@@ -204,8 +208,9 @@ func (s *svc) allAllowed(paths []string) error {
 */
 
 // resourceName resolves the name of a single resource so the archive can be named after it instead
-// of the generic "download". It returns an empty string on any failure, so the caller keeps the
-// default name. The name is sanitized via sanitizeArchiveName.
+// of the configured default. It returns an error when the lookup fails, and an empty name when the
+// resource yields nothing usable: neither a name nor a path, or a name that sanitizes away.
+// Callers fall back to their own default on either. The name is sanitized via sanitizeArchiveName.
 func (s *svc) resourceName(ctx context.Context, id *provider.ResourceId) (string, error) {
 	gatewayClient, err := s.gatewaySelector.Next()
 	if err != nil {
@@ -230,6 +235,20 @@ func (s *svc) resourceName(ctx context.Context, id *provider.ResourceId) (string
 		name = path.Base(res.GetInfo().GetPath())
 	}
 	return sanitizeArchiveName(name), nil
+}
+
+// archiveName returns the name for the archive: the resource's own name when a single resource
+// was requested and could be resolved, and the configured default otherwise.
+func (s *svc) archiveName(ctx context.Context, resources []*provider.ResourceId) string {
+	if len(resources) != 1 {
+		return s.config.Name
+	}
+	name, err := s.resourceName(ctx, resources[0])
+	if err != nil || name == "" {
+		s.log.Debug().Err(err).Msg("could not resolve the archive name, using the default")
+		return s.config.Name
+	}
+	return name
 }
 
 // sanitizeArchiveName removes characters that would break the Content-Disposition header (CR, LF,
@@ -305,19 +324,11 @@ func (s *svc) Handler() http.Handler {
 		}
 
 		// Name the archive after the resource when a single one was requested, instead of the
-		// generic "download". The name must be resolved here, before the body is streamed: the
+		// configured default. The name must be resolved here, before the body is streamed: the
 		// Content-Disposition header below is written before CreateZip/CreateTar run, so the name
 		// the walker resolves while building the archive would come too late.
 		// See https://github.com/opencloud-eu/reva/issues/308
-		archName := s.config.Name
-		if len(resources) == 1 {
-			if name, err := s.resourceName(ctx, resources[0]); name != "" && err == nil {
-				archName = name
-			} else {
-				s.log.Debug().Err(err).Msg("could not resolve the archive name, using the default")
-				archName = "download"
-			}
-		}
+		archName := s.archiveName(ctx, resources)
 		if format == "tar" {
 			archName += ".tar"
 		} else {
