@@ -1,10 +1,14 @@
 # Changelog
 
-## [2.48.1](https://github.com/opencloud-eu/reva/releases/tag/v2.48.1) - 2026-08-11
+## [2.49.0](https://github.com/opencloud-eu/reva/releases/tag/v2.49.0) - 2026-08-14
 
 ### ❤️ Thanks to all contributors! ❤️
 
-@maki5
+@butonic, @maki5
+
+### 📈 Enhancement
+
+- expose Nak & Term in raw event interface [[#768](https://github.com/opencloud-eu/reva/pull/768)]
 
 ### 🐛 Bug Fixes
 
