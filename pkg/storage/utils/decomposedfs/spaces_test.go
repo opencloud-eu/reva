@@ -94,6 +94,25 @@ var _ = Describe("Spaces", func() {
 				Expect(string(resp.StorageSpace.Opaque.Map["spaceAlias"].Value)).To(Equal("project/mission-to-mars"))
 				Expect(resp.StorageSpace.Name).To(Equal("Mission to Mars"))
 				Expect(resp.StorageSpace.SpaceType).To(Equal("project"))
+				Expect(resp.StorageSpace.Opaque.Map).ToNot(HaveKey("contentType"))
+			})
+			It("stores and returns the content type", func() {
+				env.Owner = nil
+				resp, err := env.Fs.CreateStorageSpace(env.Ctx, &provider.CreateStorageSpaceRequest{
+					Name: "Mission to Mars",
+					Type: "project",
+					Opaque: &typesv1beta1.Opaque{
+						Map: map[string]*typesv1beta1.OpaqueEntry{
+							"contentType": {
+								Decoder: "plain",
+								Value:   []byte("text-editor"),
+							},
+						},
+					},
+				})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(resp.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+				Expect(string(resp.StorageSpace.Opaque.Map["contentType"].Value)).To(Equal("text-editor"))
 			})
 		})
 
@@ -406,6 +425,42 @@ var _ = Describe("Spaces", func() {
 					}
 				},
 				rpcv1beta1.Code_CODE_PERMISSION_DENIED,
+			),
+			Entry("Editor cannot change contentType",
+				func() (*userv1beta1.User, *provider.UpdateStorageSpaceRequest) {
+					return editor, &provider.UpdateStorageSpaceRequest{
+						StorageSpace: &provider.StorageSpace{
+							Id: spaceid,
+							Opaque: &typesv1beta1.Opaque{
+								Map: map[string]*typesv1beta1.OpaqueEntry{
+									"contentType": {
+										Decoder: "plain",
+										Value:   []byte("text-editor"),
+									},
+								},
+							},
+						},
+					}
+				},
+				rpcv1beta1.Code_CODE_PERMISSION_DENIED,
+			),
+			Entry("Manager can change contentType",
+				func() (*userv1beta1.User, *provider.UpdateStorageSpaceRequest) {
+					return manager, &provider.UpdateStorageSpaceRequest{
+						StorageSpace: &provider.StorageSpace{
+							Id: spaceid,
+							Opaque: &typesv1beta1.Opaque{
+								Map: map[string]*typesv1beta1.OpaqueEntry{
+									"contentType": {
+										Decoder: "plain",
+										Value:   []byte("text-editor"),
+									},
+								},
+							},
+						},
+					}
+				},
+				rpcv1beta1.Code_CODE_OK,
 			),
 			Entry("Admin can change quota",
 				func() (*userv1beta1.User, *provider.UpdateStorageSpaceRequest) {
