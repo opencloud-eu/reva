@@ -162,8 +162,15 @@ func (s *svc) handleProppatch(ctx context.Context, w http.ResponseWriter, r *htt
 				return nil, nil, false
 			}
 
-			// don't use path.Join. It removes the double slash! concatenate with a /
-			key := fmt.Sprintf("%s/%s", patches[i].Props[j].XMLName.Space, patches[i].Props[j].XMLName.Local)
+			// For oc: namespace, use the local name directly as the metadata key
+			// to match the Graph Metadata API key format. For other namespaces,
+			// use the full URI to avoid collisions.
+			var key string
+			if patches[i].Props[j].XMLName.Space == net.NsOwncloud {
+				key = patches[i].Props[j].XMLName.Local
+			} else {
+				key = fmt.Sprintf("%s/%s", patches[i].Props[j].XMLName.Space, patches[i].Props[j].XMLName.Local)
+			}
 			value := string(patches[i].Props[j].InnerXML)
 			remove := patches[i].Remove
 			// boolean flags may be "set" to false as well

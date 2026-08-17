@@ -102,7 +102,10 @@ func (r *revaWalker) readDir(ctx context.Context, id *provider.ResourceId) ([]*p
 	if err != nil {
 		return nil, err
 	}
-	resp, err := gatewayClient.ListContainer(ctx, &provider.ListContainerRequest{Ref: &provider.Reference{ResourceId: id, Path: "."}})
+	resp, err := gatewayClient.ListContainer(ctx, &provider.ListContainerRequest{
+		Ref:                   &provider.Reference{ResourceId: id, Path: "."},
+		ArbitraryMetadataKeys: []string{"*"},
+	})
 
 	switch {
 	case err != nil:
