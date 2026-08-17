@@ -97,6 +97,7 @@ const (
 	SpaceReadmeAttr      string = OcisPrefix + "space.readme"
 	SpaceImageAttr       string = OcisPrefix + "space.image"
 	SpaceAliasAttr       string = OcisPrefix + "space.alias"
+	SpaceContentTypeAttr string = OcisPrefix + "space.contenttype"
 
 	UserAcePrefix  string = "u:"
 	GroupAcePrefix string = "g:"
