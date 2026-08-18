@@ -18,6 +18,7 @@
 
 ### 📦️ Dependencies
 
+- chore(deps): bump go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc from 0.69.0 to 0.70.0 [[#765](https://github.com/opencloud-eu/reva/pull/765)]
 - chore(deps): bump github.com/rogpeppe/go-internal from 1.15.0 to 1.16.0 [[#760](https://github.com/opencloud-eu/reva/pull/760)]
 - chore(deps): bump github.com/go-git/go-git/v5 from 5.19.1 to 5.19.2 in the go_modules group across 1 directory [[#762](https://github.com/opencloud-eu/reva/pull/762)]
 
