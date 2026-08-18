@@ -1,13 +1,14 @@
 # Changelog
 
-## [2.49.0](https://github.com/opencloud-eu/reva/releases/tag/v2.49.0) - 2026-08-14
+## [2.49.0](https://github.com/opencloud-eu/reva/releases/tag/v2.49.0) - 2026-08-18
 
 ### ❤️ Thanks to all contributors! ❤️
 
-@butonic, @maki5
+@aduffeck, @butonic, @maki5
 
 ### 📈 Enhancement
 
+- Extend upload sessions to hold more explicit state information [[#764](https://github.com/opencloud-eu/reva/pull/764)]
 - expose Nak & Term in raw event interface [[#768](https://github.com/opencloud-eu/reva/pull/768)]
 
 ### 🐛 Bug Fixes
