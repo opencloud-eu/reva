@@ -24,6 +24,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"time"
 
 	gatewayv1beta1 "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	groupv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
@@ -1148,5 +1149,25 @@ var _ = Describe("Jsoncs3", func() {
 				})
 			})
 		})
+	})
+})
+
+var _ = Describe("CleanupStaleShares", func() {
+	It("returns a migration timeout", func() {
+		tmpdir, err := os.MkdirTemp("", "jsoncs3-cleanup-test")
+		Expect(err).ToNot(HaveOccurred())
+		DeferCleanup(os.RemoveAll, tmpdir)
+
+		storage, err := metadata.NewDiskStorage(tmpdir)
+		Expect(err).ToNot(HaveOccurred())
+		m, err := jsoncs3.New(storage, nil, nil, 0, nil, 0)
+		Expect(err).ToNot(HaveOccurred())
+
+		ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond)
+		defer cancel()
+
+		err = m.CleanupStaleShares(ctx)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("share manager migrations did not complete"))
 	})
 })
