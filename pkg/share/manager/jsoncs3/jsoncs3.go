@@ -1347,7 +1347,7 @@ func (m *Manager) CleanupStaleShares(ctx context.Context) error {
 	if err := m.waitForInit(ctx); err != nil {
 		return err
 	}
-	
+
 	if err := m.waitForMigrations(ctx); err != nil {
 		return errors.Wrap(err, "wait for share manager migrations")
 	}
