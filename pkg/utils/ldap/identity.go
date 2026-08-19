@@ -40,10 +40,10 @@ import (
 
 // Identity provides methods to query users and groups from an LDAP server
 type Identity struct {
-	User           userConfig   `mapstructure:",squash"`
-	Group          groupConfig  `mapstructure:",squash"`
-	Tenant         tenantConfig `mapstructure:",squash"`
-	LookupCacheTTL string       `mapstructure:"lookup_cache_ttl"`
+	User           userConfig    `mapstructure:",squash"`
+	Group          groupConfig   `mapstructure:",squash"`
+	Tenant         tenantConfig  `mapstructure:",squash"`
+	LookupCacheTTL time.Duration `mapstructure:"lookup_cache_ttl"`
 
 	lookupCache entryCache
 }
@@ -76,8 +76,7 @@ func (c entryCache) Add(key string, entry *ldap.Entry) {
 const (
 	tracerName = "pkg/utils/ldap"
 
-	lookupCacheDefaultTTL = 10 * time.Second
-	lookupCacheSize       = 1024
+	lookupCacheSize = 1024
 )
 
 type userConfig struct {
@@ -258,25 +257,12 @@ func (i *Identity) Setup() error {
 		}
 	}
 
-	if i.LookupCacheTTL != "" {
-		// Parse the TTL string if provided
-		parsedTTL, err := time.ParseDuration(i.LookupCacheTTL)
-		if err != nil {
-			return fmt.Errorf("error parsing lookup_cache_ttl %q: %w", i.LookupCacheTTL, err)
-		}
-		switch {
-		case parsedTTL < 0:
-			return fmt.Errorf("error configuring lookup cache ttl: duration must be >= 0")
-		case parsedTTL == 0:
-			// A TTL of 0 disables the lookup cache entirely. A zero-value
-			// entryCache always misses and never stores anything.
-			i.lookupCache = entryCache{}
-		default:
-			i.lookupCache = entryCache{lru: expirable.NewLRU[string, *ldap.Entry](lookupCacheSize, nil, parsedTTL)}
-		}
+	if i.LookupCacheTTL > 0 {
+		i.lookupCache = entryCache{lru: expirable.NewLRU[string, *ldap.Entry](lookupCacheSize, nil, i.LookupCacheTTL)}
 	} else {
-		// Use default TTL if not provided
-		i.lookupCache = entryCache{lru: expirable.NewLRU[string, *ldap.Entry](lookupCacheSize, nil, lookupCacheDefaultTTL)}
+		// A TTL of 0 disables the lookup cache entirely. A zero-value
+		// entryCache always misses and never stores anything.
+		i.lookupCache = entryCache{}
 	}
 
 	return nil
