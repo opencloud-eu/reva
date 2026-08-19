@@ -24,7 +24,6 @@ bind_username="cn=admin,dc=example,dc=org"
 bind_password="admin"
 idp="http://localhost:20080"
 login_attributes=['uid', 'cn']
-lookup_cache_ttl="0"
 
 [grpc.services.authprovider.auth_managers.ldap.user_schema]
 id="entryuuid"
@@ -46,7 +45,6 @@ group_objectclass="posixGroup"
 bind_username="cn=admin,dc=example,dc=org"
 bind_password="admin"
 idp="http://localhost:20080"
-lookup_cache_ttl="0"
 
 [grpc.services.userprovider.drivers.ldap.user_schema]
 id="entryuuid"
@@ -74,7 +72,6 @@ group_objectclass="posixGroup"
 bind_username="cn=admin,dc=example,dc=org"
 bind_password="admin"
 idp="http://localhost:20080"
-lookup_cache_ttl="0"
 
 [grpc.services.groupprovider.drivers.ldap.user_schema]
 id="entryuuid"
