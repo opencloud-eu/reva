@@ -569,6 +569,14 @@ func (fs *Decomposedfs) Postprocessing(ch <-chan events.Event) {
 				sublog = log.With().Str("spaceid", session.SpaceID()).Str("nodeid", session.NodeID()).Logger()
 
 				session.SetScanData(res.Description, res.Scandate)
+				var status string
+				switch ev.Outcome {
+				case events.PPOutcomeAbort, events.PPOutcomeDelete:
+					status = upload.SessionStatusFailed
+				default:
+					status = upload.SessionStatusProcessing
+				}
+				session.SetStatus(status, "finished postprocessing step: "+string(ev.FinishedStep))
 				if err := session.Persist(ctx); err != nil {
 					sublog.Error().Err(err).Msg("Failed to persist scan results")
 				}
