@@ -503,12 +503,18 @@ func (session *DecomposedFsSession) Cleanup(revertNodeMetadata, cleanBin, cleanI
 
 // URL returns a url to download an upload
 func (session *DecomposedFsSession) URL(_ context.Context) (string, error) {
+
+	u := joinurl(session.store.tknopts.DownloadEndpoint, "tus/", session.ID())
+	if session.store.tknopts.DataGatewayEndpoint == "" {
+		return u, nil
+	}
+
+	// we need to create a token
 	type transferClaims struct {
 		jwt.RegisteredClaims
 		Target string `json:"target"`
 	}
 
-	u := joinurl(session.store.tknopts.DownloadEndpoint, "tus/", session.ID())
 	ttl := time.Duration(session.store.tknopts.TransferExpires) * time.Second
 	claims := transferClaims{
 		RegisteredClaims: jwt.RegisteredClaims{
