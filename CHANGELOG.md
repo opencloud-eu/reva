@@ -1,6 +1,6 @@
 # Changelog
 
-## [2.46.8](https://github.com/opencloud-eu/reva/releases/tag/v2.46.8) - 2026-08-18
+## [2.46.8](https://github.com/opencloud-eu/reva/releases/tag/v2.46.8) - 2026-08-19
 
 ### ❤️ Thanks to all contributors! ❤️
 
@@ -8,6 +8,7 @@
 
 ### 🐛 Bug Fixes
 
+- [stable-2.46] Do not disregard disabled spaces when propagating changes [[#771](https://github.com/opencloud-eu/reva/pull/771)]
 - [stable-2.46] Add database name to kv log output [[#752](https://github.com/opencloud-eu/reva/pull/752)]
 - [stable-2.46] Extend upload sessions to hold more explicit state information [[#772](https://github.com/opencloud-eu/reva/pull/772)]
 - [stable-2.46] Fix Metadata locking and Reading for decomposedfs and align defaults with OpenCloud [[#744](https://github.com/opencloud-eu/reva/pull/744)]
