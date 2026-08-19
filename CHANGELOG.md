@@ -8,6 +8,7 @@
 
 ### 📈 Enhancement
 
+- make datagateway optional in events [[#778](https://github.com/opencloud-eu/reva/pull/778)]
 - feat: add contentType on space [[#770](https://github.com/opencloud-eu/reva/pull/770)]
 - Extend upload sessions to hold more explicit state information [[#764](https://github.com/opencloud-eu/reva/pull/764)]
 - expose Nak & Term in raw event interface [[#768](https://github.com/opencloud-eu/reva/pull/768)]
