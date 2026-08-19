@@ -355,7 +355,7 @@ var _ = Describe("the postprocessing consumer", func() {
 				Expect(pub.published).To(HaveLen(1))
 			})
 
-			It("still unmarks when the rollback fails", func() {
+			It("keeps the session when the rollback fails", func() {
 				session := preparedSession(false)
 				fs.rollbackErr = errors.New("no such node")
 
@@ -364,7 +364,7 @@ var _ = Describe("the postprocessing consumer", func() {
 					Outcome:  events.PPOutcomeAbort,
 				}})
 
-				Expect(fs.calls).To(ContainElement("MarkProcessing(false)"))
+				Expect(fs.calls).ToNot(ContainElement("MarkProcessing(false)"))
 			})
 		})
 
