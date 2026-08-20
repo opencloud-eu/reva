@@ -1,5 +1,33 @@
 # Changelog
 
+## [2.49.0](https://github.com/opencloud-eu/reva/releases/tag/v2.49.0) - 2026-08-20
+
+### ❤️ Thanks to all contributors! ❤️
+
+@JammingBen, @aduffeck, @butonic, @maki5
+
+### 🐛 Bug Fixes
+
+- fix: CleanupStaleShares to not silently skip errors and migrations waiting [[#775](https://github.com/opencloud-eu/reva/pull/775)]
+- Set proper upload status if an upload ends at antivirus [[#779](https://github.com/opencloud-eu/reva/pull/779)]
+- Use a time.Duration for the ttl config for consistency [[#777](https://github.com/opencloud-eu/reva/pull/777)]
+- fix key propagation in for shared resources when restoring version [[#761](https://github.com/opencloud-eu/reva/pull/761)]
+
+### 📈 Enhancement
+
+- make datagateway optional in events [[#778](https://github.com/opencloud-eu/reva/pull/778)]
+- feat: add contentType on space [[#770](https://github.com/opencloud-eu/reva/pull/770)]
+- Extend upload sessions to hold more explicit state information [[#764](https://github.com/opencloud-eu/reva/pull/764)]
+- expose Nak & Term in raw event interface [[#768](https://github.com/opencloud-eu/reva/pull/768)]
+
+### 📦️ Dependencies
+
+- chore(deps): bump google.golang.org/protobuf from 1.36.11 to 1.36.12 [[#782](https://github.com/opencloud-eu/reva/pull/782)]
+- chore(deps): bump golang.org/x/crypto from 0.54.0 to 0.55.0 [[#776](https://github.com/opencloud-eu/reva/pull/776)]
+- chore(deps): bump go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc from 0.69.0 to 0.70.0 [[#765](https://github.com/opencloud-eu/reva/pull/765)]
+- chore(deps): bump github.com/rogpeppe/go-internal from 1.15.0 to 1.16.0 [[#760](https://github.com/opencloud-eu/reva/pull/760)]
+- chore(deps): bump github.com/go-git/go-git/v5 from 5.19.1 to 5.19.2 in the go_modules group across 1 directory [[#762](https://github.com/opencloud-eu/reva/pull/762)]
+
 ## [2.48.0](https://github.com/opencloud-eu/reva/releases/tag/v2.48.0) - 2026-08-03
 
 ### ❤️ Thanks to all contributors! ❤️
