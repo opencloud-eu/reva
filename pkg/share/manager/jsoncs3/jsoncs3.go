@@ -20,6 +20,7 @@ package jsoncs3
 
 import (
 	"context"
+	stderrors "errors"
 	"strings"
 	"sync"
 	"time"
@@ -343,6 +344,15 @@ func (m *Manager) migrationsRunning() bool {
 // need migrations should call SkipMigrations instead to unblock write operations.
 func (m *Manager) RunMigrations(cfg migration.MigrationConfig) {
 	go m.doMigrations(cfg)
+}
+
+func (m *Manager) waitForMigrations(ctx context.Context) error {
+	select {
+	case <-m.migrationsDone:
+		return nil
+	case <-ctx.Done():
+		return errors.Wrap(ctx.Err(), "share manager migrations did not complete")
+	}
 }
 
 // SkipMigrations unblocks write operations on this instance without running
@@ -1331,27 +1341,28 @@ func (m *Manager) removeShare(ctx context.Context, s *collaboration.Share, skipS
 	return eg.Wait()
 }
 
-func (m *Manager) CleanupStaleShares(ctx context.Context) {
+func (m *Manager) CleanupStaleShares(ctx context.Context) error {
 	log := appctx.GetLogger(ctx)
 
 	if err := m.waitForInit(ctx); err != nil {
-		return
+		return err
 	}
-	if m.migrationsRunning() {
-		return
+
+	if err := m.waitForMigrations(ctx); err != nil {
+		return errors.Wrap(err, "wait for share manager migrations")
 	}
 
 	// list all shares
 	providers, err := m.Cache.All(ctx)
 	if err != nil {
-		log.Error().Err(err).Msg("error listing all shares")
-		return
+		return errors.Wrap(err, "list all shares")
 	}
 
 	client, err := m.gatewaySelector.Next()
 	if err != nil {
-		log.Error().Err(err).Msg("could not get gateway client")
+		return errors.Wrap(err, "get gateway client")
 	}
+	var cleanupErrors []error
 
 	providers.Range(func(storage string, spaces *providercache.Spaces) bool {
 		log.Info().Str("storage", storage).Interface("spaceCount", spaces.Spaces.Count()).Msg("checking storage")
@@ -1365,12 +1376,13 @@ func (m *Manager) CleanupStaleShares(ctx context.Context) {
 				}
 				res, err := client.Stat(ctx, req)
 				if err != nil {
-					log.Error().Err(err).Str("storage", storage).Str("space", space).Msg("could not stat shared resource")
+					cleanupErrors = append(cleanupErrors, errors.Wrapf(err, "stat shared resource in storage %q and space %q", storage, space))
+					continue
 				}
 				if res.Status.Code == rpcv1beta1.Code_CODE_NOT_FOUND {
 					log.Info().Str("storage", storage).Str("space", space).Msg("shared resource does not exist anymore. cleaning up shares")
 					if err := m.removeShare(ctx, s, false); err != nil {
-						log.Error().Err(err).Str("storage", storage).Str("space", space).Msg("could not remove share")
+						cleanupErrors = append(cleanupErrors, errors.Wrapf(err, "remove stale share in storage %q and space %q", storage, space))
 					}
 				}
 			}
@@ -1380,4 +1392,6 @@ func (m *Manager) CleanupStaleShares(ctx context.Context) {
 
 		return true
 	})
+
+	return stderrors.Join(cleanupErrors...)
 }
