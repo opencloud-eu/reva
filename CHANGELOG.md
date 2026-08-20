@@ -8,6 +8,7 @@
 
 ### 🐛 Bug Fixes
 
+- fix: CleanupStaleShares to not silently skip errors and migrations waiting [[#775](https://github.com/opencloud-eu/reva/pull/775)]
 - Set proper upload status if an upload ends at antivirus [[#779](https://github.com/opencloud-eu/reva/pull/779)]
 - Use a time.Duration for the ttl config for consistency [[#777](https://github.com/opencloud-eu/reva/pull/777)]
 - fix key propagation in for shared resources when restoring version [[#761](https://github.com/opencloud-eu/reva/pull/761)]
