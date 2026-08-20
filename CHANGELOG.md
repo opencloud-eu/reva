@@ -6,16 +6,18 @@
 
 @JammingBen, @aduffeck, @butonic, @maki5
 
+### 🐛 Bug Fixes
+
+- Set proper upload status if an upload ends at antivirus [[#779](https://github.com/opencloud-eu/reva/pull/779)]
+- Use a time.Duration for the ttl config for consistency [[#777](https://github.com/opencloud-eu/reva/pull/777)]
+- fix key propagation in for shared resources when restoring version [[#761](https://github.com/opencloud-eu/reva/pull/761)]
+
 ### 📈 Enhancement
 
 - make datagateway optional in events [[#778](https://github.com/opencloud-eu/reva/pull/778)]
 - feat: add contentType on space [[#770](https://github.com/opencloud-eu/reva/pull/770)]
 - Extend upload sessions to hold more explicit state information [[#764](https://github.com/opencloud-eu/reva/pull/764)]
 - expose Nak & Term in raw event interface [[#768](https://github.com/opencloud-eu/reva/pull/768)]
-
-### 🐛 Bug Fixes
-
-- fix key propagation in for shared resources when restoring version [[#761](https://github.com/opencloud-eu/reva/pull/761)]
 
 ### 📦️ Dependencies
 
