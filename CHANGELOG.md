@@ -1,5 +1,21 @@
 # Changelog
 
+## [2.46.8](https://github.com/opencloud-eu/reva/releases/tag/v2.46.8) - 2026-08-20
+
+### ❤️ Thanks to all contributors! ❤️
+
+@rhafer
+
+### 🐛 Bug Fixes
+
+- [stable-2.46] Add a helper which checks if a resource is still being processed [[#783](https://github.com/opencloud-eu/reva/pull/783)]
+- [stable-2.46] Set proper upload status if an upload ends at antivirus [[#780](https://github.com/opencloud-eu/reva/pull/780)]
+- [stable-2.46] Do not disregard disabled spaces when propagating changes [[#771](https://github.com/opencloud-eu/reva/pull/771)]
+- [stable-2.46] Add database name to kv log output [[#752](https://github.com/opencloud-eu/reva/pull/752)]
+- [stable-2.46] Extend upload sessions to hold more explicit state information [[#772](https://github.com/opencloud-eu/reva/pull/772)]
+- [stable-2.46] Fix Metadata locking and Reading for decomposedfs and align defaults with OpenCloud [[#744](https://github.com/opencloud-eu/reva/pull/744)]
+- [stable-2.46] Sync uploads incrementally to avoid fsync freezes [[#743](https://github.com/opencloud-eu/reva/pull/743)]
+
 ## [2.46.7](https://github.com/opencloud-eu/reva/releases/tag/v2.46.7) - 2026-07-06
 
 ### ❤️ Thanks to all contributors! ❤️
