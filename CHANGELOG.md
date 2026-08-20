@@ -1,6 +1,6 @@
 # Changelog
 
-## [2.49.0](https://github.com/opencloud-eu/reva/releases/tag/v2.49.0) - 2026-08-19
+## [2.49.0](https://github.com/opencloud-eu/reva/releases/tag/v2.49.0) - 2026-08-20
 
 ### ❤️ Thanks to all contributors! ❤️
 
@@ -19,6 +19,7 @@
 
 ### 📦️ Dependencies
 
+- chore(deps): bump google.golang.org/protobuf from 1.36.11 to 1.36.12 [[#782](https://github.com/opencloud-eu/reva/pull/782)]
 - chore(deps): bump golang.org/x/crypto from 0.54.0 to 0.55.0 [[#776](https://github.com/opencloud-eu/reva/pull/776)]
 - chore(deps): bump go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc from 0.69.0 to 0.70.0 [[#765](https://github.com/opencloud-eu/reva/pull/765)]
 - chore(deps): bump github.com/rogpeppe/go-internal from 1.15.0 to 1.16.0 [[#760](https://github.com/opencloud-eu/reva/pull/760)]
