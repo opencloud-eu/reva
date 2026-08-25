@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -188,7 +189,7 @@ var _ = Describe("Grants", func() {
 		Context("with guest grants", func() {
 			BeforeEach(func() {
 				userid = &userpb.UserId{
-					OpaqueId: "foo@example.com",
+					OpaqueId: "Foo@Example.COM",
 					Type:     userpb.UserType_USER_TYPE_GUEST,
 				}
 			})
@@ -202,9 +203,10 @@ var _ = Describe("Grants", func() {
 				Expect(len(grants)).To(Equal(1))
 
 				g := grants[0]
-				Expect(g.Grantee.GetUserId().OpaqueId).To(Equal(grant.Grantee.GetUserId().OpaqueId))
+				Expect(g.Grantee.GetUserId().OpaqueId).To(Equal(strings.ToLower(grant.Grantee.GetUserId().OpaqueId)))
 				Expect(g.Grantee.GetUserId().Type).To(Equal(userpb.UserType_USER_TYPE_GUEST))
 
+				// the mixed-case request must match the lowercased persisted grant
 				err = env.Fs.RemoveGrant(env.Ctx, ref, grant)
 				Expect(err).ToNot(HaveOccurred())
 
