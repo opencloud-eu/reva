@@ -1309,10 +1309,11 @@ func (n *Node) DeleteGrant(ctx context.Context, g *provider.Grant) (err error) {
 		attr = prefixes.GrantGroupAcePrefix + g.Grantee.GetGroupId().OpaqueId
 	default:
 		prefix := prefixes.GrantUserAcePrefix
+		opaqueID := strings.ToLower(g.Grantee.GetUserId().GetOpaqueId())
 		if g.Grantee.GetUserId().GetType() == userpb.UserType_USER_TYPE_GUEST {
 			prefix = prefixes.GrantMailAcePrefix
 		}
-		attr = prefix + g.Grantee.GetUserId().OpaqueId
+		attr = prefix + opaqueID
 	}
 
 	if err = n.RemoveXattr(ctx, attr); err != nil {
