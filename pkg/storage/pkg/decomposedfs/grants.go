@@ -237,7 +237,7 @@ func (fs *Decomposedfs) RemoveGrant(ctx context.Context, ref *provider.Reference
 		case provider.GranteeType_GRANTEE_TYPE_USER:
 			// remove from user index
 			if g.Grantee.GetUserId().GetType() == userpb.UserType_USER_TYPE_GUEST {
-				if err := fs.mailSpaceIndex.Remove(g.Grantee.GetUserId().GetOpaqueId(), grantNode.SpaceID); err != nil {
+				if err := fs.mailSpaceIndex.Remove(strings.ToLower(g.Grantee.GetUserId().GetOpaqueId()), grantNode.SpaceID); err != nil {
 					return err
 				}
 			} else {
@@ -327,7 +327,12 @@ func (fs *Decomposedfs) loadGrant(ctx context.Context, ref *provider.Reference, 
 	for _, grant := range grants {
 		switch grant.Grantee.GetType() {
 		case provider.GranteeType_GRANTEE_TYPE_USER:
-			if g.Grantee.GetUserId().GetOpaqueId() == grant.Grantee.GetUserId().GetOpaqueId() {
+			// guest grants are persisted with a lowercased mail as the principal
+			if grant.Grantee.GetUserId().GetType() == userpb.UserType_USER_TYPE_GUEST {
+				if strings.ToLower(g.Grantee.GetUserId().GetOpaqueId()) == grant.Grantee.GetUserId().GetOpaqueId() {
+					return n, unlockFunc, grant, nil
+				}
+			} else if g.Grantee.GetUserId().GetOpaqueId() == grant.Grantee.GetUserId().GetOpaqueId() {
 				return n, unlockFunc, grant, nil
 			}
 		case provider.GranteeType_GRANTEE_TYPE_GROUP:
