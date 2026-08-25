@@ -1300,19 +1300,25 @@ func (n *Node) ReadGrant(ctx context.Context, grantee string) (g *provider.Grant
 	return e.Grant(), nil
 }
 
-// ReadGrant reads a CS3 grant
+// DeleteGrant reads a CS3 grant
 func (n *Node) DeleteGrant(ctx context.Context, g *provider.Grant) (err error) {
 
 	var attr string
 	switch g.Grantee.Type {
 	case provider.GranteeType_GRANTEE_TYPE_GROUP:
 		attr = prefixes.GrantGroupAcePrefix + g.Grantee.GetGroupId().OpaqueId
-	default:
+	case provider.GranteeType_GRANTEE_TYPE_USER:
 		prefix := prefixes.GrantUserAcePrefix
+		opaqueID := strings.ToLower(g.Grantee.GetUserId().GetOpaqueId())
 		if g.Grantee.GetUserId().GetType() == userpb.UserType_USER_TYPE_GUEST {
 			prefix = prefixes.GrantMailAcePrefix
+			opaqueID = strings.ToLower(opaqueID)
 		}
-		attr = prefix + g.Grantee.GetUserId().OpaqueId
+		attr = prefix + opaqueID
+	default:
+		// Note: We shouldn't actually get here as this is already caught in the upper
+		// layers (e.g. the storage provider)
+		return errors.New("grantee type is invalid")
 	}
 
 	if err = n.RemoveXattr(ctx, attr); err != nil {

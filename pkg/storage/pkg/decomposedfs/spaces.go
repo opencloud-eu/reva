@@ -910,7 +910,7 @@ func (fs *Decomposedfs) updateIndexes(ctx context.Context, grantee *provider.Gra
 	switch grantee.Type {
 	case provider.GranteeType_GRANTEE_TYPE_USER:
 		if grantee.GetUserId().GetType() == userv1beta1.UserType_USER_TYPE_GUEST {
-			return fs.linkSpaceByMail(ctx, grantee.GetUserId().GetOpaqueId(), spaceID, target)
+			return fs.linkSpaceByMail(ctx, strings.ToLower(grantee.GetUserId().GetOpaqueId()), spaceID, target)
 		}
 		return fs.linkSpaceByUser(ctx, grantee.GetUserId().GetOpaqueId(), spaceID, target)
 	case provider.GranteeType_GRANTEE_TYPE_GROUP:
@@ -1007,7 +1007,7 @@ func (fs *Decomposedfs) StorageSpaceFromNode(ctx context.Context, n *node.Node, 
 					case provider.GranteeType_GRANTEE_TYPE_USER:
 						if g.Grantee.GetUserId().GetType() == userv1beta1.UserType_USER_TYPE_GUEST {
 							// remove from mail index
-							if err := fs.mailSpaceIndex.Remove(g.Grantee.GetUserId().GetOpaqueId(), n.GetSpaceID()); err != nil {
+							if err := fs.mailSpaceIndex.Remove(strings.ToLower(g.Grantee.GetUserId().GetOpaqueId()), n.GetSpaceID()); err != nil {
 								sublog.Error().Err(err).Str("grantee", id).
 									Msg("failed to delete expired mail space index")
 							}
