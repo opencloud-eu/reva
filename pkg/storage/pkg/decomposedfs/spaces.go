@@ -357,6 +357,21 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 			matches[allMatches[entry]] = allMatches[entry]
 		}
 
+		// guests are granted shares via their mail address, search the mail index as well
+		if requestedUserID.GetType() == userv1beta1.UserType_USER_TYPE_GUEST {
+			allMatches, err = fs.mailSpaceIndex.Load(strings.ToLower(requestedUserID.GetOpaqueId()))
+			// do not return an error if the guest has no spaces
+			if err != nil && !os.IsNotExist(err) {
+				return nil, errors.Wrap(err, "error reading mail index")
+			}
+
+			if entry == spaceIDAny {
+				maps.Copy(matches, allMatches)
+			} else {
+				matches[allMatches[entry]] = allMatches[entry]
+			}
+		}
+
 		// get Groups for userid
 		user := ctxpkg.ContextMustGetUser(ctx)
 		// TODO the user from context may not have groups populated
