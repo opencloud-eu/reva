@@ -1,5 +1,15 @@
 # Changelog
 
+## [2.49.1](https://github.com/opencloud-eu/reva/releases/tag/v2.49.1) - 2026-08-25
+
+### ❤️ Thanks to all contributors! ❤️
+
+@maki5
+
+### 🐛 Bug Fixes
+
+- Backport and fix of space membership expired event [[#766](https://github.com/opencloud-eu/reva/pull/766)]
+
 ## [2.49.0](https://github.com/opencloud-eu/reva/releases/tag/v2.49.0) - 2026-08-20
 
 ### ❤️ Thanks to all contributors! ❤️
