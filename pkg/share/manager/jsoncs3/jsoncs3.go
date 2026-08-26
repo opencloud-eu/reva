@@ -289,6 +289,34 @@ func (m *Manager) initialize(ctx context.Context) error {
 		return err
 	}
 
+	err = m.storage.MakeDirIfNotExist(ctx, "migrations")
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		return err
+	}
+
+	// A missing "storages" directory means nobody has ever used this metadata
+	// tree, so there is nothing to migrate. Record all migrations as applied
+	// before creating "storages": any instance that observes "storages" is then
+	// guaranteed to also observe the state file, which keeps instances starting
+	// in parallel from disagreeing about whether migrations have to run.
+	_, err = m.storage.Stat(ctx, "storages")
+	switch err.(type) {
+	case nil:
+		// existing deployment, leave the migration state untouched
+	case errtypes.IsNotFound:
+		if err = migration.MarkAllApplied(ctx, m.storage); err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, err.Error())
+			return err
+		}
+	default:
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		return err
+	}
+
 	err = m.storage.MakeDirIfNotExist(ctx, "storages")
 	if err != nil {
 		span.RecordError(err)
@@ -302,12 +330,6 @@ func (m *Manager) initialize(ctx context.Context) error {
 		return err
 	}
 	err = m.storage.MakeDirIfNotExist(ctx, "groups")
-	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
-		return err
-	}
-	err = m.storage.MakeDirIfNotExist(ctx, "migrations")
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
