@@ -19,6 +19,7 @@
 package tree_test
 
 import (
+	"errors"
 	"os"
 	"path"
 	"path/filepath"
@@ -26,15 +27,24 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/google/uuid"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/decomposedfs/lookup"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/decomposedfs/metadata"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/decomposedfs/metadata/prefixes"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/decomposedfs/node"
 	helpers "github.com/opencloud-eu/reva/v2/pkg/storage/utils/decomposedfs/testhelpers"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/decomposedfs/timemanager"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/decomposedfs/tree"
+	"github.com/opencloud-eu/reva/v2/pkg/store"
+	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/mock"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
+
+// renameFailBackend wraps a metadata.Backend and injects a failure on Rename (OCISDEV-817)
+type renameFailBackend struct{ metadata.Backend }
+
+func (b renameFailBackend) Rename(_, _ string) error { return errors.New("injected rename error") }
 
 var _ = Describe("Tree", func() {
 	var (
@@ -129,6 +139,63 @@ var _ = Describe("Tree", func() {
 
 				It("does not delete the blob from the blobstore", func() {
 					env.Blobstore.AssertNotCalled(GinkgoT(), "Delete", mock.AnythingOfType("*node.Node"))
+				})
+			})
+
+			// OCISDEV-817: trash symlink must be removed when MetadataBackend.Rename fails mid-delete.
+			// This is the exact path observed in the SE-1149 production incident.
+			Context("when MetadataBackend.Rename fails", func() {
+				It("rolls back the trash symlink", func() {
+					log := &zerolog.Logger{}
+					lu := lookup.New(renameFailBackend{env.Lookup.MetadataBackend()}, env.Options, &timemanager.Manager{})
+					failTree := tree.New(lu, env.Blobstore, env.Options, store.Create(), log)
+
+					file, err := lu.NodeFromResource(env.Ctx, &provider.Reference{
+						ResourceId: env.SpaceRootRes,
+						Path:       "dir1/file1",
+					})
+					Expect(err).ToNot(HaveOccurred())
+
+					Expect(failTree.Delete(env.Ctx, file)).To(HaveOccurred())
+
+					trashLink := path.Join(env.Root, "spaces", lookup.Pathify(file.SpaceRoot.ID, 1, 2), "trash", lookup.Pathify(file.ID, 4, 2))
+					_, statErr := os.Lstat(trashLink)
+					Expect(os.IsNotExist(statErr)).To(BeTrue())
+				})
+			})
+
+			// OCISDEV-817: trash symlink must be removed when os.Rename fails mid-delete.
+			// chmod 0500 on the node's parent dir blocks rename but allows xattr writes (tested on macOS + Linux).
+			Context("when os.Rename fails", func() {
+				It("rolls back the trash symlink", func() {
+					nodeDir := filepath.Dir(n.InternalPath())
+					Expect(os.Chmod(nodeDir, 0o500)).To(Succeed())
+					defer os.Chmod(nodeDir, 0o700)
+
+					Expect(t.Delete(env.Ctx, n)).To(HaveOccurred())
+
+					trashLink := path.Join(env.Root, "spaces", lookup.Pathify(n.SpaceRoot.ID, 1, 2), "trash", lookup.Pathify(n.ID, 4, 2))
+					_, statErr := os.Lstat(trashLink)
+					Expect(os.IsNotExist(statErr)).To(BeTrue())
+				})
+			})
+
+			// OCISDEV-817: trash symlink and node rename must be rolled back when removing
+			// the parent-dir entry fails (path #3). chmod 0500 on n.ParentPath() blocks
+			// os.Remove(path) while all prior steps succeed.
+			Context("when os.Remove of parent entry fails", func() {
+				It("rolls back the trash symlink and node rename", func() {
+					Expect(os.Chmod(n.ParentPath(), 0o500)).To(Succeed())
+					defer os.Chmod(n.ParentPath(), 0o700)
+
+					Expect(t.Delete(env.Ctx, n)).To(HaveOccurred())
+
+					trashLink := path.Join(env.Root, "spaces", lookup.Pathify(n.SpaceRoot.ID, 1, 2), "trash", lookup.Pathify(n.ID, 4, 2))
+					_, statErr := os.Lstat(trashLink)
+					Expect(os.IsNotExist(statErr)).To(BeTrue())
+
+					_, err := os.Stat(n.InternalPath())
+					Expect(err).ToNot(HaveOccurred())
 				})
 			})
 		})
