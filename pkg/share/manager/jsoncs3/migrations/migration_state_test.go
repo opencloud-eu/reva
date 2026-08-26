@@ -152,6 +152,54 @@ var _ = Describe("RunMigrations / loadState / saveState", func() {
 
 	// ── RunMigrations ──────────────────────────────────────────────────────────
 
+	Describe("MarkAllApplied", func() {
+		BeforeEach(func() {
+			migrations = []migration{
+				&fakeMigration{name: "first", version: 1},
+				&fakeMigration{name: "second", version: 2},
+			}
+		})
+
+		It("records the highest registered version so no migration runs", func() {
+			Expect(MarkAllApplied(context.Background(), stor)).To(Succeed())
+
+			Expect(m.loadState(context.Background())).To(Succeed())
+			Expect(m.state.version).To(Equal(2))
+
+			m.RunMigrations()
+			for _, mig := range migrations {
+				Expect(mig.(*fakeMigration).called).To(BeFalse())
+			}
+		})
+
+		It("never overwrites an already persisted state", func() {
+			m.state.version = 1
+			Expect(m.saveState(context.Background())).To(Succeed())
+
+			Expect(MarkAllApplied(context.Background(), stor)).To(Succeed())
+
+			m.state.version = 0
+			Expect(m.loadState(context.Background())).To(Succeed())
+			Expect(m.state.version).To(Equal(1))
+		})
+
+		It("is safe to call concurrently from several instances", func() {
+			var wg sync.WaitGroup
+			for range 8 {
+				wg.Add(1)
+				go func() {
+					defer GinkgoRecover()
+					defer wg.Done()
+					Expect(MarkAllApplied(context.Background(), stor)).To(Succeed())
+				}()
+			}
+			wg.Wait()
+
+			Expect(m.loadState(context.Background())).To(Succeed())
+			Expect(m.state.version).To(Equal(2))
+		})
+	})
+
 	Describe("RunMigrations", func() {
 		Context("when there are no registered migrations", func() {
 			It("completes without error and leaves version at 0", func() {
