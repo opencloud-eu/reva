@@ -803,9 +803,16 @@ func (fs *Decomposedfs) DeleteStorageSpace(ctx context.Context, req *provider.De
 		for _, g := range grants {
 			switch g.Grantee.Type {
 			case provider.GranteeType_GRANTEE_TYPE_USER:
-				// remove from user index
-				if err := fs.userSpaceIndex.Remove(g.Grantee.GetUserId().GetOpaqueId(), spaceID); err != nil {
-					sublog.Error().Err(err).Str("grantee", g.Grantee.GetUserId().GetOpaqueId()).Msg("could not remove user from user index")
+				if g.Grantee.GetUserId().GetType() == userv1beta1.UserType_USER_TYPE_GUEST {
+					// remove from mail index
+					if err := fs.mailSpaceIndex.Remove(strings.ToLower(g.Grantee.GetUserId().GetOpaqueId()), spaceID); err != nil {
+						sublog.Error().Err(err).Str("grantee", g.Grantee.GetUserId().GetOpaqueId()).Msg("could not remove guest from mail index")
+					}
+				} else {
+					// remove from user index
+					if err := fs.userSpaceIndex.Remove(g.Grantee.GetUserId().GetOpaqueId(), spaceID); err != nil {
+						sublog.Error().Err(err).Str("grantee", g.Grantee.GetUserId().GetOpaqueId()).Msg("could not remove user from user index")
+					}
 				}
 			case provider.GranteeType_GRANTEE_TYPE_GROUP:
 				// remove from group index
