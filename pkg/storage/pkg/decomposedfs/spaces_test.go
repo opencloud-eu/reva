@@ -275,6 +275,7 @@ var _ = Describe("Spaces", func() {
 
 				userGrantee := helpers.User0ID
 				groupGrantee := "11111111-2222-3333-4444-555555555555"
+				guestGrantee := "Guest@Example.COM"
 				Expect(env.Fs.AddGrant(env.Ctx, ref, &provider.Grant{
 					Grantee:     &provider.Grantee{Type: provider.GranteeType_GRANTEE_TYPE_USER, Id: &provider.Grantee_UserId{UserId: &userv1beta1.UserId{OpaqueId: userGrantee}}},
 					Permissions: &provider.ResourcePermissions{Stat: true},
@@ -282,6 +283,11 @@ var _ = Describe("Spaces", func() {
 				})).To(Succeed())
 				Expect(env.Fs.AddGrant(env.Ctx, ref, &provider.Grant{
 					Grantee:     &provider.Grantee{Type: provider.GranteeType_GRANTEE_TYPE_GROUP, Id: &provider.Grantee_GroupId{GroupId: &grouppb.GroupId{OpaqueId: groupGrantee}}},
+					Permissions: &provider.ResourcePermissions{Stat: true},
+					Creator:     &userv1beta1.UserId{OpaqueId: helpers.OwnerID},
+				})).To(Succeed())
+				Expect(env.Fs.AddGrant(env.Ctx, ref, &provider.Grant{
+					Grantee:     &provider.Grantee{Type: provider.GranteeType_GRANTEE_TYPE_USER, Id: &provider.Grantee_UserId{UserId: &userv1beta1.UserId{OpaqueId: guestGrantee, Type: userv1beta1.UserType_USER_TYPE_GUEST}}},
 					Permissions: &provider.ResourcePermissions{Stat: true},
 					Creator:     &userv1beta1.UserId{OpaqueId: helpers.OwnerID},
 				})).To(Succeed())
@@ -296,6 +302,9 @@ var _ = Describe("Spaces", func() {
 				groupIdx := spaceidindex.New(filepath.Join(env.Root, "indexes"), "by-group-id")
 				Expect(groupIdx.Init()).To(Succeed())
 				Expect(groupIdx.Add(groupGrantee, spaceID, target)).To(Succeed())
+				mailIdx := spaceidindex.New(filepath.Join(env.Root, "indexes"), "by-mail")
+				Expect(mailIdx.Init()).To(Succeed())
+				Expect(mailIdx.Add("guest@example.com", spaceID, target)).To(Succeed())
 
 				load := func(indexName, key string) map[string]string {
 					idx := spaceidindex.New(filepath.Join(env.Root, "indexes"), indexName)
@@ -305,9 +314,10 @@ var _ = Describe("Spaces", func() {
 					return m
 				}
 
-				// precondition: both grantee indexes reference the space
+				// precondition: the grantee indexes reference the space
 				Expect(load("by-user-id", userGrantee)).To(HaveKey(spaceID))
 				Expect(load("by-group-id", groupGrantee)).To(HaveKey(spaceID))
+				Expect(load("by-mail", "guest@example.com")).To(HaveKey(spaceID))
 
 				// disable, then purge as the space admin
 				ctx := ctxpkg.ContextSetUser(context.Background(), env.DeleteAllSpacesUser)
@@ -320,6 +330,7 @@ var _ = Describe("Spaces", func() {
 				// the grantee index entries must be gone after the purge
 				Expect(load("by-user-id", userGrantee)).ToNot(HaveKey(spaceID))
 				Expect(load("by-group-id", groupGrantee)).ToNot(HaveKey(spaceID))
+				Expect(load("by-mail", "guest@example.com")).ToNot(HaveKey(spaceID))
 			})
 			// purging one space must remove only that space's entry: a sibling
 			// space of the same owner must stay in the by-user-id index.
