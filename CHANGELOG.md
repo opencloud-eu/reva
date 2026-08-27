@@ -1,10 +1,14 @@
 # Changelog
 
-## [2.49.1](https://github.com/opencloud-eu/reva/releases/tag/v2.49.1) - 2026-08-25
+## [2.50.0](https://github.com/opencloud-eu/reva/releases/tag/v2.50.0) - 2026-08-27
 
 ### ❤️ Thanks to all contributors! ❤️
 
-@maki5
+@maki5, @rhafer
+
+### 📈 Enhancement
+
+- enhancement(shares/jsoncs3): Shortcut migration on fresh system [[#787](https://github.com/opencloud-eu/reva/pull/787)]
 
 ### 🐛 Bug Fixes
 
