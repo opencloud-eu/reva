@@ -1308,13 +1308,7 @@ func (n *Node) DeleteGrant(ctx context.Context, g *provider.Grant) (err error) {
 	case provider.GranteeType_GRANTEE_TYPE_GROUP:
 		attr = prefixes.GrantGroupAcePrefix + g.Grantee.GetGroupId().OpaqueId
 	case provider.GranteeType_GRANTEE_TYPE_USER:
-		prefix := prefixes.GrantUserAcePrefix
-		opaqueID := strings.ToLower(g.Grantee.GetUserId().GetOpaqueId())
-		if g.Grantee.GetUserId().GetType() == userpb.UserType_USER_TYPE_GUEST {
-			prefix = prefixes.GrantMailAcePrefix
-			opaqueID = strings.ToLower(opaqueID)
-		}
-		attr = prefix + opaqueID
+		attr = prefixes.GrantPrefix + ace.UserAce(g.Grantee.GetUserId())
 	default:
 		// Note: We shouldn't actually get here as this is already caught in the upper
 		// layers (e.g. the storage provider)
