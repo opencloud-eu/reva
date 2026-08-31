@@ -1,13 +1,14 @@
 # Changelog
 
-## [2.50.0](https://github.com/opencloud-eu/reva/releases/tag/v2.50.0) - 2026-08-27
+## [2.50.0](https://github.com/opencloud-eu/reva/releases/tag/v2.50.0) - 2026-08-31
 
 ### ❤️ Thanks to all contributors! ❤️
 
-@maki5, @rhafer
+@dschmidt, @maki5, @rhafer
 
 ### 📈 Enhancement
 
+- mime: map the Nikon NRW raw extension [[#773](https://github.com/opencloud-eu/reva/pull/773)]
 - enhancement(shares/jsoncs3): Shortcut migration on fresh system [[#787](https://github.com/opencloud-eu/reva/pull/787)]
 
 ### 🐛 Bug Fixes
