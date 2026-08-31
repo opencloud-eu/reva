@@ -93,13 +93,13 @@ var _ = Describe("ACE", func() {
 
 	Describe("FromGrant", func() {
 		It("creates an ACE from a user grant", func() {
-			ace := ace.FromGrant(userGrant)
-			Expect(ace.Principal()).To(Equal("u:foo"))
+			aceValue := ace.FromGrant(userGrant)
+			Expect(aceValue.Principal()).To(Equal(ace.UserAcePrefix + "foo"))
 		})
 
 		It("creates an ACE from a group grant", func() {
-			ace := ace.FromGrant(groupGrant)
-			Expect(ace.Principal()).To(Equal("g:foo"))
+			aceValue := ace.FromGrant(groupGrant)
+			Expect(aceValue.Principal()).To(Equal(ace.GroupAcePrefix + "foo"))
 		})
 
 		It("creates an ACE from a guest grant", func() {
@@ -109,8 +109,8 @@ var _ = Describe("ACE", func() {
 					Type:     userpb.UserType_USER_TYPE_GUEST,
 				},
 			}
-			ace := ace.FromGrant(guestGrant)
-			Expect(ace.Principal()).To(Equal("m:guest@example.com"))
+			aceValue := ace.FromGrant(guestGrant)
+			Expect(aceValue.Principal()).To(Equal(ace.MailAcePrefix + "guest@example.com"))
 		})
 	})
 
