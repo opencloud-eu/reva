@@ -31,6 +31,7 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/grants"
+	"github.com/opencloud-eu/reva/v2/pkg/utils"
 )
 
 const (
@@ -223,9 +224,9 @@ func FromGrant(g *provider.Grant) *ACE {
 func UserAce(id *userpb.UserId) string {
 	switch id.GetType() {
 	case userpb.UserType_USER_TYPE_GUEST:
-		return MailAcePrefix + strings.ToLower(id.GetOpaqueId())
+		return MailAcePrefix + utils.CanonicalUserID(id)
 	default:
-		return UserAcePrefix + id.GetOpaqueId()
+		return UserAcePrefix + utils.CanonicalUserID(id)
 	}
 }
 

@@ -359,7 +359,7 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 
 		// guests are granted shares via their mail address, search the mail index as well
 		if requestedUserID.GetType() == userv1beta1.UserType_USER_TYPE_GUEST {
-			allMatches, err = fs.mailSpaceIndex.Load(strings.ToLower(requestedUserID.GetOpaqueId()))
+			allMatches, err = fs.mailSpaceIndex.Load(utils.CanonicalUserID(requestedUserID))
 			// do not return an error if the guest has no spaces
 			if err != nil && !os.IsNotExist(err) {
 				return nil, errors.Wrap(err, "error reading mail index")
@@ -805,7 +805,7 @@ func (fs *Decomposedfs) DeleteStorageSpace(ctx context.Context, req *provider.De
 			case provider.GranteeType_GRANTEE_TYPE_USER:
 				if g.Grantee.GetUserId().GetType() == userv1beta1.UserType_USER_TYPE_GUEST {
 					// remove from mail index
-					if err := fs.mailSpaceIndex.Remove(strings.ToLower(g.Grantee.GetUserId().GetOpaqueId()), spaceID); err != nil {
+					if err := fs.mailSpaceIndex.Remove(utils.CanonicalUserID(g.Grantee.GetUserId()), spaceID); err != nil {
 						sublog.Error().Err(err).Str("grantee", g.Grantee.GetUserId().GetOpaqueId()).Msg("could not remove guest from mail index")
 					}
 				} else {
@@ -917,7 +917,7 @@ func (fs *Decomposedfs) updateIndexes(ctx context.Context, grantee *provider.Gra
 	switch grantee.Type {
 	case provider.GranteeType_GRANTEE_TYPE_USER:
 		if grantee.GetUserId().GetType() == userv1beta1.UserType_USER_TYPE_GUEST {
-			return fs.linkSpaceByMail(ctx, strings.ToLower(grantee.GetUserId().GetOpaqueId()), spaceID, target)
+			return fs.linkSpaceByMail(ctx, utils.CanonicalUserID(grantee.GetUserId()), spaceID, target)
 		}
 		return fs.linkSpaceByUser(ctx, grantee.GetUserId().GetOpaqueId(), spaceID, target)
 	case provider.GranteeType_GRANTEE_TYPE_GROUP:
@@ -1014,7 +1014,7 @@ func (fs *Decomposedfs) StorageSpaceFromNode(ctx context.Context, n *node.Node, 
 					case provider.GranteeType_GRANTEE_TYPE_USER:
 						if g.Grantee.GetUserId().GetType() == userv1beta1.UserType_USER_TYPE_GUEST {
 							// remove from mail index
-							if err := fs.mailSpaceIndex.Remove(strings.ToLower(g.Grantee.GetUserId().GetOpaqueId()), n.GetSpaceID()); err != nil {
+							if err := fs.mailSpaceIndex.Remove(utils.CanonicalUserID(g.Grantee.GetUserId()), n.GetSpaceID()); err != nil {
 								sublog.Error().Err(err).Str("grantee", id).
 									Msg("failed to delete expired mail space index")
 							}

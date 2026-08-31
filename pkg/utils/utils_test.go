@@ -21,6 +21,7 @@ package utils
 import (
 	"testing"
 
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 )
 
@@ -169,5 +170,25 @@ func TestMakeRelativePath(t *testing.T) {
 		if rel != tt.relPath {
 			t.Errorf("expected %s, got %s", tt.relPath, rel)
 		}
+	}
+}
+
+func TestCanonicalUserID(t *testing.T) {
+	tests := []struct {
+		name     string
+		id       *userpb.UserId
+		expected string
+	}{
+		{name: "nil", expected: ""},
+		{name: "regular user", id: &userpb.UserId{OpaqueId: "MixedCase"}, expected: "MixedCase"},
+		{name: "guest", id: &userpb.UserId{OpaqueId: "Guest@Example.COM", Type: userpb.UserType_USER_TYPE_GUEST}, expected: "guest@example.com"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if actual := CanonicalUserID(tt.id); actual != tt.expected {
+				t.Errorf("expected %q, got %q", tt.expected, actual)
+			}
+		})
 	}
 }
