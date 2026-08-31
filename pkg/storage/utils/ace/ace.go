@@ -33,6 +33,12 @@ import (
 	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/grants"
 )
 
+const (
+	UserAcePrefix  = "u:"
+	GroupAcePrefix = "g:"
+	MailAcePrefix  = "m:"
+)
+
 /*
 ACE represents an Access Control Entry, mimicing NFSv4 ACLs
 The difference is tht grant ACEs are not propagated down the tree when being set on a dir.
@@ -202,7 +208,7 @@ func FromGrant(g *provider.Grant) *ACE {
 	}
 	if g.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_GROUP {
 		e.flags = "g"
-		e.principal = "g:" + g.Grantee.GetGroupId().OpaqueId
+		e.principal = GroupAcePrefix + g.Grantee.GetGroupId().OpaqueId
 	} else {
 		e.principal = UserAce(g.Grantee.GetUserId())
 	}
@@ -217,9 +223,9 @@ func FromGrant(g *provider.Grant) *ACE {
 func UserAce(id *userpb.UserId) string {
 	switch id.GetType() {
 	case userpb.UserType_USER_TYPE_GUEST:
-		return "m:" + strings.ToLower(id.OpaqueId)
+		return MailAcePrefix + strings.ToLower(id.GetOpaqueId())
 	default:
-		return "u:" + id.OpaqueId
+		return UserAcePrefix + id.GetOpaqueId()
 	}
 }
 
@@ -261,11 +267,11 @@ func Unmarshal(principal string, v []byte) (e *ACE, err error) {
 		}
 		// check consistency of Flags and principal type
 		if strings.Contains(e.flags, "g") {
-			if principal[:1] != "g" {
+			if !strings.HasPrefix(principal, GroupAcePrefix) {
 				return nil, fmt.Errorf("inconsistent ace: expected group")
 			}
 		} else {
-			if principal[:1] != "u" && principal[:1] != "m" {
+			if !strings.HasPrefix(principal, UserAcePrefix) && !strings.HasPrefix(principal, MailAcePrefix) {
 				return nil, fmt.Errorf("inconsistent ace: expected user")
 			}
 		}
@@ -293,7 +299,7 @@ func (e *ACE) Grant() *provider.Grant {
 	if e.granteeType() == provider.GranteeType_GRANTEE_TYPE_GROUP {
 		g.Grantee.Id = &provider.Grantee_GroupId{GroupId: &grouppb.GroupId{OpaqueId: id}}
 	} else if e.granteeType() == provider.GranteeType_GRANTEE_TYPE_USER {
-		if strings.HasPrefix(e.principal, "m:") {
+		if strings.HasPrefix(e.principal, MailAcePrefix) {
 			g.Grantee.Id = &provider.Grantee_UserId{UserId: &userpb.UserId{OpaqueId: id, Type: userpb.UserType_USER_TYPE_GUEST}}
 		} else {
 			g.Grantee.Id = &provider.Grantee_UserId{UserId: &userpb.UserId{OpaqueId: id, Type: userpb.UserType_USER_TYPE_PRIMARY}}
