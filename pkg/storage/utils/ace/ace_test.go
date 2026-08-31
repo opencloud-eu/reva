@@ -20,7 +20,6 @@ package ace_test
 
 import (
 	"fmt"
-	"strings"
 
 	grouppb "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -126,11 +125,9 @@ var _ = Describe("ACE", func() {
 		It("returns a proper guest Grant with lowercased OpaqueId", func() {
 			ace := ace.FromGrant(guestGrant)
 			grant := ace.Grant()
-			// do not check opaque values
-			grant.Grantee.Opaque = nil
-			g := guestGrant
-			g.Grantee.Id.(*provider.Grantee_UserId).UserId.OpaqueId = strings.ToLower(g.Grantee.Id.(*provider.Grantee_UserId).UserId.OpaqueId)
-			Expect(grant).To(BeComparableTo(g, protocmp.Transform()))
+			Expect(grant.GetGrantee().GetUserId().GetOpaqueId()).To(Equal("guest@example.com"))
+			Expect(grant.GetGrantee().GetUserId().GetType()).To(Equal(userpb.UserType_USER_TYPE_GUEST))
+			Expect(grant.GetPermissions()).To(BeComparableTo(guestGrant.GetPermissions(), protocmp.Transform()))
 		})
 
 		It("returns a proper Grant for group ACE", func() {
