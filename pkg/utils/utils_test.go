@@ -173,6 +173,32 @@ func TestMakeRelativePath(t *testing.T) {
 	}
 }
 
+func TestIsPathSafeID(t *testing.T) {
+	tests := []struct {
+		name string
+		id   string
+		safe bool
+	}{
+		{name: "empty", id: "", safe: false},
+		{name: "dot", id: ".", safe: false},
+		{name: "dotdot", id: "..", safe: false},
+		{name: "uuid", id: "4c510ada-ee8c-4f0d-9e1a-6f2c9d1e2a1", safe: true},
+		{name: "email", id: "guest@example.com", safe: true},
+		{name: "path traversal", id: "my/../email@email.com", safe: false},
+		{name: "absolute path", id: "/etc/passwd", safe: false},
+		{name: "backslash", id: `..\other`, safe: false},
+		{name: "nul byte", id: "user\x00", safe: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if actual := IsPathSafeID(tt.id); actual != tt.safe {
+				t.Errorf("IsPathSafeID(%q) = %t, want %t", tt.id, actual, tt.safe)
+			}
+		})
+	}
+}
+
 func TestCanonicalUserID(t *testing.T) {
 	tests := []struct {
 		name     string

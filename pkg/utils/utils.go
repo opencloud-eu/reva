@@ -266,6 +266,15 @@ func GranteeEqual(u, v *provider.Grantee) bool {
 	return u.Type == v.Type && (UserEqual(uu, vu) || GroupEqual(ug, vg))
 }
 
+// IsPathSafeID checks whether the provided ID can safely be used as a path segment.
+// Emails which are used as path segments can have malicious values (e.g. "my/../email@email.com")
+func IsPathSafeID(id string) bool {
+	if id == "" || id == "." || id == ".." {
+		return false
+	}
+	return !strings.ContainsAny(id, "/\\\x00")
+}
+
 // MarshalProtoV1ToJSON marshals a proto V1 message to a JSON byte array
 // TODO: update this once we start using V2 in CS3APIs
 func MarshalProtoV1ToJSON(m proto.Message) ([]byte, error) {

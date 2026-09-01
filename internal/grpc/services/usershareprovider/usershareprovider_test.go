@@ -514,6 +514,50 @@ var _ = Describe("user share provider service", func() {
 
 				manager.AssertNumberOfCalls(GinkgoT(), "Share", 1)
 			})
+
+			It("fails when sharing with a guest using an invalid mail address", func() {
+				createShareResponse, err := provider.CreateShare(ctx, &collaborationpb.CreateShareRequest{
+					ResourceInfo: &providerpb.ResourceInfo{
+						PermissionSet: conversions.RoleFromName("manager").CS3ResourcePermissions(),
+					},
+					Grant: &collaborationpb.ShareGrant{
+						Grantee: &providerpb.Grantee{
+							Type: providerpb.GranteeType_GRANTEE_TYPE_USER,
+							Id:   &providerpb.Grantee_UserId{UserId: &userpb.UserId{OpaqueId: "not-a-mail", TenantId: "tenant1", Type: userpb.UserType_USER_TYPE_GUEST}},
+						},
+						Permissions: &collaborationpb.SharePermissions{
+							Permissions: conversions.RoleFromName("viewer").CS3ResourcePermissions(),
+						},
+					},
+				})
+
+				Expect(err).ToNot(HaveOccurred())
+				Expect(createShareResponse.Status.Code).To(Equal(rpcpb.Code_CODE_INVALID_ARGUMENT))
+
+				manager.AssertNumberOfCalls(GinkgoT(), "Share", 0)
+			})
+
+			It("fails when sharing with a guest using a mail address with path separators", func() {
+				createShareResponse, err := provider.CreateShare(ctx, &collaborationpb.CreateShareRequest{
+					ResourceInfo: &providerpb.ResourceInfo{
+						PermissionSet: conversions.RoleFromName("manager").CS3ResourcePermissions(),
+					},
+					Grant: &collaborationpb.ShareGrant{
+						Grantee: &providerpb.Grantee{
+							Type: providerpb.GranteeType_GRANTEE_TYPE_USER,
+							Id:   &providerpb.Grantee_UserId{UserId: &userpb.UserId{OpaqueId: "my/../email@email.com", TenantId: "tenant1", Type: userpb.UserType_USER_TYPE_GUEST}},
+						},
+						Permissions: &collaborationpb.SharePermissions{
+							Permissions: conversions.RoleFromName("viewer").CS3ResourcePermissions(),
+						},
+					},
+				})
+
+				Expect(err).ToNot(HaveOccurred())
+				Expect(createShareResponse.Status.Code).To(Equal(rpcpb.Code_CODE_INVALID_ARGUMENT))
+
+				manager.AssertNumberOfCalls(GinkgoT(), "Share", 0)
+			})
 		})
 	})
 

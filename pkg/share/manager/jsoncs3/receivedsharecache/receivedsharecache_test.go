@@ -156,4 +156,29 @@ var _ = Describe("Cache", func() {
 			})
 		})
 	})
+
+	Describe("with an unsafe user id", func() {
+		It("rejects a user id containing path separators", func() {
+			rs := &collaboration.ReceivedShare{
+				Share: share,
+				State: collaboration.ShareState_SHARE_STATE_PENDING,
+			}
+			Expect(c.Add(ctx, "my/../email@email.com", spaceID, rs)).To(HaveOccurred())
+			_, err := c.Get(ctx, "my/../email@email.com", spaceID, shareID)
+			Expect(err).To(HaveOccurred())
+			_, err = c.List(ctx, "my/../email@email.com")
+			Expect(err).To(HaveOccurred())
+			Expect(c.Remove(ctx, "my/../email@email.com", spaceID, shareID)).To(HaveOccurred())
+		})
+
+		It("still works with a regular user id", func() {
+			rs := &collaboration.ReceivedShare{
+				Share: share,
+				State: collaboration.ShareState_SHARE_STATE_PENDING,
+			}
+			Expect(c.Add(ctx, userID, spaceID, rs)).To(Succeed())
+			Expect(c.List(ctx, userID)).ToNot(BeNil())
+			Expect(c.Remove(ctx, userID, spaceID, shareID)).To(Succeed())
+		})
+	})
 })

@@ -81,6 +81,15 @@ func (fs *Decomposedfs) AddGrant(ctx context.Context, ref *provider.Reference, g
 	defer span.End()
 	log := appctx.GetLogger(ctx)
 	log.Debug().Interface("ref", ref).Interface("grant", g).Msg("AddGrant()")
+	// Guests are granted shares via their mail address, which ends up in the
+	// mail space index filename and the grant ACE xattr key. Reject mails that
+	// could break the storage layout before anything is written..
+	if g.GetGrantee().GetType() == provider.GranteeType_GRANTEE_TYPE_USER &&
+		g.GetGrantee().GetUserId().GetType() == userpb.UserType_USER_TYPE_GUEST &&
+		!utils.IsPathSafeID(utils.CanonicalUserID(g.GetGrantee().GetUserId())) {
+
+		return errtypes.BadRequest("invalid mail address for guest grantee")
+	}
 	grantNode, unlockFunc, grant, err := fs.loadGrant(ctx, ref, g)
 	if err != nil {
 		return err
@@ -238,6 +247,9 @@ func (fs *Decomposedfs) RemoveGrant(ctx context.Context, ref *provider.Reference
 			// remove from user index
 			canonicalUserID := utils.CanonicalUserID(g.Grantee.GetUserId())
 			if g.Grantee.GetUserId().GetType() == userpb.UserType_USER_TYPE_GUEST {
+				if !utils.IsPathSafeID(canonicalUserID) {
+					return errtypes.BadRequest("invalid mail address for guest grantee")
+				}
 				if err := fs.mailSpaceIndex.Remove(canonicalUserID, grantNode.SpaceID); err != nil {
 					return err
 				}

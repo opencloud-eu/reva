@@ -698,5 +698,26 @@ var _ = Describe("Spaces", func() {
 			Expect(spaces[0].SpaceType).To(Equal("project"))
 			Expect(spaces[0].GetId().GetOpaqueId()).To(Equal(resp.StorageSpace.GetId().GetOpaqueId()))
 		})
+
+		It("rejects granting a project space to a guest with an unsafe mail address", func() {
+			// create a project space as the owner
+			resp, err := env.Fs.CreateStorageSpace(env.Ctx, &provider.CreateStorageSpaceRequest{Name: "Guest Space", Type: "project"})
+			Expect(err).ToNot(HaveOccurred())
+			ref := &provider.Reference{ResourceId: resp.StorageSpace.GetRoot()}
+
+			ctx := storageprovider.WithSpaceType(ctxpkg.ContextSetUser(context.Background(), env.Users[0]), "project")
+			err = env.Fs.AddGrant(ctx, ref, &provider.Grant{
+				Grantee:     &provider.Grantee{Type: provider.GranteeType_GRANTEE_TYPE_USER, Id: &provider.Grantee_UserId{UserId: &userv1beta1.UserId{OpaqueId: "my/../email@email.com", Type: userv1beta1.UserType_USER_TYPE_GUEST}}},
+				Permissions: &provider.ResourcePermissions{Stat: true},
+				Creator:     &userv1beta1.UserId{OpaqueId: helpers.OwnerID},
+			})
+			Expect(err).To(HaveOccurred())
+
+			// nothing must have been written to the mail index
+			mailIdx := spaceidindex.New(filepath.Join(env.Root, "indexes"), "by-mail")
+			Expect(mailIdx.Init()).To(Succeed())
+			_, err = mailIdx.Load("my/../email@email.com")
+			Expect(err).To(HaveOccurred())
+		})
 	})
 })
