@@ -31,6 +31,7 @@ type Handler struct {
 	c                     ocs.CapabilitiesData
 	defaultUploadProtocol string
 	userAgentChunkingMap  map[string]string
+	gatewayAddr           string
 }
 
 // Init initializes this and any contained handlers
@@ -38,6 +39,7 @@ func (h *Handler) Init(c *config.Config) {
 	h.c = c.Capabilities
 	h.defaultUploadProtocol = c.DefaultUploadProtocol
 	h.userAgentChunkingMap = c.UserAgentChunkingMap
+	h.gatewayAddr = c.GatewaySvc
 
 	// capabilities
 	if h.c.Capabilities == nil {
@@ -241,5 +243,10 @@ func (h *Handler) Init(c *config.Config) {
 // Handler renders the capabilities
 func (h *Handler) GetCapabilities(w http.ResponseWriter, r *http.Request) {
 	c := h.getCapabilitiesForUserAgent(r.UserAgent())
+	if providers := h.resolveProviders(r.Context()); len(providers) > 0 && c.Capabilities != nil {
+		caps := *c.Capabilities
+		caps.Providers = providers
+		c.Capabilities = &caps
+	}
 	response.WriteOCSSuccess(w, r, c)
 }
