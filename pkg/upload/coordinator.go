@@ -863,10 +863,14 @@ func rewriteChunkedRef(ref *provider.Reference) (*provider.Reference, string, er
 
 // ListUploadSessions returns the upload sessions matching the given filter.
 func (c *coordinator) ListUploadSessions(ctx context.Context, filter storage.UploadSessionFilter) ([]storage.UploadSession, error) {
-	// Only the driver can resolve a session's node, so refuse rather than
-	// silently report every session as a match.
+	// Only the driver can resolve a session's node, so the orphaned filter needs a
+	// driver that answers the question. Assert once rather than per session.
+	var orphanChecker storage.OrphanChecker
 	if filter.Orphaned != nil {
-		return nil, errtypes.NotSupported("coordinator: the orphaned filter is not supported")
+		var ok bool
+		if orphanChecker, ok = c.fs.(storage.OrphanChecker); !ok {
+			return nil, errtypes.NotSupported("coordinator: the orphaned filter is not supported")
+		}
 	}
 
 	var sessions []Session
@@ -905,6 +909,14 @@ func (c *coordinator) ListUploadSessions(ctx context.Context, filter storage.Upl
 			sr, _ := session.ScanData()
 			infected := sr != ""
 			if *filter.HasVirus != infected {
+				continue
+			}
+		}
+		// evaluated last: unlike the other filters this reads the node metadata
+		// from disk, so it is only done for sessions that passed all other filters
+		if filter.Orphaned != nil {
+			ref := session.Reference()
+			if *filter.Orphaned != orphanChecker.IsOrphaned(ctx, &ref) {
 				continue
 			}
 		}
