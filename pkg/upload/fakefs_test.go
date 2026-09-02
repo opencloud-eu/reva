@@ -293,3 +293,20 @@ func (s *brokenStore) List(ctx context.Context) ([]Session, error) {
 	}
 	return s.SessionStore.List(ctx)
 }
+
+// fakeOrphanFS is a fakeFS that also implements storage.OrphanChecker. fakeFS
+// deliberately does not, so the specs can cover a driver that cannot answer.
+type fakeOrphanFS struct {
+	*fakeFS
+
+	// orphaned maps a node id to the verdict the driver reports for it.
+	orphaned map[string]bool
+
+	// refs records what the coordinator asked about, in order.
+	refs []*provider.Reference
+}
+
+func (f *fakeOrphanFS) IsOrphaned(_ context.Context, ref *provider.Reference) bool {
+	f.refs = append(f.refs, ref)
+	return f.orphaned[ref.GetResourceId().GetOpaqueId()]
+}
