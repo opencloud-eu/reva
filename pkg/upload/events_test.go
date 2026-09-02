@@ -272,13 +272,75 @@ var _ = Describe("coordinator events", func() {
 	})
 
 	Describe("ListUploadSessions", func() {
-		// Only the driver can resolve a session's node.
-		It("refuses the orphaned filter", func() {
+		// Only the driver can resolve a session's node, so a driver that does not
+		// implement storage.OrphanChecker cannot answer the question at all.
+		It("refuses the orphaned filter when the driver cannot answer it", func() {
 			orphaned := true
 
 			_, err := c.ListUploadSessions(ctx, storage.UploadSessionFilter{Orphaned: &orphaned})
 
 			Expect(err).To(BeAssignableToTypeOf(errtypes.NotSupported("")))
+		})
+
+		It("filters on whether the node is orphaned when the driver can answer it", func() {
+			healthy := stagedSession(ctx, store, true)
+			broken := stagedSession(ctx, store, true)
+			broken.SetStorageValue("NodeId", "orphaned-node")
+			Expect(broken.Persist(ctx)).To(Succeed())
+			c = NewCoordinator(&fakeOrphanFS{
+				fakeFS:   fs,
+				orphaned: map[string]bool{"orphaned-node": true},
+			}, store, "", nil)
+
+			isOrphaned := true
+			found, err := c.ListUploadSessions(ctx, storage.UploadSessionFilter{Orphaned: &isOrphaned})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(found).To(HaveLen(1))
+			Expect(found[0].ID()).To(Equal(broken.ID()))
+
+			isOrphaned = false
+			rest, err := c.ListUploadSessions(ctx, storage.UploadSessionFilter{Orphaned: &isOrphaned})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(rest).To(HaveLen(1))
+			Expect(rest[0].ID()).To(Equal(healthy.ID()))
+		})
+
+		// The driver resolves the node by id, so a reference missing the space or the
+		// node would silently report every session as healthy.
+		It("asks the driver about the session's own node", func() {
+			stagedSession(ctx, store, true)
+			orphanFS := &fakeOrphanFS{fakeFS: fs}
+			c = NewCoordinator(orphanFS, store, "", nil)
+
+			isOrphaned := false
+			_, err := c.ListUploadSessions(ctx, storage.UploadSessionFilter{Orphaned: &isOrphaned})
+
+			Expect(err).ToNot(HaveOccurred())
+			Expect(orphanFS.refs).To(HaveLen(1))
+			Expect(orphanFS.refs[0].GetResourceId().GetSpaceId()).To(Equal(spaceRoot))
+			Expect(orphanFS.refs[0].GetResourceId().GetOpaqueId()).To(Equal(nodeID))
+		})
+
+		// The filter reads node metadata, so it must not run for sessions another
+		// filter already excluded.
+		It("evaluates the orphaned filter only for sessions that passed the others", func() {
+			complete := stagedSession(ctx, store, true)
+			partial := stagedSession(ctx, store, true)
+			partial.SetSize(bodyLen * 2)
+			Expect(partial.Persist(ctx)).To(Succeed())
+			orphanFS := &fakeOrphanFS{fakeFS: fs}
+			c = NewCoordinator(orphanFS, store, "", nil)
+
+			processing, isOrphaned := true, false
+			sessions, err := c.ListUploadSessions(ctx, storage.UploadSessionFilter{
+				Processing: &processing,
+				Orphaned:   &isOrphaned,
+			})
+
+			Expect(err).ToNot(HaveOccurred())
+			Expect(sessions).To(HaveLen(1))
+			Expect(sessions[0].ID()).To(Equal(complete.ID()))
+			Expect(orphanFS.refs).To(HaveLen(1), "the incomplete session should not have been resolved")
 		})
 
 		It("returns every session when no filter is given", func() {

@@ -831,6 +831,12 @@ func (fs *Decomposedfs) ListUploadSessions(ctx context.Context, filter storage.U
 	return filteredSessions, nil
 }
 
+// IsOrphaned reports whether the referenced resource exists but its metadata is unreadable.
+func (fs *Decomposedfs) IsOrphaned(ctx context.Context, ref *provider.Reference) bool {
+	_, err := fs.lu.NodeFromResource(ctx, ref)
+	return err != nil
+}
+
 // AsTerminatableUpload returns a TerminatableUpload
 // To implement the termination extension as specified in https://tus.io/protocols/resumable-upload.html#termination
 // the storage needs to implement AsTerminatableUpload
