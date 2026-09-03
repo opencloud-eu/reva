@@ -913,9 +913,9 @@ func metadataKeys(pf XML) ([]string, []string) {
 					metadataKeys = append(metadataKeys, metadataKeysWithPrefix("libre.graph.photo", photoKeys)...)
 				case "http://owncloud.org/ns/video":
 					metadataKeys = append(metadataKeys, metadataKeysWithPrefix("libre.graph.video", videoKeys)...)
-				case "http://owncloud.org/ns/motionPhoto":
+				case "http://owncloud.org/ns/motion-photo":
 					metadataKeys = append(metadataKeys, metadataKeysWithPrefix("libre.graph.motionPhoto", motionPhotoKeys)...)
-				case "http://owncloud.org/ns/livePhoto":
+				case "http://owncloud.org/ns/live-photo":
 					metadataKeys = append(metadataKeys, metadataKeysWithPrefix("libre.graph.livePhoto", livePhotoKeys)...)
 				default:
 					metadataKeys = append(metadataKeys, key)
@@ -974,7 +974,7 @@ func requiresExplicitFetching(n *xml.Name) bool {
 		}
 	case net.NsOwncloud:
 		switch n.Local {
-		case "favorite", "share-types", "checksums", "size", "tags", "audio", "location", "image", "photo", "video", "motionPhoto", "livePhoto":
+		case "favorite", "share-types", "checksums", "size", "tags", "audio", "location", "image", "photo", "video", "motion-photo", "live-photo":
 			return true
 		default:
 			return false
@@ -1323,8 +1323,8 @@ func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, p
 			appendMetadataProp(k, "oc", "image", "libre.graph.image", imageKeys)
 			appendMetadataProp(k, "oc", "photo", "libre.graph.photo", photoKeys)
 			appendMetadataProp(k, "oc", "video", "libre.graph.video", videoKeys)
-			appendMetadataProp(k, "oc", "motionPhoto", "libre.graph.motionPhoto", motionPhotoKeys)
-			appendMetadataProp(k, "oc", "livePhoto", "libre.graph.livePhoto", livePhotoKeys)
+			appendMetadataProp(k, "oc", "motion-photo", "libre.graph.motionPhoto", motionPhotoKeys)
+			appendMetadataProp(k, "oc", "live-photo", "libre.graph.livePhoto", livePhotoKeys)
 		}
 
 		if md.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
@@ -1616,13 +1616,13 @@ func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, p
 					if k := md.GetArbitraryMetadata().GetMetadata(); k != nil {
 						appendMetadataProp(k, "oc", "video", "libre.graph.video", videoKeys)
 					}
-				case "motionPhoto":
+				case "motion-photo":
 					if k := md.GetArbitraryMetadata().GetMetadata(); k != nil {
-						appendMetadataProp(k, "oc", "motionPhoto", "libre.graph.motionPhoto", motionPhotoKeys)
+						appendMetadataProp(k, "oc", "motion-photo", "libre.graph.motionPhoto", motionPhotoKeys)
 					}
-				case "livePhoto":
+				case "live-photo":
 					if k := md.GetArbitraryMetadata().GetMetadata(); k != nil {
-						appendMetadataProp(k, "oc", "livePhoto", "libre.graph.livePhoto", livePhotoKeys)
+						appendMetadataProp(k, "oc", "live-photo", "libre.graph.livePhoto", livePhotoKeys)
 					}
 				case "name":
 					appendToOK(prop.Escaped("oc:name", md.Name))
