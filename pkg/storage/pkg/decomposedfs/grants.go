@@ -23,6 +23,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/opencloud-eu/reva/v2/internal/grpc/services/storageprovider"
 	"github.com/opencloud-eu/reva/v2/pkg/appctx"
@@ -80,6 +81,15 @@ func (fs *Decomposedfs) AddGrant(ctx context.Context, ref *provider.Reference, g
 	defer span.End()
 	log := appctx.GetLogger(ctx)
 	log.Debug().Interface("ref", ref).Interface("grant", g).Msg("AddGrant()")
+	// Guests are granted shares via their mail address, which ends up in the
+	// mail space index filename and the grant ACE xattr key. Reject mails that
+	// could break the storage layout before anything is written..
+	if g.GetGrantee().GetType() == provider.GranteeType_GRANTEE_TYPE_USER &&
+		g.GetGrantee().GetUserId().GetType() == userpb.UserType_USER_TYPE_GUEST &&
+		!utils.IsPathSafeID(utils.CanonicalUserID(g.GetGrantee().GetUserId())) {
+
+		return errtypes.BadRequest("invalid mail address for guest grantee")
+	}
 	grantNode, unlockFunc, grant, err := fs.loadGrant(ctx, ref, g)
 	if err != nil {
 		return err
@@ -235,8 +245,18 @@ func (fs *Decomposedfs) RemoveGrant(ctx context.Context, ref *provider.Reference
 		switch g.Grantee.Type {
 		case provider.GranteeType_GRANTEE_TYPE_USER:
 			// remove from user index
-			if err := fs.userSpaceIndex.Remove(g.Grantee.GetUserId().GetOpaqueId(), grantNode.SpaceID); err != nil {
-				return err
+			canonicalUserID := utils.CanonicalUserID(g.Grantee.GetUserId())
+			if g.Grantee.GetUserId().GetType() == userpb.UserType_USER_TYPE_GUEST {
+				if !utils.IsPathSafeID(canonicalUserID) {
+					return errtypes.BadRequest("invalid mail address for guest grantee")
+				}
+				if err := fs.mailSpaceIndex.Remove(canonicalUserID, grantNode.SpaceID); err != nil {
+					return err
+				}
+			} else {
+				if err := fs.userSpaceIndex.Remove(canonicalUserID, grantNode.SpaceID); err != nil {
+					return err
+				}
 			}
 		case provider.GranteeType_GRANTEE_TYPE_GROUP:
 			// remove from group index
@@ -320,7 +340,7 @@ func (fs *Decomposedfs) loadGrant(ctx context.Context, ref *provider.Reference, 
 	for _, grant := range grants {
 		switch grant.Grantee.GetType() {
 		case provider.GranteeType_GRANTEE_TYPE_USER:
-			if g.Grantee.GetUserId().GetOpaqueId() == grant.Grantee.GetUserId().GetOpaqueId() {
+			if utils.UserIDEqual(g.Grantee.GetUserId(), grant.Grantee.GetUserId()) {
 				return n, unlockFunc, grant, nil
 			}
 		case provider.GranteeType_GRANTEE_TYPE_GROUP:

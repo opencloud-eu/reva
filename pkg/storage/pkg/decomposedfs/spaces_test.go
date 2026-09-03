@@ -30,6 +30,7 @@ import (
 	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/opencloud-eu/reva/v2/internal/grpc/services/storageprovider"
 	ctxpkg "github.com/opencloud-eu/reva/v2/pkg/ctx"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/node"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/spaceidindex"
@@ -274,6 +275,7 @@ var _ = Describe("Spaces", func() {
 
 				userGrantee := helpers.User0ID
 				groupGrantee := "11111111-2222-3333-4444-555555555555"
+				guestGrantee := "Guest@Example.COM"
 				Expect(env.Fs.AddGrant(env.Ctx, ref, &provider.Grant{
 					Grantee:     &provider.Grantee{Type: provider.GranteeType_GRANTEE_TYPE_USER, Id: &provider.Grantee_UserId{UserId: &userv1beta1.UserId{OpaqueId: userGrantee}}},
 					Permissions: &provider.ResourcePermissions{Stat: true},
@@ -281,6 +283,11 @@ var _ = Describe("Spaces", func() {
 				})).To(Succeed())
 				Expect(env.Fs.AddGrant(env.Ctx, ref, &provider.Grant{
 					Grantee:     &provider.Grantee{Type: provider.GranteeType_GRANTEE_TYPE_GROUP, Id: &provider.Grantee_GroupId{GroupId: &grouppb.GroupId{OpaqueId: groupGrantee}}},
+					Permissions: &provider.ResourcePermissions{Stat: true},
+					Creator:     &userv1beta1.UserId{OpaqueId: helpers.OwnerID},
+				})).To(Succeed())
+				Expect(env.Fs.AddGrant(env.Ctx, ref, &provider.Grant{
+					Grantee:     &provider.Grantee{Type: provider.GranteeType_GRANTEE_TYPE_USER, Id: &provider.Grantee_UserId{UserId: &userv1beta1.UserId{OpaqueId: guestGrantee, Type: userv1beta1.UserType_USER_TYPE_GUEST}}},
 					Permissions: &provider.ResourcePermissions{Stat: true},
 					Creator:     &userv1beta1.UserId{OpaqueId: helpers.OwnerID},
 				})).To(Succeed())
@@ -295,6 +302,9 @@ var _ = Describe("Spaces", func() {
 				groupIdx := spaceidindex.New(filepath.Join(env.Root, "indexes"), "by-group-id")
 				Expect(groupIdx.Init()).To(Succeed())
 				Expect(groupIdx.Add(groupGrantee, spaceID, target)).To(Succeed())
+				mailIdx := spaceidindex.New(filepath.Join(env.Root, "indexes"), "by-mail")
+				Expect(mailIdx.Init()).To(Succeed())
+				Expect(mailIdx.Add("guest@example.com", spaceID, target)).To(Succeed())
 
 				load := func(indexName, key string) map[string]string {
 					idx := spaceidindex.New(filepath.Join(env.Root, "indexes"), indexName)
@@ -304,9 +314,10 @@ var _ = Describe("Spaces", func() {
 					return m
 				}
 
-				// precondition: both grantee indexes reference the space
+				// precondition: the grantee indexes reference the space
 				Expect(load("by-user-id", userGrantee)).To(HaveKey(spaceID))
 				Expect(load("by-group-id", groupGrantee)).To(HaveKey(spaceID))
+				Expect(load("by-mail", "guest@example.com")).To(HaveKey(spaceID))
 
 				// disable, then purge as the space admin
 				ctx := ctxpkg.ContextSetUser(context.Background(), env.DeleteAllSpacesUser)
@@ -319,6 +330,7 @@ var _ = Describe("Spaces", func() {
 				// the grantee index entries must be gone after the purge
 				Expect(load("by-user-id", userGrantee)).ToNot(HaveKey(spaceID))
 				Expect(load("by-group-id", groupGrantee)).ToNot(HaveKey(spaceID))
+				Expect(load("by-mail", "guest@example.com")).ToNot(HaveKey(spaceID))
 			})
 			// purging one space must remove only that space's entry: a sibling
 			// space of the same owner must stay in the by-user-id index.
@@ -635,5 +647,77 @@ var _ = Describe("Spaces", func() {
 				rpcv1beta1.Code_CODE_NOT_FOUND,
 			),
 		)
+	})
+
+	Describe("List storage spaces for guests", func() {
+		var (
+			env *helpers.DecomposedTestEnv
+		)
+
+		BeforeEach(func() {
+			var err error
+			env, err = helpers.NewTestEnv(nil)
+			Expect(err).ToNot(HaveOccurred())
+			env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything).Unset()
+			env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything).Return(&provider.ResourcePermissions{
+				Stat:     true,
+				AddGrant: true,
+				GetQuota: true,
+			}, nil)
+			env.PermissionsClient.On("CheckPermission", mock.Anything, mock.Anything, mock.Anything).Return(&cs3permissions.CheckPermissionResponse{Status: &rpcv1beta1.Status{Code: rpcv1beta1.Code_CODE_OK}}, nil)
+		})
+
+		AfterEach(func() {
+			if env != nil {
+				env.Cleanup()
+			}
+		})
+
+		It("finds project spaces granted to a guest via the by-mail index", func() {
+			// create a project space as the owner
+			resp, err := env.Fs.CreateStorageSpace(env.Ctx, &provider.CreateStorageSpaceRequest{Name: "Guest Space", Type: "project"})
+			Expect(err).ToNot(HaveOccurred())
+			ref := &provider.Reference{ResourceId: resp.StorageSpace.GetRoot()}
+
+			// grant the space to a guest. A space-typed context makes the storage
+			// link the space in the by-mail index, like the real share flow.
+			guest := &userv1beta1.UserId{OpaqueId: "guest@example.com", Type: userv1beta1.UserType_USER_TYPE_GUEST}
+			ctx := storageprovider.WithSpaceType(ctxpkg.ContextSetUser(context.Background(), env.Users[0]), "project")
+			Expect(env.Fs.AddGrant(ctx, ref, &provider.Grant{
+				Grantee:     &provider.Grantee{Type: provider.GranteeType_GRANTEE_TYPE_USER, Id: &provider.Grantee_UserId{UserId: guest}},
+				Permissions: &provider.ResourcePermissions{Stat: true},
+				Creator:     &userv1beta1.UserId{OpaqueId: helpers.OwnerID},
+			})).To(Succeed())
+
+			// the guest can discover the granted space when listing their spaces
+			spaces, err := env.Fs.ListStorageSpaces(ctxpkg.ContextSetUser(context.Background(), &userv1beta1.User{Id: guest}), []*provider.ListStorageSpacesRequest_Filter{
+				{Type: provider.ListStorageSpacesRequest_Filter_TYPE_USER, Term: &provider.ListStorageSpacesRequest_Filter_User{User: guest}},
+			}, false)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(len(spaces)).To(Equal(1))
+			Expect(spaces[0].SpaceType).To(Equal("project"))
+			Expect(spaces[0].GetId().GetOpaqueId()).To(Equal(resp.StorageSpace.GetId().GetOpaqueId()))
+		})
+
+		It("rejects granting a project space to a guest with an unsafe mail address", func() {
+			// create a project space as the owner
+			resp, err := env.Fs.CreateStorageSpace(env.Ctx, &provider.CreateStorageSpaceRequest{Name: "Guest Space", Type: "project"})
+			Expect(err).ToNot(HaveOccurred())
+			ref := &provider.Reference{ResourceId: resp.StorageSpace.GetRoot()}
+
+			ctx := storageprovider.WithSpaceType(ctxpkg.ContextSetUser(context.Background(), env.Users[0]), "project")
+			err = env.Fs.AddGrant(ctx, ref, &provider.Grant{
+				Grantee:     &provider.Grantee{Type: provider.GranteeType_GRANTEE_TYPE_USER, Id: &provider.Grantee_UserId{UserId: &userv1beta1.UserId{OpaqueId: "my/../email@email.com", Type: userv1beta1.UserType_USER_TYPE_GUEST}}},
+				Permissions: &provider.ResourcePermissions{Stat: true},
+				Creator:     &userv1beta1.UserId{OpaqueId: helpers.OwnerID},
+			})
+			Expect(err).To(HaveOccurred())
+
+			// nothing must have been written to the mail index
+			mailIdx := spaceidindex.New(filepath.Join(env.Root, "indexes"), "by-mail")
+			Expect(mailIdx.Init()).To(Succeed())
+			_, err = mailIdx.Load("my/../email@email.com")
+			Expect(err).To(HaveOccurred())
+		})
 	})
 })

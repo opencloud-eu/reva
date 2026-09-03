@@ -218,12 +218,27 @@ func ExtractGranteeID(grantee *provider.Grantee) (*userpb.UserId, *grouppb.Group
 
 // UserEqual returns whether two users have the same field values.
 func UserEqual(u, v *userpb.UserId) bool {
-	return u != nil && v != nil && u.Idp == v.Idp && u.OpaqueId == v.OpaqueId
+	return u != nil && v != nil && u.Idp == v.Idp && UserIDEqual(u, v)
 }
 
 // UserIDEqual returns whether two users have the same opaqueid values. The idp is ignored
 func UserIDEqual(u, v *userpb.UserId) bool {
-	return u != nil && v != nil && u.OpaqueId == v.OpaqueId
+	if u == nil || v == nil {
+		return false
+	}
+	return CanonicalUserID(u) == CanonicalUserID(v)
+}
+
+// CanonicalUserID returns the stable representation of a UserId as e.g. used for user storage keys.
+// Currently this is only relevant for UserId of the USER_TYPE_GUEST, which are matched case-insensitively.
+func CanonicalUserID(id *userpb.UserId) string {
+	if id == nil {
+		return ""
+	}
+	if id.GetType() == userpb.UserType_USER_TYPE_GUEST {
+		return strings.ToLower(id.GetOpaqueId())
+	}
+	return id.GetOpaqueId()
 }
 
 // GroupEqual returns whether two groups have the same field values.
@@ -249,6 +264,15 @@ func GranteeEqual(u, v *provider.Grantee) bool {
 	uu, ug := ExtractGranteeID(u)
 	vu, vg := ExtractGranteeID(v)
 	return u.Type == v.Type && (UserEqual(uu, vu) || GroupEqual(ug, vg))
+}
+
+// IsPathSafeID checks whether the provided ID can safely be used as a path segment.
+// Emails which are used as path segments can have malicious values (e.g. "my/../email@email.com")
+func IsPathSafeID(id string) bool {
+	if id == "" || id == "." || id == ".." {
+		return false
+	}
+	return !strings.ContainsAny(id, "/\\\x00")
 }
 
 // MarshalProtoV1ToJSON marshals a proto V1 message to a JSON byte array

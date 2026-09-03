@@ -37,6 +37,7 @@ import (
 	"github.com/opencloud-eu/reva/v2/pkg/share/manager/jsoncs3/shareid"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/decomposedfs/mtimesyncedcache"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/metadata"
+	"github.com/opencloud-eu/reva/v2/pkg/utils"
 )
 
 // name is the Tracer name used to identify this instrumentation library.
@@ -90,6 +91,10 @@ func New(s metadata.Storage, namespace, filename string, ttl time.Duration) Cach
 
 // Add adds a share to the cache
 func (c *Cache) Add(ctx context.Context, userid, shareID string) error {
+	if !utils.IsPathSafeID(userid) {
+		return errtypes.BadRequest("invalid user id for share cache")
+	}
+
 	ctx, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "Grab lock")
 	unlock := c.lockUser(userid)
 	span.End()
@@ -161,6 +166,10 @@ func (c *Cache) Add(ctx context.Context, userid, shareID string) error {
 
 // Remove removes a share for the given user
 func (c *Cache) Remove(ctx context.Context, userid, shareID string) error {
+	if !utils.IsPathSafeID(userid) {
+		return errtypes.BadRequest("invalid user id for share cache")
+	}
+
 	ctx, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "Grab lock")
 	unlock := c.lockUser(userid)
 	span.End()
@@ -236,6 +245,9 @@ func (c *Cache) Remove(ctx context.Context, userid, shareID string) error {
 
 // List return the list of spaces/shares for the given user/group
 func (c *Cache) List(ctx context.Context, userid string) (map[string]SpaceShareIDs, error) {
+	if !utils.IsPathSafeID(userid) {
+		return nil, errtypes.BadRequest("invalid user id for share cache")
+	}
 	ctx, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "Grab lock")
 	unlock := c.lockUser(userid)
 	span.End()

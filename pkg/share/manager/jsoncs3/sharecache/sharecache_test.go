@@ -82,4 +82,19 @@ var _ = Describe("Sharecache", func() {
 			})
 		})
 	})
+
+	Describe("Add with an unsafe user id", func() {
+		It("rejects a user id containing path separators", func() {
+			Expect(c.Add(ctx, "my/../email@email.com", shareID)).To(HaveOccurred())
+			_, err := c.List(ctx, "my/../email@email.com")
+			Expect(err).To(HaveOccurred())
+			Expect(c.Remove(ctx, "my/../email@email.com", shareID)).To(HaveOccurred())
+		})
+
+		It("still works with a regular user id", func() {
+			Expect(c.Add(ctx, userid, shareID)).To(Succeed())
+			Expect(c.List(ctx, userid)).ToNot(BeNil())
+			Expect(c.Remove(ctx, userid, shareID)).To(Succeed())
+		})
+	})
 })

@@ -34,6 +34,7 @@ import (
 	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/decomposedfs/mtimesyncedcache"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/metadata"
+	"github.com/opencloud-eu/reva/v2/pkg/utils"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 )
@@ -92,6 +93,9 @@ func (c *Cache) lockUser(userID string) func() {
 
 // Add adds a new entry to the cache
 func (c *Cache) Add(ctx context.Context, userID, spaceID string, rs *collaboration.ReceivedShare) error {
+	if !utils.IsPathSafeID(userID) {
+		return errtypes.BadRequest("invalid user id for received share cache")
+	}
 	ctx, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "Grab lock")
 	unlock := c.lockUser(userID)
 	span.End()
@@ -168,6 +172,9 @@ func (c *Cache) Add(ctx context.Context, userID, spaceID string, rs *collaborati
 
 // Get returns one entry from the cache
 func (c *Cache) Get(ctx context.Context, userID, spaceID, shareID string) (*State, error) {
+	if !utils.IsPathSafeID(userID) {
+		return nil, errtypes.BadRequest("invalid user id for received share cache")
+	}
 	ctx, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "Grab lock")
 	unlock := c.lockUser(userID)
 	span.End()
@@ -187,6 +194,9 @@ func (c *Cache) Get(ctx context.Context, userID, spaceID, shareID string) (*Stat
 
 // Remove removes an entry from the cache
 func (c *Cache) Remove(ctx context.Context, userID, spaceID, shareID string) error {
+	if !utils.IsPathSafeID(userID) {
+		return errtypes.BadRequest("invalid user id for received share cache")
+	}
 	ctx, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "Grab lock")
 	unlock := c.lockUser(userID)
 	span.End()
@@ -256,6 +266,9 @@ func (c *Cache) Remove(ctx context.Context, userID, spaceID, shareID string) err
 // List returns a list of received shares for a given user
 // The return list is guaranteed to be thread-safe
 func (c *Cache) List(ctx context.Context, userID string) (map[string]*Space, error) {
+	if !utils.IsPathSafeID(userID) {
+		return nil, errtypes.BadRequest("invalid user id for received share cache")
+	}
 	ctx, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "Grab lock")
 	unlock := c.lockUser(userID)
 	span.End()

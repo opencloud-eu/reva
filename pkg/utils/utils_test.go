@@ -21,6 +21,7 @@ package utils
 import (
 	"testing"
 
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 )
 
@@ -169,5 +170,51 @@ func TestMakeRelativePath(t *testing.T) {
 		if rel != tt.relPath {
 			t.Errorf("expected %s, got %s", tt.relPath, rel)
 		}
+	}
+}
+
+func TestIsPathSafeID(t *testing.T) {
+	tests := []struct {
+		name string
+		id   string
+		safe bool
+	}{
+		{name: "empty", id: "", safe: false},
+		{name: "dot", id: ".", safe: false},
+		{name: "dotdot", id: "..", safe: false},
+		{name: "uuid", id: "4c510ada-ee8c-4f0d-9e1a-6f2c9d1e2a1", safe: true},
+		{name: "email", id: "guest@example.com", safe: true},
+		{name: "path traversal", id: "my/../email@email.com", safe: false},
+		{name: "absolute path", id: "/etc/passwd", safe: false},
+		{name: "backslash", id: `..\other`, safe: false},
+		{name: "nul byte", id: "user\x00", safe: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if actual := IsPathSafeID(tt.id); actual != tt.safe {
+				t.Errorf("IsPathSafeID(%q) = %t, want %t", tt.id, actual, tt.safe)
+			}
+		})
+	}
+}
+
+func TestCanonicalUserID(t *testing.T) {
+	tests := []struct {
+		name     string
+		id       *userpb.UserId
+		expected string
+	}{
+		{name: "nil", expected: ""},
+		{name: "regular user", id: &userpb.UserId{OpaqueId: "MixedCase"}, expected: "MixedCase"},
+		{name: "guest", id: &userpb.UserId{OpaqueId: "Guest@Example.COM", Type: userpb.UserType_USER_TYPE_GUEST}, expected: "guest@example.com"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if actual := CanonicalUserID(tt.id); actual != tt.expected {
+				t.Errorf("expected %q, got %q", tt.expected, actual)
+			}
+		})
 	}
 }

@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -35,19 +36,24 @@ import (
 
 var _ = Describe("Grants", func() {
 	var (
-		env   *helpers.DecomposedTestEnv
-		ref   *provider.Reference
-		grant *provider.Grant
+		env    *helpers.DecomposedTestEnv
+		ref    *provider.Reference
+		grant  *provider.Grant
+		userid *userpb.UserId
 	)
 
 	BeforeEach(func() {
+		userid = &userpb.UserId{
+			OpaqueId: "4c510ada-c86b-4815-8820-42cdf82c3d51",
+		}
+	})
+
+	JustBeforeEach(func() {
 		grant = &provider.Grant{
 			Grantee: &provider.Grantee{
 				Type: provider.GranteeType_GRANTEE_TYPE_USER,
 				Id: &provider.Grantee_UserId{
-					UserId: &userpb.UserId{
-						OpaqueId: "4c510ada-c86b-4815-8820-42cdf82c3d51",
-					},
+					UserId: userid,
 				},
 			},
 			Permissions: &provider.ResourcePermissions{
@@ -60,9 +66,7 @@ var _ = Describe("Grants", func() {
 				OpaqueId: helpers.OwnerID,
 			},
 		}
-	})
 
-	JustBeforeEach(func() {
 		var err error
 		env, err = helpers.NewTestEnv(nil)
 		Expect(err).ToNot(HaveOccurred())
@@ -173,6 +177,36 @@ var _ = Describe("Grants", func() {
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(grants)).To(Equal(1))
 
+				err = env.Fs.RemoveGrant(env.Ctx, ref, grant)
+				Expect(err).ToNot(HaveOccurred())
+
+				grants, err = env.Fs.ListGrants(env.Ctx, ref)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(len(grants)).To(Equal(0))
+			})
+		})
+
+		Context("with guest grants", func() {
+			BeforeEach(func() {
+				userid = &userpb.UserId{
+					OpaqueId: "Foo@Example.COM",
+					Type:     userpb.UserType_USER_TYPE_GUEST,
+				}
+			})
+
+			It("adds, lists and removes the guest grant", func() {
+				err := env.Fs.AddGrant(env.Ctx, ref, grant)
+				Expect(err).ToNot(HaveOccurred())
+
+				grants, err := env.Fs.ListGrants(env.Ctx, ref)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(len(grants)).To(Equal(1))
+
+				g := grants[0]
+				Expect(g.Grantee.GetUserId().OpaqueId).To(Equal(strings.ToLower(grant.Grantee.GetUserId().OpaqueId)))
+				Expect(g.Grantee.GetUserId().Type).To(Equal(userpb.UserType_USER_TYPE_GUEST))
+
+				// the mixed-case request must match the lowercased persisted grant
 				err = env.Fs.RemoveGrant(env.Ctx, ref, grant)
 				Expect(err).ToNot(HaveOccurred())
 
