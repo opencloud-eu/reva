@@ -181,6 +181,54 @@ func (_c *IDCache_DeletePath_Call) RunAndReturn(run func(context.Context, string
 	return _c
 }
 
+// MovePath provides a mock function with given fields: ctx, oldPath, newPath
+func (_m *IDCache) MovePath(ctx context.Context, oldPath string, newPath string) error {
+	ret := _m.Called(ctx, oldPath, newPath)
+
+	if len(ret) == 0 {
+		panic("no return value specified for MovePath")
+	}
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(context.Context, string, string) error); ok {
+		r0 = rf(ctx, oldPath, newPath)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+// IDCache_MovePath_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'MovePath'
+type IDCache_MovePath_Call struct {
+	*mock.Call
+}
+
+// MovePath is a helper method to define mock.On call
+//   - ctx context.Context
+//   - oldPath string
+//   - newPath string
+func (_e *IDCache_Expecter) MovePath(ctx interface{}, oldPath interface{}, newPath interface{}) *IDCache_MovePath_Call {
+	return &IDCache_MovePath_Call{Call: _e.mock.On("MovePath", ctx, oldPath, newPath)}
+}
+
+func (_c *IDCache_MovePath_Call) Run(run func(ctx context.Context, oldPath string, newPath string)) *IDCache_MovePath_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string), args[2].(string))
+	})
+	return _c
+}
+
+func (_c *IDCache_MovePath_Call) Return(_a0 error) *IDCache_MovePath_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *IDCache_MovePath_Call) RunAndReturn(run func(context.Context, string, string) error) *IDCache_MovePath_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // Get provides a mock function with given fields: ctx, spaceID, nodeID
 func (_m *IDCache) Get(ctx context.Context, spaceID string, nodeID string) (string, error) {
 	ret := _m.Called(ctx, spaceID, nodeID)
