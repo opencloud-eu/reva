@@ -340,6 +340,12 @@ func (m *Manager) initialize(ctx context.Context) error {
 	return nil
 }
 
+// Ready returns a channel that is closed once the background initialization
+// goroutine has successfully connected to the metadata storage.
+func (m *Manager) Ready() <-chan struct{} {
+	return m.ready
+}
+
 // waitForInit blocks until the background initialization goroutine has
 // successfully completed, or until ctx is cancelled.
 func (m *Manager) waitForInit(ctx context.Context) error {
