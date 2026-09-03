@@ -28,6 +28,7 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	invitepb "github.com/cs3org/go-cs3apis/cs3/ocm/invite/v1beta1"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
 	"github.com/opencloud-eu/reva/v2/pkg/ocm/invite"
 	"github.com/stretchr/testify/assert"
 )
@@ -147,6 +148,105 @@ func TestGetRemoteUser_NotFound(t *testing.T) {
 	// Try to get a non-existent remote user
 	_, err := mgr.GetRemoteUser(ctx, initiator, &userpb.UserId{OpaqueId: "non-existent"})
 	assert.Error(t, err)
+	var notFound errtypes.NotFound
+	assert.ErrorAs(t, err, &notFound)
+}
+
+func TestGetRemoteUser_LegacyAndCanonicalLookup(t *testing.T) {
+	const (
+		uuid = "056fc874-dd7f-11ef-ba84-af6fca4b7289"
+		idp  = "cloud2.opencloud.test:10200"
+	)
+	legacyOpaque := uuid + "@https://" + idp
+	ctx := context.Background()
+	initiator := &userpb.UserId{OpaqueId: "alan"}
+
+	t.Run("legacy stored found by canonical query", func(t *testing.T) {
+		mgr := setupTestManager(t)
+		mgr.model.AcceptedUsers[initiator.OpaqueId] = []*userpb.User{{
+			Id:          &userpb.UserId{OpaqueId: legacyOpaque, Idp: idp},
+			DisplayName: "Mary",
+		}}
+		user, err := mgr.GetRemoteUser(ctx, initiator, &userpb.UserId{OpaqueId: uuid, Idp: idp})
+		assert.NoError(t, err)
+		assert.Equal(t, legacyOpaque, user.Id.OpaqueId)
+	})
+
+	t.Run("legacy stored found by legacy graph query opaque", func(t *testing.T) {
+		mgr := setupTestManager(t)
+		mgr.model.AcceptedUsers[initiator.OpaqueId] = []*userpb.User{{
+			Id:          &userpb.UserId{OpaqueId: legacyOpaque, Idp: idp},
+			DisplayName: "Mary",
+		}}
+		user, err := mgr.GetRemoteUser(ctx, initiator, &userpb.UserId{OpaqueId: legacyOpaque, Idp: idp})
+		assert.NoError(t, err)
+		assert.Equal(t, legacyOpaque, user.Id.OpaqueId)
+	})
+
+	t.Run("canonical stored found by qualified query", func(t *testing.T) {
+		mgr := setupTestManager(t)
+		mgr.model.AcceptedUsers[initiator.OpaqueId] = []*userpb.User{{
+			Id:          &userpb.UserId{OpaqueId: uuid, Idp: idp},
+			DisplayName: "Mary",
+		}}
+		user, err := mgr.GetRemoteUser(ctx, initiator, &userpb.UserId{OpaqueId: uuid + "@" + idp, Idp: idp})
+		assert.NoError(t, err)
+		assert.Equal(t, uuid, user.Id.OpaqueId)
+	})
+}
+
+func TestAddRemoteUser_LegacyDedup(t *testing.T) {
+	const (
+		uuid = "056fc874-dd7f-11ef-ba84-af6fca4b7289"
+		idp  = "cloud2.opencloud.test:10200"
+	)
+	legacyOpaque := uuid + "@https://" + idp
+	ctx := context.Background()
+	initiator := &userpb.UserId{OpaqueId: "alan"}
+
+	mgr := setupTestManager(t)
+	mgr.model.AcceptedUsers[initiator.OpaqueId] = []*userpb.User{{
+		Id:          &userpb.UserId{OpaqueId: legacyOpaque, Idp: idp},
+		DisplayName: "Mary",
+	}}
+
+	canonicalUser := &userpb.User{
+		Id: &userpb.UserId{
+			OpaqueId: uuid,
+			Idp:      idp,
+		},
+		DisplayName: "Mary",
+	}
+
+	err := mgr.AddRemoteUser(ctx, initiator, canonicalUser)
+	assert.ErrorIs(t, err, invite.ErrUserAlreadyAccepted)
+	assert.Len(t, mgr.model.AcceptedUsers[initiator.OpaqueId], 1)
+	assert.Equal(t, legacyOpaque, mgr.model.AcceptedUsers[initiator.OpaqueId][0].Id.OpaqueId)
+}
+
+func TestDeleteRemoteUser_LegacyFallback(t *testing.T) {
+	const (
+		uuid = "056fc874-dd7f-11ef-ba84-af6fca4b7289"
+		idp  = "cloud2.opencloud.test:10200"
+	)
+	legacyOpaque := uuid + "@https://" + idp
+	ctx := context.Background()
+	initiator := &userpb.UserId{OpaqueId: "alan"}
+
+	mgr := setupTestManager(t)
+	mgr.model.AcceptedUsers[initiator.OpaqueId] = []*userpb.User{{
+		Id:          &userpb.UserId{OpaqueId: legacyOpaque, Idp: idp},
+		DisplayName: "Mary",
+	}}
+
+	err := mgr.DeleteRemoteUser(ctx, initiator, &userpb.UserId{OpaqueId: uuid, Idp: idp})
+	assert.NoError(t, err)
+	assert.Empty(t, mgr.model.AcceptedUsers[initiator.OpaqueId])
+
+	_, err = mgr.GetRemoteUser(ctx, initiator, &userpb.UserId{OpaqueId: legacyOpaque, Idp: idp})
+	assert.Error(t, err)
+	var notFound errtypes.NotFound
+	assert.ErrorAs(t, err, &notFound)
 }
 
 func TestDeleteRemoteUser(t *testing.T) {

@@ -22,7 +22,6 @@ import (
 	"context"
 	"encoding/json"
 	"io"
-	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -35,6 +34,7 @@ import (
 	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
 	"github.com/opencloud-eu/reva/v2/pkg/ocm/invite"
 	"github.com/opencloud-eu/reva/v2/pkg/ocm/invite/repository/registry"
+	ocmuser "github.com/opencloud-eu/reva/v2/pkg/ocm/user"
 	"github.com/opencloud-eu/reva/v2/pkg/utils"
 	"github.com/opencloud-eu/reva/v2/pkg/utils/cfg"
 	"github.com/opencloud-eu/reva/v2/pkg/utils/list"
@@ -182,7 +182,7 @@ func (m *manager) AddRemoteUser(ctx context.Context, initiator *userpb.UserId, r
 	defer m.Unlock()
 
 	for _, acceptedUser := range m.model.AcceptedUsers[initiator.GetOpaqueId()] {
-		if acceptedUser.Id.GetOpaqueId() == remoteUser.Id.OpaqueId && idpsEqual(acceptedUser.Id.GetIdp(), remoteUser.Id.Idp) {
+		if ocmuser.RemoteUserIDsMatch(acceptedUser.Id, remoteUser.Id) {
 			return invite.ErrUserAlreadyAccepted
 		}
 	}
@@ -192,31 +192,6 @@ func (m *manager) AddRemoteUser(ctx context.Context, initiator *userpb.UserId, r
 		return errors.Wrap(err, "json: error saving model")
 	}
 	return nil
-}
-
-func idpsEqual(idp1, idp2 string) bool {
-	normalizeIDP := func(s string) (string, error) {
-		u, err := url.Parse(s)
-		if err != nil {
-			return "", errors.New("could not parse url")
-		}
-
-		if u.Scheme == "" {
-			return strings.ToLower(u.Path), nil // the string is just a hostname
-		}
-		return strings.ToLower(u.Hostname()), nil
-	}
-
-	domain1, err := normalizeIDP(idp1)
-	if err != nil {
-		return false
-	}
-	domain2, err := normalizeIDP(idp2)
-	if err != nil {
-		return false
-	}
-
-	return domain1 == domain2
 }
 
 func (m *manager) GetRemoteUser(ctx context.Context, initiator *userpb.UserId, remoteUserID *userpb.UserId) (*userpb.User, error) {
@@ -231,7 +206,7 @@ func (m *manager) GetRemoteUser(ctx context.Context, initiator *userpb.UserId, r
 			acceptedUser.Id.GetOpaqueId(),
 			acceptedUser.Id.GetIdp(),
 		)
-		if (acceptedUser.Id.GetOpaqueId() == remoteUserID.OpaqueId) && (remoteUserID.Idp == "" || idpsEqual(acceptedUser.Id.GetIdp(), remoteUserID.Idp)) {
+		if ocmuser.RemoteUserIDsMatch(acceptedUser.Id, remoteUserID) {
 			return acceptedUser, nil
 		}
 	}
@@ -267,7 +242,7 @@ func (m *manager) DeleteRemoteUser(ctx context.Context, initiator *userpb.UserId
 	}
 
 	for i, user := range acceptedUsers {
-		if (user.Id.GetOpaqueId() == remoteUser.OpaqueId) && (remoteUser.Idp == "" || user.Id.GetIdp() == remoteUser.Idp) {
+		if ocmuser.RemoteUserIDsMatch(user.Id, remoteUser) {
 			acceptedUsers = list.Remove(acceptedUsers, i)
 			m.model.AcceptedUsers[initiator.GetOpaqueId()] = acceptedUsers
 			_ = m.model.save()
