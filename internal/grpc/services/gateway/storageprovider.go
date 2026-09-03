@@ -725,46 +725,6 @@ func (s *svc) CreateContainer(ctx context.Context, req *provider.CreateContainer
 	return res, nil
 }
 
-func (s *svc) AddLabel(ctx context.Context, req *provider.AddLabelRequest) (*provider.AddLabelResponse, error) {
-	var c provider.ProviderAPIClient
-	var err error
-	c, _, req.Ref, err = s.findAndUnwrap(ctx, req.Ref)
-	if err != nil {
-		return &provider.AddLabelResponse{
-			Status: status.NewStatusFromErrType(ctx, fmt.Sprintf("gateway could not find space for ref=%+v", req.Ref), err),
-		}, nil
-	}
-
-	res, err := c.AddLabel(ctx, req)
-	if err != nil {
-		return &provider.AddLabelResponse{
-			Status: status.NewStatusFromErrType(ctx, "gateway could not call AddLabel", err),
-		}, nil
-	}
-
-	return res, nil
-}
-
-func (s *svc) RemoveLabel(ctx context.Context, req *provider.RemoveLabelRequest) (*provider.RemoveLabelResponse, error) {
-	var c provider.ProviderAPIClient
-	var err error
-	c, _, req.Ref, err = s.findAndUnwrap(ctx, req.Ref)
-	if err != nil {
-		return &provider.RemoveLabelResponse{
-			Status: status.NewStatusFromErrType(ctx, fmt.Sprintf("gateway could not find space for ref=%+v", req.Ref), err),
-		}, nil
-	}
-
-	res, err := c.RemoveLabel(ctx, req)
-	if err != nil {
-		return &provider.RemoveLabelResponse{
-			Status: status.NewStatusFromErrType(ctx, "gateway could not call RemoveLabel", err),
-		}, nil
-	}
-
-	return res, nil
-}
-
 func (s *svc) TouchFile(ctx context.Context, req *provider.TouchFileRequest) (*provider.TouchFileResponse, error) {
 	var c provider.ProviderAPIClient
 	var err error
@@ -956,6 +916,40 @@ func (s *svc) Unlock(ctx context.Context, req *provider.UnlockRequest) (*provide
 		return nil, errors.Wrap(err, "gateway: error calling Unlock")
 	}
 
+	return res, nil
+}
+
+func (s *svc) SetImmutable(ctx context.Context, req *provider.SetImmutableRequest) (*provider.SetImmutableResponse, error) {
+	c, _, err := s.find(ctx, req.Ref)
+	if err != nil {
+		return &provider.SetImmutableResponse{
+			Status: status.NewStatusFromErrType(ctx, "SetImmutable ref="+req.Ref.String(), err),
+		}, nil
+	}
+	res, err := c.SetImmutable(ctx, req)
+	if err != nil {
+		if gstatus.Code(err) == codes.PermissionDenied {
+			return &provider.SetImmutableResponse{Status: &rpc.Status{Code: rpc.Code_CODE_PERMISSION_DENIED}}, nil
+		}
+		return nil, errors.Wrap(err, "gateway: error calling SetImmutable")
+	}
+	return res, nil
+}
+
+func (s *svc) UnsetImmutable(ctx context.Context, req *provider.UnsetImmutableRequest) (*provider.UnsetImmutableResponse, error) {
+	c, _, err := s.find(ctx, req.Ref)
+	if err != nil {
+		return &provider.UnsetImmutableResponse{
+			Status: status.NewStatusFromErrType(ctx, "UnsetImmutable ref="+req.Ref.String(), err),
+		}, nil
+	}
+	res, err := c.UnsetImmutable(ctx, req)
+	if err != nil {
+		if gstatus.Code(err) == codes.PermissionDenied {
+			return &provider.UnsetImmutableResponse{Status: &rpc.Status{Code: rpc.Code_CODE_PERMISSION_DENIED}}, nil
+		}
+		return nil, errors.Wrap(err, "gateway: error calling UnsetImmutable")
+	}
 	return res, nil
 }
 

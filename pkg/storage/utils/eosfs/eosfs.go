@@ -1013,6 +1013,14 @@ func (fs *eosfs) Unlock(ctx context.Context, ref *provider.Reference, lock *prov
 	return fs.removeLockAttrs(ctx, auth, path)
 }
 
+func (fs *eosfs) SetImmutable(ctx context.Context, ref *provider.Reference) error {
+	return errtypes.NotSupported("unimplemented")
+}
+
+func (fs *eosfs) UnsetImmutable(ctx context.Context, ref *provider.Reference) error {
+	return errtypes.NotSupported("unimplemented")
+}
+
 func (fs *eosfs) AddGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error {
 	fn, auth, err := fs.resolveRefAndGetAuth(ctx, ref)
 	if err != nil {

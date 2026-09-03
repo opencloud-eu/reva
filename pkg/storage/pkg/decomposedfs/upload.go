@@ -288,6 +288,20 @@ func (fs *Decomposedfs) InitiateUpload(ctx context.Context, ref *provider.Refere
 		return nil, errtypes.PermissionDenied(path)
 	}
 
+	// Immutable checks
+	if n.Exists && n.IsImmutable(ctx) {
+		// File is frozen → no overwrite
+		return nil, errtypes.PermissionDenied(path)
+	}
+	if n.Exists && parent.IsImmutable(ctx) {
+		// Direct entry in immutable container → no modification (parent rule)
+		return nil, errtypes.PermissionDenied(path)
+	}
+	if !n.Exists && parent.IsImmutable(ctx) {
+		// New file in immutable container → no new entries
+		return nil, errtypes.PermissionDenied(path)
+	}
+
 	// are we trying to overwriting a folder with a file?
 	if n.Exists && n.IsDir(ctx) {
 		return nil, errtypes.PreconditionFailed("resource is not a file")

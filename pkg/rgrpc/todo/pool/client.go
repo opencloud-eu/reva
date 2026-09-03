@@ -25,6 +25,7 @@ import (
 	authprovider "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
 	authregistry "github.com/cs3org/go-cs3apis/cs3/auth/registry/v1beta1"
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
+	labelsService "github.com/cs3org/go-cs3apis/cs3/labels/v1beta1"
 	group "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	tenant "github.com/cs3org/go-cs3apis/cs3/identity/tenant/v1beta1"
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -74,6 +75,12 @@ func GetStorageProviderServiceClient(id string, opts ...Option) (storageprovider
 // GetSpacesProviderServiceClient returns a SpacesProviderServiceClient.
 func GetSpacesProviderServiceClient(id string, opts ...Option) (storageprovider.SpacesAPIClient, error) {
 	selector, _ := SpacesProviderSelector(id, opts...)
+	return selector.Next()
+}
+
+// GetLabelsProviderServiceClient returns a LabelsAPIClient connected to the StorageProvider.
+func GetLabelsProviderServiceClient(id string, opts ...Option) (labelsService.LabelsAPIClient, error) {
+	selector, _ := LabelsProviderSelector(id, opts...)
 	return selector.Next()
 }
 
