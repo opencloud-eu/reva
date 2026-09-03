@@ -1,19 +1,20 @@
 # Changelog
 
-## [2.50.0](https://github.com/opencloud-eu/reva/releases/tag/v2.50.0) - 2026-09-02
+## [2.50.0](https://github.com/opencloud-eu/reva/releases/tag/v2.50.0) - 2026-09-03
 
 ### ❤️ Thanks to all contributors! ❤️
 
 @dschmidt, @maki5, @rhafer
 
+### 🐛 Bug Fixes
+
+- fix(decomposedfs): write arbitrary metadata in one go [[#791](https://github.com/opencloud-eu/reva/pull/791)]
+- Backport and fix of space membership expired event [[#766](https://github.com/opencloud-eu/reva/pull/766)]
+
 ### 📈 Enhancement
 
 - mime: map the Nikon NRW raw extension [[#773](https://github.com/opencloud-eu/reva/pull/773)]
 - enhancement(shares/jsoncs3): Shortcut migration on fresh system [[#787](https://github.com/opencloud-eu/reva/pull/787)]
-
-### 🐛 Bug Fixes
-
-- Backport and fix of space membership expired event [[#766](https://github.com/opencloud-eu/reva/pull/766)]
 
 ## [2.49.0](https://github.com/opencloud-eu/reva/releases/tag/v2.49.0) - 2026-08-20
 
