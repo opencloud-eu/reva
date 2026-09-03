@@ -23,6 +23,7 @@ import (
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
+	"io"
 	"net/url"
 	"strconv"
 	"strings"
@@ -976,8 +977,34 @@ func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 	})
 }
 
-func (s *svc) ListContainerStream(_ *provider.ListContainerStreamRequest, _ gateway.GatewayAPI_ListContainerStreamServer) error {
-	return errtypes.NotSupported("Unimplemented")
+func (s *svc) ListContainerStream(req *provider.ListContainerStreamRequest, ss gateway.GatewayAPI_ListContainerStreamServer) error {
+	c, _, ref, err := s.findAndUnwrap(ss.Context(), req.Ref)
+	if err != nil {
+		return errors.Wrap(err, "gateway: could not find space for ListContainerStream")
+	}
+
+	stream, err := c.ListContainerStream(ss.Context(), &provider.ListContainerStreamRequest{
+		Opaque:                req.Opaque,
+		Ref:                   ref,
+		ArbitraryMetadataKeys: req.ArbitraryMetadataKeys,
+		FieldMask:             req.FieldMask,
+	})
+	if err != nil {
+		return errors.Wrap(err, "gateway: error calling ListContainerStream on provider")
+	}
+
+	for {
+		res, err := stream.Recv()
+		if err != nil {
+			if err == io.EOF {
+				return nil
+			}
+			return errors.Wrap(err, "gateway: error receiving from ListContainerStream")
+		}
+		if err := ss.Send(res); err != nil {
+			return errors.Wrap(err, "gateway: error sending ListContainerStream response")
+		}
+	}
 }
 
 // ListContainer lists the Resoure infos for a given resource by forwarding the request to the responsible provider.
