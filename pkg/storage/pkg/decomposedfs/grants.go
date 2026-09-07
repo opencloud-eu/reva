@@ -235,14 +235,13 @@ func (fs *Decomposedfs) RemoveGrant(ctx context.Context, ref *provider.Reference
 		// invalidate space grant
 		switch g.Grantee.Type {
 		case provider.GranteeType_GRANTEE_TYPE_USER:
-			// remove from user index
-			canonicalUserID := utils.CanonicalUserID(g.Grantee.GetUserId())
+			filename := (utils.FSSafeUserID{ID: g.Grantee.GetUserId()}).SafeFilename()
 			if g.Grantee.GetUserId().GetType() == userpb.UserType_USER_TYPE_GUEST {
-				if err := fs.mailSpaceIndex.Remove(canonicalUserID, grantNode.SpaceID); err != nil {
+				if err := fs.mailSpaceIndex.Remove(filename, grantNode.SpaceID); err != nil {
 					return err
 				}
 			} else {
-				if err := fs.userSpaceIndex.Remove(canonicalUserID, grantNode.SpaceID); err != nil {
+				if err := fs.userSpaceIndex.Remove(filename, grantNode.SpaceID); err != nil {
 					return err
 				}
 			}

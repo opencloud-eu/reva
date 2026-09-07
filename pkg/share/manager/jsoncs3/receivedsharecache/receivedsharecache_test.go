@@ -23,9 +23,11 @@ import (
 	"os"
 	"time"
 
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	"github.com/opencloud-eu/reva/v2/pkg/share/manager/jsoncs3/receivedsharecache"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/metadata"
+	"github.com/opencloud-eu/reva/v2/pkg/utils"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -36,7 +38,11 @@ var _ = Describe("Cache", func() {
 		c       receivedsharecache.Cache
 		storage metadata.Storage
 
-		userID  = "user"
+		userID = utils.FSSafeUserID{
+			ID: &userpb.UserId{
+				OpaqueId: "userid",
+			},
+		}
 		spaceID = "spaceid"
 		shareID = "storageid$spaceid!share1"
 		share   = &collaboration.Share{
@@ -111,7 +117,12 @@ var _ = Describe("Cache", func() {
 
 		Describe("Get", func() {
 			It("handles unknown users", func() {
-				s, err := c.Get(ctx, "something", spaceID, shareID)
+				someUserID := utils.FSSafeUserID{
+					ID: &userpb.UserId{
+						OpaqueId: "something",
+					},
+				}
+				s, err := c.Get(ctx, someUserID, spaceID, shareID)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(s).To(BeNil())
 			})

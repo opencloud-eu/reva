@@ -31,6 +31,7 @@ import (
 	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/lookup"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata/prefixes"
 	helpers "github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/testhelpers"
+	"github.com/opencloud-eu/reva/v2/pkg/utils"
 	"github.com/stretchr/testify/mock"
 )
 
@@ -196,6 +197,12 @@ var _ = Describe("Grants", func() {
 
 			It("adds, lists and removes the guest grant", func() {
 				err := env.Fs.AddGrant(env.Ctx, ref, grant)
+				Expect(err).ToNot(HaveOccurred())
+
+				n, err := env.Lookup.NodeFromResource(env.Ctx, ref)
+				Expect(err).ToNot(HaveOccurred())
+				principal := prefixes.GrantMailAcePrefix + (utils.FSSafeUserID{ID: grant.Grantee.GetUserId()}).SafeFilename()
+				_, err = n.XattrString(env.Ctx, principal)
 				Expect(err).ToNot(HaveOccurred())
 
 				grants, err := env.Fs.ListGrants(env.Ctx, ref)
