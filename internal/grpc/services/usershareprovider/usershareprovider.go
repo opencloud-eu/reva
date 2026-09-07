@@ -182,15 +182,15 @@ func (s *service) CreateShare(ctx context.Context, req *collaboration.CreateShar
 			}, nil
 		}
 
-		// guests are identified by their mail address, which is used as a path
-		// segment in the share manager storage; reject invalid mails before they
-		// end up in any index or cache.
-		_, err := mail.ParseAddress(req.GetGrant().GetGrantee().GetUserId().GetOpaqueId())
-		if req.GetGrant().GetGrantee().GetUserId().GetType() == userpb.UserType_USER_TYPE_GUEST && err != nil {
-
-			return &collaboration.CreateShareResponse{
-				Status: status.NewInvalidArg(ctx, "invalid mail address for guest grantee"),
-			}, nil
+		if req.GetGrant().GetGrantee().GetUserId().GetType() == userpb.UserType_USER_TYPE_GUEST {
+			// guests are identified by their mail address, lets be strict here and only accept bare mail addresses
+			// and reject the "Mailbox"-Format that also contains a Display name
+			addr, err := mail.ParseAddress(req.GetGrant().GetGrantee().GetUserId().GetOpaqueId())
+			if err != nil || addr.Name != "" {
+				return &collaboration.CreateShareResponse{
+					Status: status.NewInvalidArg(ctx, "invalid mail address for guest grantee"),
+				}, nil
+			}
 		}
 	}
 	gatewayClient, err := s.gatewaySelector.Next()
