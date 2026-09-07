@@ -2,6 +2,9 @@ package jsoncs3
 
 import (
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"strings"
 	"sync"
@@ -14,12 +17,14 @@ import (
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/go-viper/mapstructure/v2"
 	"github.com/google/uuid"
+	"github.com/hashicorp/golang-lru/v2/expirable"
 	"github.com/opencloud-eu/reva/v2/pkg/appauth"
 	"github.com/opencloud-eu/reva/v2/pkg/appauth/manager/registry"
 	"github.com/opencloud-eu/reva/v2/pkg/appctx"
 	ctxpkg "github.com/opencloud-eu/reva/v2/pkg/ctx"
 	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
 	"github.com/opencloud-eu/reva/v2/pkg/metadatacache"
+	"github.com/opencloud-eu/reva/v2/pkg/sharedconf"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/metadata"
 	"github.com/opencloud-eu/reva/v2/pkg/utils"
 	"github.com/pkg/errors"
@@ -43,6 +48,8 @@ type manager struct {
 	store               *metadatacache.Store[string, map[string]*apppb.AppPassword]
 	generator           PasswordGenerator
 	uTimeUpdateInterval time.Duration
+	authCache           *expirable.LRU[string, *apppb.AppPassword]
+	authCacheSecret     []byte
 	initialized         bool
 }
 
@@ -59,7 +66,10 @@ type config struct {
 	UpdateRetryCount    int `mapstructure:"update_retry_count"`
 }
 
-const tracerName = "jsoncs3"
+const (
+	tracerName      = "jsoncs3"
+	defaultCacheTTL = 60 * time.Second
+)
 
 func New(m map[string]any) (appauth.Manager, error) {
 	c := &config{}
@@ -131,11 +141,14 @@ func NewWithOptions(mds metadata.Storage, generator PasswordGenerator, uTimeUpda
 		Retries: updateRetries,
 		Init:    func() map[string]*apppb.AppPassword { return map[string]*apppb.AppPassword{} },
 	})
+
 	return &manager{
 		mds:                 mds,
 		store:               store,
 		generator:           generator,
 		uTimeUpdateInterval: uTimeUpdateInterval,
+		authCache:           expirable.NewLRU[string, *apppb.AppPassword](0, nil, defaultCacheTTL),
+		authCacheSecret:     []byte(sharedconf.GetJWTSecret("")),
 	}, nil
 }
 
@@ -291,6 +304,8 @@ func (m *manager) InvalidateAppPassword(ctx context.Context, secretOrId string) 
 		log.Error().Err(err).Msg("store.Update failed")
 		return errtypes.NotFound("password not found")
 	}
+
+	m.removeFromAuthCache(userID.GetOpaqueId(), secretOrId)
 	return nil
 }
 
@@ -310,6 +325,19 @@ func (m *manager) GetAppPassword(ctx context.Context, user *userpb.UserId, secre
 		matchedID string
 	)
 
+	// check for a previously validated authentication result from memory first, to avoid
+	// recomputing the Argon2id hash for every stored password.
+	cacheKey := m.createAuthCacheKey(user.GetOpaqueId(), secret)
+	if cached, ok := m.authCache.Get(cacheKey); ok {
+		if isAppPasswordExpired(cached) {
+			m.authCache.Remove(cacheKey)
+			return nil, errtypes.NotFound("password not found")
+		}
+		result := proto.Clone(cached).(*apppb.AppPassword)
+		result.Password = cached.Password
+		return result, nil
+	}
+
 	err := m.store.Update(ctx, user.GetOpaqueId(), false, func(a map[string]*apppb.AppPassword) (map[string]*apppb.AppPassword, bool, error) {
 		matchedPw = nil
 		for id, pw := range a {
@@ -319,7 +347,7 @@ func (m *manager) GetAppPassword(ctx context.Context, user *userpb.UserId, secre
 				log.Debug().Err(err).Msg("Error comparing password and hash")
 			case ok:
 				// password found
-				if pw.Expiration != nil && pw.Expiration.Seconds != 0 && uint64(time.Now().Unix()) > pw.Expiration.Seconds {
+				if isAppPasswordExpired(pw) {
 					log.Debug().Str("AppPasswordId", id).Msg("password expired")
 					return nil, false, errtypes.NotFound("password not found")
 				}
@@ -328,8 +356,17 @@ func (m *manager) GetAppPassword(ctx context.Context, user *userpb.UserId, secre
 				matchedID = id
 				// Updating the Utime will cause an Upload for every single GetAppPassword request. We are limiting this to one
 				// update per 'uTimeUpdateInterval' (default 5 min) otherwise this backend will become unusable.
+				persist := false
 				if time.Since(utils.TSToTime(pw.Utime)) > m.uTimeUpdateInterval {
 					a[id].Utime = utils.TSNow()
+					persist = true
+				}
+
+				cached := proto.Clone(pw).(*apppb.AppPassword)
+				cached.Password = id
+				m.authCache.Add(cacheKey, cached)
+
+				if persist {
 					return a, true, nil
 				}
 				return a, false, nil
@@ -346,6 +383,29 @@ func (m *manager) GetAppPassword(ctx context.Context, user *userpb.UserId, secre
 	result := proto.Clone(matchedPw).(*apppb.AppPassword)
 	result.Password = matchedID
 	return result, nil
+}
+
+func (m *manager) createAuthCacheKey(userID, secret string) string {
+	mac := hmac.New(sha256.New, m.authCacheSecret)
+	_, _ = mac.Write([]byte(userID + ":" + secret))
+	return hex.EncodeToString(mac.Sum(nil))
+}
+
+func (m *manager) removeFromAuthCache(userID, secretOrId string) {
+	key := m.createAuthCacheKey(userID, secretOrId)
+	if m.authCache.Remove(key) {
+		return
+	}
+	for _, k := range m.authCache.Keys() {
+		v, ok := m.authCache.Peek(k)
+		if ok && v.Password == secretOrId {
+			m.authCache.Remove(k)
+		}
+	}
+}
+
+func isAppPasswordExpired(pw *apppb.AppPassword) bool {
+	return pw.Expiration != nil && pw.Expiration.Seconds != 0 && uint64(time.Now().Unix()) > pw.Expiration.Seconds
 }
 
 func (m *manager) initialize(ctx context.Context) error {
