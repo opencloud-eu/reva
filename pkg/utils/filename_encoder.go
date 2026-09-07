@@ -1,0 +1,54 @@
+package utils
+
+import (
+	"encoding/base64"
+	"strings"
+
+	grouppb "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	"google.golang.org/protobuf/proto"
+)
+
+type FilenameEncoder interface {
+	SafeFilename() string
+}
+
+type FSSafeUserID struct {
+	ID *userpb.UserId
+}
+
+func (id FSSafeUserID) SafeFilename() string {
+	opaqueID := id.ID.GetOpaqueId()
+	if id.ID.GetType() == userpb.UserType_USER_TYPE_GUEST {
+		return base64.RawURLEncoding.EncodeToString([]byte(strings.ToLower(opaqueID)))
+	}
+	return opaqueID
+}
+
+// Decode returns a copy of the wrapped user ID with the filename restored as its opaque ID.
+// The decoding decision is done based on the Type attribute of the Receiver id
+func (id FSSafeUserID) Decode(filename string) (*userpb.UserId, error) {
+	opaqueID := filename
+	if id.ID.GetType() == userpb.UserType_USER_TYPE_GUEST {
+		decoded, err := base64.RawURLEncoding.DecodeString(filename)
+		if err != nil {
+			return nil, err
+		}
+		opaqueID = string(decoded)
+	}
+
+	decodedID := &userpb.UserId{}
+	if id.ID != nil {
+		decodedID = proto.Clone(id.ID).(*userpb.UserId)
+	}
+	decodedID.OpaqueId = opaqueID
+	return decodedID, nil
+}
+
+type FSSafeGroupID struct {
+	ID *grouppb.GroupId
+}
+
+func (id FSSafeGroupID) SafeFilename() string {
+	return id.ID.GetOpaqueId()
+}

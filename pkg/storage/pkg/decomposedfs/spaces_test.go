@@ -36,6 +36,7 @@ import (
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/spaceidindex"
 	helpers "github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/testhelpers"
 	"github.com/opencloud-eu/reva/v2/pkg/storagespace"
+	"github.com/opencloud-eu/reva/v2/pkg/utils"
 	"github.com/stretchr/testify/mock"
 	"google.golang.org/grpc"
 )
@@ -304,7 +305,8 @@ var _ = Describe("Spaces", func() {
 				Expect(groupIdx.Add(groupGrantee, spaceID, target)).To(Succeed())
 				mailIdx := spaceidindex.New(filepath.Join(env.Root, "indexes"), "by-mail")
 				Expect(mailIdx.Init()).To(Succeed())
-				Expect(mailIdx.Add("guest@example.com", spaceID, target)).To(Succeed())
+				guestFilename := (utils.FSSafeUserID{ID: &userv1beta1.UserId{OpaqueId: guestGrantee, Type: userv1beta1.UserType_USER_TYPE_GUEST}}).SafeFilename()
+				Expect(mailIdx.Add(guestFilename, spaceID, target)).To(Succeed())
 
 				load := func(indexName, key string) map[string]string {
 					idx := spaceidindex.New(filepath.Join(env.Root, "indexes"), indexName)
@@ -317,7 +319,7 @@ var _ = Describe("Spaces", func() {
 				// precondition: the grantee indexes reference the space
 				Expect(load("by-user-id", userGrantee)).To(HaveKey(spaceID))
 				Expect(load("by-group-id", groupGrantee)).To(HaveKey(spaceID))
-				Expect(load("by-mail", "guest@example.com")).To(HaveKey(spaceID))
+				Expect(load("by-mail", guestFilename)).To(HaveKey(spaceID))
 
 				// disable, then purge as the space admin
 				ctx := ctxpkg.ContextSetUser(context.Background(), env.DeleteAllSpacesUser)
@@ -330,7 +332,7 @@ var _ = Describe("Spaces", func() {
 				// the grantee index entries must be gone after the purge
 				Expect(load("by-user-id", userGrantee)).ToNot(HaveKey(spaceID))
 				Expect(load("by-group-id", groupGrantee)).ToNot(HaveKey(spaceID))
-				Expect(load("by-mail", "guest@example.com")).ToNot(HaveKey(spaceID))
+				Expect(load("by-mail", guestFilename)).ToNot(HaveKey(spaceID))
 			})
 			// purging one space must remove only that space's entry: a sibling
 			// space of the same owner must stay in the by-user-id index.
@@ -697,6 +699,37 @@ var _ = Describe("Spaces", func() {
 			Expect(len(spaces)).To(Equal(1))
 			Expect(spaces[0].SpaceType).To(Equal("project"))
 			Expect(spaces[0].GetId().GetOpaqueId()).To(Equal(resp.StorageSpace.GetId().GetOpaqueId()))
+		})
+
+		It("safely indexes a project space granted to a guest with a path-like ID", func() {
+			// create a project space as the owner
+			resp, err := env.Fs.CreateStorageSpace(env.Ctx, &provider.CreateStorageSpaceRequest{Name: "Guest Space", Type: "project"})
+			Expect(err).ToNot(HaveOccurred())
+			ref := &provider.Reference{ResourceId: resp.StorageSpace.GetRoot()}
+
+			ctx := storageprovider.WithSpaceType(ctxpkg.ContextSetUser(context.Background(), env.Users[0]), "project")
+			guest := &userv1beta1.UserId{OpaqueId: "my/../email@email.com", Type: userv1beta1.UserType_USER_TYPE_GUEST}
+			err = env.Fs.AddGrant(ctx, ref, &provider.Grant{
+				Grantee:     &provider.Grantee{Type: provider.GranteeType_GRANTEE_TYPE_USER, Id: &provider.Grantee_UserId{UserId: guest}},
+				Permissions: &provider.ResourcePermissions{Stat: true},
+				Creator:     &userv1beta1.UserId{OpaqueId: helpers.OwnerID},
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			mailIdx := spaceidindex.New(filepath.Join(env.Root, "indexes"), "by-mail")
+			Expect(mailIdx.Init()).To(Succeed())
+			filename := (utils.FSSafeUserID{ID: guest}).SafeFilename()
+			index, err := mailIdx.Load(filename)
+			Expect(err).NotTo(HaveOccurred())
+			_, spaceID, _, err := storagespace.SplitID(resp.StorageSpace.GetId().GetOpaqueId())
+			Expect(err).NotTo(HaveOccurred())
+			Expect(index).To(HaveKey(spaceID))
+
+			spaces, err := env.Fs.ListStorageSpaces(ctxpkg.ContextSetUser(context.Background(), &userv1beta1.User{Id: guest}), []*provider.ListStorageSpacesRequest_Filter{
+				{Type: provider.ListStorageSpacesRequest_Filter_TYPE_USER, Term: &provider.ListStorageSpacesRequest_Filter_User{User: guest}},
+			}, false)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(spaces).To(HaveLen(1))
 		})
 	})
 })

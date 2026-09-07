@@ -25,6 +25,7 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/ace"
+	"github.com/opencloud-eu/reva/v2/pkg/utils"
 	"google.golang.org/protobuf/testing/protocmp"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -102,14 +103,15 @@ var _ = Describe("ACE", func() {
 		})
 
 		It("creates an ACE from a guest grant", func() {
+			userid := &userpb.UserId{
+				OpaqueId: "GUEST@example.com",
+				Type:     userpb.UserType_USER_TYPE_GUEST,
+			}
 			guestGrant.Grantee.Id = &provider.Grantee_UserId{
-				UserId: &userpb.UserId{
-					OpaqueId: "GUEST@example.com",
-					Type:     userpb.UserType_USER_TYPE_GUEST,
-				},
+				UserId: userid,
 			}
 			aceValue := ace.FromGrant(guestGrant)
-			Expect(aceValue.Principal()).To(Equal(ace.MailAcePrefix + "guest@example.com"))
+			Expect(aceValue.Principal()).To(Equal(ace.MailAcePrefix + utils.FSSafeUserID{ID: userid}.SafeFilename()))
 		})
 	})
 

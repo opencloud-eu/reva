@@ -1238,7 +1238,7 @@ func (n *Node) IsDenied(ctx context.Context) bool {
 	isExecutant := func(g *provider.Grantee) bool {
 		switch g.GetType() {
 		case provider.GranteeType_GRANTEE_TYPE_USER:
-			return g.GetUserId().GetOpaqueId() == u.GetId().GetOpaqueId()
+			return utils.UserIDEqual(g.GetUserId(), u.GetId())
 		case provider.GranteeType_GRANTEE_TYPE_GROUP:
 			// check gid
 			gid := g.GetGroupId().GetOpaqueId()
@@ -1358,7 +1358,7 @@ func (n *Node) getGranteeTypes(ctx context.Context) []provider.GranteeType {
 		hasUserShares, hasGroupShares := false, false
 		for i := range g {
 			switch {
-			case !hasUserShares && strings.HasPrefix(g[i], prefixes.GrantUserAcePrefix):
+			case !hasUserShares && (strings.HasPrefix(g[i], prefixes.GrantUserAcePrefix) || strings.HasPrefix(g[i], prefixes.GrantMailAcePrefix)):
 				hasUserShares = true
 			case !hasGroupShares && strings.HasPrefix(g[i], prefixes.GrantGroupAcePrefix):
 				hasGroupShares = true
