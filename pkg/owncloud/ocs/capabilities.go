@@ -20,6 +20,7 @@ package ocs
 
 import (
 	"encoding/xml"
+	"sort"
 
 	"github.com/opencloud-eu/reva/v2/pkg/storage"
 )
@@ -67,7 +68,37 @@ type Capabilities struct {
 	// Providers is the per-provider capability section, keyed by provider ID. It
 	// supersedes the deprecated global storage keys under Files/Dav; there is no
 	// fallback between them.
-	Providers map[string]*ProviderCapabilities `json:"providers,omitempty" xml:"providers,omitempty" mapstructure:"providers"`
+	Providers ProviderCapabilitiesMap `json:"providers,omitempty" xml:"providers,omitempty" mapstructure:"providers"`
+}
+
+// ProviderCapabilitiesMap is the per-provider section keyed by provider ID.
+type ProviderCapabilitiesMap map[string]*ProviderCapabilities
+
+// MarshalXML renders the map as <providers><provider id="...">...</provider>...</providers>,
+// ordered by id. encoding/xml cannot marshal a Go map, so XML output is produced
+// explicitly; JSON uses the default map encoding.
+func (m ProviderCapabilitiesMap) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
+	if len(m) == 0 {
+		return nil
+	}
+	if err := e.EncodeToken(start); err != nil {
+		return err
+	}
+	ids := make([]string, 0, len(m))
+	for id := range m {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	for _, id := range ids {
+		el := xml.StartElement{
+			Name: xml.Name{Local: "provider"},
+			Attr: []xml.Attr{{Name: xml.Name{Local: "id"}, Value: id}},
+		}
+		if err := e.EncodeElement(m[id], el); err != nil {
+			return err
+		}
+	}
+	return e.EncodeToken(start.End())
 }
 
 // ProviderCapabilities is the wire form of a provider's declared capabilities.

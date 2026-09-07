@@ -68,6 +68,49 @@ func TestProviderCapabilitiesXMLParity(t *testing.T) {
 	}
 }
 
+// TestCapabilitiesProvidersXML guards the whole Capabilities envelope: XML is the
+// default OCS format and encoding/xml cannot marshal a Go map, so a populated
+// providers section must still marshal via the custom ProviderCapabilitiesMap.
+func TestCapabilitiesProvidersXML(t *testing.T) {
+	c := Capabilities{
+		Providers: ProviderCapabilitiesMap{
+			"kiteworks":    NewProviderCapabilities(storage.Capabilities{}),
+			"decomposedfs": NewProviderCapabilities(storage.FullCapabilities()),
+		},
+	}
+
+	b, err := xml.Marshal(c)
+	if err != nil {
+		t.Fatalf("marshal populated capabilities: %v", err)
+	}
+
+	out := string(b)
+	// ordered by id, so decomposedfs comes before kiteworks
+	for _, want := range []string{
+		`<providers>`,
+		`<provider id="decomposedfs">`,
+		`<provider id="kiteworks">`,
+		`<upload>1</upload>`,
+		`<upload>0</upload>`,
+	} {
+		if !contains(out, want) {
+			t.Errorf("xml %q missing %q", out, want)
+		}
+	}
+}
+
+// TestCapabilitiesProvidersXMLEmpty verifies omitempty still drops the section
+// when no provider resolved, leaving the rest of the envelope untouched.
+func TestCapabilitiesProvidersXMLEmpty(t *testing.T) {
+	b, err := xml.Marshal(Capabilities{})
+	if err != nil {
+		t.Fatalf("marshal empty capabilities: %v", err)
+	}
+	if contains(string(b), "<providers>") {
+		t.Errorf("empty providers should be omitted, got %q", string(b))
+	}
+}
+
 func contains(s, sub string) bool {
 	for i := 0; i+len(sub) <= len(s); i++ {
 		if s[i:i+len(sub)] == sub {
