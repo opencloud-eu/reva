@@ -1,10 +1,14 @@
 # Changelog
 
-## [2.50.0](https://github.com/opencloud-eu/reva/releases/tag/v2.50.0) - 2026-09-03
+## [2.50.0](https://github.com/opencloud-eu/reva/releases/tag/v2.50.0) - 2026-09-08
 
 ### ❤️ Thanks to all contributors! ❤️
 
 @dschmidt, @maki5, @rhafer
+
+### ✅ Tests
+
+- fix(jsoncs3): wait for init before asserting the migration timeout [[#792](https://github.com/opencloud-eu/reva/pull/792)]
 
 ### 📈 Enhancement
 
