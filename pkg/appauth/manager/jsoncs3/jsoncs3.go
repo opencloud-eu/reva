@@ -2,7 +2,6 @@ package jsoncs3
 
 import (
 	"context"
-	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
@@ -24,7 +23,6 @@ import (
 	ctxpkg "github.com/opencloud-eu/reva/v2/pkg/ctx"
 	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
 	"github.com/opencloud-eu/reva/v2/pkg/metadatacache"
-	"github.com/opencloud-eu/reva/v2/pkg/sharedconf"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/metadata"
 	"github.com/opencloud-eu/reva/v2/pkg/utils"
 	"github.com/pkg/errors"
@@ -49,7 +47,6 @@ type manager struct {
 	generator           PasswordGenerator
 	uTimeUpdateInterval time.Duration
 	authCache           *expirable.LRU[string, *apppb.AppPassword]
-	authCacheSecret     []byte
 	initialized         bool
 }
 
@@ -148,7 +145,6 @@ func NewWithOptions(mds metadata.Storage, generator PasswordGenerator, uTimeUpda
 		generator:           generator,
 		uTimeUpdateInterval: uTimeUpdateInterval,
 		authCache:           expirable.NewLRU[string, *apppb.AppPassword](0, nil, defaultCacheTTL),
-		authCacheSecret:     []byte(sharedconf.GetJWTSecret("")),
 	}, nil
 }
 
@@ -327,7 +323,7 @@ func (m *manager) GetAppPassword(ctx context.Context, user *userpb.UserId, secre
 
 	// check for a previously validated authentication result from memory first, to avoid
 	// recomputing the Argon2id hash for every stored password.
-	cacheKey := m.createAuthCacheKey(user.GetOpaqueId(), secret)
+	cacheKey := createAuthCacheKey(user.GetOpaqueId(), secret)
 	if cached, ok := m.authCache.Get(cacheKey); ok {
 		if isAppPasswordExpired(cached) {
 			m.authCache.Remove(cacheKey)
@@ -362,10 +358,6 @@ func (m *manager) GetAppPassword(ctx context.Context, user *userpb.UserId, secre
 					persist = true
 				}
 
-				cached := proto.Clone(pw).(*apppb.AppPassword)
-				cached.Password = id
-				m.authCache.Add(cacheKey, cached)
-
 				if persist {
 					return a, true, nil
 				}
@@ -382,17 +374,16 @@ func (m *manager) GetAppPassword(ctx context.Context, user *userpb.UserId, secre
 	// is not corrupted.
 	result := proto.Clone(matchedPw).(*apppb.AppPassword)
 	result.Password = matchedID
+	m.authCache.Add(cacheKey, result)
+
 	return result, nil
 }
 
-func (m *manager) createAuthCacheKey(userID, secret string) string {
-	mac := hmac.New(sha256.New, m.authCacheSecret)
-	_, _ = mac.Write([]byte(userID + ":" + secret))
-	return hex.EncodeToString(mac.Sum(nil))
-}
-
+// removeFromAuthCache removes the cached entry matching the app password.
+// secretOrIdis actually a password which is comming to the InvalidateAppPassword method
+// and then is propagated here, just keeped the same naming
 func (m *manager) removeFromAuthCache(userID, secretOrId string) {
-	key := m.createAuthCacheKey(userID, secretOrId)
+	key := createAuthCacheKey(userID, secretOrId)
 	if m.authCache.Remove(key) {
 		return
 	}
@@ -483,4 +474,12 @@ func (d dicewarePassword) GeneratePassword() (string, error) {
 		return "", errors.Wrap(err, "error creating new token")
 	}
 	return strings.Join(token, " "), nil
+}
+
+func createAuthCacheKey(userID, secret string) string {
+	h := sha256.New()
+	_, _ = h.Write([]byte(userID))
+	_, _ = h.Write([]byte{0})
+	_, _ = h.Write([]byte(secret))
+	return hex.EncodeToString(h.Sum(nil))
 }
