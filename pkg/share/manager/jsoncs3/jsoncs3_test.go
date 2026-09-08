@@ -1163,7 +1163,13 @@ var _ = Describe("CleanupStaleShares", func() {
 		m, err := jsoncs3.New(storage, nil, nil, 0, nil, 0)
 		Expect(err).ToNot(HaveOccurred())
 
-		ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond)
+		// New initializes the metadata storage in the background. Wait for that
+		// to finish, otherwise the context below can expire while the manager is
+		// still initializing and CleanupStaleShares reports that instead of the
+		// migration timeout.
+		Eventually(m.Ready(), 10*time.Second).Should(BeClosed())
+
+		ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 		defer cancel()
 
 		err = m.CleanupStaleShares(ctx)
