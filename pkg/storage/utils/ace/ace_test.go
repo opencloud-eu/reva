@@ -111,7 +111,7 @@ var _ = Describe("ACE", func() {
 				UserId: userid,
 			}
 			aceValue := ace.FromGrant(guestGrant)
-			Expect(aceValue.Principal()).To(Equal(ace.MailAcePrefix + utils.FSSafeUserID{ID: userid}.SafeFilename()))
+			Expect(aceValue.Principal()).To(Equal(ace.MailAcePrefix + utils.NewFSSafeUserID(userid).SafeFilename()))
 		})
 	})
 

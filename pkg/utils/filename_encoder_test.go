@@ -13,10 +13,10 @@ import (
 var _ = Describe("FSSafeUserID", func() {
 	DescribeTable("SafeFilename",
 		func(userType userpb.UserType, opaqueID string, encoded bool) {
-			id := &utils.FSSafeUserID{ID: &userpb.UserId{
+			id := utils.NewFSSafeUserID(&userpb.UserId{
 				Type:     userType,
 				OpaqueId: opaqueID,
-			}}
+			})
 			if encoded {
 				Expect(id.SafeFilename()).To(Equal(base64.RawURLEncoding.EncodeToString([]byte(strings.ToLower(opaqueID)))))
 			} else {
@@ -42,7 +42,7 @@ var _ = Describe("FSSafeUserID", func() {
 				TenantId: "tenant",
 			}
 
-			decoded, err := (utils.FSSafeUserID{ID: original}).Decode(
+			decoded, err := utils.NewFSSafeUserID(original).Decode(
 				base64.RawURLEncoding.EncodeToString([]byte(strings.ToLower("../../etc/passwd"))),
 			)
 
@@ -55,7 +55,7 @@ var _ = Describe("FSSafeUserID", func() {
 		})
 
 		It("does not decode a non-guest ID", func() {
-			id := utils.FSSafeUserID{ID: &userpb.UserId{Type: userpb.UserType_USER_TYPE_PRIMARY}}
+			id := utils.NewFSSafeUserID(&userpb.UserId{Type: userpb.UserType_USER_TYPE_PRIMARY})
 
 			someb64 := base64.RawURLEncoding.EncodeToString([]byte("userid"))
 			decoded, err := id.Decode(someb64)
@@ -65,7 +65,7 @@ var _ = Describe("FSSafeUserID", func() {
 		})
 
 		It("rejects malformed Base64 for a guest ID", func() {
-			id := utils.FSSafeUserID{ID: &userpb.UserId{Type: userpb.UserType_USER_TYPE_GUEST}}
+			id := utils.NewFSSafeUserID(&userpb.UserId{Type: userpb.UserType_USER_TYPE_GUEST})
 
 			decoded, err := id.Decode("not valid base64")
 
