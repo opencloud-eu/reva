@@ -4,7 +4,7 @@
 
 ### ❤️ Thanks to all contributors! ❤️
 
-@dschmidt, @rhafer
+@dschmidt, @maki5, @rhafer
 
 ### ✅ Tests
 
@@ -14,10 +14,12 @@
 
 - feat(ocdav): expose the video, motionPhoto and livePhoto facets [[#790](https://github.com/opencloud-eu/reva/pull/790)]
 - mime: map the Nikon NRW raw extension [[#773](https://github.com/opencloud-eu/reva/pull/773)]
+- enhancement(shares/jsoncs3): Shortcut migration on fresh system [[#787](https://github.com/opencloud-eu/reva/pull/787)]
 
 ### 🐛 Bug Fixes
 
 - fix(decomposedfs): write arbitrary metadata in one go [[#791](https://github.com/opencloud-eu/reva/pull/791)]
+- Backport and fix of space membership expired event [[#766](https://github.com/opencloud-eu/reva/pull/766)]
 
 ### 📦️ Dependencies
 
