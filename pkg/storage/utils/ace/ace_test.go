@@ -25,6 +25,7 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/ace"
+	"github.com/opencloud-eu/reva/v2/pkg/utils"
 	"google.golang.org/protobuf/testing/protocmp"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -34,12 +35,19 @@ import (
 var _ = Describe("ACE", func() {
 
 	var (
+		userGrant  *provider.Grant
+		groupGrant *provider.Grant
+		guestGrant *provider.Grant
+	)
+
+	BeforeEach(func() {
 		userGrant = &provider.Grant{
 			Grantee: &provider.Grantee{
 				Type: provider.GranteeType_GRANTEE_TYPE_USER,
 				Id: &provider.Grantee_UserId{
 					UserId: &userpb.UserId{
 						OpaqueId: "foo",
+						Type:     userpb.UserType_USER_TYPE_PRIMARY,
 					},
 				},
 			},
@@ -63,18 +71,47 @@ var _ = Describe("ACE", func() {
 			Permissions: &provider.ResourcePermissions{
 				CreateContainer: true,
 			},
+			Creator: &userpb.UserId{},
 		}
-	)
+
+		guestGrant = &provider.Grant{
+			Grantee: &provider.Grantee{
+				Type: provider.GranteeType_GRANTEE_TYPE_USER,
+				Id: &provider.Grantee_UserId{
+					UserId: &userpb.UserId{
+						OpaqueId: "GUEST@example.com",
+						Type:     userpb.UserType_USER_TYPE_GUEST,
+					},
+				},
+			},
+			Permissions: &provider.ResourcePermissions{
+				CreateContainer: true,
+			},
+			Creator: &userpb.UserId{},
+		}
+	})
 
 	Describe("FromGrant", func() {
 		It("creates an ACE from a user grant", func() {
-			ace := ace.FromGrant(userGrant)
-			Expect(ace.Principal()).To(Equal("u:foo"))
+			aceValue := ace.FromGrant(userGrant)
+			Expect(aceValue.Principal()).To(Equal(ace.UserAcePrefix + "foo"))
 		})
 
 		It("creates an ACE from a group grant", func() {
-			ace := ace.FromGrant(groupGrant)
-			Expect(ace.Principal()).To(Equal("g:foo"))
+			aceValue := ace.FromGrant(groupGrant)
+			Expect(aceValue.Principal()).To(Equal(ace.GroupAcePrefix + "foo"))
+		})
+
+		It("creates an ACE from a guest grant", func() {
+			userid := &userpb.UserId{
+				OpaqueId: "GUEST@example.com",
+				Type:     userpb.UserType_USER_TYPE_GUEST,
+			}
+			guestGrant.Grantee.Id = &provider.Grantee_UserId{
+				UserId: userid,
+			}
+			aceValue := ace.FromGrant(guestGrant)
+			Expect(aceValue.Principal()).To(Equal(ace.MailAcePrefix + utils.NewFSSafeUserID(userid).SafeFilename()))
 		})
 	})
 
@@ -85,6 +122,36 @@ var _ = Describe("ACE", func() {
 			// do not check opaque values
 			grant.Grantee.Opaque = nil
 			Expect(grant).To(BeComparableTo(userGrant, protocmp.Transform()))
+		})
+
+		It("returns a proper guest Grant with lowercased OpaqueId", func() {
+			ace := ace.FromGrant(guestGrant)
+			grant := ace.Grant()
+			Expect(grant.GetGrantee().GetUserId().GetOpaqueId()).To(Equal("guest@example.com"))
+			Expect(grant.GetGrantee().GetUserId().GetType()).To(Equal(userpb.UserType_USER_TYPE_GUEST))
+			Expect(grant.GetPermissions()).To(BeComparableTo(guestGrant.GetPermissions(), protocmp.Transform()))
+		})
+
+		It("returns a proper Grant for group ACE", func() {
+			ace := ace.FromGrant(groupGrant)
+			grant := ace.Grant()
+			// do not check opaque values
+			grant.Grantee.Opaque = nil
+			Expect(grant).To(BeComparableTo(groupGrant, protocmp.Transform()))
+		})
+
+		It("returns a proper Grant for guest ACE", func() {
+			guestGrant.Grantee.Id = &provider.Grantee_UserId{
+				UserId: &userpb.UserId{
+					OpaqueId: "guest@example.com",
+					Type:     userpb.UserType_USER_TYPE_GUEST,
+				},
+			}
+			ace := ace.FromGrant(guestGrant)
+			grant := ace.Grant()
+			// do not check opaque values
+			grant.Grantee.Opaque = nil
+			Expect(grant).To(BeComparableTo(guestGrant, protocmp.Transform()))
 		})
 	})
 

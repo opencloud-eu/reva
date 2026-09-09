@@ -26,8 +26,10 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	"github.com/opencloud-eu/reva/v2/pkg/share/manager/jsoncs3/sharecache"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/metadata"
+	"github.com/opencloud-eu/reva/v2/pkg/utils"
 )
 
 var _ = Describe("Sharecache", func() {
@@ -35,7 +37,9 @@ var _ = Describe("Sharecache", func() {
 		c       sharecache.Cache
 		storage metadata.Storage
 
-		userid  = "user"
+		userid = utils.NewFSSafeUserID(&userpb.UserId{
+			OpaqueId: "userid",
+		})
 		shareID = "storageid$spaceid!share1"
 		ctx     context.Context
 		tmpdir  string
@@ -71,13 +75,13 @@ var _ = Describe("Sharecache", func() {
 			})
 
 			It("updates the etag", func() {
-				uc, _ := c.UserShares.Load(userid)
+				uc, _ := c.UserShares.Load(userid.SafeFilename())
 				oldEtag := uc.Etag
 				Expect(oldEtag).ToNot(BeEmpty())
 
-				Expect(c.Persist(ctx, userid)).To(Succeed())
+				Expect(c.Persist(ctx, userid.SafeFilename())).To(Succeed())
 
-				uc, _ = c.UserShares.Load(userid)
+				uc, _ = c.UserShares.Load(userid.SafeFilename())
 				Expect(uc.Etag).ToNot(Equal(oldEtag))
 			})
 		})
