@@ -236,6 +236,10 @@ func CanonicalUserID(id *userpb.UserId) string {
 		return ""
 	}
 	if id.GetType() == userpb.UserType_USER_TYPE_GUEST {
+		// Guest user IDs are lowercased to enable case insensitive
+		// comparisons: those are email addresses, and while RFC 5321 states
+		// that the local-part is case sensitive, in practice, it's a de facto
+		// standard that email providers consider them to be case insensitive.
 		return strings.ToLower(id.GetOpaqueId())
 	}
 	return id.GetOpaqueId()
