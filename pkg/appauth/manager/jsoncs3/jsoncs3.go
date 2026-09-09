@@ -380,7 +380,7 @@ func (m *manager) GetAppPassword(ctx context.Context, user *userpb.UserId, secre
 }
 
 // removeFromAuthCache removes the cached entry matching the app password.
-// secretOrIdis actually a password which is comming to the InvalidateAppPassword method
+// secretOrIdis actually a password which is coming to the InvalidateAppPassword method
 // and then is propagated here, just keeped the same naming
 func (m *manager) removeFromAuthCache(userID, secretOrId string) {
 	key := createAuthCacheKey(userID, secretOrId)
