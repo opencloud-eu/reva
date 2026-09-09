@@ -3,6 +3,7 @@ package ocs
 import (
 	"encoding/json"
 	"encoding/xml"
+	"strings"
 	"testing"
 
 	"github.com/opencloud-eu/reva/v2/pkg/storage"
@@ -60,10 +61,10 @@ func TestProviderCapabilitiesXMLParity(t *testing.T) {
 	}
 
 	out := string(b)
-	if want := "<upload>1</upload>"; !contains(out, want) {
+	if want := "<upload>1</upload>"; !strings.Contains(out, want) {
 		t.Errorf("xml %q missing %q", out, want)
 	}
-	if want := "<trash>0</trash>"; !contains(out, want) {
+	if want := "<trash>0</trash>"; !strings.Contains(out, want) {
 		t.Errorf("xml %q missing %q", out, want)
 	}
 }
@@ -93,7 +94,7 @@ func TestCapabilitiesProvidersXML(t *testing.T) {
 		`<upload>1</upload>`,
 		`<upload>0</upload>`,
 	} {
-		if !contains(out, want) {
+		if !strings.Contains(out, want) {
 			t.Errorf("xml %q missing %q", out, want)
 		}
 	}
@@ -106,16 +107,7 @@ func TestCapabilitiesProvidersXMLEmpty(t *testing.T) {
 	if err != nil {
 		t.Fatalf("marshal empty capabilities: %v", err)
 	}
-	if contains(string(b), "<providers>") {
+	if strings.Contains(string(b), "<providers>") {
 		t.Errorf("empty providers should be omitted, got %q", string(b))
 	}
-}
-
-func contains(s, sub string) bool {
-	for i := 0; i+len(sub) <= len(s); i++ {
-		if s[i:i+len(sub)] == sub {
-			return true
-		}
-	}
-	return false
 }
