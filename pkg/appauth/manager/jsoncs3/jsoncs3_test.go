@@ -272,6 +272,95 @@ var _ = Describe("Jsoncs3", func() {
 				Expect(err).ToNot(HaveOccurred())
 			})
 		})
+		Describe("AuthCache", func() {
+			var (
+				existingAppPw map[string]*apppb.AppPassword
+				content       []byte
+			)
+			BeforeEach(func() {
+				existingAppPw = map[string]*apppb.AppPassword{}
+				hash, err := argon2id.CreateHash("password", argon2id.DefaultParams)
+				Expect(err).ToNot(HaveOccurred())
+				existingAppPw["existing-id"] = &apppb.AppPassword{
+					Password: hash,
+					Utime:    utils.TSNow(),
+				}
+				content, err = json.Marshal(existingAppPw)
+				Expect(err).ToNot(HaveOccurred())
+			})
+
+			It("Serves a cached result on a repeated request without touching storage", func() {
+				dlRes := &metadata.DownloadResponse{Content: content}
+				md.EXPECT().Download(mock.Anything, mock.Anything).Return(dlRes, nil).Once()
+
+				_, err = manager.GetAppPassword(ctx, &user.UserId{OpaqueId: testUserID, Idp: testUserIDP}, "password")
+				Expect(err).ToNot(HaveOccurred())
+
+				pw, err := manager.GetAppPassword(ctx, &user.UserId{OpaqueId: testUserID, Idp: testUserIDP}, "password")
+				Expect(err).ToNot(HaveOccurred())
+				Expect(pw.Password).To(Equal("existing-id"))
+
+				md.AssertNumberOfCalls(GinkgoT(), "Download", 1)
+			})
+
+			It("Removes the cached result when the password is invalidated", func() {
+				dlRes := &metadata.DownloadResponse{Content: content}
+				md.EXPECT().Download(mock.Anything, mock.Anything).Return(dlRes, nil).Once()
+				md.EXPECT().Upload(
+					mock.Anything,
+					mock.MatchedBy(func(req metadata.UploadRequest) bool {
+						err := json.Unmarshal(req.Content, &map[string]*apppb.AppPassword{})
+						return err == nil
+					}),
+				).Return(nil, nil).Once()
+
+				_, err = manager.GetAppPassword(ctx, &user.UserId{OpaqueId: testUserID, Idp: testUserIDP}, "password")
+				Expect(err).ToNot(HaveOccurred())
+
+				err = manager.InvalidateAppPassword(ctx, "password")
+				Expect(err).ToNot(HaveOccurred())
+
+				_, err = manager.GetAppPassword(ctx, &user.UserId{OpaqueId: testUserID, Idp: testUserIDP}, "password")
+				Expect(err).Should(MatchError(errtypes.NotFound("password not found")))
+			})
+
+			It("Removes the cached result when the password is invalidated by id", func() {
+				dlRes := &metadata.DownloadResponse{Content: content}
+				md.EXPECT().Download(mock.Anything, mock.Anything).Return(dlRes, nil).Once()
+				md.EXPECT().Upload(
+					mock.Anything,
+					mock.MatchedBy(func(req metadata.UploadRequest) bool {
+						err := json.Unmarshal(req.Content, &map[string]*apppb.AppPassword{})
+						return err == nil
+					}),
+				).Return(nil, nil).Once()
+
+				_, err = manager.GetAppPassword(ctx, &user.UserId{OpaqueId: testUserID, Idp: testUserIDP}, "password")
+				Expect(err).ToNot(HaveOccurred())
+
+				err = manager.InvalidateAppPassword(ctx, "existing-id")
+				Expect(err).ToNot(HaveOccurred())
+
+				_, err = manager.GetAppPassword(ctx, &user.UserId{OpaqueId: testUserID, Idp: testUserIDP}, "password")
+				Expect(err).Should(MatchError(errtypes.NotFound("password not found")))
+			})
+
+			It("Rejects an expired token that is still cached", func() {
+				existingAppPw["existing-id"].Expiration = utils.TimeToTS(time.Now().Add(time.Second))
+				content, err = json.Marshal(existingAppPw)
+				Expect(err).ToNot(HaveOccurred())
+				dlRes := &metadata.DownloadResponse{Content: content}
+				md.EXPECT().Download(mock.Anything, mock.Anything).Return(dlRes, nil).Once()
+
+				_, err = manager.GetAppPassword(ctx, &user.UserId{OpaqueId: testUserID, Idp: testUserIDP}, "password")
+				Expect(err).ToNot(HaveOccurred())
+
+				time.Sleep(2500 * time.Millisecond)
+
+				_, err = manager.GetAppPassword(ctx, &user.UserId{OpaqueId: testUserID, Idp: testUserIDP}, "password")
+				Expect(err).Should(MatchError(errtypes.NotFound("password not found")))
+			})
+		})
 		Describe("ListAppPasswords", func() {
 			var existingAppPw = map[string]*apppb.AppPassword{
 				"existing-id": {
