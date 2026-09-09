@@ -20,6 +20,10 @@ type FSSafeUserID struct {
 func (id FSSafeUserID) SafeFilename() string {
 	opaqueID := id.ID.GetOpaqueId()
 	if id.ID.GetType() == userpb.UserType_USER_TYPE_GUEST {
+		// Guest opaqueID is an email address, which is why we choose to make
+		// it lowercase: RFC 5321 does specify that email address local-parts
+		// are case sensitive but, in practice, it's a de-facto standard that
+		// email providers consider them to be case insensitive:
 		return base64.RawURLEncoding.EncodeToString([]byte(strings.ToLower(opaqueID)))
 	}
 	return opaqueID
