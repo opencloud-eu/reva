@@ -20,7 +20,8 @@ package ocs
 
 import (
 	"encoding/xml"
-	"sort"
+	"maps"
+	"slices"
 
 	"github.com/opencloud-eu/reva/v2/pkg/storage"
 )
@@ -84,12 +85,7 @@ func (m ProviderCapabilitiesMap) MarshalXML(e *xml.Encoder, start xml.StartEleme
 	if err := e.EncodeToken(start); err != nil {
 		return err
 	}
-	ids := make([]string, 0, len(m))
-	for id := range m {
-		ids = append(ids, id)
-	}
-	sort.Strings(ids)
-	for _, id := range ids {
+	for _, id := range slices.Sorted(maps.Keys(m)) {
 		el := xml.StartElement{
 			Name: xml.Name{Local: "provider"},
 			Attr: []xml.Attr{{Name: xml.Name{Local: "id"}, Value: id}},

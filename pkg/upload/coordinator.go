@@ -53,9 +53,6 @@ type Coordinator interface {
 	StartPostprocessing(stream events.Consumer, ac AsyncConf) error
 	// ResolveUpload stats the resource a finished upload produced, as the upload's executant.
 	storage.UploadSessionResolver
-	// Capabilities returns the served provider's declaration, defaulting to the
-	// full set when the driver does not implement storage.CapabilityProvider.
-	Capabilities(ctx context.Context) storage.Capabilities
 }
 
 const maxCommitRetryBackoff = 2 * time.Minute
@@ -113,13 +110,6 @@ func NewCoordinatorFromConfig(uploadDir string, driverConf map[string]interface{
 		chunkFolder = store.UploadDir()
 	}
 	return NewCoordinator(fs, store, chunkFolder, pub), nil
-}
-
-func (c *coordinator) Capabilities(ctx context.Context) storage.Capabilities {
-	if cp, ok := c.fs.(storage.CapabilityProvider); ok {
-		return cp.Capabilities(ctx)
-	}
-	return storage.FullCapabilities()
 }
 
 // InitiateUpload resolves the target, then creates and persists the session that
