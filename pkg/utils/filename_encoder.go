@@ -14,12 +14,16 @@ type FilenameEncoder interface {
 }
 
 type FSSafeUserID struct {
-	ID *userpb.UserId
+	id *userpb.UserId
+}
+
+func NewFSSafeUserID(id *userpb.UserId) FSSafeUserID {
+	return FSSafeUserID{id: id}
 }
 
 func (id FSSafeUserID) SafeFilename() string {
-	opaqueID := id.ID.GetOpaqueId()
-	if id.ID.GetType() == userpb.UserType_USER_TYPE_GUEST {
+	opaqueID := id.id.GetOpaqueId()
+	if id.id.GetType() == userpb.UserType_USER_TYPE_GUEST {
 		// Guest opaqueID is an email address, which is why we choose to make
 		// it lowercase: RFC 5321 does specify that email address local-parts
 		// are case sensitive but, in practice, it's a de-facto standard that
@@ -33,7 +37,7 @@ func (id FSSafeUserID) SafeFilename() string {
 // The decoding decision is done based on the Type attribute of the Receiver id
 func (id FSSafeUserID) Decode(filename string) (*userpb.UserId, error) {
 	opaqueID := filename
-	if id.ID.GetType() == userpb.UserType_USER_TYPE_GUEST {
+	if id.id.GetType() == userpb.UserType_USER_TYPE_GUEST {
 		decoded, err := base64.RawURLEncoding.DecodeString(filename)
 		if err != nil {
 			return nil, err
@@ -42,8 +46,8 @@ func (id FSSafeUserID) Decode(filename string) (*userpb.UserId, error) {
 	}
 
 	decodedID := &userpb.UserId{}
-	if id.ID != nil {
-		decodedID = proto.Clone(id.ID).(*userpb.UserId)
+	if id.id != nil {
+		decodedID = proto.Clone(id.id).(*userpb.UserId)
 	}
 	decodedID.OpaqueId = opaqueID
 	return decodedID, nil

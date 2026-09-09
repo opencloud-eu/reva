@@ -222,7 +222,7 @@ func FromGrant(g *provider.Grant) *ACE {
 }
 
 func UserAce(id *userpb.UserId) string {
-	filename := (utils.FSSafeUserID{ID: id}).SafeFilename()
+	filename := utils.NewFSSafeUserID(id).SafeFilename()
 	switch id.GetType() {
 	case userpb.UserType_USER_TYPE_GUEST:
 		return MailAcePrefix + filename
@@ -278,7 +278,7 @@ func Unmarshal(principal string, v []byte) (e *ACE, err error) {
 			}
 			if strings.HasPrefix(principal, MailAcePrefix) {
 				id := &userpb.UserId{Type: userpb.UserType_USER_TYPE_GUEST}
-				if _, err := (utils.FSSafeUserID{ID: id}).Decode(strings.TrimPrefix(principal, MailAcePrefix)); err != nil {
+				if _, err := utils.NewFSSafeUserID(id).Decode(strings.TrimPrefix(principal, MailAcePrefix)); err != nil {
 					return nil, fmt.Errorf("invalid guest ace principal: %w", err)
 				}
 			}
@@ -310,7 +310,7 @@ func (e *ACE) Grant() *provider.Grant {
 		if strings.HasPrefix(e.principal, MailAcePrefix) {
 			// Guest principals are validated by Unmarshal or encoded by FromGrant,
 			// so decoding cannot fail for a valid ACE.
-			userID, _ := (utils.FSSafeUserID{ID: &userpb.UserId{Type: userpb.UserType_USER_TYPE_GUEST}}).Decode(id)
+			userID, _ := utils.NewFSSafeUserID(&userpb.UserId{Type: userpb.UserType_USER_TYPE_GUEST}).Decode(id)
 			g.Grantee.Id = &provider.Grantee_UserId{UserId: userID}
 		} else {
 			g.Grantee.Id = &provider.Grantee_UserId{UserId: &userpb.UserId{OpaqueId: id, Type: userpb.UserType_USER_TYPE_PRIMARY}}

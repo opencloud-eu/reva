@@ -345,7 +345,7 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 	var err error
 
 	if requestedUserID != nil {
-		filename := (utils.FSSafeUserID{ID: requestedUserID}).SafeFilename()
+		filename := utils.NewFSSafeUserID(requestedUserID).SafeFilename()
 		allMatches, err = fs.userSpaceIndex.Load(filename)
 		// do not return an error if the user has no spaces
 		if err != nil && !os.IsNotExist(err) {
@@ -804,7 +804,7 @@ func (fs *Decomposedfs) DeleteStorageSpace(ctx context.Context, req *provider.De
 		for _, g := range grants {
 			switch g.Grantee.Type {
 			case provider.GranteeType_GRANTEE_TYPE_USER:
-				filename := (utils.FSSafeUserID{ID: g.Grantee.GetUserId()}).SafeFilename()
+				filename := utils.NewFSSafeUserID(g.Grantee.GetUserId()).SafeFilename()
 				if g.Grantee.GetUserId().GetType() == userv1beta1.UserType_USER_TYPE_GUEST {
 					// remove from mail index
 					if err := fs.mailSpaceIndex.Remove(filename, spaceID); err != nil {
@@ -918,7 +918,7 @@ func (fs *Decomposedfs) updateIndexes(ctx context.Context, grantee *provider.Gra
 	// create space grant index
 	switch grantee.Type {
 	case provider.GranteeType_GRANTEE_TYPE_USER:
-		filename := (utils.FSSafeUserID{ID: grantee.GetUserId()}).SafeFilename()
+		filename := utils.NewFSSafeUserID(grantee.GetUserId()).SafeFilename()
 		if grantee.GetUserId().GetType() == userv1beta1.UserType_USER_TYPE_GUEST {
 			return fs.linkSpaceByMail(ctx, filename, spaceID, target)
 		}
@@ -1015,7 +1015,7 @@ func (fs *Decomposedfs) StorageSpaceFromNode(ctx context.Context, n *node.Node, 
 					// invalidate space grant
 					switch g.Grantee.Type {
 					case provider.GranteeType_GRANTEE_TYPE_USER:
-						filename := (utils.FSSafeUserID{ID: g.Grantee.GetUserId()}).SafeFilename()
+						filename := utils.NewFSSafeUserID(g.Grantee.GetUserId()).SafeFilename()
 						if g.Grantee.GetUserId().GetType() == userv1beta1.UserType_USER_TYPE_GUEST {
 							// remove from mail index
 							if err := fs.mailSpaceIndex.Remove(filename, n.GetSpaceID()); err != nil {

@@ -305,7 +305,7 @@ var _ = Describe("Spaces", func() {
 				Expect(groupIdx.Add(groupGrantee, spaceID, target)).To(Succeed())
 				mailIdx := spaceidindex.New(filepath.Join(env.Root, "indexes"), "by-mail")
 				Expect(mailIdx.Init()).To(Succeed())
-				guestFilename := (utils.FSSafeUserID{ID: &userv1beta1.UserId{OpaqueId: guestGrantee, Type: userv1beta1.UserType_USER_TYPE_GUEST}}).SafeFilename()
+				guestFilename := utils.NewFSSafeUserID(&userv1beta1.UserId{OpaqueId: guestGrantee, Type: userv1beta1.UserType_USER_TYPE_GUEST}).SafeFilename()
 				Expect(mailIdx.Add(guestFilename, spaceID, target)).To(Succeed())
 
 				load := func(indexName, key string) map[string]string {
@@ -718,7 +718,7 @@ var _ = Describe("Spaces", func() {
 
 			mailIdx := spaceidindex.New(filepath.Join(env.Root, "indexes"), "by-mail")
 			Expect(mailIdx.Init()).To(Succeed())
-			filename := (utils.FSSafeUserID{ID: guest}).SafeFilename()
+			filename := utils.NewFSSafeUserID(guest).SafeFilename()
 			index, err := mailIdx.Load(filename)
 			Expect(err).NotTo(HaveOccurred())
 			_, spaceID, _, err := storagespace.SplitID(resp.StorageSpace.GetId().GetOpaqueId())

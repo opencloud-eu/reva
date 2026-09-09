@@ -38,11 +38,9 @@ var _ = Describe("Cache", func() {
 		c       receivedsharecache.Cache
 		storage metadata.Storage
 
-		userID = utils.FSSafeUserID{
-			ID: &userpb.UserId{
-				OpaqueId: "userid",
-			},
-		}
+		userID = utils.NewFSSafeUserID(&userpb.UserId{
+			OpaqueId: "userid",
+		})
 		spaceID = "spaceid"
 		shareID = "storageid$spaceid!share1"
 		share   = &collaboration.Share{
@@ -117,11 +115,9 @@ var _ = Describe("Cache", func() {
 
 		Describe("Get", func() {
 			It("handles unknown users", func() {
-				someUserID := utils.FSSafeUserID{
-					ID: &userpb.UserId{
-						OpaqueId: "something",
-					},
-				}
+				someUserID := utils.NewFSSafeUserID(&userpb.UserId{
+					OpaqueId: "something",
+				})
 				s, err := c.Get(ctx, someUserID, spaceID, shareID)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(s).To(BeNil())

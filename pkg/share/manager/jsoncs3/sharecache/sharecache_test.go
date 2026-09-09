@@ -37,11 +37,9 @@ var _ = Describe("Sharecache", func() {
 		c       sharecache.Cache
 		storage metadata.Storage
 
-		userid = utils.FSSafeUserID{
-			ID: &userpb.UserId{
-				OpaqueId: "userid",
-			},
-		}
+		userid = utils.NewFSSafeUserID(&userpb.UserId{
+			OpaqueId: "userid",
+		})
 		shareID = "storageid$spaceid!share1"
 		ctx     context.Context
 		tmpdir  string

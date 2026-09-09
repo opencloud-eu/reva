@@ -201,7 +201,7 @@ var _ = Describe("Grants", func() {
 
 				n, err := env.Lookup.NodeFromResource(env.Ctx, ref)
 				Expect(err).ToNot(HaveOccurred())
-				principal := prefixes.GrantMailAcePrefix + (utils.FSSafeUserID{ID: grant.Grantee.GetUserId()}).SafeFilename()
+				principal := prefixes.GrantMailAcePrefix + utils.NewFSSafeUserID(grant.Grantee.GetUserId()).SafeFilename()
 				_, err = n.XattrString(env.Ctx, principal)
 				Expect(err).ToNot(HaveOccurred())
 
