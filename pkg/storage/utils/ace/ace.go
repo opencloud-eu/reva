@@ -308,6 +308,8 @@ func (e *ACE) Grant() *provider.Grant {
 		g.Grantee.Id = &provider.Grantee_GroupId{GroupId: &grouppb.GroupId{OpaqueId: id}}
 	} else if e.granteeType() == provider.GranteeType_GRANTEE_TYPE_USER {
 		if strings.HasPrefix(e.principal, MailAcePrefix) {
+			// Guest principals are validated by Unmarshal or encoded by FromGrant,
+			// so decoding cannot fail for a valid ACE.
 			userID, _ := (utils.FSSafeUserID{ID: &userpb.UserId{Type: userpb.UserType_USER_TYPE_GUEST}}).Decode(id)
 			g.Grantee.Id = &provider.Grantee_UserId{UserId: userID}
 		} else {
