@@ -173,4 +173,22 @@ var _ = Describe("Non-watching tree", func() {
 		_, ok = err.(errtypes.IsPermissionDenied)
 		Expect(ok).To(BeTrue())
 	})
+
+	It("does not change the tree size when a file fails to assimilate", func() {
+		if os.Geteuid() == 0 {
+			Skip("root can set extended attributes on read-only files")
+		}
+		// assimilation can't set the extended attributes of a read-only file
+		Expect(os.WriteFile(filepath.Join(root, "readonly"), []byte("some content"), 0400)).To(Succeed())
+
+		ref := &provider.Reference{ResourceId: non_watching_env.SpaceRootRes, Path: subtree}
+		dir, err := non_watching_env.Lookup.NodeFromResource(non_watching_env.Ctx, ref)
+		Expect(err).ToNot(HaveOccurred())
+		_, err = non_watching_env.Tree.ListFolder(non_watching_env.Ctx, dir)
+		Expect(err).ToNot(HaveOccurred())
+
+		dir, err = non_watching_env.Lookup.NodeFromResource(non_watching_env.Ctx, ref)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(dir.GetTreeSize(non_watching_env.Ctx)).To(BeZero())
+	})
 })
