@@ -682,9 +682,70 @@ func (t *Tree) assimilate(item scanItem) error {
 	return nil
 }
 
+const (
+	// a file that failed to assimilate after its checksums were computed is retried once it changed
+	// on disk or after a delay that starts at assimilationRetryMinDelay and doubles with every failure
+	assimilationRetryMinDelay = time.Minute
+	assimilationRetryMaxDelay = 24 * time.Hour
+)
+
+// assimilationFailure is the state of a file when it last failed to assimilate
+type assimilationFailure struct {
+	err     error
+	modTime time.Time
+	size    int64
+	mode    fs.FileMode
+	inode   uint64
+	delay   time.Duration
+	retryAt time.Time
+}
+
+func (f assimilationFailure) unchanged(fi fs.FileInfo) bool {
+	return f.modTime.Equal(fi.ModTime()) && f.size == fi.Size() && f.mode == fi.Mode() && f.inode == inode(fi)
+}
+
+func inode(fi fs.FileInfo) uint64 {
+	if st, ok := fi.Sys().(*syscall.Stat_t); ok {
+		return st.Ino
+	}
+	return 0
+}
+
+// recentAssimilationFailure returns the error the file at path last failed to assimilate with,
+// unless the file has changed since or is due for a retry
+func (t *Tree) recentAssimilationFailure(path string, fi fs.FileInfo) error {
+	f, ok := t.assimilationFailures.Get(path)
+	if !ok || !f.unchanged(fi) || !time.Now().Before(f.retryAt) {
+		return nil
+	}
+	return errors.Wrapf(f.err, "item is unchanged since it failed to assimilate, not retrying before %s", f.retryAt.Format(time.RFC3339))
+}
+
+// recordAssimilation records the outcome of assimilating the file at path, fi is its state before
+func (t *Tree) recordAssimilation(path string, fi fs.FileInfo, err error) {
+	if err == nil || errors.Is(err, fs.ErrNotExist) {
+		t.assimilationFailures.Remove(path)
+		return
+	}
+
+	delay := assimilationRetryMinDelay
+	if f, ok := t.assimilationFailures.Peek(path); ok && f.unchanged(fi) {
+		delay = min(2*f.delay, assimilationRetryMaxDelay)
+	}
+	t.assimilationFailures.Add(path, assimilationFailure{
+		err:     err,
+		modTime: fi.ModTime(),
+		size:    fi.Size(),
+		mode:    fi.Mode(),
+		inode:   inode(fi),
+		delay:   delay,
+		retryAt: time.Now().Add(delay),
+	})
+}
+
 // updateFile updates the metadata of the given file and returns the new file info and attributes
 // The according file is supposed to be locked for assimilation already when calling this function
-func (t *Tree) updateFile(path, id, spaceID string, fi fs.FileInfo) (fs.FileInfo, node.Attributes, error) {
+func (t *Tree) updateFile(path, id, spaceID string, fi fs.FileInfo) (_ fs.FileInfo, _ node.Attributes, err error) {
 	retries := 1
 	parentID := ""
 	bn := &assimilationNode{spaceID: spaceID, nodeId: id, path: path}
@@ -767,6 +828,14 @@ assimilate:
 		}
 		n = node.New(spaceID, id, parentID, filepath.Base(path), treeSize, "", provider.ResourceType_RESOURCE_TYPE_CONTAINER, nil, t.lookup)
 	} else {
+		// computing the checksums reads the whole file, so don't do it again for a file that failed
+		// to assimilate after this point and hasn't changed since. It would most likely fail the same
+		// way again, e.g. when the service user can't set extended attributes on it.
+		if err := t.recentAssimilationFailure(path, fi); err != nil {
+			return nil, nil, err
+		}
+		defer func() { t.recordAssimilation(path, fi, err) }()
+
 		sha1h, md5h, adler32h, err := node.CalculateChecksums(context.Background(), path)
 		if err == nil {
 			attributes[prefixes.ChecksumPrefix+"sha1"] = sha1h.Sum(nil)
