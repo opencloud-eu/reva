@@ -9,6 +9,7 @@ import (
 	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/lookup"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/node"
+	"golang.org/x/sys/unix"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -104,6 +105,44 @@ var _ = Describe("Non-watching tree", func() {
 			g.Expect(err).ToNot(HaveOccurred())
 			g.Expect(newSize).To(Equal(initialSize + fileSize))
 		}).Should(Succeed())
+	})
+
+	It("does not retry assimilating an unchanged file that failed to assimilate", func() {
+		if os.Geteuid() == 0 {
+			Skip("root can set extended attributes on read-only files")
+		}
+		// assimilation can't set the extended attributes of a read-only file, but only
+		// fails after it has read the whole file for its checksums
+		path := filepath.Join(root, "readonly")
+		Expect(os.WriteFile(path, []byte("some content"), 0400)).To(Succeed())
+
+		// reads tells from the access time whether fn read the file. The access time is set to
+		// before the mtime first, so that a read updates it even with relatime.
+		reads := func(fn func()) bool {
+			fi, err := os.Stat(path)
+			Expect(err).ToNot(HaveOccurred())
+			atime := fi.ModTime().Add(-time.Hour)
+			Expect(os.Chtimes(path, atime, fi.ModTime())).To(Succeed())
+			fn()
+			var st unix.Stat_t
+			Expect(unix.Stat(path, &st)).To(Succeed())
+			return !time.Unix(st.Atim.Unix()).Equal(atime)
+		}
+		if !reads(func() { _, _ = os.ReadFile(path) }) {
+			Skip("the file system doesn't update access times")
+		}
+
+		listFolder := func() {
+			dir, err := non_watching_env.Lookup.NodeFromResource(non_watching_env.Ctx, &provider.Reference{
+				ResourceId: non_watching_env.SpaceRootRes,
+				Path:       subtree,
+			})
+			Expect(err).ToNot(HaveOccurred())
+			_, err = non_watching_env.Tree.ListFolder(non_watching_env.Ctx, dir)
+			Expect(err).ToNot(HaveOccurred())
+		}
+		Expect(reads(listFolder)).To(BeTrue())
+		Expect(reads(listFolder)).To(BeFalse())
 	})
 
 	It("rejects creation of internal paths", func() {

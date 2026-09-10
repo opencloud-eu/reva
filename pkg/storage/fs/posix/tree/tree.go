@@ -30,6 +30,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/hashicorp/golang-lru/v2/expirable"
 	"github.com/pkg/errors"
 	"github.com/pkg/xattr"
 	"github.com/prometheus/client_golang/prometheus"
@@ -104,6 +105,8 @@ type Tree struct {
 	watcher       Watcher
 	scanQueue     chan scanItem
 	scanDebouncer *ScanDebouncer
+	// files that failed to assimilate, keyed by path, see updateFile()
+	assimilationFailures *expirable.LRU[string, assimilationFailure]
 
 	es  events.Stream
 	log *zerolog.Logger
@@ -130,9 +133,11 @@ func New(lu node.PathLookup, bs node.Blobstore, um usermapper.Mapper, trashbin *
 		scanDebouncer: NewScanDebouncer(o.ScanDebounceDelay, func(item scanItem) {
 			scanQueue <- item
 		}),
-		es:      es,
-		log:     log,
-		Ignorer: ignore.NewIgnorer(o, log),
+		// failures expire so that the ones of items that are gone don't accumulate
+		assimilationFailures: expirable.NewLRU[string, assimilationFailure](0, nil, 2*assimilationRetryMaxDelay),
+		es:                   es,
+		log:                  log,
+		Ignorer:              ignore.NewIgnorer(o, log),
 	}
 	t.idResolver = t.lookup
 	t.assimilateFunc = t.assimilate
