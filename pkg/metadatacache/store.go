@@ -57,6 +57,12 @@ type Options[K comparable, V any] struct {
 	// with createIfNotFound=true (e.g. to produce an initialised map rather
 	// than a nil map).
 	Init func() V
+
+	// LockingStorage, when set, makes Update perform a fully-atomic
+	// read-modify-write via LockingStorage.UploadWithLock instead of the
+	// etag-based Compare-And-Swap retry loop. This is safe across replicas
+	// without relying on etag semantics. When nil the etag-CAS path is used.
+	LockingStorage metadata.LockingStorage
 }
 
 // Store is a generic in-memory write-through cache.  V must be
@@ -265,6 +271,13 @@ func (s *Store[K, V]) Update(ctx context.Context, key K, createIfNotFound bool, 
 		}
 	}
 
+	// When a locking storage is configured, perform the read-modify-write as a
+	// single atomic operation. The lock held by UploadWithLock guarantees no
+	// other writer can interleave, so no etag-based CAS or retry loop is needed.
+	if s.opts.LockingStorage != nil {
+		return s.updateLocked(ctx, key, createIfNotFound, fn)
+	}
+
 	var lastErr error
 	for attempt := 0; attempt < s.opts.Retries; attempt++ {
 		// Load the current value (or initialise if absent and allowed).
@@ -325,4 +338,45 @@ func (s *Store[K, V]) Update(ctx context.Context, key K, createIfNotFound bool, 
 	span.RecordError(lastErr)
 	span.SetStatus(codes.Error, fmt.Sprintf("gave up after %d attempts: %s", s.opts.Retries, lastErr))
 	return fmt.Errorf("metadatacache: update of %v failed after %d attempts: %w", key, s.opts.Retries, lastErr)
+}
+
+// updateLocked performs the read-modify-write using a locking storage. The
+// caller must hold the per-key lock. It mirrors the semantics of Update's
+// etag-CAS path (honouring createIfNotFound and shouldPersist) but replaces the
+// CAS retry loop with a single atomic UploadWithLock call.
+func (s *Store[K, V]) updateLocked(ctx context.Context, key K, createIfNotFound bool, fn func(V) (V, bool, error)) error {
+	p := s.opts.Path(key)
+
+	_, err := s.opts.LockingStorage.UploadWithLock(ctx, metadata.UploadRequest{Path: p}, func(existing []byte) ([]byte, error) {
+		var v V
+		if len(existing) > 0 {
+			if err := json.Unmarshal(existing, &v); err != nil {
+				return nil, err
+			}
+		} else if createIfNotFound && s.opts.Init != nil {
+			v = s.opts.Init()
+		} else {
+			return nil, errtypes.NotFound(fmt.Sprint(key))
+		}
+
+		newV, shouldPersist, err := fn(v)
+		if err != nil {
+			return nil, err
+		}
+
+		// Keep the in-memory cache consistent regardless of whether we persist.
+		s.Set(key, newV)
+
+		if !shouldPersist {
+			// Returning nil signals UploadWithLock to skip the write while
+			// keeping any pre-existing file intact.
+			return nil, nil
+		}
+
+		return json.Marshal(newV)
+	})
+	if err != nil {
+		return err
+	}
+	return nil
 }
