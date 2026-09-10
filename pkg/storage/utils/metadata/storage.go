@@ -20,12 +20,10 @@ package metadata
 
 import (
 	"context"
-	"crypto/md5"
-	"encoding/binary"
-	"fmt"
 	"time"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/metadata/locks"
 )
 
 // UploadRequest represents an upload request and its options
@@ -80,13 +78,49 @@ type Storage interface {
 	MakeDirIfNotExist(ctx context.Context, name string) error
 }
 
-func calcEtag(mtime time.Time, size int64) (string, error) {
-	h := md5.New()
-	if err := binary.Write(h, binary.BigEndian, mtime.UnixNano()); err != nil {
-		return "", err
+// LockingStorage is a Storage that can perform an atomic read-modify-write on
+// a path. The write is serialized by an exclusive lock held across the entire
+// read→mutate→write cycle, which makes it safe for concurrent writers without
+// relying on etag-based compare-and-swap retries.
+type LockingStorage interface {
+	Storage
+
+	// UploadWithLock atomically reads the current content of req.Path, passes
+	// it to fn (nil if the file does not exist), and persists the bytes fn
+	// returns. If fn returns nil the write is skipped. The exclusive lock for
+	// req.Path is held for the whole operation, so no other writer can
+	// interleave between the read and the write.
+	UploadWithLock(ctx context.Context, req UploadRequest, fn func(existing []byte) ([]byte, error)) (*UploadResponse, error)
+}
+
+// config holds the resolved options shared by the storage backends.
+type config struct {
+	locker locks.Locker
+}
+
+// Option configures a storage backend.
+type Option func(*config)
+
+// WithLocker overrides the lock strategy used for atomic read-modify-write
+// operations. When not supplied the disk-based locker is used, which is safe
+// both for single-replica deployments (a local flock) and multi-replica
+// deployments sharing an RWX volume.
+func WithLocker(l locks.Locker) Option {
+	return func(c *config) {
+		if l != nil {
+			c.locker = l
+		}
 	}
-	if err := binary.Write(h, binary.BigEndian, size); err != nil {
-		return "", err
+}
+
+// applyOptions resolves the given options into a config. The locker is left
+// unset here; each backend applies its own appropriate default (the disk
+// backend roots a disk locker at its data dir, while the cs3 backend uses a
+// base-agnostic locker). Callers may override it with WithLocker.
+func applyOptions(opts []Option) *config {
+	c := &config{}
+	for _, opt := range opts {
+		opt(c)
 	}
-	return fmt.Sprintf("%x", h.Sum(nil)), nil
+	return c
 }

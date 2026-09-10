@@ -43,6 +43,7 @@ import (
 	ctxpkg "github.com/opencloud-eu/reva/v2/pkg/ctx"
 	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
 	"github.com/opencloud-eu/reva/v2/pkg/rgrpc/todo/pool"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/metadata/locks"
 	"github.com/opencloud-eu/reva/v2/pkg/utils"
 )
 
@@ -63,6 +64,7 @@ type CS3 struct {
 	machineAuthAPIKey string
 
 	dataGatewayClient *http.Client
+	locker            locks.Locker
 }
 
 // NewCS3 returns a new CS3 instance. Use an authenticated context and be sure to define SpaceRoot manually.
@@ -76,7 +78,7 @@ func NewCS3(gwAddr, providerAddr string) (s *CS3) {
 
 // NewCS3Storage returns a new cs3 storage instance. Context passed to methods is irrelevant as the service user will be used.
 // Be sure to call Init before using the storage.
-func NewCS3Storage(gwAddr, providerAddr, serviceUserID, serviceUserIDP, machineAuthAPIKey string) (s Storage, err error) {
+func NewCS3Storage(gwAddr, providerAddr, serviceUserID, serviceUserIDP, machineAuthAPIKey string, opts ...Option) (s Storage, err error) {
 	cs3 := NewCS3(gwAddr, providerAddr)
 
 	cs3.useSystemUser = true
@@ -87,6 +89,14 @@ func NewCS3Storage(gwAddr, providerAddr, serviceUserID, serviceUserIDP, machineA
 			Idp:      serviceUserIDP,
 		},
 	}
+	c := applyOptions(opts)
+	if c.locker == nil {
+		// The CS3 backend has no local data dir to root a disk locker at, so it
+		// defaults to an in-process locker. Operators on a shared volume can
+		// supply a disk locker via WithLocker for cross-replica safety.
+		c.locker = locks.NewMemoryLocker()
+	}
+	cs3.locker = c.locker
 
 	return cs3, nil
 }
@@ -270,6 +280,59 @@ func (cs3 *CS3) Upload(ctx context.Context, req UploadRequest) (*UploadResponse,
 		Etag:   etag,
 		FileID: resp.Header.Get("OC-Fileid"),
 	}, nil
+}
+
+// UploadWithLock performs an atomic read-modify-write on req.Path over the CS3
+// API.
+//
+// The exclusive lock for the path is held across the entire
+// download → mutate → upload cycle, which is what makes the operation atomic:
+// no other writer can interleave between reading the current content and
+// writing the new one. Because the lock already serializes writers, the upload
+// is issued without etag preconditions (no If-Match / If-None-Match), so there
+// are no compare-and-swap retry storms under contention. fn receives the
+// current content (nil if the file does not exist) and returns the bytes to
+// persist; returning nil from fn skips the write.
+func (cs3 *CS3) UploadWithLock(ctx context.Context, req UploadRequest, fn func(existing []byte) ([]byte, error)) (*UploadResponse, error) {
+	unlock, err := cs3.locker.Lock(ctx, req.Path)
+	if err != nil {
+		return nil, err
+	}
+	defer unlock()
+
+	// Always fetch the current content (no If-None-Match) so fn sees the latest
+	// state. A missing file is not an error: it means fn will receive a nil
+	// existing value (the create path).
+	existing := []byte(nil)
+	priorEtag := ""
+	dres, err := cs3.Download(ctx, DownloadRequest{Path: req.Path})
+	if err != nil {
+		if _, ok := err.(errtypes.NotFound); !ok {
+			return nil, err
+		}
+	} else {
+		existing = dres.Content
+		priorEtag = dres.Etag
+	}
+
+	// Let the caller mutate the content. A nil result means "do not write".
+	newContent, err := fn(existing)
+	if err != nil {
+		return nil, err
+	}
+	if newContent == nil {
+		// Nothing changed; report the etag we last observed so callers can keep
+		// their cache-invalidation token stable.
+		return &UploadResponse{Etag: priorEtag}, nil
+	}
+
+	// Upload without etag preconditions: the lock already guarantees that no
+	// other writer changed the file between our read and this write.
+	res, err := cs3.Upload(ctx, UploadRequest{Path: req.Path, Content: newContent})
+	if err != nil {
+		return nil, err
+	}
+	return res, nil
 }
 
 // Stat returns the metadata for the given path

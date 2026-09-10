@@ -24,6 +24,7 @@ import (
 	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
 	"github.com/opencloud-eu/reva/v2/pkg/metadatacache"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/metadata"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/metadata/locks"
 	"github.com/opencloud-eu/reva/v2/pkg/utils"
 	"github.com/pkg/errors"
 	"github.com/sethvargo/go-diceware/diceware"
@@ -61,6 +62,11 @@ type config struct {
 	// For testing set this -1 to disable automatic updates.
 	UTimeUpdateInterval int `mapstructure:"utime_update_interval_seconds"`
 	UpdateRetryCount    int `mapstructure:"update_retry_count"`
+	// LockBackend selects the locking strategy used to make read-modify-write
+	// cycles atomic across replicas. "disk" (default) uses cross-process file
+	// locks; "memory" uses in-process mutexes. When set, updates use a fully
+	// atomic UploadWithLock instead of etag-based Compare-And-Swap.
+	LockBackend string `mapstructure:"lock_backend"`
 }
 
 const (
@@ -123,7 +129,11 @@ func New(m map[string]any) (appauth.Manager, error) {
 		return nil, fmt.Errorf("appauth jsoncs3 manager: failed initialize password generator: %w", err)
 	}
 
-	cs3, err := metadata.NewCS3Storage(c.ProviderAddr, c.ProviderAddr, c.ServiceUserID, c.ServiceUserIdp, c.MachineAuthAPIKey)
+	var opts []metadata.Option
+	if c.LockBackend == "memory" {
+		opts = append(opts, metadata.WithLocker(locks.NewMemoryLocker()))
+	}
+	cs3, err := metadata.NewCS3Storage(c.ProviderAddr, c.ProviderAddr, c.ServiceUserID, c.ServiceUserIdp, c.MachineAuthAPIKey, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -132,11 +142,17 @@ func New(m map[string]any) (appauth.Manager, error) {
 }
 
 func NewWithOptions(mds metadata.Storage, generator PasswordGenerator, uTimeUpdateInterval time.Duration, updateRetries int) (*manager, error) {
+	var locking metadata.LockingStorage
+	if ls, ok := mds.(metadata.LockingStorage); ok {
+		locking = ls
+	}
+
 	store := metadatacache.New(metadatacache.Options[string, map[string]*apppb.AppPassword]{
-		Storage: mds,
-		Path:    func(userID string) string { return userID + ".json" },
-		Retries: updateRetries,
-		Init:    func() map[string]*apppb.AppPassword { return map[string]*apppb.AppPassword{} },
+		Storage:        mds,
+		Path:           func(userID string) string { return userID + ".json" },
+		Retries:        updateRetries,
+		Init:           func() map[string]*apppb.AppPassword { return map[string]*apppb.AppPassword{} },
+		LockingStorage: locking,
 	})
 
 	return &manager{
