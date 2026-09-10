@@ -859,15 +859,17 @@ assimilate:
 		}()
 	}
 
-	err = t.Propagate(context.Background(), n, sizeDiff)
-	if err != nil {
-		return nil, nil, errors.Wrap(err, "failed to propagate")
-	}
-
 	t.log.Debug().Str("path", path).Interface("attributes", attributes).Msg("setting attributes")
 	err = t.lookup.MetadataBackend().SetMultiple(context.Background(), bn, attributes)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "failed to set attributes")
+	}
+
+	// only propagate once the attributes are stored. If storing them failed after propagating, the file
+	// would still have no blobsize and the next attempt would propagate its whole size again.
+	err = t.Propagate(context.Background(), n, sizeDiff)
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "failed to propagate")
 	}
 
 	// clear the status attribute if it was set before, if there was any upload to this file in progress
