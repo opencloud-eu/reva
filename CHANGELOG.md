@@ -1,10 +1,20 @@
 # Changelog
 
-## [2.50.0](https://github.com/opencloud-eu/reva/releases/tag/v2.50.0) - 2026-09-09
+## [2.50.0](https://github.com/opencloud-eu/reva/releases/tag/v2.50.0) - 2026-09-14
 
 ### ❤️ Thanks to all contributors! ❤️
 
 @dschmidt, @maki5, @rhafer
+
+### ✨ Features
+
+- Add support for mail grantees [[#785](https://github.com/opencloud-eu/reva/pull/785)]
+
+### 🐛 Bug Fixes
+
+- feat(auth): cache Argon2 hash calculations [[#793](https://github.com/opencloud-eu/reva/pull/793)]
+- fix(decomposedfs): write arbitrary metadata in one go [[#791](https://github.com/opencloud-eu/reva/pull/791)]
+- Backport and fix of space membership expired event [[#766](https://github.com/opencloud-eu/reva/pull/766)]
 
 ### ✅ Tests
 
@@ -15,11 +25,6 @@
 - feat(ocdav): expose the video, motionPhoto and livePhoto facets [[#790](https://github.com/opencloud-eu/reva/pull/790)]
 - mime: map the Nikon NRW raw extension [[#773](https://github.com/opencloud-eu/reva/pull/773)]
 - enhancement(shares/jsoncs3): Shortcut migration on fresh system [[#787](https://github.com/opencloud-eu/reva/pull/787)]
-
-### 🐛 Bug Fixes
-
-- fix(decomposedfs): write arbitrary metadata in one go [[#791](https://github.com/opencloud-eu/reva/pull/791)]
-- Backport and fix of space membership expired event [[#766](https://github.com/opencloud-eu/reva/pull/766)]
 
 ### 📦️ Dependencies
 
