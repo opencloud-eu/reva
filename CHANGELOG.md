@@ -1,5 +1,35 @@
 # Changelog
 
+## [2.50.0](https://github.com/opencloud-eu/reva/releases/tag/v2.50.0) - 2026-09-14
+
+### ❤️ Thanks to all contributors! ❤️
+
+@dschmidt, @maki5, @rhafer
+
+### ✨ Features
+
+- Add support for mail grantees [[#785](https://github.com/opencloud-eu/reva/pull/785)]
+
+### 🐛 Bug Fixes
+
+- feat(auth): cache Argon2 hash calculations [[#793](https://github.com/opencloud-eu/reva/pull/793)]
+- fix(decomposedfs): write arbitrary metadata in one go [[#791](https://github.com/opencloud-eu/reva/pull/791)]
+- Backport and fix of space membership expired event [[#766](https://github.com/opencloud-eu/reva/pull/766)]
+
+### ✅ Tests
+
+- fix(jsoncs3): wait for init before asserting the migration timeout [[#792](https://github.com/opencloud-eu/reva/pull/792)]
+
+### 📈 Enhancement
+
+- feat(ocdav): expose the video, motionPhoto and livePhoto facets [[#790](https://github.com/opencloud-eu/reva/pull/790)]
+- mime: map the Nikon NRW raw extension [[#773](https://github.com/opencloud-eu/reva/pull/773)]
+- enhancement(shares/jsoncs3): Shortcut migration on fresh system [[#787](https://github.com/opencloud-eu/reva/pull/787)]
+
+### 📦️ Dependencies
+
+- chore(deps): bump google.golang.org/grpc from 1.83.0 to 1.83.2 in the go_modules group across 1 directory [[#794](https://github.com/opencloud-eu/reva/pull/794)]
+
 ## [2.49.0](https://github.com/opencloud-eu/reva/releases/tag/v2.49.0) - 2026-08-20
 
 ### ❤️ Thanks to all contributors! ❤️
