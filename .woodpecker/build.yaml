@@ -42,7 +42,7 @@ steps:
       - make build-ci
 
   - name: upload
-    image: minio/mc:RELEASE.2021-10-07T04-19-58Z
+    image: quay.io/opencloudeu/minio-mc-ci:1.0
     depends_on:
       - build
     environment:
