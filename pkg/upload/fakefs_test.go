@@ -164,6 +164,26 @@ func (f *fakeFS) Delete(_ context.Context, _ *provider.Reference) error {
 	return nil
 }
 
+type gatedCommitFS struct {
+	storage.FS
+	started chan string
+	release <-chan struct{}
+}
+
+func (f *gatedCommitFS) CommitUpload(_ context.Context, _ *provider.Reference, sessionID string, _ storage.UploadSource) error {
+	f.started <- sessionID
+	<-f.release
+	return nil
+}
+
+func (f *gatedCommitFS) MarkProcessing(_ context.Context, _ *provider.Reference, _ bool, _ string) error {
+	return nil
+}
+
+func (f *gatedCommitFS) GetMD(_ context.Context, ref *provider.Reference, _, _ []string) (*provider.ResourceInfo, error) {
+	return &provider.ResourceInfo{Id: ref.GetResourceId()}, nil
+}
+
 // fakePublisher is an events.Publisher test double keeping the published events.
 type fakePublisher struct {
 	published []interface{}

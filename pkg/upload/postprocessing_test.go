@@ -111,6 +111,51 @@ var _ = Describe("the postprocessing consumer", func() {
 
 	// The consumer goroutine reaches the same handlers the specs below call directly.
 	Describe("Postprocessing", func() {
+		DescribeTable("keeps consuming events while limiting background commits",
+			func(numConsumers, maxCommits int) {
+				published := make(chan interface{}, maxCommits+2)
+				started := make(chan string, maxCommits+1)
+				release := make(chan struct{})
+				defer close(release)
+				c = NewCoordinator(&gatedCommitFS{started: started, release: release}, store, "",
+					&channelPublisher{published: published})
+				stream := &fakeConsumer{ch: make(chan eventsapi.Event)}
+				defer close(stream.ch)
+				Expect(c.StartPostprocessing(stream, AsyncConf{
+					ConsumerGroup: "storage-users", MountID: mountID, NumConsumers: numConsumers,
+				})).To(Succeed())
+
+				for i := 0; i < maxCommits; i++ {
+					session := preparedSession(false)
+					pushEvent(stream.ch, events.PostprocessingFinished{
+						UploadID: session.ID(), Outcome: events.PPOutcomeContinue,
+					})
+					Eventually(started).Should(Receive(Equal(session.ID())))
+				}
+
+				queued := preparedSession(false)
+				pushEvent(stream.ch, events.PostprocessingFinished{
+					UploadID: queued.ID(), Outcome: events.PPOutcomeContinue,
+				})
+				restarted := preparedSession(false)
+				pushEvent(stream.ch, events.RestartPostprocessing{UploadID: restarted.ID()})
+				Eventually(published).Should(Receive(BeAssignableToTypeOf(events.BytesReceived{})))
+				Consistently(started).ShouldNot(Receive())
+
+				release <- struct{}{}
+				Eventually(started).Should(Receive(Equal(queued.ID())))
+				for i := 0; i < maxCommits; i++ {
+					release <- struct{}{}
+				}
+				for i := 0; i < maxCommits+1; i++ {
+					Eventually(published).Should(Receive(BeAssignableToTypeOf(events.UploadReady{})))
+				}
+			},
+			Entry("with one consumer", 1, 1),
+			Entry("with two consumers", 2, 2),
+			Entry("with the default consumer count", 0, 1),
+		)
+
 		It("commits an upload postprocessing cleared", func() {
 			published := make(chan interface{}, 1)
 			c = NewCoordinator(fs, store, "", &channelPublisher{published: published})

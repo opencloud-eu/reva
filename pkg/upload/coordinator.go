@@ -70,11 +70,13 @@ type coordinator struct {
 	mountID            string
 	commitMaxRetries   int
 	commitRetryBackoff time.Duration
+	// commitLimiter caps concurrent background commits at NumConsumers.
+	commitLimiter chan struct{}
 }
 
 // NewCoordinator constructs a coordinator backed by the given driver and store.
 func NewCoordinator(fs storage.FS, store SessionStore, chunkFolder string, pub events.Publisher) *coordinator {
-	c := &coordinator{fs: fs, store: store, pub: pub}
+	c := &coordinator{fs: fs, store: store, pub: pub, commitLimiter: make(chan struct{}, 1)}
 	if chunkFolder != "" {
 		c.chunkHandler = chunking.NewChunkHandler(chunkFolder)
 	}

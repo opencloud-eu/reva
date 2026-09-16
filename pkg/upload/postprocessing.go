@@ -57,6 +57,7 @@ func (c *coordinator) StartPostprocessing(stream events.Consumer, ac AsyncConf) 
 	c.mountID = ac.MountID
 	c.commitMaxRetries = ac.CommitMaxRetries
 	c.commitRetryBackoff = ac.CommitRetryBackoff
+	c.commitLimiter = make(chan struct{}, numConsumers)
 	c.async = true
 	for i := 0; i < numConsumers; i++ {
 		go c.Postprocessing(ch)
@@ -65,13 +66,22 @@ func (c *coordinator) StartPostprocessing(stream events.Consumer, ac AsyncConf) 
 }
 
 // Postprocessing consumes postprocessing results until ch is closed. Run it in
-// its own goroutine, one per configured consumer.
+// its own goroutine, one per configured consumer. Blob commits run separately
+// so their retry window does not stall the event consumer.
 func (c *coordinator) Postprocessing(ch <-chan events.Event) {
 	for event := range ch {
 		// derive a per-event context from the event's W3C trace context so the
 		// postprocessing work is linked to the originating request
 		ctx := event.GetTraceContext(context.Background())
 		ctx = ctxpkg.ContextSetInitiator(ctx, event.InitiatorID)
+		if ev, ok := event.Event.(events.PostprocessingFinished); ok && ev.Outcome == events.PPOutcomeContinue {
+			go func() {
+				c.commitLimiter <- struct{}{}
+				defer func() { <-c.commitLimiter }()
+				c.processEvent(ctx, event)
+			}()
+			continue
+		}
 		c.processEvent(ctx, event)
 	}
 }
