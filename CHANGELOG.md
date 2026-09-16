@@ -4,7 +4,7 @@
 
 ### ❤️ Thanks to all contributors! ❤️
 
-@rhafer
+@maki5, @rhafer
 
 
 
