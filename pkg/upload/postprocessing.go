@@ -14,6 +14,7 @@ import (
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/rs/zerolog"
+	"golang.org/x/sync/semaphore"
 
 	"github.com/opencloud-eu/reva/v2/pkg/appctx"
 	ctxpkg "github.com/opencloud-eu/reva/v2/pkg/ctx"
@@ -57,7 +58,7 @@ func (c *coordinator) StartPostprocessing(stream events.Consumer, ac AsyncConf) 
 	c.mountID = ac.MountID
 	c.commitMaxRetries = ac.CommitMaxRetries
 	c.commitRetryBackoff = ac.CommitRetryBackoff
-	c.commitLimiter = make(chan struct{}, numConsumers)
+	c.commitLimiter = semaphore.NewWeighted(int64(numConsumers))
 	c.async = true
 	for i := 0; i < numConsumers; i++ {
 		go c.Postprocessing(ch)
@@ -76,8 +77,11 @@ func (c *coordinator) Postprocessing(ch <-chan events.Event) {
 		ctx = ctxpkg.ContextSetInitiator(ctx, event.InitiatorID)
 		if ev, ok := event.Event.(events.PostprocessingFinished); ok && ev.Outcome == events.PPOutcomeContinue {
 			go func() {
-				c.commitLimiter <- struct{}{}
-				defer func() { <-c.commitLimiter }()
+				if err := c.commitLimiter.Acquire(ctx, 1); err != nil {
+					appctx.GetLogger(ctx).Error().Err(err).Str("uploadid", ev.UploadID).Msg("could not acquire commit slot")
+					return
+				}
+				defer c.commitLimiter.Release(1)
 				c.processEvent(ctx, event)
 			}()
 			continue

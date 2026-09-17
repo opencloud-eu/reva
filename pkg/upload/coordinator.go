@@ -14,6 +14,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 	tusd "github.com/tus/tusd/v2/pkg/handler"
+	"golang.org/x/sync/semaphore"
 
 	"github.com/opencloud-eu/reva/v2/pkg/appctx"
 	ctxpkg "github.com/opencloud-eu/reva/v2/pkg/ctx"
@@ -71,12 +72,12 @@ type coordinator struct {
 	commitMaxRetries   int
 	commitRetryBackoff time.Duration
 	// commitLimiter caps concurrent background commits at NumConsumers.
-	commitLimiter chan struct{}
+	commitLimiter *semaphore.Weighted
 }
 
 // NewCoordinator constructs a coordinator backed by the given driver and store.
 func NewCoordinator(fs storage.FS, store SessionStore, chunkFolder string, pub events.Publisher) *coordinator {
-	c := &coordinator{fs: fs, store: store, pub: pub, commitLimiter: make(chan struct{}, 1)}
+	c := &coordinator{fs: fs, store: store, pub: pub, commitLimiter: semaphore.NewWeighted(1)}
 	if chunkFolder != "" {
 		c.chunkHandler = chunking.NewChunkHandler(chunkFolder)
 	}
@@ -577,15 +578,17 @@ func (c *coordinator) finishAsync(ctx context.Context, session Session) error {
 		if _, err = c.commit(ctx, session); err == nil {
 			return nil
 		}
+		ev := appctx.GetLogger(ctx).Warn().Err(err).
+			Int("attempt", attempt).Int("maxAttempts", maxAttempts).
+			Str("uploadid", session.ID()).
+			Str("spaceid", session.SpaceID()).Str("nodeid", session.NodeID())
 		if attempt == maxAttempts {
+			ev.Msg("blob commit failed, giving up")
 			break
 		}
+		// Clamp before doubling so even a configured maximum duration cannot overflow.
 		backoff = min(backoff, maxCommitRetryBackoff)
-		appctx.GetLogger(ctx).Warn().Err(err).
-			Int("attempt", attempt).Int("maxAttempts", maxAttempts).
-			Dur("backoff", backoff).
-			Str("uploadid", session.ID()).
-			Msg("blob commit failed, retrying after backoff")
+		ev.Dur("backoff", backoff).Msg("blob commit failed, retrying after backoff")
 		t := time.NewTimer(backoff)
 		select {
 		case <-ctx.Done():

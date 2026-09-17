@@ -1,7 +1,9 @@
 package upload
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -12,8 +14,10 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/prometheus/client_golang/prometheus/testutil"
+	"github.com/rs/zerolog"
 	eventsapi "go-micro.dev/v4/events"
 
+	"github.com/opencloud-eu/reva/v2/pkg/appctx"
 	ctxpkg "github.com/opencloud-eu/reva/v2/pkg/ctx"
 	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
 	"github.com/opencloud-eu/reva/v2/pkg/events"
@@ -362,6 +366,52 @@ var _ = Describe("the postprocessing consumer", func() {
 				BeforeEach(func() {
 					c.commitMaxRetries = 2
 					c.commitRetryBackoff = 0
+				})
+
+				It("logs the final attempt with the upload and resource identifiers", func() {
+					session := preparedSession(false)
+					fs.commitErr = errors.New("blobstore unavailable")
+					var logs bytes.Buffer
+					log := zerolog.New(&logs)
+
+					Expect(c.finishAsync(appctx.WithLogger(ctx, &log), session)).To(MatchError(fs.commitErr))
+
+					decoder := json.NewDecoder(&logs)
+					var entry struct {
+						Message     string `json:"message"`
+						Attempt     int    `json:"attempt"`
+						MaxAttempts int    `json:"maxAttempts"`
+						UploadID    string `json:"uploadid"`
+						SpaceID     string `json:"spaceid"`
+						NodeID      string `json:"nodeid"`
+					}
+					for i := 0; i < 3; i++ {
+						Expect(decoder.Decode(&entry)).To(Succeed())
+					}
+					Expect(entry.Message).To(Equal("blob commit failed, giving up"))
+					Expect(entry.Attempt).To(Equal(3))
+					Expect(entry.MaxAttempts).To(Equal(3))
+					Expect(entry.UploadID).To(Equal(session.ID()))
+					Expect(entry.SpaceID).To(Equal(session.SpaceID()))
+					Expect(entry.NodeID).To(Equal(session.NodeID()))
+				})
+
+				It("caps the retry delay and stops waiting when the context is cancelled", func() {
+					session := preparedSession(false)
+					fs.commitErr = errors.New("blobstore unavailable")
+					c.commitRetryBackoff = time.Duration(1<<63 - 1)
+					var logs bytes.Buffer
+					log := zerolog.New(&logs)
+					cancelCtx, cancel := context.WithCancel(appctx.WithLogger(ctx, &log))
+					cancel()
+
+					Expect(c.finishAsync(cancelCtx, session)).To(MatchError(context.Canceled))
+					Expect(fs.commitCalls).To(Equal(1))
+					var entry struct {
+						Backoff float64 `json:"backoff"`
+					}
+					Expect(json.NewDecoder(&logs).Decode(&entry)).To(Succeed())
+					Expect(entry.Backoff).To(Equal(float64(maxCommitRetryBackoff) / float64(zerolog.DurationFieldUnit)))
 				})
 
 				It("retries a transient commit failure and succeeds", func() {
