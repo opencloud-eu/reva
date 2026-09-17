@@ -19,12 +19,12 @@
 package mock
 
 import (
-	"context"
 	"io/fs"
 	"path/filepath"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	"github.com/opencloud-eu/reva/v2/pkg/auth"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/walker"
 )
 
@@ -73,6 +73,6 @@ func mockWalkFunc(fn walker.WalkFunc, tmpDir string) filepath.WalkFunc {
 }
 
 // Walk walks into the local file system using the built-in filepath.Walk go function
-func (m *mockWalker) Walk(_ context.Context, root *provider.ResourceId, fn walker.WalkFunc) error {
+func (m *mockWalker) Walk(_ *auth.Session, root *provider.ResourceId, fn walker.WalkFunc) error {
 	return filepath.Walk(root.OpaqueId, mockWalkFunc(fn, m.tmpDir))
 }
