@@ -767,6 +767,14 @@ assimilate:
 		}
 		n = node.New(spaceID, id, parentID, filepath.Base(path), treeSize, "", provider.ResourceType_RESOURCE_TYPE_CONTAINER, nil, t.lookup)
 	} else {
+		// CalculateChecksums reads the whole file, so skip an unchanged file that recently failed after
+		// this point, e.g. because the service user can't set its xattrs
+		if err := t.assimilationFailures.Recent(path, fi); err != nil {
+			return nil, nil, err
+		}
+		// Record sees err because every failure below assigns it before returning
+		defer func() { t.assimilationFailures.Record(path, fi, err) }()
+
 		sha1h, md5h, adler32h, err := node.CalculateChecksums(context.Background(), path)
 		if err == nil {
 			attributes[prefixes.ChecksumPrefix+"sha1"] = sha1h.Sum(nil)
