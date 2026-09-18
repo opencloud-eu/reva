@@ -111,13 +111,12 @@ var _ = Describe("Non-watching tree", func() {
 		if os.Geteuid() == 0 {
 			Skip("root can set extended attributes on read-only files")
 		}
-		// assimilation can't set the extended attributes of a read-only file, but only
-		// fails after it has read the whole file for its checksums
+		// assimilation reads a read-only file for its checksums, then fails to set its xattrs
 		path := filepath.Join(root, "readonly")
 		Expect(os.WriteFile(path, []byte("some content"), 0400)).To(Succeed())
 
-		// reads tells from the access time whether fn read the file. The access time is set to
-		// before the mtime first, so that a read updates it even with relatime.
+		// reads reports whether fn read the file, based on its atime. Setting the atime to before the
+		// mtime makes relatime update it on a read.
 		reads := func(fn func()) bool {
 			fi, err := os.Stat(path)
 			Expect(err).ToNot(HaveOccurred())

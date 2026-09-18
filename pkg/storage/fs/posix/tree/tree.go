@@ -30,7 +30,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/hashicorp/golang-lru/v2/expirable"
 	"github.com/pkg/errors"
 	"github.com/pkg/xattr"
 	"github.com/prometheus/client_golang/prometheus"
@@ -49,6 +48,7 @@ import (
 	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/lookup"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/options"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/trashbin"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/tree/assimilation"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/watcher/natswatcher"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata"
@@ -106,7 +106,7 @@ type Tree struct {
 	scanQueue     chan scanItem
 	scanDebouncer *ScanDebouncer
 	// files that failed to assimilate, keyed by path, see updateFile()
-	assimilationFailures *expirable.LRU[string, assimilationFailure]
+	assimilationFailures *assimilation.Failures
 
 	es  events.Stream
 	log *zerolog.Logger
@@ -133,8 +133,7 @@ func New(lu node.PathLookup, bs node.Blobstore, um usermapper.Mapper, trashbin *
 		scanDebouncer: NewScanDebouncer(o.ScanDebounceDelay, func(item scanItem) {
 			scanQueue <- item
 		}),
-		// failures expire so that the ones of items that are gone don't accumulate
-		assimilationFailures: expirable.NewLRU[string, assimilationFailure](0, nil, 2*assimilationRetryMaxDelay),
+		assimilationFailures: assimilation.NewFailures(),
 		es:                   es,
 		log:                  log,
 		Ignorer:              ignore.NewIgnorer(o, log),
