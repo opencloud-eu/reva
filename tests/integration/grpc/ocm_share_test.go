@@ -125,8 +125,8 @@ var _ = Describe("ocm share", func() {
 		}
 		federatedEinsteinID = &userpb.UserId{
 			Type:     userpb.UserType_USER_TYPE_FEDERATED,
-			Idp:      "cernbox.cern.ch",                                              // the provider is stored in the idp property
-			OpaqueId: "4c510ada-c86b-4815-8820-42cdf82c3d51@https://cernbox.cern.ch", // the original idp becomes part of the opaqueid
+			Idp:      "cernbox.cern.ch",                      // scheme-free OCM provider
+			OpaqueId: "4c510ada-c86b-4815-8820-42cdf82c3d51", // bare OCM user id, not id@host
 		}
 		marie = &userpb.User{
 			Id: &userpb.UserId{
@@ -140,8 +140,8 @@ var _ = Describe("ocm share", func() {
 		}
 		federatedMarieID = &userpb.UserId{
 			Type:     userpb.UserType_USER_TYPE_FEDERATED,
-			Idp:      "cesnet.cz",                                              // the provider is stored in the idp property
-			OpaqueId: "f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c@https://cesnet.cz", // the original idp becomes part of the opaqueid
+			Idp:      "cesnet.cz",                            // scheme-free OCM provider
+			OpaqueId: "f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c", // bare OCM user id, not id@host
 		}
 	)
 
@@ -209,12 +209,11 @@ var _ = Describe("ocm share", func() {
 			})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(invRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
-			// Make sure the user is a federated user
 			// The user type must be a federated user
 			Expect(invRes.UserId.Type).To(Equal(userpb.UserType_USER_TYPE_FEDERATED))
-			// Federated users use the OCM provider id which MUST NOT contain the protocol
+			// Idp is the OCM provider domain without a URI scheme.
 			Expect(invRes.UserId.Idp).To(Equal("cernbox.cern.ch"))
-			// The OpaqueId follows the pattern{user opaque id}@{user ipd}@{provider id} to prevent collisions with other users on the graph API
+			// OpaqueId is the bare remote identifier; Graph builds "{opaque}@{idp}".
 			Expect(invRes.UserId.OpaqueId).To(Equal(federatedEinsteinID.OpaqueId))
 		})
 
