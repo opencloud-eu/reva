@@ -36,22 +36,23 @@ type Authenticator func(ctx context.Context) (context.Context, time.Time, error)
 // tokens without having to thread a new context around.
 // A Session is safe for concurrent use.
 type Session struct {
-	mu   sync.RWMutex
-	ctx  context.Context
-	stop chan struct{}
-	once sync.Once
+	mu     sync.RWMutex
+	ctx    context.Context
+	cancel context.CancelFunc
 }
 
 // NewSession authenticates once via auth and then refreshes the context in the
 // background shortly before the token expires. It returns an error if the initial
 // authentication fails.
 func NewSession(parent context.Context, auth Authenticator) (*Session, error) {
-	ctx, expiry, err := auth(parent)
+	sessionCtx, cancel := context.WithCancel(parent)
+	ctx, expiry, err := auth(sessionCtx)
 	if err != nil {
+		cancel()
 		return nil, err
 	}
-	s := &Session{ctx: ctx, stop: make(chan struct{})}
-	go s.refresh(parent, auth, expiry)
+	s := &Session{ctx: ctx, cancel: cancel}
+	go s.refresh(sessionCtx, auth, expiry)
 	return s, nil
 }
 
@@ -59,7 +60,7 @@ func NewSession(parent context.Context, auth Authenticator) (*Session, error) {
 // It is useful for callers that manage their own (typically short-lived) context
 // but need to satisfy a Session-based API.
 func NewStaticSession(ctx context.Context) *Session {
-	return &Session{ctx: ctx, stop: make(chan struct{})}
+	return &Session{ctx: ctx, cancel: func() {}}
 }
 
 // Ctx returns the current authentication context. It always carries a valid token
@@ -70,10 +71,10 @@ func (s *Session) Ctx() context.Context {
 	return s.ctx
 }
 
-// Close stops the background refresher. It is safe to call more than once and on
-// a static session.
+// Close stops the background refresher and cancels the session-owned context,
+// unblocking any in-flight authentication call.
 func (s *Session) Close() {
-	s.once.Do(func() { close(s.stop) })
+	s.cancel()
 }
 
 func (s *Session) set(ctx context.Context) {
@@ -82,34 +83,34 @@ func (s *Session) set(ctx context.Context) {
 	s.ctx = ctx
 }
 
-func (s *Session) refresh(parent context.Context, auth Authenticator, expiry time.Time) {
+func (s *Session) refresh(ctx context.Context, auth Authenticator, expiry time.Time) {
 	for {
 		wait := max(time.Until(expiry)-RefreshLeeway, 0)
 
 		timer := time.NewTimer(wait)
 		select {
-		case <-s.stop:
-			timer.Stop()
-			return
-		case <-parent.Done():
+		case <-ctx.Done():
 			timer.Stop()
 			return
 		case <-timer.C:
 		}
 
-		ctx, exp, err := auth(parent)
+		newCtx, exp, err := auth(ctx)
+		// If the session was closed while auth was in flight, drop the result so a
+		// slow authenticator can no longer update the session after Close.
+		if ctx.Err() != nil {
+			return
+		}
 		if err != nil {
 			// keep using the current context and retry after a short backoff
 			select {
-			case <-s.stop:
-				return
-			case <-parent.Done():
+			case <-ctx.Done():
 				return
 			case <-time.After(retryBackoff):
 			}
 			continue
 		}
-		s.set(ctx)
+		s.set(newCtx)
 		expiry = exp
 	}
 }
