@@ -23,6 +23,7 @@ import (
 	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
 	"github.com/opencloud-eu/reva/v2/pkg/metadatacache"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/metadata"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/metadata/locks"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -42,6 +43,21 @@ func newStoreOnDir(dir string) *metadatacache.Store[string, map[string]string] {
 		Storage: mds,
 		Path:    func(key string) string { return key + ".json" },
 		Init:    func() map[string]string { return map[string]string{} },
+	})
+}
+
+// newLockingStoreOnDir builds a store whose Update uses the fully-atomic
+// LockingStorage.UploadWithLock path (here with an in-memory locker).
+func newLockingStoreOnDir(dir string) *metadatacache.Store[string, map[string]string] {
+	mds, err := metadata.NewDiskStorage(dir, metadata.WithLocker(locks.NewMemoryLocker()))
+	Expect(err).NotTo(HaveOccurred())
+	ctx := context.Background()
+	Expect(mds.Init(ctx, "test")).To(Succeed())
+	return metadatacache.New(metadatacache.Options[string, map[string]string]{
+		Storage:        mds,
+		Path:           func(key string) string { return key + ".json" },
+		Init:           func() map[string]string { return map[string]string{} },
+		LockingStorage: mds.(metadata.LockingStorage),
 	})
 }
 
@@ -161,6 +177,74 @@ var _ = Describe("Store", func() {
 				}(k)
 			}
 			wg.Wait()
+		})
+	})
+
+	Context("with a locking storage", func() {
+		var lockStore *metadatacache.Store[string, map[string]string]
+
+		BeforeEach(func() {
+			lockStore = newLockingStoreOnDir(dir)
+		})
+
+		It("creates an entry when createIfNotFound is true", func() {
+			err := lockStore.Update(ctx, "alice", true, func(m map[string]string) (map[string]string, bool, error) {
+				m["k"] = "v"
+				return m, true, nil
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			unlock := lockStore.Lock("alice")
+			defer unlock()
+			val, ok, err := lockStore.Get(ctx, "alice")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(ok).To(BeTrue())
+			Expect(val).To(HaveKeyWithValue("k", "v"))
+		})
+
+		It("returns NotFound when createIfNotFound is false and key is absent", func() {
+			err := lockStore.Update(ctx, "bob", false, func(m map[string]string) (map[string]string, bool, error) {
+				return m, true, nil
+			})
+			Expect(err).To(BeAssignableToTypeOf(errtypes.NotFound("")))
+		})
+
+		It("does not persist when shouldPersist is false", func() {
+			Expect(lockStore.Update(ctx, "alice", true, func(m map[string]string) (map[string]string, bool, error) {
+				m["a"] = "1"
+				return m, true, nil
+			})).To(Succeed())
+
+			var captured map[string]string
+			Expect(lockStore.Update(ctx, "alice", false, func(m map[string]string) (map[string]string, bool, error) {
+				captured = m
+				return m, false, nil
+			})).To(Succeed())
+			Expect(captured).To(HaveKeyWithValue("a", "1"))
+		})
+
+		It("does not lose updates when many goroutines target the same key", func() {
+			const goroutines = 30
+			var wg sync.WaitGroup
+			wg.Add(goroutines)
+			for i := 0; i < goroutines; i++ {
+				go func(n int) {
+					defer wg.Done()
+					_ = lockStore.Update(ctx, "shared", true, func(m map[string]string) (map[string]string, bool, error) {
+						key := fmt.Sprintf("g%d", n)
+						m[key] = key
+						return m, true, nil
+					})
+				}(i)
+			}
+			wg.Wait()
+
+			unlock := lockStore.Lock("shared")
+			defer unlock()
+			val, ok, err := lockStore.Get(ctx, "shared")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(ok).To(BeTrue())
+			Expect(val).To(HaveLen(goroutines))
 		})
 	})
 })

@@ -26,20 +26,26 @@ import (
 	"path/filepath"
 	"sync"
 
+	"github.com/google/renameio/v2"
 	"github.com/opencloud-eu/reva/v2/pkg/publicshare/manager/json/persistence"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/metadata/locks"
 )
 
 type file struct {
 	path        string
 	initialized bool
 	lock        *sync.RWMutex
+	locker      locks.Locker
 }
 
-// New returns a new Cache instance
+// New returns a new Cache instance. It uses a disk-based locker rooted at the
+// directory containing the db file so that concurrent processes serialise their
+// read-modify-write cycles.
 func New(path string) persistence.Persistence {
 	return &file{
-		path: path,
-		lock: &sync.RWMutex{},
+		path:   path,
+		lock:   &sync.RWMutex{},
+		locker: locks.NewDiskLocker(filepath.Dir(path)),
 	}
 }
 
@@ -101,7 +107,45 @@ func (p *file) Write(_ context.Context, db persistence.PublicShares) error {
 		return err
 	}
 
-	return os.WriteFile(p.path, dbAsJSON, 0644)
+	return renameio.WriteFile(p.path, dbAsJSON, 0644)
+}
+
+// Update atomically reads the current db, applies fn, and writes the result
+// back while holding a cross-process lock on the db file. This prevents lost
+// updates when multiple replicas create/update/revoke shares concurrently.
+func (p *file) Update(ctx context.Context, fn func(current persistence.PublicShares) (persistence.PublicShares, error)) error {
+	if !p.isInitialized() {
+		return fmt.Errorf("not initialized")
+	}
+
+	unlock, err := p.locker.Lock(ctx, filepath.Base(p.path))
+	if err != nil {
+		return err
+	}
+	defer unlock()
+
+	readBytes, err := os.ReadFile(p.path)
+	if err != nil {
+		return err
+	}
+	current := persistence.PublicShares{}
+	if len(readBytes) > 0 {
+		if err := json.Unmarshal(readBytes, &current); err != nil {
+			return err
+		}
+	}
+
+	next, err := fn(current)
+	if err != nil {
+		return err
+	}
+
+	dbAsJSON, err := json.Marshal(next)
+	if err != nil {
+		return err
+	}
+
+	return renameio.WriteFile(p.path, dbAsJSON, 0644)
 }
 
 func (p *file) isInitialized() bool {
