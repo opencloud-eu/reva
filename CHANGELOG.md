@@ -4,7 +4,7 @@
 
 ### ❤️ Thanks to all contributors! ❤️
 
-@NickWalters, @maki5, @rhafer
+@NickWalters, @maki5, @pReya, @rhafer
 
 
 
