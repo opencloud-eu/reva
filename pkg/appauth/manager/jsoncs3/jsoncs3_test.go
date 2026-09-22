@@ -305,12 +305,16 @@ var _ = Describe("Jsoncs3", func() {
 
 			It("Removes the cached result when the password is invalidated", func() {
 				dlRes := &metadata.DownloadResponse{Content: content}
-				md.EXPECT().Download(mock.Anything, mock.Anything).Return(dlRes, nil).Once()
+				md.EXPECT().Download(mock.Anything, mock.Anything).Return(dlRes, nil).Times(3)
 				md.EXPECT().Upload(
 					mock.Anything,
 					mock.MatchedBy(func(req metadata.UploadRequest) bool {
-						err := json.Unmarshal(req.Content, &map[string]*apppb.AppPassword{})
-						return err == nil
+						var passwords map[string]*apppb.AppPassword
+						if err := json.Unmarshal(req.Content, &passwords); err != nil {
+							return false
+						}
+						dlRes.Content = req.Content
+						return len(passwords) == 0
 					}),
 				).Return(nil, nil).Once()
 
@@ -326,12 +330,16 @@ var _ = Describe("Jsoncs3", func() {
 
 			It("Removes the cached result when the password is invalidated by id", func() {
 				dlRes := &metadata.DownloadResponse{Content: content}
-				md.EXPECT().Download(mock.Anything, mock.Anything).Return(dlRes, nil).Once()
+				md.EXPECT().Download(mock.Anything, mock.Anything).Return(dlRes, nil).Times(3)
 				md.EXPECT().Upload(
 					mock.Anything,
 					mock.MatchedBy(func(req metadata.UploadRequest) bool {
-						err := json.Unmarshal(req.Content, &map[string]*apppb.AppPassword{})
-						return err == nil
+						var passwords map[string]*apppb.AppPassword
+						if err := json.Unmarshal(req.Content, &passwords); err != nil {
+							return false
+						}
+						dlRes.Content = req.Content
+						return len(passwords) == 0
 					}),
 				).Return(nil, nil).Once()
 
