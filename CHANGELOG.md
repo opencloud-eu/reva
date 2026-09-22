@@ -6,7 +6,9 @@
 
 @NickWalters, @aduffeck, @maki5, @pReya, @rhafer
 
+### 📦️ Dependencies
 
+- chore(deps): bump go.opentelemetry.io/otel/exporters/otlp/otlptrace from 1.44.0 to 1.46.0 in the go_modules group across 1 directory [[#812](https://github.com/opencloud-eu/reva/pull/812)]
 
 ## [2.50.0](https://github.com/opencloud-eu/reva/releases/tag/v2.50.0) - 2026-09-14
 
