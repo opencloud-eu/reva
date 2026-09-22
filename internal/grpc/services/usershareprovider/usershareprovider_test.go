@@ -40,6 +40,7 @@ import (
 	"github.com/opencloud-eu/reva/v2/internal/grpc/services/usershareprovider"
 	"github.com/opencloud-eu/reva/v2/pkg/conversions"
 	ctxpkg "github.com/opencloud-eu/reva/v2/pkg/ctx"
+	"github.com/opencloud-eu/reva/v2/pkg/permission"
 	"github.com/opencloud-eu/reva/v2/pkg/rgrpc/status"
 	"github.com/opencloud-eu/reva/v2/pkg/rgrpc/todo/pool"
 	"github.com/opencloud-eu/reva/v2/pkg/share"
@@ -58,6 +59,7 @@ var _ = Describe("user share provider service", func() {
 		gatewayClient            *cs3mocks.GatewayAPIClient
 		gatewaySelector          pool.Selectable[gateway.GatewayAPIClient]
 		checkPermissionResponse  *permissions.CheckPermissionResponse
+		guestMailWriteResponse   *permissions.CheckPermissionResponse
 		statResourceResponse     *providerpb.StatResponse
 		cs3permissionsNoAddGrant *providerpb.ResourcePermissions
 		getShareResponse         *collaborationpb.Share
@@ -109,6 +111,12 @@ var _ = Describe("user share provider service", func() {
 		checkPermissionResponse = &permissions.CheckPermissionResponse{
 			Status: status.NewOK(ctx),
 		}
+		guestMailWriteResponse = &permissions.CheckPermissionResponse{
+			Status: status.NewOK(ctx),
+		}
+		gatewayClient.On("CheckPermission", mock.Anything, mock.MatchedBy(func(req *permissions.CheckPermissionRequest) bool {
+			return req.GetPermission() == permission.GuestMailWrite
+		})).Return(guestMailWriteResponse, nil)
 		gatewayClient.On("CheckPermission", mock.Anything, mock.Anything).
 			Return(checkPermissionResponse, nil)
 		statResourceResponse = &providerpb.StatResponse{
@@ -391,6 +399,55 @@ var _ = Describe("user share provider service", func() {
 				0,
 			),
 		)
+		Context("guest shares (mail invites)", func() {
+			guestGrant := func() *collaborationpb.ShareGrant {
+				return &collaborationpb.ShareGrant{
+					Grantee: &providerpb.Grantee{
+						Type: providerpb.GranteeType_GRANTEE_TYPE_USER,
+						Id: &providerpb.Grantee_UserId{UserId: &userpb.UserId{
+							Type:     userpb.UserType_USER_TYPE_GUEST,
+							OpaqueId: "guest@example.com",
+							TenantId: "tenant1",
+						}},
+					},
+					Permissions: &collaborationpb.SharePermissions{
+						Permissions: conversions.RoleFromName("viewer").CS3ResourcePermissions(),
+					},
+				}
+			}
+
+			BeforeEach(func() {
+				statResourceResponse.Info.PermissionSet = conversions.RoleFromName("manager").CS3ResourcePermissions()
+			})
+
+			It("rejects guest shares without the permission to invite guests", func() {
+				guestMailWriteResponse.Status.Code = rpcpb.Code_CODE_PERMISSION_DENIED
+
+				createShareResponse, err := provider.CreateShare(ctx, &collaborationpb.CreateShareRequest{
+					ResourceInfo: &providerpb.ResourceInfo{
+						PermissionSet: conversions.RoleFromName("manager").CS3ResourcePermissions(),
+					},
+					Grant: guestGrant(),
+				})
+
+				Expect(err).ToNot(HaveOccurred())
+				Expect(createShareResponse.Status.Code).To(Equal(rpcpb.Code_CODE_PERMISSION_DENIED))
+				manager.AssertNumberOfCalls(GinkgoT(), "Share", 0)
+			})
+
+			It("creates guest shares when the user has the permission to invite guests", func() {
+				createShareResponse, err := provider.CreateShare(ctx, &collaborationpb.CreateShareRequest{
+					ResourceInfo: &providerpb.ResourceInfo{
+						PermissionSet: conversions.RoleFromName("manager").CS3ResourcePermissions(),
+					},
+					Grant: guestGrant(),
+				})
+
+				Expect(err).ToNot(HaveOccurred())
+				Expect(createShareResponse.Status.Code).To(Equal(rpcpb.Code_CODE_OK))
+				manager.AssertNumberOfCalls(GinkgoT(), "Share", 1)
+			})
+		})
 		Context("resharing is not allowed", func() {
 			JustBeforeEach(func() {
 				rgrpcService := usershareprovider.New(gatewaySelector, manager, []*regexp.Regexp{})
@@ -747,6 +804,92 @@ var _ = Describe("user share provider service", func() {
 			Expect(updateShareResponse.Status.Code).To(Equal(rpcpb.Code_CODE_OK))
 
 			manager.AssertNumberOfCalls(GinkgoT(), "UpdateShare", 1)
+		})
+
+		Context("guest shares (mail invites)", func() {
+			updateReq := func() *collaborationpb.UpdateShareRequest {
+				return &collaborationpb.UpdateShareRequest{
+					Ref: &collaborationpb.ShareReference{
+						Spec: &collaborationpb.ShareReference_Id{
+							Id: &collaborationpb.ShareId{
+								OpaqueId: "shareid",
+							},
+						},
+					},
+					Share: &collaborationpb.Share{
+						Permissions: &collaborationpb.SharePermissions{
+							Permissions: &providerpb.ResourcePermissions{
+								Stat:                 true,
+								InitiateFileDownload: true,
+							},
+						},
+					},
+					UpdateMask: &fieldmaskpb.FieldMask{
+						Paths: []string{"permissions"},
+					},
+				}
+			}
+
+			BeforeEach(func() {
+				// the user is the owner/creator of the share and has read access on the resource
+				statResourceResponse.Info.PermissionSet = &providerpb.ResourcePermissions{
+					InitiateFileDownload: true,
+					Stat:                 true,
+				}
+			})
+
+			It("rejects updating a guest share without the permission to invite guests", func() {
+				getShareResponse.Grantee = &providerpb.Grantee{
+					Type: providerpb.GranteeType_GRANTEE_TYPE_USER,
+					Id: &providerpb.Grantee_UserId{UserId: &userpb.UserId{
+						Type:     userpb.UserType_USER_TYPE_GUEST,
+						OpaqueId: "guest@example.com",
+						TenantId: "tenant1",
+					}},
+				}
+				guestMailWriteResponse.Status.Code = rpcpb.Code_CODE_PERMISSION_DENIED
+
+				updateShareResponse, err := provider.UpdateShare(ctx, updateReq())
+
+				Expect(err).ToNot(HaveOccurred())
+				Expect(updateShareResponse.Status.Code).To(Equal(rpcpb.Code_CODE_PERMISSION_DENIED))
+				manager.AssertNumberOfCalls(GinkgoT(), "UpdateShare", 0)
+			})
+
+			It("updates guest shares when the user has the permission to invite guests", func() {
+				getShareResponse.Grantee = &providerpb.Grantee{
+					Type: providerpb.GranteeType_GRANTEE_TYPE_USER,
+					Id: &providerpb.Grantee_UserId{UserId: &userpb.UserId{
+						Type:     userpb.UserType_USER_TYPE_GUEST,
+						OpaqueId: "guest@example.com",
+						TenantId: "tenant1",
+					}},
+				}
+
+				updateShareResponse, err := provider.UpdateShare(ctx, updateReq())
+
+				Expect(err).ToNot(HaveOccurred())
+				Expect(updateShareResponse.Status.Code).To(Equal(rpcpb.Code_CODE_OK))
+				manager.AssertNumberOfCalls(GinkgoT(), "UpdateShare", 1)
+			})
+
+			It("does not require the guest permission for regular shares", func() {
+				getShareResponse.Grantee = &providerpb.Grantee{
+					Type: providerpb.GranteeType_GRANTEE_TYPE_USER,
+					Id: &providerpb.Grantee_UserId{UserId: &userpb.UserId{
+						Type:     userpb.UserType_USER_TYPE_PRIMARY,
+						OpaqueId: "bob",
+						TenantId: "tenant1",
+					}},
+				}
+				guestMailWriteResponse.Status.Code = rpcpb.Code_CODE_PERMISSION_DENIED
+
+				updateShareResponse, err := provider.UpdateShare(ctx, updateReq())
+
+				Expect(err).ToNot(HaveOccurred())
+				Expect(updateShareResponse.Status.Code).To(Equal(rpcpb.Code_CODE_OK))
+				manager.AssertNumberOfCalls(GinkgoT(), "UpdateShare", 1)
+			})
 		})
 
 		Context("last manager check on space root", func() {
