@@ -13,12 +13,10 @@ require (
 	github.com/bluele/gcache v0.0.2
 	github.com/c-bata/go-prompt v0.2.6
 	github.com/cenkalti/backoff v2.2.1+incompatible
-	github.com/ceph/go-ceph v0.40.0
 	github.com/cheggaaa/pb/v3 v3.2.0
 	github.com/coreos/go-oidc/v3 v3.20.0
 	github.com/cs3org/cato v0.0.0-20200828125504-e418fc54dd5e
 	github.com/cs3org/go-cs3apis v0.0.0-20260424072047-8d9ef7076ae9
-	github.com/dgraph-io/ristretto v0.2.0
 	github.com/emvi/iso-639-1 v1.1.1
 	github.com/eventials/go-tus v0.0.0-20220610120217-05d0564bb571
 	github.com/fsnotify/fsnotify v1.10.1
@@ -53,7 +51,6 @@ require (
 	github.com/jellydator/ttlcache/v2 v2.11.1
 	github.com/juliangruber/go-intersect v1.1.0
 	github.com/mattn/go-sqlite3 v1.14.49
-	github.com/maxymania/go-system v0.0.0-20170110133659-647cc364bf0b
 	github.com/mileusna/useragent v1.3.5
 	github.com/minio/minio-go/v7 v7.2.1
 	github.com/nats-io/nats-server/v2 v2.14.4

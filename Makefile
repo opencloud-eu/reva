@@ -56,9 +56,6 @@ build: build-revad build-reva test-go-version
 .PHONY: build-debug
 build-debug: build-revad-debug build-reva-debug test-go-version
 
-.PHONY: build-cephfs
-build-cephfs: build-revad-cephfs build-reva
-
 .PHONY: tidy
 tidy:
 	go mod tidy
@@ -70,10 +67,6 @@ build-revad: imports
 .PHONY: build-revad-debug
 build-revad-debug: imports
 	go build -gcflags="all=-N -l" -ldflags ${BUILD_FLAGS} -o ./cmd/revad/revad ./cmd/revad
-
-.PHONY: build-revad-cephfs
-build-revad-cephfs: imports
-	go build -ldflags ${BUILD_FLAGS} -tags ceph -o ./cmd/revad/revad ./cmd/revad
 
 .PHONY: build-reva
 build-reva: imports
@@ -87,10 +80,6 @@ build-reva-debug: imports
 .PHONY: build-revad-docker
 build-revad-docker: off
 	go build -ldflags ${BUILD_FLAGS} -o ./cmd/revad/revad ./cmd/revad
-
-.PHONY: build-revad-cephfs-docker
-build-revad-cephfs-docker: off
-	go build -ldflags ${BUILD_FLAGS} -tags ceph -o ./cmd/revad/revad ./cmd/revad
 
 .PHONY: build-reva-docker
 build-reva-docker: off
