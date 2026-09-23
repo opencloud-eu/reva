@@ -8,6 +8,7 @@
 
 ### 📦️ Dependencies
 
+- chore(deps): bump go.etcd.io/etcd/client/v3 from 3.6.13 to 3.7.1 [[#750](https://github.com/opencloud-eu/reva/pull/750)]
 - chore(deps): bump golang.org/x/oauth2 from 0.36.0 to 0.37.0 [[#815](https://github.com/opencloud-eu/reva/pull/815)]
 - chore(deps): bump go.opentelemetry.io/otel/exporters/otlp/otlptrace from 1.44.0 to 1.46.0 in the go_modules group across 1 directory [[#812](https://github.com/opencloud-eu/reva/pull/812)]
 
