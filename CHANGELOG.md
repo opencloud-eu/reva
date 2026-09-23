@@ -1,6 +1,6 @@
 # Changelog
 
-## [2.50.1](https://github.com/opencloud-eu/reva/releases/tag/v2.50.1) - 2026-09-22
+## [2.50.1](https://github.com/opencloud-eu/reva/releases/tag/v2.50.1) - 2026-09-23
 
 ### ❤️ Thanks to all contributors! ❤️
 
@@ -8,6 +8,7 @@
 
 ### 📦️ Dependencies
 
+- chore(deps): bump golang.org/x/oauth2 from 0.36.0 to 0.37.0 [[#815](https://github.com/opencloud-eu/reva/pull/815)]
 - chore(deps): bump go.opentelemetry.io/otel/exporters/otlp/otlptrace from 1.44.0 to 1.46.0 in the go_modules group across 1 directory [[#812](https://github.com/opencloud-eu/reva/pull/812)]
 
 ## [2.50.0](https://github.com/opencloud-eu/reva/releases/tag/v2.50.0) - 2026-09-14
