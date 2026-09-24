@@ -175,7 +175,7 @@ func (session *DecomposedFsSession) FinishUploadDecomposed(ctx context.Context) 
 			err = errtypes.BadRequest("unsupported checksum algorithm: " + parts[0])
 		}
 		if err != nil {
-			session.store.Cleanup(ctx, session, true, false, false)
+			session.Cleanup(false, true, true, false)
 			return err
 		}
 	}
@@ -256,7 +256,7 @@ func (session *DecomposedFsSession) FinishUploadDecomposed(ctx context.Context) 
 	if !session.store.async || session.info.Size == 0 {
 		// handle postprocessing synchronously
 		err = session.Finalize(ctx)
-		session.store.Cleanup(ctx, session, err != nil, false, err == nil)
+		session.Cleanup(err != nil, true, true, true)
 		if err != nil {
 			log.Error().Err(err).Msg("failed to upload")
 			return err
@@ -269,7 +269,7 @@ func (session *DecomposedFsSession) FinishUploadDecomposed(ctx context.Context) 
 
 // Terminate terminates the upload
 func (session *DecomposedFsSession) Terminate(_ context.Context) error {
-	session.Cleanup(true, true, true)
+	session.Cleanup(true, true, true, true)
 	return nil
 }
 
@@ -445,10 +445,10 @@ func (session *DecomposedFsSession) removeNode(ctx context.Context) {
 }
 
 // cleanup cleans up after the upload is finished
-func (session *DecomposedFsSession) Cleanup(revertNodeMetadata, cleanBin, cleanInfo bool) {
+func (session *DecomposedFsSession) Cleanup(revertNodeMetadata, cleanBin, cleanInfo, unmarkPostprocessing bool) {
 	ctx := session.Context(context.Background())
 	sublog := session.store.log.With().Str("cleanup sessionid", session.ID()).Bool("revertNodeMetadata", revertNodeMetadata).Bool("cleanBin", cleanBin).
-		Bool("cleanInfo", cleanInfo).Logger()
+		Bool("cleanInfo", cleanInfo).Bool("unmarkPostprocessing", unmarkPostprocessing).Logger()
 
 	if revertNodeMetadata {
 		n, err := session.Node(ctx)
@@ -506,8 +506,23 @@ func (session *DecomposedFsSession) Cleanup(revertNodeMetadata, cleanBin, cleanI
 	}
 
 	if cleanInfo {
-		if err := session.Purge(ctx); err != nil && !errors.Is(err, fs.ErrNotExist) {
-			appctx.GetLogger(ctx).Error().Err(err).Str("session", session.ID()).Msg("removing upload info failed")
+		if err := os.Remove(session.infoPath()); err != nil {
+			sublog.Error().Err(err).Msg("removing upload info failed")
+			return
+		}
+	}
+
+	if unmarkPostprocessing {
+		n, err := session.Node(ctx)
+		if err != nil {
+			sublog.Info().Err(err).Msg("could not read node")
+			return
+		}
+		// FIXME: after cleanup the node might already be deleted ...
+		if n != nil { // node can be nil when there was an error before it was created (eg. checksum-mismatch)
+			if err := n.UnmarkProcessing(ctx, session.ID()); err != nil {
+				sublog.Info().Err(err).Str("path", n.InternalPath()).Msg("unmarking processing failed")
+			}
 		}
 	}
 }
