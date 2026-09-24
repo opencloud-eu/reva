@@ -1,0 +1,14 @@
+[shared]
+jwt_secret = "changemeplease"
+
+[grpc]
+address = "{{grpc_address}}"
+
+[grpc.services.authprovider]
+auth_manager = "guestlinks"
+
+[grpc.services.authprovider.auth_managers.guestlinks]
+gateway_addr = "{{gateway_address}}"
+jwt_secret = "guest-session-jwt-secret"
+service_account_id = "guestlinks-sa"
+service_account_secret = "guestlinks-sa-secret"

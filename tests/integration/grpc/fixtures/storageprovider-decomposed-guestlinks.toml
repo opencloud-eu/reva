@@ -1,0 +1,19 @@
+[shared]
+jwt_secret = "changemeplease"
+gatewaysvc = "{{gateway_address}}"
+
+[grpc]
+address = "{{grpc_address}}"
+
+[grpc.services.storageprovider]
+driver = "decomposed"
+mount_id = "guestlinks-storage"
+
+[grpc.services.storageprovider.drivers.decomposed]
+root = "{{root}}/storage"
+treetime_accounting = true
+treesize_accounting = true
+permissionssvc = "{{permissions_address}}"
+
+[grpc.services.storageprovider.drivers.decomposed.filemetadatacache]
+cache_store = "noop"
