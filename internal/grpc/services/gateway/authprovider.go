@@ -93,7 +93,7 @@ func (s *svc) Authenticate(ctx context.Context, req *gateway.AuthenticateRequest
 		return res, nil
 	}
 
-	if scope, ok := res.TokenScope["user"]; s.c.DisableHomeCreationOnLogin || !ok || scope.Role != authpb.Role_ROLE_OWNER || res.User.Id.Type == userpb.UserType_USER_TYPE_FEDERATED {
+	if scope, ok := res.TokenScope["user"]; s.c.DisableHomeCreationOnLogin || !ok || scope.Role != authpb.Role_ROLE_OWNER || res.User.Id.Type == userpb.UserType_USER_TYPE_FEDERATED || res.User.Id.Type == userpb.UserType_USER_TYPE_GUEST {
 		gwRes := &gateway.AuthenticateResponse{
 			Status: status.NewOK(ctx),
 			User:   res.User,
