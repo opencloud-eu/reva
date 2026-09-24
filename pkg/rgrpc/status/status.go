@@ -182,7 +182,7 @@ func NewStatusFromErrType(ctx context.Context, msg string, err error) *rpc.Statu
 	case errtypes.AlreadyExists:
 		return NewAlreadyExists(ctx, err, msg+": "+err.Error())
 	case errtypes.InvalidCredentials:
-		return NewPermissionDenied(ctx, e, msg+": "+err.Error())
+		return NewUnauthenticated(ctx, e, msg+": "+err.Error())
 	case errtypes.IsInvalidCredentials:
 		// TODO this maps badly
 		return NewUnauthenticated(ctx, err, msg+": "+err.Error())
