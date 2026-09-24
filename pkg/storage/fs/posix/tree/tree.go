@@ -357,6 +357,16 @@ func (t *Tree) TouchFile(ctx context.Context, n *node.Node, markprocessing bool,
 		_ = unlock()
 	}()
 
+	if t.options.WatchFS {
+		// Also hold the lock used by the assimilation for items without an id. Otherwise an assimilation triggered
+		// by the create event could claim the file with a new id before we have set ours.
+		unlockNewItem, err := t.lookup.MetadataBackend().Lock(t.newItemLockNode(n.SpaceID, nodePath))
+		if err != nil {
+			return err
+		}
+		defer func() { _ = unlockNewItem() }()
+	}
+
 	if n.ID == "" {
 		n.ID = uuid.New().String()
 	}
@@ -786,29 +796,41 @@ func (t *Tree) InitNewNode(ctx context.Context, n *node.Node, fsize uint64) (met
 		return nil, err
 	}
 
+	nodePath := n.InternalPath()
+	if t.options.WatchFS {
+		// Also hold the lock used by the assimilation for items without an id. Otherwise an assimilation triggered
+		// by the create event could claim the file with a new id before we have set ours.
+		unlockNewItem, err := t.lookup.MetadataBackend().Lock(t.newItemLockNode(n.SpaceID, nodePath))
+		if err != nil {
+			return unlock, err
+		}
+		defer func() { _ = unlockNewItem() }()
+	}
+
 	// we also need to touch the actual node file here it stores the mtime of the resource
-	h, err := os.OpenFile(n.InternalPath(), os.O_CREATE|os.O_EXCL, 0600)
+	h, err := os.OpenFile(nodePath, os.O_CREATE|os.O_EXCL, 0600)
 	if err != nil {
 		if os.IsExist(err) {
-			return unlock, errtypes.AlreadyExists(n.InternalPath())
+			return unlock, errtypes.AlreadyExists(nodePath)
 		}
 		return unlock, err
 	}
+	defer func() { _ = h.Close() }()
 
-	// Set known mtime from filesystem to metadata to preven re-assimilation
+	// Set the id and the known mtime from the filesystem to the metadata to prevent re-assimilation
 	fi, err := h.Stat()
 	if err != nil {
-		return nil, err
+		return unlock, err
 	}
-	mtime := fi.ModTime()
-	err = n.SetXattrsWithContext(ctx, map[string][]byte{
-		prefixes.MTimeAttr: []byte(mtime.UTC().Format(time.RFC3339Nano)),
-	})
-	if err != nil {
-		t.log.Error().Err(err).Str("path", n.InternalPath()).Msg("could not set mtime attribute on new node")
+	attrs := node.Attributes{
+		prefixes.IDAttr:       []byte(n.ID),
+		prefixes.ParentidAttr: []byte(n.ParentID),
+		prefixes.NameAttr:     []byte(n.Name),
 	}
-
-	_ = h.Close()
+	attrs.SetTime(prefixes.MTimeAttr, fi.ModTime())
+	if err := n.SetXattrsWithContext(ctx, attrs); err != nil {
+		return unlock, errors.Wrap(err, "could not set initial attributes on new node")
+	}
 
 	if _, err := node.CheckQuota(ctx, n.SpaceRoot, false, 0, fsize); err != nil {
 		return unlock, err
