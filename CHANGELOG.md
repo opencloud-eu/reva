@@ -8,6 +8,7 @@
 
 ### 📦️ Dependencies
 
+- chore(deps): bump github.com/coreos/go-oidc/v3 from 3.20.0 to 3.21.0 [[#818](https://github.com/opencloud-eu/reva/pull/818)]
 - chore(deps): bump github.com/go-playground/universal-translator from 0.18.1 to 0.18.2 [[#817](https://github.com/opencloud-eu/reva/pull/817)]
 - chore(deps): bump go.etcd.io/etcd/client/v3 from 3.6.13 to 3.7.1 [[#750](https://github.com/opencloud-eu/reva/pull/750)]
 - chore(deps): bump golang.org/x/oauth2 from 0.36.0 to 0.37.0 [[#815](https://github.com/opencloud-eu/reva/pull/815)]
