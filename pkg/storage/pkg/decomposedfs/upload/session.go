@@ -80,17 +80,10 @@ func (session *DecomposedFsSession) executantUser() *userpb.User {
 }
 
 // Purge deletes the upload session metadata and written binary data
-func (session *DecomposedFsSession) Purge(ctx context.Context) error {
+func (session *DecomposedFsSession) Purge(ctx context.Context) {
 	_, span := tracer.Start(ctx, "Purge")
 	defer span.End()
-	sessionPath := sessionPath(session.store.root, session.info.ID)
-	if err := os.Remove(sessionPath); err != nil {
-		return err
-	}
-	if err := os.Remove(session.binPath()); err != nil {
-		return err
-	}
-	return nil
+	session.Cleanup(true, true, true)
 }
 
 // TouchBin creates a file to contain the binary data. It's size will be used to keep track of the tus upload offset.

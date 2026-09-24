@@ -506,7 +506,8 @@ func (session *DecomposedFsSession) Cleanup(revertNodeMetadata, cleanBin, cleanI
 	}
 
 	if cleanInfo {
-		if err := session.Purge(ctx); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		sessionPath := sessionPath(session.store.root, session.info.ID)
+		if err := os.Remove(sessionPath); err != nil && !errors.Is(err, fs.ErrNotExist) {
 			appctx.GetLogger(ctx).Error().Err(err).Str("session", session.ID()).Msg("removing upload info failed")
 		}
 	}
