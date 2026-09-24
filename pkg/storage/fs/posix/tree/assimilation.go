@@ -449,7 +449,9 @@ func (t *Tree) assimilate(item scanItem) error {
 	t.log.Debug().Str("path", item.Path).Bool("recurse", item.Recurse).Msg("assimilate")
 	var err error
 
-	spaceID, id, parentID, mtime, err := t.lookup.MetadataBackend().IdentifyPath(context.Background(), item.Path)
+	var parentID string
+	var mtime time.Time
+	spaceID, id, _, _, err := t.lookup.MetadataBackend().IdentifyPath(context.Background(), item.Path)
 	if err != nil {
 		return err
 	}
