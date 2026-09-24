@@ -104,6 +104,89 @@ func TestResourceName(t *testing.T) {
 	}
 }
 
+// TestArchiveName covers what archiveName does with resourceName's result, which TestResourceName
+// above does not reach. archiveName maps several distinct failures onto one fallback, so a
+// regression in that fallback stays invisible to the callee's own tests.
+//
+// resourceName returns ("", nil) when the resource has no usable name; the caller must treat that
+// like an error and keep s.config.Name. A deployment that configured a name must never silently
+// receive a different one.
+func TestArchiveName(t *testing.T) {
+	const configured = "meinarchiv"
+	ok := func(info *provider.ResourceInfo) *provider.StatResponse {
+		return &provider.StatResponse{Status: &rpc.Status{Code: rpc.Code_CODE_OK}, Info: info}
+	}
+
+	cases := []struct {
+		name    string
+		single  bool
+		resp    *provider.StatResponse
+		statErr error
+		selErr  error
+		want    string
+	}{
+		{name: "resolved name wins", single: true, resp: ok(&provider.ResourceInfo{Name: "Documents"}), want: "Documents"},
+		{name: "stat error keeps the configured name", single: true, statErr: errors.New("boom"), want: configured},
+		{name: "non-OK status keeps the configured name", single: true, resp: &provider.StatResponse{Status: &rpc.Status{Code: rpc.Code_CODE_NOT_FOUND}}, want: configured},
+		{name: "selector error keeps the configured name", single: true, selErr: errors.New("no gateway"), want: configured},
+		{name: "name sanitizing to empty keeps the configured name", single: true, resp: ok(&provider.ResourceInfo{Name: "/"}), want: configured},
+		{name: "empty name and path keep the configured name", single: true, resp: ok(&provider.ResourceInfo{}), want: configured},
+		{name: "several resources keep the configured name", single: false, want: configured},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			gw := cs3mocks.NewGatewayAPIClient(t)
+			if tc.single && tc.selErr == nil {
+				gw.EXPECT().Stat(mock.Anything, mock.Anything).Return(tc.resp, tc.statErr).Once()
+			}
+			log := zerolog.Nop()
+			s := &svc{
+				gatewaySelector: fakeSelector{client: gw, err: tc.selErr},
+				log:             &log,
+				config:          &Config{Name: configured},
+			}
+
+			resources := []*provider.ResourceId{{OpaqueId: "x"}}
+			if !tc.single {
+				resources = append(resources, &provider.ResourceId{OpaqueId: "y"})
+			}
+
+			if got := s.archiveName(context.Background(), resources); got != tc.want {
+				t.Errorf("archiveName() = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestConfigNameSanitized pins that a configured archive name cannot break the
+// Content-Disposition header. archiveName returns s.config.Name on every fallback path, so the
+// value reaches the header unmodified unless it is sanitized once at config time.
+func TestConfigNameSanitized(t *testing.T) {
+	cases := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{"plain name kept", "meinarchiv", "meinarchiv"},
+		{"double quote removed", `my"archive`, "myarchive"},
+		{"crlf removed", "arch\r\nive", "archive"},
+		{"slashes removed", "a/b", "ab"},
+		{"unset falls back", "", "download"},
+		{"sanitizing to empty falls back", "/", "download"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			c := &Config{Name: tc.in}
+			c.init()
+			if c.Name != tc.want {
+				t.Errorf("Config.init() Name = %q, want %q", c.Name, tc.want)
+			}
+		})
+	}
+}
+
 func TestArchiveNameContentDisposition(t *testing.T) {
 	// A name with umlauts survives sanitization and still encodes correctly:
 	// net.ContentDispositionAttachment emits both the RFC 6266 filename* form and the raw filename.
