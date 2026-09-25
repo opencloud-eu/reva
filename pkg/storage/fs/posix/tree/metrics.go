@@ -29,4 +29,10 @@ var (
 		Name: "reva_assimilation_active_tasks",
 		Help: "Number of active assimilation tasks in posixfs",
 	})
+
+	// ScanDurationGauge is a Prometheus gauge that tracks the duration of the initial filesystem scan.
+	ScanDurationGauge = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "reva_fs_scan_duration_seconds",
+		Help: "Duration of the initial filesystem scan in seconds",
+	})
 )
