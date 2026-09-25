@@ -21,6 +21,7 @@ package jsoncs3_test
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
@@ -226,6 +227,76 @@ var _ = Describe("Jsoncs3", func() {
 
 			Expect(err).ToNot(HaveOccurred())
 			Expect(s.ResourceId.OpaqueId).To(Equal(share.ResourceId.OpaqueId))
+		})
+	})
+
+	Describe("Dump", func() {
+		It("exports all shares from the provider cache", func() {
+			// Create a share on the source manager.
+			_, err := m.Share(ctx, sharedResource, grant)
+			Expect(err).ToNot(HaveOccurred())
+
+			sharesChan := make(chan *collaboration.Share, 16)
+			receivedChan := make(chan sharespkg.ReceivedShareWithUser, 16)
+
+			dumpWG := sync.WaitGroup{}
+			dumpWG.Add(1)
+			go func() {
+				defer dumpWG.Done()
+				Expect(m.Dump(ctx, sharesChan, receivedChan)).To(Succeed())
+			}()
+			dumpWG.Wait()
+			close(sharesChan)
+			close(receivedChan)
+
+			var dumped []*collaboration.Share
+			for s := range sharesChan {
+				dumped = append(dumped, s)
+			}
+			Expect(len(dumped)).To(BeNumerically(">", 0))
+
+			// The created share must be among the dumped shares.
+			found := false
+			for _, s := range dumped {
+				if s.GetResourceId().GetOpaqueId() == sharedResource.Id.OpaqueId {
+					found = true
+					break
+				}
+			}
+			Expect(found).To(BeTrue())
+		})
+	})
+
+	Describe("concurrent adds", func() {
+		It("does not lose updates when many shares target the same space", func() {
+			const n = 20
+			var wg sync.WaitGroup
+			wg.Add(n)
+			for i := 0; i < n; i++ {
+				i := i
+				go func() {
+					defer wg.Done()
+					// Each goroutine shares a distinct resource in the same
+					// space, exercising concurrent read-modify-write of the
+					// per-space JSON file.
+					res := &providerv1beta1.ResourceInfo{
+						Id: &providerv1beta1.ResourceId{
+							StorageId: "storageid",
+							SpaceId:   "spaceid",
+							OpaqueId:  fmt.Sprintf("opaque%d", i),
+						},
+					}
+					if _, err := m.Share(ctx, res, grant); err != nil {
+						Fail(fmt.Sprintf("share %d failed: %v", i, err))
+					}
+				}()
+			}
+			wg.Wait()
+
+			// All n shares must be present in the space.
+			shares, err := m.Cache.ListSpace(ctx, "storageid", "spaceid")
+			Expect(err).ToNot(HaveOccurred())
+			Expect(len(shares.Shares)).To(Equal(n))
 		})
 	})
 
