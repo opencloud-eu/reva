@@ -7,7 +7,9 @@ import (
 	"time"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/google/uuid"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata/prefixes"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/node"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -73,6 +75,35 @@ var _ = Describe("Watching tree", func() {
 					g.Expect(n.Blobsize).To(Equal(int64(0)))
 					g.Expect(n.Xattr(env.Ctx, prefixes.ChecksumPrefix+"adler32")).ToNot(BeEmpty())
 				}).ProbeEvery(200 * time.Millisecond).Should(Succeed())
+			})
+
+			It("does not claim files that are being created by opencloud", func() {
+				parent, err := env.Lookup.NodeFromResource(env.Ctx, &provider.Reference{
+					ResourceId: env.SpaceRootRes,
+					Path:       subtree,
+				})
+				Expect(err).ToNot(HaveOccurred())
+
+				path := root + "/upload.txt"
+				n := node.New(parent.SpaceID, uuid.NewString(), parent.ID, "upload.txt", 0, "", provider.ResourceType_RESOURCE_TYPE_FILE, nil, env.Lookup)
+				n.SpaceRoot = parent.SpaceRoot
+				Expect(env.Lookup.CacheID(env.Ctx, n.SpaceID, n.ID, path)).To(Succeed())
+
+				unlock, err := env.Tree.InitNewNode(env.Ctx, n, 0)
+				Expect(err).ToNot(HaveOccurred())
+				// give the assimilation triggered by the create event time to run while the upload still holds the lock
+				time.Sleep(500 * time.Millisecond)
+				Expect(unlock()).To(Succeed())
+
+				Consistently(func(g Gomega) {
+					_, id, _, _, err := env.Lookup.MetadataBackend().IdentifyPath(env.Ctx, path)
+					g.Expect(err).ToNot(HaveOccurred())
+					g.Expect(id).To(Equal(n.ID))
+
+					_, cachedID, err := env.Lookup.IDsForPath(env.Ctx, path)
+					g.Expect(err).ToNot(HaveOccurred())
+					g.Expect(cachedID).To(Equal(n.ID))
+				}).WithTimeout(time.Second).ProbeEvery(100 * time.Millisecond).Should(Succeed())
 			})
 
 			It("does not ignore .lock files", func() {
