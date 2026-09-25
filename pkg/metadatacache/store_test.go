@@ -123,6 +123,32 @@ var _ = Describe("Store", func() {
 			Expect(val).To(HaveKeyWithValue("hello", "world"))
 		})
 
+		It("syncs a warmed store before updating", func() {
+			Expect(store.Update(ctx, "alice", true, func(m map[string]string) (map[string]string, bool, error) {
+				m["initial"] = "value"
+				return m, true, nil
+			})).To(Succeed())
+
+			store2 := newStoreOnDir(dir)
+			unlock := store2.Lock("alice")
+			_, ok, err := store2.Get(ctx, "alice")
+			unlock()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(ok).To(BeTrue())
+
+			Expect(store.Update(ctx, "alice", false, func(m map[string]string) (map[string]string, bool, error) {
+				m["added"] = "later"
+				return m, true, nil
+			})).To(Succeed())
+
+			var captured map[string]string
+			Expect(store2.Update(ctx, "alice", false, func(m map[string]string) (map[string]string, bool, error) {
+				captured = m
+				return m, false, nil
+			})).To(Succeed())
+			Expect(captured).To(HaveKeyWithValue("added", "later"))
+		})
+
 		It("is safe under concurrent updates to the same key (race detector)", func() {
 			const goroutines = 20
 			var wg sync.WaitGroup
