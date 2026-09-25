@@ -1,5 +1,19 @@
 # Changelog
 
+## [2.50.1](https://github.com/opencloud-eu/reva/releases/tag/v2.50.1) - 2026-09-25
+
+### ❤️ Thanks to all contributors! ❤️
+
+@NickWalters, @aduffeck, @butonic, @maki5, @pReya, @rhafer
+
+### 📦️ Dependencies
+
+- chore(deps): bump github.com/coreos/go-oidc/v3 from 3.20.0 to 3.21.0 [[#818](https://github.com/opencloud-eu/reva/pull/818)]
+- chore(deps): bump github.com/go-playground/universal-translator from 0.18.1 to 0.18.2 [[#817](https://github.com/opencloud-eu/reva/pull/817)]
+- chore(deps): bump go.etcd.io/etcd/client/v3 from 3.6.13 to 3.7.1 [[#750](https://github.com/opencloud-eu/reva/pull/750)]
+- chore(deps): bump golang.org/x/oauth2 from 0.36.0 to 0.37.0 [[#815](https://github.com/opencloud-eu/reva/pull/815)]
+- chore(deps): bump go.opentelemetry.io/otel/exporters/otlp/otlptrace from 1.44.0 to 1.46.0 in the go_modules group across 1 directory [[#812](https://github.com/opencloud-eu/reva/pull/812)]
+
 ## [2.50.0](https://github.com/opencloud-eu/reva/releases/tag/v2.50.0) - 2026-09-14
 
 ### ❤️ Thanks to all contributors! ❤️
