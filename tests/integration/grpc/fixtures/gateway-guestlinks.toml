@@ -1,0 +1,40 @@
+[shared]
+jwt_secret = "changemeplease"
+gatewaysvc = "{{grpc_address}}"
+
+[grpc]
+address = "{{grpc_address}}"
+
+[grpc.services.gateway]
+# registries
+storageregistrysvc = "{{grpc_address}}"
+userprovidersvc = "{{users_address}}"
+stat_cache_ttl = 1
+permissionssvc = "{{permissions_address}}"# sharing
+usershareprovidersvc = "{{shares_address}}"
+publicshareprovidersvc = "{{shares_address}}"
+commit_share_to_storage_grant = true
+
+[grpc.services.authregistry]
+driver = "static"
+
+[grpc.services.authregistry.drivers.static.rules]
+basic = "{{users_address}}"
+publicshares = "{{shares_address}}" # started with the shares.toml
+guestlinks = "{{guestlinks_address}}" # started with the authprovider-guestlinks.toml
+serviceaccounts = "{{serviceaccounts_address}}" # started with the authprovider-serviceaccounts.toml
+
+[grpc.services.storageregistry]
+driver = "spaces"
+
+[grpc.services.storageregistry.drivers.spaces]
+home_template = "/users/{{.Id.OpaqueId}}"
+
+[grpc.services.storageregistry.drivers.spaces.providers."{{storage_address}}".spaces]
+"personal" = { "mount_point" = "/users", "path_template" = "/users/{{.Space.Owner.Id.OpaqueId}}" }
+
+[http]
+address = "{{grpc_address+1}}"
+
+[http.services.datagateway]
+transfer_shared_secret = "replace-me-with-a-transfer-secret"
