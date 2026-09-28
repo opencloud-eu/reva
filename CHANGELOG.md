@@ -1,6 +1,6 @@
 # Changelog
 
-## [2.50.1](https://github.com/opencloud-eu/reva/releases/tag/v2.50.1) - 2026-09-25
+## [2.50.1](https://github.com/opencloud-eu/reva/releases/tag/v2.50.1) - 2026-09-28
 
 ### ❤️ Thanks to all contributors! ❤️
 
@@ -8,6 +8,7 @@
 
 ### 📦️ Dependencies
 
+- chore(deps): bump github.com/go-sql-driver/mysql from 1.10.0 to 1.10.1 [[#824](https://github.com/opencloud-eu/reva/pull/824)]
 - chore(deps): bump github.com/coreos/go-oidc/v3 from 3.20.0 to 3.21.0 [[#818](https://github.com/opencloud-eu/reva/pull/818)]
 - chore(deps): bump github.com/go-playground/universal-translator from 0.18.1 to 0.18.2 [[#817](https://github.com/opencloud-eu/reva/pull/817)]
 - chore(deps): bump go.etcd.io/etcd/client/v3 from 3.6.13 to 3.7.1 [[#750](https://github.com/opencloud-eu/reva/pull/750)]
