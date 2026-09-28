@@ -8,6 +8,7 @@
 
 ### 📦️ Dependencies
 
+- chore(deps): bump github.com/gofrs/flock from 0.13.0 to 0.13.1 [[#823](https://github.com/opencloud-eu/reva/pull/823)]
 - chore(deps): bump github.com/go-sql-driver/mysql from 1.10.0 to 1.10.1 [[#824](https://github.com/opencloud-eu/reva/pull/824)]
 - chore(deps): bump github.com/coreos/go-oidc/v3 from 3.20.0 to 3.21.0 [[#818](https://github.com/opencloud-eu/reva/pull/818)]
 - chore(deps): bump github.com/go-playground/universal-translator from 0.18.1 to 0.18.2 [[#817](https://github.com/opencloud-eu/reva/pull/817)]
