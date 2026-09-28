@@ -298,7 +298,7 @@ func (m *manager) InvalidateAppPassword(ctx context.Context, secretOrId string) 
 	})
 	if err != nil {
 		log.Error().Err(err).Msg("store.Update failed")
-		return errtypes.NotFound("password not found")
+		return err
 	}
 
 	m.removeFromAuthCache(userID.GetOpaqueId(), secretOrId)
@@ -367,7 +367,7 @@ func (m *manager) GetAppPassword(ctx context.Context, user *userpb.UserId, secre
 		if cacheHit {
 			m.authCache.Remove(cacheKey)
 		}
-		return nil, errtypes.NotFound("password not found")
+		return nil, err
 	}
 
 	// Return a clone with the ID in the password field so the cached entry

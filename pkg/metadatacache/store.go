@@ -122,8 +122,8 @@ func (s *Store[K, V]) Set(key K, v V) {
 }
 
 // Sync downloads the current state of key from storage and updates the cache.
-// It is a no-op (returns nil) when the key does not exist in storage or when
-// the stored etag matches the cached etag (NotModified).
+// It is a no-op (returns nil) when the stored etag matches the cached etag (NotModified).
+// If the key does not exist in storage, the cached entry is removed and nil is returned.
 // The caller must hold the per-key lock.
 func (s *Store[K, V]) Sync(ctx context.Context, key K) error {
 	ctx, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "Sync")
@@ -144,6 +144,7 @@ func (s *Store[K, V]) Sync(ctx context.Context, key K) error {
 		// fall through to unmarshal
 	case errtypes.NotFound:
 		span.SetStatus(codes.Ok, "not found")
+		s.entries.Delete(key)
 		return nil
 	case errtypes.NotModified:
 		span.SetStatus(codes.Ok, "not modified")
