@@ -918,6 +918,9 @@ func (t *Tree) WarmupIDCache(root string, assimilate, onlyDirty bool) error {
 	}
 
 	sizes := make(map[string]int64)
+	// ids of the directories the walk went through, so we can tell whether an item still sits
+	// in the same parent. filepath.Walk visits a directory before its children.
+	dirIDs := make(map[string]string)
 	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
@@ -964,7 +967,10 @@ func (t *Tree) WarmupIDCache(root string, assimilate, onlyDirty bool) error {
 			}
 		}
 
-		nodeSpaceID, id, _, _, err := t.lookup.MetadataBackend().IdentifyPath(context.Background(), path)
+		nodeSpaceID, id, parentID, mtime, err := t.lookup.MetadataBackend().IdentifyPath(context.Background(), path)
+		if info.IsDir() && len(id) > 0 {
+			dirIDs[path] = id
+		}
 		if err == nil && len(id) > 0 {
 			if len(nodeSpaceID) > 0 {
 				spaceID = nodeSpaceID
@@ -1004,6 +1010,7 @@ func (t *Tree) WarmupIDCache(root string, assimilate, onlyDirty bool) error {
 			if id != "" {
 				// Check if the item on the previous path still exists. In this case it might have been a copy with extended attributes -> set new ID
 				isCopy := false
+				isMove := false
 				previousPath, err := t.lookup.GetCachedID(context.Background(), spaceID, id)
 				switch err.(type) {
 				case errtypes.NotFound:
@@ -1011,18 +1018,36 @@ func (t *Tree) WarmupIDCache(root string, assimilate, onlyDirty bool) error {
 				case nil:
 					if previousPath != path {
 						_, err := os.Stat(previousPath)
-						if err == nil {
+						switch {
+						case err == nil:
 							// previous path (using the same id) still exists -> this is a copy
 							isCopy = true
+						case os.IsNotExist(err):
+							// the item is gone from the previous path. It needs to be assimilated
+							// again only when its own name or parent changed. When an ancestor was
+							// renamed the item itself stayed as it was and the stale cache entry
+							// is all there is to fix.
+							parentOnDisk, known := dirIDs[filepath.Dir(path)]
+							isMove = filepath.Base(previousPath) != filepath.Base(path) ||
+								(known && len(parentID) > 0 && parentID != parentOnDisk)
 						}
 					}
 				default:
 					return errors.Wrap(err, "failed to get previous path from cache")
 				}
 
-				if isCopy {
-					// copy detected -> re-assimilate
-					_ = t.assimilate(scanItem{Path: path})
+				// the metadata mtime lags behind the one on disk when a file changed outside of
+				// opencloud. Directories are left out because their mtime on disk also changes
+				// when a child is added or removed, and the walk visits those children anyway.
+				isChanged := !info.IsDir() && !mtime.IsZero() && !mtime.Equal(info.ModTime())
+
+				if isCopy || (assimilate && (isMove || isChanged)) {
+					// a copy with a clashing id, a move or a change on disk -> re-assimilate.
+					// assimilate skips items whose path and mtime still match the metadata
+					err := t.assimilate(scanItem{Path: path})
+					if err != nil && !errors.Is(err, _errSkipAlreadyKnown) {
+						t.log.Error().Err(err).Str("path", path).Msg("could not assimilate item")
+					}
 				} else {
 					// update cached id with new path
 					if err := t.lookup.CacheID(context.Background(), spaceID, id, path); err != nil {
