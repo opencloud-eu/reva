@@ -289,9 +289,9 @@ var _ = Describe("Jsoncs3", func() {
 				Expect(err).ToNot(HaveOccurred())
 			})
 
-			It("Serves a cached result on a repeated request without touching storage", func() {
+			It("validates a cached result against storage", func() {
 				dlRes := &metadata.DownloadResponse{Content: content}
-				md.EXPECT().Download(mock.Anything, mock.Anything).Return(dlRes, nil).Once()
+				md.EXPECT().Download(mock.Anything, mock.Anything).Return(dlRes, nil).Times(2)
 
 				_, err = manager.GetAppPassword(ctx, &user.UserId{OpaqueId: testUserID, Idp: testUserIDP}, "password")
 				Expect(err).ToNot(HaveOccurred())
@@ -300,17 +300,21 @@ var _ = Describe("Jsoncs3", func() {
 				Expect(err).ToNot(HaveOccurred())
 				Expect(pw.Password).To(Equal("existing-id"))
 
-				md.AssertNumberOfCalls(GinkgoT(), "Download", 1)
+				md.AssertNumberOfCalls(GinkgoT(), "Download", 2)
 			})
 
 			It("Removes the cached result when the password is invalidated", func() {
 				dlRes := &metadata.DownloadResponse{Content: content}
-				md.EXPECT().Download(mock.Anything, mock.Anything).Return(dlRes, nil).Once()
+				md.EXPECT().Download(mock.Anything, mock.Anything).Return(dlRes, nil).Times(3)
 				md.EXPECT().Upload(
 					mock.Anything,
 					mock.MatchedBy(func(req metadata.UploadRequest) bool {
-						err := json.Unmarshal(req.Content, &map[string]*apppb.AppPassword{})
-						return err == nil
+						var passwords map[string]*apppb.AppPassword
+						if err := json.Unmarshal(req.Content, &passwords); err != nil {
+							return false
+						}
+						dlRes.Content = req.Content
+						return len(passwords) == 0
 					}),
 				).Return(nil, nil).Once()
 
@@ -326,12 +330,16 @@ var _ = Describe("Jsoncs3", func() {
 
 			It("Removes the cached result when the password is invalidated by id", func() {
 				dlRes := &metadata.DownloadResponse{Content: content}
-				md.EXPECT().Download(mock.Anything, mock.Anything).Return(dlRes, nil).Once()
+				md.EXPECT().Download(mock.Anything, mock.Anything).Return(dlRes, nil).Times(3)
 				md.EXPECT().Upload(
 					mock.Anything,
 					mock.MatchedBy(func(req metadata.UploadRequest) bool {
-						err := json.Unmarshal(req.Content, &map[string]*apppb.AppPassword{})
-						return err == nil
+						var passwords map[string]*apppb.AppPassword
+						if err := json.Unmarshal(req.Content, &passwords); err != nil {
+							return false
+						}
+						dlRes.Content = req.Content
+						return len(passwords) == 0
 					}),
 				).Return(nil, nil).Once()
 
@@ -350,7 +358,7 @@ var _ = Describe("Jsoncs3", func() {
 				content, err = json.Marshal(existingAppPw)
 				Expect(err).ToNot(HaveOccurred())
 				dlRes := &metadata.DownloadResponse{Content: content}
-				md.EXPECT().Download(mock.Anything, mock.Anything).Return(dlRes, nil).Once()
+				md.EXPECT().Download(mock.Anything, mock.Anything).Return(dlRes, nil).Times(2)
 
 				_, err = manager.GetAppPassword(ctx, &user.UserId{OpaqueId: testUserID, Idp: testUserIDP}, "password")
 				Expect(err).ToNot(HaveOccurred())
@@ -453,6 +461,40 @@ var _ = Describe("Jsoncs3", func() {
 				_, ok = uploadedPw["id2"]
 				Expect(ok).To(BeFalse())
 			})
+		})
+	})
+	Describe("Multiple manager instances", func() {
+		It("rejects a cached password invalidated by another instance", func() {
+			ctx := ctxpkg.ContextSetUser(context.Background(), &user.User{
+				Username: testUsername,
+				Id: &user.UserId{
+					OpaqueId: testUserID,
+					Idp:      testUserIDP,
+				},
+			})
+
+			storageDir := GinkgoT().TempDir()
+			storageA, err := metadata.NewDiskStorage(storageDir)
+			Expect(err).NotTo(HaveOccurred())
+			storageB, err := metadata.NewDiskStorage(storageDir)
+			Expect(err).NotTo(HaveOccurred())
+
+			generator, err := jsoncs3.NewRandGenerator(map[string]any{"token_strength": 11})
+			Expect(err).NotTo(HaveOccurred())
+			managerA, err := jsoncs3.NewWithOptions(storageA, generator, 5*time.Minute, 5)
+			Expect(err).NotTo(HaveOccurred())
+			managerB, err := jsoncs3.NewWithOptions(storageB, generator, 5*time.Minute, 5)
+			Expect(err).NotTo(HaveOccurred())
+
+			appPassword, err := managerA.GenerateAppPassword(ctx, nil, "testing", nil)
+			Expect(err).NotTo(HaveOccurred())
+			_, err = managerA.GetAppPassword(ctx, ctxpkg.ContextMustGetUser(ctx).GetId(), appPassword.Password)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(managerB.InvalidateAppPassword(ctx, appPassword.Password)).To(Succeed())
+
+			_, err = managerA.GetAppPassword(ctx, ctxpkg.ContextMustGetUser(ctx).GetId(), appPassword.Password)
+			Expect(err).To(MatchError(errtypes.NotFound("password not found")))
 		})
 	})
 })
