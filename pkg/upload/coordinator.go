@@ -304,7 +304,8 @@ func (c *coordinator) touchNode(ctx context.Context, session Session) error {
 		Path: session.Filename(),
 	}
 	// MarkProcessing is the coordinator's own call, hence false here.
-	err := c.fs.TouchFile(ctx, pathRef, false, session.Metadata()["mtime"])
+	// PrepareUpload propagates the node, so TouchFile need not.
+	err := c.fs.TouchFile(storage.ContextSkipTouchPropagation(ctx), pathRef, false, session.Metadata()["mtime"])
 	if err == nil {
 		// TouchFile does not report the node it created, read it back.
 		var ri *provider.ResourceInfo
