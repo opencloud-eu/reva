@@ -1,15 +1,16 @@
 package tree_test
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+	"syscall"
 	"time"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/lookup"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/node"
-	"golang.org/x/sys/unix"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -107,29 +108,34 @@ var _ = Describe("Non-watching tree", func() {
 		}).Should(Succeed())
 	})
 
-	It("does not retry assimilating an unchanged file that failed to assimilate", func() {
+	It("retries assimilating a file that failed only after it changed", func() {
 		if os.Geteuid() == 0 {
 			Skip("root can set extended attributes on read-only files")
 		}
-		// assimilation reads a read-only file for its checksums, then fails to set its xattrs
+		// assimilation reads a read-only file for its checksums, then fails to set its xattrs.
+		// The file is big enough that the bytes below can only come from reading it.
 		path := filepath.Join(root, "readonly")
-		Expect(os.WriteFile(path, []byte("some content"), 0400)).To(Succeed())
+		content := make([]byte, 4<<20)
+		Expect(os.WriteFile(path, content, 0400)).To(Succeed())
 
-		// reads reports whether fn read the file, based on its atime. Setting the atime to before the
-		// mtime makes relatime update it on a read.
-		reads := func(fn func()) bool {
-			fi, err := os.Stat(path)
+		// reads reports whether fn read the file, based on the bytes this process read. The access
+		// time can't tell us, because changing it also changes the ctime, which triggers a retry.
+		rchar := func() int64 {
+			procIO, err := os.ReadFile("/proc/self/io")
+			if err != nil {
+				Skip("/proc/self/io is not available")
+			}
+			var read int64
+			_, err = fmt.Sscanf(string(procIO), "rchar: %d", &read)
 			Expect(err).ToNot(HaveOccurred())
-			atime := fi.ModTime().Add(-time.Hour)
-			Expect(os.Chtimes(path, atime, fi.ModTime())).To(Succeed())
+			return read
+		}
+		reads := func(fn func()) bool {
+			before := rchar()
 			fn()
-			var st unix.Stat_t
-			Expect(unix.Stat(path, &st)).To(Succeed())
-			return !time.Unix(st.Atim.Unix()).Equal(atime)
+			return rchar()-before >= int64(len(content))
 		}
-		if !reads(func() { _, _ = os.ReadFile(path) }) {
-			Skip("the file system doesn't update access times")
-		}
+		Expect(reads(func() { _, _ = os.ReadFile(path) })).To(BeTrue())
 
 		listFolder := func() {
 			dir, err := non_watching_env.Lookup.NodeFromResource(non_watching_env.Ctx, &provider.Reference{
@@ -142,6 +148,21 @@ var _ = Describe("Non-watching tree", func() {
 		}
 		Expect(reads(listFolder)).To(BeTrue())
 		Expect(reads(listFolder)).To(BeFalse())
+
+		// a fix that changes none of the attributes the failure cache keeps, a setfacl or a
+		// chattr -i for example, still changes the ctime and gets the file read again. Some
+		// kernels stamp the ctime from a coarse clock, so chmod until it really moved.
+		ctime := func() time.Time {
+			fi, err := os.Lstat(path)
+			Expect(err).ToNot(HaveOccurred())
+			return time.Unix(fi.Sys().(*syscall.Stat_t).Ctim.Unix())
+		}
+		before := ctime()
+		Eventually(func() bool {
+			Expect(os.Chmod(path, 0400)).To(Succeed())
+			return ctime().After(before)
+		}).Should(BeTrue())
+		Expect(reads(listFolder)).To(BeTrue())
 	})
 
 	It("rejects creation of internal paths", func() {
