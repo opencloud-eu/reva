@@ -197,6 +197,8 @@ func RoleFromName(name string) *Role {
 		return NewEditorListGrantsRole()
 	case RoleEditorListGrantsWithVersions:
 		return NewEditorListGrantsWithVersionsRole()
+	case RoleSpaceEditorWithoutVersions:
+		return NewSpaceEditorWithoutVersionsRole()
 	case RoleSpaceEditor:
 		return NewSpaceEditorRole()
 	case RoleSpaceEditorWithoutTrashbin:
