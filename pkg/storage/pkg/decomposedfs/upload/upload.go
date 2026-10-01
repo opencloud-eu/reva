@@ -46,6 +46,7 @@ import (
 	"github.com/opencloud-eu/reva/v2/pkg/rhttp/datatx/metrics"
 	"github.com/opencloud-eu/reva/v2/pkg/rhttp/datatx/utils/download"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/disk"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata/prefixes"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/node"
 	"github.com/opencloud-eu/reva/v2/pkg/utils"
@@ -453,9 +454,37 @@ func (session *DecomposedFsSession) Cleanup(revertNodeMetadata, cleanBin, cleanI
 		} else {
 			versionID := strings.TrimPrefix(session.info.MetaData["versionID"], n.ID+node.RevisionIDDelimiter)
 			if session.NodeExists() && versionID != "" {
-				sublog.Debug().Str("nodepath", n.InternalPath()).Str("versionID", versionID).Msg("restoring revision")
-				if err := n.RevertUpload(ctx, versionID); err != nil {
-					sublog.Error().Err(err).Str("versionID", versionID).Msg("reverting node metadata failed")
+				ok := func() bool {
+					// lock the node so that no other upload can finish while we revert. RevertUpload
+					// takes the same lock, which this node object then already holds.
+					unlock, err := session.store.lu.MetadataBackend().Lock(n)
+					if err != nil {
+						sublog.Error().Err(err).Str("versionID", versionID).Msg("locking node failed")
+						return false
+					}
+					defer func() { _ = unlock() }()
+
+					// only roll back if this session still owns the node. Otherwise a newer upload has
+					// replaced the content since, and reverting would overwrite it with the old version.
+					// Read the status through the backend, the node may have cached it before we locked.
+					status, err := session.store.lu.MetadataBackend().Get(ctx, n, prefixes.StatusPrefix)
+					if err != nil && !metadata.IsAttrUnset(err) {
+						sublog.Error().Err(err).Str("versionID", versionID).Msg("reading processingid for session failed")
+						return false
+					}
+					if string(status) != node.ProcessingStatus+session.ID() {
+						sublog.Info().Str("versionID", versionID).Str("status", string(status)).Msg("node was changed by another upload, keeping it and the revision")
+						return true
+					}
+
+					sublog.Debug().Str("nodepath", n.InternalPath()).Str("versionID", versionID).Msg("restoring revision")
+					if err := n.RevertUpload(ctx, versionID); err != nil {
+						sublog.Error().Err(err).Str("versionID", versionID).Msg("reverting node metadata failed")
+						return false
+					}
+					return true
+				}()
+				if !ok {
 					return
 				}
 			} else {
