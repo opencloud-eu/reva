@@ -1,10 +1,14 @@
 # Changelog
 
-## [2.50.1](https://github.com/opencloud-eu/reva/releases/tag/v2.50.1) - 2026-09-29
+## [2.50.1](https://github.com/opencloud-eu/reva/releases/tag/v2.50.1) - 2026-10-01
 
 ### ❤️ Thanks to all contributors! ❤️
 
 @NickWalters, @aduffeck, @butonic, @maki5, @pReya, @rhafer
+
+### 🐛 Bug Fixes
+
+- Issue/827 [[#829](https://github.com/opencloud-eu/reva/pull/829)]
 
 ### 📦️ Dependencies
 
