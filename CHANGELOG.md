@@ -6,6 +6,10 @@
 
 @NickWalters, @aduffeck, @butonic, @fschade, @maki5, @pReya, @rhafer
 
+### ✨ Features
+
+- Add "guestlinks" authmanager [[#822](https://github.com/opencloud-eu/reva/pull/822)]
+
 ### 📈 Enhancement
 
 - feat(appprovider): forward the mobile parameter to the app [[#830](https://github.com/opencloud-eu/reva/pull/830)]
