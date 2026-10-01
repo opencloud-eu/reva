@@ -61,7 +61,7 @@ func init() {
 }
 
 // WriteChunk writes the stream from the reader to the given offset of the upload
-func (session *DecomposedFsSession) WriteChunk(ctx context.Context, _ int64, src io.Reader) (int64, error) {
+func (session *DecomposedFsSession) WriteChunk(ctx context.Context, offset int64, src io.Reader) (int64, error) {
 	ctx, span := tracer.Start(session.Context(ctx), "WriteChunk")
 	defer span.End()
 	_, subspan := tracer.Start(ctx, "os.OpenFile")
@@ -80,6 +80,18 @@ func (session *DecomposedFsSession) WriteChunk(ctx context.Context, _ int64, src
 		_ = disk.Fdatasync(file)
 		_ = file.Close()
 	}()
+
+	// The file is opened with O_APPEND, so refuse to write if another request has changed its
+	// size since tusd checked the offset. Otherwise the chunk would land at the wrong position.
+	stat, err := file.Stat()
+	if err != nil {
+		log.Error().Err(err).Msg("WriteChunk: error stating upload file")
+		return 0, err
+	}
+	if stat.Size() != offset {
+		log.Error().Int64("offset", offset).Int64("size", stat.Size()).Msg("WriteChunk: upload file size does not match offset")
+		return 0, tusd.ErrMismatchOffset
+	}
 
 	// calculate cheksum here? needed for the TUS checksum extension. https://tus.io/protocols/resumable-upload.html#checksum
 	// TODO but how do we get the `Upload-Checksum`? WriteChunk() only has a context, offset and the reader ...
@@ -151,6 +163,18 @@ func (session *DecomposedFsSession) FinishUploadDecomposed(ctx context.Context) 
 	ctx = ctxpkg.ContextSetInitiator(ctx, session.InitiatorID())
 
 	ctx = context.WithoutCancel(ctx) // Do not cancel the finish process, we unconditionally want to complete the upload.
+
+	// make sure the staging file holds exactly the declared number of bytes before hashing it
+	stat, err := os.Stat(session.binPath())
+	if err != nil {
+		return err
+	}
+	if stat.Size() != session.Size() {
+		log.Error().Str("uploadid", session.ID()).Int64("expected", session.Size()).Int64("actual", stat.Size()).Msg("upload size mismatch")
+		session.Cleanup(false, true, true, false)
+		return errtypes.ChecksumMismatch(fmt.Sprintf("upload size mismatch: expected %d bytes, got %d", session.Size(), stat.Size()))
+	}
+
 	sha1h, md5h, adler32h, err := node.CalculateChecksums(ctx, session.binPath())
 	if err != nil {
 		return err
