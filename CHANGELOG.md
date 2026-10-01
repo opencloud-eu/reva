@@ -4,7 +4,7 @@
 
 ### ❤️ Thanks to all contributors! ❤️
 
-@NickWalters, @aduffeck, @butonic, @fschade, @maki5, @pReya, @rhafer
+@NickWalters, @aduffeck, @butonic, @fschade, @maki5, @micbar, @pReya, @rhafer
 
 ### ✨ Features
 
@@ -12,6 +12,7 @@
 
 ### 📈 Enhancement
 
+- Add new editor roles [[#834](https://github.com/opencloud-eu/reva/pull/834)]
 - feat(appprovider): forward the mobile parameter to the app [[#830](https://github.com/opencloud-eu/reva/pull/830)]
 
 ### 🐛 Bug Fixes
