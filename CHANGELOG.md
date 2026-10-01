@@ -1,10 +1,14 @@
 # Changelog
 
-## [2.50.1](https://github.com/opencloud-eu/reva/releases/tag/v2.50.1) - 2026-10-01
+## [2.51.0](https://github.com/opencloud-eu/reva/releases/tag/v2.51.0) - 2026-10-01
 
 ### ❤️ Thanks to all contributors! ❤️
 
-@NickWalters, @aduffeck, @butonic, @maki5, @pReya, @rhafer
+@NickWalters, @aduffeck, @butonic, @fschade, @maki5, @pReya, @rhafer
+
+### 📈 Enhancement
+
+- feat(appprovider): forward the mobile parameter to the app [[#830](https://github.com/opencloud-eu/reva/pull/830)]
 
 ### 🐛 Bug Fixes
 
