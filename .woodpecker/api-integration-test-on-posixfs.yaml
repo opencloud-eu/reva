@@ -75,11 +75,23 @@ steps:
 
   - name: clone-api-tests
     image: *alpine_image
+    environment:
+      GITHUB_TOKEN:
+        from_secret: github_public_readonly_token
     commands:
       - . ./.woodpecker.env
-      - git clone -b $APITESTS_BRANCH --single-branch --no-tags $APITESTS_REPO_GIT_URL
+      - |
+        if [ -n "$GITHUB_TOKEN" ]; then
+          export GIT_CONFIG_COUNT=1
+          export GIT_CONFIG_KEY_0=http.extraheader
+          export GIT_CONFIG_VALUE_0="Authorization: Basic $(printf 'x-access-token:%s' "$GITHUB_TOKEN" | base64 | tr -d '\n')"
+        fi
+      - mkdir opencloud
       - cd opencloud
-      - git checkout $APITESTS_COMMITID
+      - git init -q
+      - git remote add origin $APITESTS_REPO_GIT_URL
+      - for i in 1 2 3; do git fetch --depth 1 --no-tags origin $APITESTS_COMMITID && break || sleep $((i*5)); done
+      - git checkout -q FETCH_HEAD
 
   - name: opencloud-api-tests
     image: *behat_image
