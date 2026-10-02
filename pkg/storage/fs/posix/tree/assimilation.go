@@ -434,11 +434,24 @@ func (t *Tree) generateTempNodeId(path string) string {
 	}
 }
 
+// newItemLockNode returns the node used for locking a path that does not carry an id yet. It is used by the
+// assimilation of new items and by opencloud when creating new files so that both are serialized.
+func (t *Tree) newItemLockNode(spaceID, path string) *assimilationNode {
+	return &assimilationNode{
+		spaceID: spaceID,
+		// Use the path as the node ID (which is used for calculating the lock file path) since we do not have an ID yet
+		// In the case path is too long, we do sha256 and extract first 240 characters
+		nodeId: t.generateTempNodeId(path),
+	}
+}
+
 func (t *Tree) assimilate(item scanItem) error {
 	t.log.Debug().Str("path", item.Path).Bool("recurse", item.Recurse).Msg("assimilate")
 	var err error
 
-	spaceID, id, parentID, mtime, err := t.lookup.MetadataBackend().IdentifyPath(context.Background(), item.Path)
+	var parentID string
+	var mtime time.Time
+	spaceID, id, _, _, err := t.lookup.MetadataBackend().IdentifyPath(context.Background(), item.Path)
 	if err != nil {
 		return err
 	}
@@ -485,6 +498,25 @@ func (t *Tree) assimilate(item scanItem) error {
 			}
 			_ = unlock()
 		}()
+
+		// Re-read the state now that we hold the lock. Operations done through opencloud (e.g. an upload
+		// creating the node and later moving the blob into place) modify the file while holding the lock,
+		// so the values read before acquiring it may be stale.
+		var lockedID string
+		_, lockedID, parentID, mtime, err = t.lookup.MetadataBackend().IdentifyPath(context.Background(), item.Path)
+		if err != nil {
+			return err
+		}
+		if lockedID != id {
+			// the id changed while we were waiting for the lock, start over
+			_ = unlock()
+			locked = false
+			return t.assimilate(item)
+		}
+		fi, err = os.Lstat(item.Path)
+		if err != nil {
+			return err
+		}
 
 		previousPath, err := t.lookup.GetCachedID(context.Background(), spaceID, id)
 		if previousPath == "" || err != nil {
@@ -611,13 +643,7 @@ func (t *Tree) assimilate(item scanItem) error {
 		}
 	} else {
 		t.log.Debug().Str("path", item.Path).Msg("new item detected")
-		assimilationNode := &assimilationNode{
-			spaceID: spaceID,
-			// Use the path as the node ID (which is used for calculating the lock file path) since we do not have an ID yet
-			// In the case path is too long, we do sha256 and extract first 240 characters
-			nodeId: t.generateTempNodeId(item.Path),
-		}
-		unlock, err := t.lookup.MetadataBackend().Lock(assimilationNode)
+		unlock, err := t.lookup.MetadataBackend().Lock(t.newItemLockNode(spaceID, item.Path))
 		if err != nil {
 			return err
 		}
