@@ -20,6 +20,7 @@ package metadata
 
 import (
 	"context"
+	"crypto/md5"
 	"errors"
 	"fmt"
 	"io"
@@ -30,18 +31,45 @@ import (
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	"github.com/google/renameio/v2"
 	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/metadata/locks"
 )
+
+// contentEtag returns an etag derived from the file's content (md5), so that it
+// changes whenever the bytes change — not merely when mtime or size do. This is
+// what makes the etag a reliable cache-invalidation token for read-modify-write
+// cycles, including same-size writes that happen within the same second.
+func contentEtag(p string) (string, error) {
+	f, err := os.Open(p)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+	h := md5.New()
+	if _, err := io.Copy(h, f); err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%x", h.Sum(nil)), nil
+}
 
 // Disk represents a disk metadata storage
 type Disk struct {
 	dataDir string
+	locker  locks.Locker
 }
 
 // NewDiskStorage returns a new disk storage instance
-func NewDiskStorage(dataDir string) (s Storage, err error) {
+func NewDiskStorage(dataDir string, opts ...Option) (s Storage, err error) {
+	c := applyOptions(opts)
+	if _, ok := c.locker.(*locks.DiskLocker); !ok {
+		// When no explicit locker was supplied, root the default disk locker at
+		// the data dir so sidecar lock files are written next to the data.
+		c.locker = locks.NewDiskLocker(dataDir)
+	}
 	return &Disk{
 		dataDir: dataDir,
+		locker:  c.locker,
 	}, nil
 }
 
@@ -73,8 +101,9 @@ func (disk *Disk) Stat(ctx context.Context, path string) (*provider.ResourceInfo
 	}
 	if info.IsDir() {
 		entry.Type = provider.ResourceType_RESOURCE_TYPE_CONTAINER
+		return entry, nil
 	}
-	entry.Etag, err = calcEtag(info.ModTime(), info.Size())
+	entry.Etag, err = contentEtag(disk.targetPath(info.Name()))
 	if err != nil {
 		return nil, err
 	}
@@ -115,12 +144,8 @@ func (disk *Disk) Upload(_ context.Context, req UploadRequest) (*UploadResponse,
 		if err := f.Close(); err != nil {
 			return nil, err
 		}
-		info, err := os.Stat(p)
-		if err != nil {
-			return nil, err
-		}
 		res := &UploadResponse{}
-		res.Etag, err = calcEtag(info.ModTime(), info.Size())
+		res.Etag, err = contentEtag(p)
 		if err != nil {
 			return nil, err
 		}
@@ -128,17 +153,17 @@ func (disk *Disk) Upload(_ context.Context, req UploadRequest) (*UploadResponse,
 	}
 
 	if req.IfMatchEtag != "" {
-		info, err := os.Stat(p)
-		if err != nil && !errors.Is(err, os.ErrNotExist) {
-			return nil, err
-		} else if err == nil {
-			etag, err := calcEtag(info.ModTime(), info.Size())
+		if _, err := os.Stat(p); err == nil {
+			// File exists: verify its content matches the expected etag.
+			etag, err := contentEtag(p)
 			if err != nil {
 				return nil, err
 			}
 			if etag != req.IfMatchEtag {
 				return nil, errtypes.PreconditionFailed("etag mismatch")
 			}
+		} else if !errors.Is(err, os.ErrNotExist) {
+			return nil, err
 		}
 	}
 	if req.IfUnmodifiedSince != (time.Time{}) {
@@ -156,16 +181,79 @@ func (disk *Disk) Upload(_ context.Context, req UploadRequest) (*UploadResponse,
 		return nil, err
 	}
 
-	info, err := os.Stat(disk.targetPath(req.Path))
-	if err != nil {
-		return nil, err
-	}
 	res := &UploadResponse{}
-	res.Etag, err = calcEtag(info.ModTime(), info.Size())
+	res.Etag, err = contentEtag(p)
 	if err != nil {
 		return nil, err
 	}
 	return res, nil
+}
+
+// UploadWithLock performs an atomic read-modify-write on req.Path.
+//
+// The exclusive lock for the path is held across the entire
+// read → mutate → write cycle, which is what makes the operation atomic: no
+// other writer can interleave between reading the current content and writing
+// the new one. fn receives the current content (nil if the file does not exist)
+// and returns the bytes to persist; returning nil from fn skips the write.
+func (disk *Disk) UploadWithLock(ctx context.Context, req UploadRequest, fn func(existing []byte) ([]byte, error)) (*UploadResponse, error) {
+	// The lock key is the logical path; the locker resolves it against its own
+	// base directory so the sidecar lock file lands next to the data file.
+	unlock, err := disk.locker.Lock(ctx, req.Path)
+	if err != nil {
+		return nil, err
+	}
+	defer unlock()
+
+	p := disk.targetPath(req.Path)
+
+	// Read the current content. A missing file is not an error: it simply means
+	// fn will receive a nil existing value (the create path).
+	existing, err := os.ReadFile(p)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			existing = nil
+		} else {
+			return nil, err
+		}
+	}
+
+	// Let the caller mutate the content. A nil result means "do not write".
+	newContent, err := fn(existing)
+	if err != nil {
+		return nil, err
+	}
+	if newContent == nil {
+		etag, _ := disk.currentEtag(p)
+		return &UploadResponse{Etag: etag}, nil
+	}
+
+	// IfNoneMatch: ["*"] means create the file only if it does not already exist.
+	for _, tag := range req.IfNoneMatch {
+		if tag == "*" && existing != nil {
+			return nil, errtypes.AlreadyExists(req.Path)
+		}
+	}
+
+	// Write atomically so a reader never observes a partially written file.
+	if err := renameio.WriteFile(p, newContent, 0644); err != nil {
+		return nil, err
+	}
+
+	res := &UploadResponse{}
+	res.Etag = fmt.Sprintf("%x", md5.Sum(newContent))
+	return res, nil
+}
+
+// currentEtag returns the etag for an existing file, or "" if it does not exist.
+func (disk *Disk) currentEtag(p string) (string, error) {
+	if _, err := os.Stat(p); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return "", nil
+		}
+		return "", err
+	}
+	return contentEtag(p)
 }
 
 // Download reads a file from disk
@@ -189,15 +277,12 @@ func (disk *Disk) Download(_ context.Context, req DownloadRequest) (*DownloadRes
 
 	res := DownloadResponse{}
 	res.Mtime = info.ModTime()
-	res.Etag, err = calcEtag(info.ModTime(), info.Size())
-	if err != nil {
-		return nil, err
-	}
 
 	res.Content, err = io.ReadAll(f)
 	if err != nil {
 		return nil, err
 	}
+	res.Etag = fmt.Sprintf("%x", md5.Sum(res.Content))
 	return &res, nil
 }
 

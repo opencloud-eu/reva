@@ -96,15 +96,32 @@ var _ = Describe("Cache", func() {
 			Expect(space.Etag).ToNot(BeEmpty())
 		})
 
-		It("updates the etag", func() {
+		It("updates the etag when content changes", func() {
 			Expect(c.Add(ctx, storageID, spaceID, shareID, share1)).To(Succeed())
 			spaces, ok := c.Providers.Load(storageID)
 			Expect(ok).To(BeTrue())
 			space, ok := spaces.Spaces.Load(spaceID)
 			Expect(ok).To(BeTrue())
 			old := space.Etag
-			Expect(c.Add(ctx, storageID, spaceID, shareID, share1)).To(Succeed())
+
+			// A different share changes the serialized content, so the etag must change.
+			share2 := &collaboration.Share{Id: &collaboration.ShareId{OpaqueId: "share2"}}
+			Expect(c.Add(ctx, storageID, spaceID, "storageid$spaceid!share2", share2)).To(Succeed())
 			Expect(space.Etag).ToNot(Equal(old))
+		})
+
+		It("keeps the etag stable for an idempotent add", func() {
+			Expect(c.Add(ctx, storageID, spaceID, shareID, share1)).To(Succeed())
+			spaces, ok := c.Providers.Load(storageID)
+			Expect(ok).To(BeTrue())
+			space, ok := spaces.Spaces.Load(spaceID)
+			Expect(ok).To(BeTrue())
+			old := space.Etag
+
+			// Re-adding the same share does not change the content, so the
+			// content-based etag stays stable (no spurious cache invalidation).
+			Expect(c.Add(ctx, storageID, spaceID, shareID, share1)).To(Succeed())
+			Expect(space.Etag).To(Equal(old))
 		})
 	})
 
@@ -172,12 +189,13 @@ var _ = Describe("Cache", func() {
 
 		})
 
-		Describe("PersistWithTime", func() {
+		Describe("Persist", func() {
 			It("does not persist if the etag changed", func() {
-				time.Sleep(1 * time.Nanosecond)
 				path := filepath.Join(tmpdir, "storages/storageid/spaceid.json")
-				now := time.Now()
-				_ = os.Chtimes(path, now, now) // this only works for the file backend
+				// Modify the file content on disk so that its content-based etag
+				// no longer matches the one held in memory. The subsequent
+				// persist must then fail its If-Match precondition.
+				Expect(os.WriteFile(path, []byte(`{"Shares":{}}`), 0644)).To(Succeed())
 				Expect(c.Persist(ctx, storageID, spaceID)).ToNot(Succeed())
 			})
 		})

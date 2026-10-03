@@ -21,11 +21,13 @@ package memory
 import (
 	"context"
 	"fmt"
+	"sync"
 
 	"github.com/opencloud-eu/reva/v2/pkg/publicshare/manager/json/persistence"
 )
 
 type memory struct {
+	mu sync.Mutex
 	db map[string]interface{}
 }
 
@@ -50,6 +52,24 @@ func (p *memory) Write(_ context.Context, db persistence.PublicShares) error {
 	if p.db == nil {
 		return fmt.Errorf("not initialized")
 	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
 	p.db = db
+	return nil
+}
+
+// Update applies fn to the in-memory db while holding the lock.
+func (p *memory) Update(_ context.Context, fn func(current persistence.PublicShares) (persistence.PublicShares, error)) error {
+	if p.db == nil {
+		return fmt.Errorf("not initialized")
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	next, err := fn(p.db)
+	if err != nil {
+		return err
+	}
+	p.db = next
 	return nil
 }

@@ -50,6 +50,7 @@ import (
 	"github.com/opencloud-eu/reva/v2/pkg/publicshare/manager/registry"
 	"github.com/opencloud-eu/reva/v2/pkg/rgrpc/todo/pool"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/metadata"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/metadata/locks"
 	"github.com/opencloud-eu/reva/v2/pkg/utils"
 	"github.com/pkg/errors"
 )
@@ -98,7 +99,11 @@ func NewCS3(c map[string]interface{}) (publicshare.Manager, error) {
 
 	conf.init()
 
-	s, err := metadata.NewCS3Storage(conf.ProviderAddr, conf.ProviderAddr, conf.ServiceUserID, conf.ServiceUserIdp, conf.MachineAuthAPIKey)
+	var opts []metadata.Option
+	if conf.LockBackend == "memory" {
+		opts = append(opts, metadata.WithLocker(locks.NewMemoryLocker()))
+	}
+	s, err := metadata.NewCS3Storage(conf.ProviderAddr, conf.ProviderAddr, conf.ServiceUserID, conf.ServiceUserIdp, conf.MachineAuthAPIKey, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -142,6 +147,10 @@ type cs3Config struct {
 	ServiceUserID     string `mapstructure:"service_user_id"`
 	ServiceUserIdp    string `mapstructure:"service_user_idp"`
 	MachineAuthAPIKey string `mapstructure:"machine_auth_apikey"`
+	// LockBackend selects the locking strategy used to serialise read-modify-
+	// write cycles. "disk" (default) uses cross-process file locks; "memory"
+	// uses in-process mutexes (useful for single-replica deployments and tests).
+	LockBackend string `mapstructure:"lock_backend"`
 }
 
 func (c *commonConfig) init() {
@@ -306,21 +315,16 @@ func (m *manager) CreatePublicShare(ctx context.Context, u *user.User, rInfo *pr
 		return nil, err
 	}
 
-	db, err := m.persistence.Read(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	if _, ok := db[s.Id.GetOpaqueId()]; !ok {
-		db[s.Id.GetOpaqueId()] = map[string]interface{}{
-			"share":    string(encShare),
-			"password": ps.Password,
+	err = m.persistence.Update(ctx, func(db persistence.PublicShares) (persistence.PublicShares, error) {
+		if _, ok := db[s.Id.GetOpaqueId()]; !ok {
+			db[s.Id.GetOpaqueId()] = map[string]interface{}{
+				"share":    string(encShare),
+				"password": ps.Password,
+			}
+			return db, nil
 		}
-	} else {
 		return nil, errors.New("key already exists")
-	}
-
-	err = m.persistence.Write(ctx, db)
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -394,29 +398,25 @@ func (m *manager) UpdatePublicShare(ctx context.Context, u *user.User, req *link
 		return nil, err
 	}
 
-	db, err := m.persistence.Read(ctx)
-	if err != nil {
-		return nil, err
-	}
-
 	encShare, err := utils.MarshalProtoV1ToJSON(share)
 	if err != nil {
 		return nil, err
 	}
 
-	data, ok := db[share.Id.OpaqueId].(map[string]interface{})
-	if !ok {
-		data = map[string]interface{}{}
-	}
+	err = m.persistence.Update(ctx, func(db persistence.PublicShares) (persistence.PublicShares, error) {
+		data, ok := db[share.Id.OpaqueId].(map[string]interface{})
+		if !ok {
+			data = map[string]interface{}{}
+		}
 
-	if ok && passwordChanged {
-		data["password"] = newPasswordEncoded
-	}
-	data["share"] = string(encShare)
+		if ok && passwordChanged {
+			data["password"] = newPasswordEncoded
+		}
+		data["share"] = string(encShare)
 
-	db[share.Id.OpaqueId] = data
-
-	err = m.persistence.Write(ctx, db)
+		db[share.Id.OpaqueId] = data
+		return db, nil
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -625,29 +625,28 @@ func (m *manager) RevokePublicShare(ctx context.Context, _ *user.User, ref *link
 
 // revokePublicShare doesn't have a lock inside, ensure a lock before call
 func (m *manager) revokePublicShare(ctx context.Context, ref *link.PublicShareReference) error {
-	db, err := m.persistence.Read(ctx)
-	if err != nil {
-		return err
-	}
-
-	switch {
-	case ref.GetId() != nil && ref.GetId().OpaqueId != "":
-		if _, ok := db[ref.GetId().OpaqueId]; ok {
-			delete(db, ref.GetId().OpaqueId)
-		} else {
-			return errors.New("reference does not exist")
-		}
-	case ref.GetToken() != "":
+	if ref.GetToken() != "" && (ref.GetId() == nil || ref.GetId().OpaqueId == "") {
+		// Resolve the token to a share id up front so the atomic update below
+		// only has to perform a simple delete.
 		share, _, err := m.getByToken(ctx, ref.GetToken())
 		if err != nil {
 			return err
 		}
-		delete(db, share.Id.OpaqueId)
-	default:
-		return errors.New("reference does not exist")
+		ref = &link.PublicShareReference{Spec: &link.PublicShareReference_Id{Id: &link.PublicShareId{OpaqueId: share.Id.OpaqueId}}}
 	}
 
-	return m.persistence.Write(ctx, db)
+	return m.persistence.Update(ctx, func(db persistence.PublicShares) (persistence.PublicShares, error) {
+		switch {
+		case ref.GetId() != nil && ref.GetId().OpaqueId != "":
+			if _, ok := db[ref.GetId().OpaqueId]; ok {
+				delete(db, ref.GetId().OpaqueId)
+				return db, nil
+			}
+			return nil, errors.New("reference does not exist")
+		default:
+			return nil, errors.New("reference does not exist")
+		}
+	})
 }
 
 // getByToken doesn't have a lock inside, ensure a lock before call

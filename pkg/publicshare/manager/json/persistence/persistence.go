@@ -28,4 +28,11 @@ type Persistence interface {
 	Init(context.Context) error
 	Read(context.Context) (PublicShares, error)
 	Write(context.Context, PublicShares) error
+
+	// Update performs an atomic read-modify-write of the whole share database.
+	// fn receives the current state and returns the new state to persist; it is
+	// invoked while holding the persistence lock, so no other writer can
+	// interleave between the read and the write. This makes the operation safe
+	// against concurrent create/update/revoke without lost updates.
+	Update(context.Context, func(current PublicShares) (PublicShares, error)) error
 }
