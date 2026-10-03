@@ -170,6 +170,10 @@ type Manager struct {
 	gatewaySelector pool.Selectable[gatewayv1beta1.GatewayAPIClient]
 	eventStream     events.Stream
 	logger          *zerolog.Logger
+
+	// migrationCfg is kept so that migrations can be run again later, see
+	// RunMigrationsFrom.
+	migrationCfg migration.MigrationConfig
 }
 
 // NewDefault returns a new manager instance with default dependencies
@@ -372,7 +376,24 @@ func (m *Manager) migrationsRunning() bool {
 // called once after New() in production server startup. Callers that do not
 // need migrations should call SkipMigrations instead to unblock write operations.
 func (m *Manager) RunMigrations(cfg migration.MigrationConfig) {
+	m.migrationCfg = cfg
 	go m.doMigrations(cfg)
+}
+
+// RunMigration runs the named migration whether or not it has already been
+// applied, and blocks until it is done. It is meant for operators repeating a
+// migration; the ordinary startup path is RunMigrations.
+func (m *Manager) RunMigration(ctx context.Context, name string) error {
+	if err := m.waitForInit(ctx); err != nil {
+		return err
+	}
+	// the startup run holds the migration lock; waiting for it to finish keeps
+	// this from being silently skipped
+	if err := m.waitForMigrations(ctx); err != nil {
+		return err
+	}
+	migrations := migration.New(*m.logger, m.gatewaySelector, m.storage, m.migrationCfg, m, m)
+	return migrations.RunMigration(name)
 }
 
 func (m *Manager) waitForMigrations(ctx context.Context) error {
