@@ -20,7 +20,10 @@ package node_test
 
 import (
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"slices"
+	"strings"
 	"time"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -29,6 +32,7 @@ import (
 	. "github.com/onsi/gomega"
 	ocsconv "github.com/opencloud-eu/reva/v2/pkg/conversions"
 	ctxpkg "github.com/opencloud-eu/reva/v2/pkg/ctx"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata/prefixes"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/node"
 	helpers "github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/testhelpers"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/grants"
@@ -400,5 +404,218 @@ var _ = Describe("Node", func() {
 			Expect(o).To(BeComparableTo(env.Owner.Id, protocmp.Transform()))
 		})
 
+	})
+
+	Describe("DeleteRevision", func() {
+		var fileRef *provider.Reference
+
+		BeforeEach(func() {
+			fileRef = &provider.Reference{
+				ResourceId: env.SpaceRootRes,
+				Path:       "/dir1/file1",
+			}
+		})
+
+		It("purges the node when there is no revision", func() {
+			n, err := env.Lookup.NodeFromResource(env.Ctx, fileRef)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(n.Exists).To(BeTrue())
+
+			_, err = n.DeleteRevision(env.Ctx, "")
+			Expect(err).ToNot(HaveOccurred())
+
+			n2, err := env.Lookup.NodeFromResource(env.Ctx, fileRef)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(n2.Exists).To(BeFalse())
+		})
+
+		It("deletes the given revision and returns its blob id", func() {
+			n, err := env.Lookup.NodeFromResource(env.Ctx, fileRef)
+			Expect(err).ToNot(HaveOccurred())
+			origBlob := n.BlobID
+			Expect(origBlob).ToNot(BeEmpty())
+
+			_, err = env.Tree.CreateRevision(env.Ctx, n, "2024-01-01T00:00:00Z")
+			Expect(err).ToNot(HaveOccurred())
+
+			// the node gets a new blob
+			n.BlobID = "second-blobid"
+			n.Blobsize = 1000
+			Expect(n.SetXattrs(n.NodeMetadata(env.Ctx))).To(Succeed())
+
+			blobID, err := n.DeleteRevision(env.Ctx, "2024-01-01T00:00:00Z")
+			Expect(err).ToNot(HaveOccurred())
+			Expect(blobID).To(Equal(origBlob))
+
+			// the node's current content is untouched
+			n2, err := env.Lookup.NodeFromResource(env.Ctx, fileRef)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(n2.BlobID).To(Equal("second-blobid"))
+			Expect(n2.Blobsize).To(Equal(int64(1000)))
+
+			// the deleted revision is gone
+			_, statErr := os.Stat(env.Lookup.VersionPath(n2.SpaceID, n2.ID, "2024-01-01T00:00:00Z"))
+			Expect(os.IsNotExist(statErr)).To(BeTrue())
+		})
+
+		It("restores the latest revision and removes it", func() {
+			n, err := env.Lookup.NodeFromResource(env.Ctx, fileRef)
+			Expect(err).ToNot(HaveOccurred())
+			origBlob, origSize := n.BlobID, n.Blobsize
+
+			_, err = env.Tree.CreateRevision(env.Ctx, n, "2024-01-01T00:00:00Z")
+			Expect(err).ToNot(HaveOccurred())
+
+			// simulate a new upload overwriting the node's blob metadata
+			n.BlobID = "bad-blobid"
+			n.Blobsize = 42
+			Expect(n.SetXattrs(n.NodeMetadata(env.Ctx))).To(Succeed())
+
+			_, err = n.DeleteRevision(env.Ctx, "")
+			Expect(err).ToNot(HaveOccurred())
+
+			n2, err := env.Lookup.NodeFromResource(env.Ctx, fileRef)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(n2.Exists).To(BeTrue())
+			Expect(n2.BlobID).To(Equal(origBlob))
+			Expect(n2.Blobsize).To(Equal(origSize))
+
+			// the reverted revision file must be gone
+			revPath := env.Lookup.VersionPath(n2.SpaceID, n2.ID, "2024-01-01T00:00:00Z")
+			_, statErr := os.Stat(revPath)
+			Expect(os.IsNotExist(statErr)).To(BeTrue())
+		})
+
+		It("unmarks processing after a successful revert", func() {
+			n, err := env.Lookup.NodeFromResource(env.Ctx, fileRef)
+			Expect(err).ToNot(HaveOccurred())
+
+			_, err = env.Tree.CreateRevision(env.Ctx, n, "2024-01-01T00:00:00Z")
+			Expect(err).ToNot(HaveOccurred())
+
+			uploadID := "upload-1"
+			Expect(n.SetXattr(env.Ctx, prefixes.StatusPrefix, []byte(node.ProcessingStatus+uploadID))).To(Succeed())
+			Expect(n.IsProcessing(env.Ctx)).To(BeTrue())
+
+			_, err = n.DeleteRevision(env.Ctx, "")
+			Expect(err).ToNot(HaveOccurred())
+
+			n2, err := env.Lookup.NodeFromResource(env.Ctx, fileRef)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(n2.IsProcessing(env.Ctx)).To(BeFalse())
+		})
+	})
+
+	Describe("RevertUpload", func() {
+		var fileRef *provider.Reference
+
+		BeforeEach(func() {
+			fileRef = &provider.Reference{
+				ResourceId: env.SpaceRootRes,
+				Path:       "/dir1/file1",
+			}
+		})
+
+		It("restores the exact revision, not the latest", func() {
+			n, err := env.Lookup.NodeFromResource(env.Ctx, fileRef)
+			Expect(err).ToNot(HaveOccurred())
+			origBlob, origSize := n.BlobID, n.Blobsize
+
+			// the 2024-01-01 revision captures the original blob
+			_, err = env.Tree.CreateRevision(env.Ctx, n, "2024-01-01T00:00:00Z")
+			Expect(err).ToNot(HaveOccurred())
+
+			// the node gets a new blob, captured in a later revision
+			n.BlobID = "second-blobid"
+			n.Blobsize = 1000
+			Expect(n.SetXattrs(n.NodeMetadata(env.Ctx))).To(Succeed())
+			_, err = env.Tree.CreateRevision(env.Ctx, n, "2024-06-01T00:00:00Z")
+			Expect(err).ToNot(HaveOccurred())
+
+			// simulate a failed upload overwriting the node's blob metadata
+			n.BlobID = "bad-blobid"
+			n.Blobsize = 42
+			Expect(n.SetXattrs(n.NodeMetadata(env.Ctx))).To(Succeed())
+
+			Expect(n.RevertUpload(env.Ctx, "2024-01-01T00:00:00Z")).To(Succeed())
+
+			n2, err := env.Lookup.NodeFromResource(env.Ctx, fileRef)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(n2.Exists).To(BeTrue())
+			Expect(n2.BlobID).To(Equal(origBlob))
+			Expect(n2.Blobsize).To(Equal(origSize))
+
+			// the reverted revision must be gone, the later one must survive
+			_, statErr := os.Stat(env.Lookup.VersionPath(n2.SpaceID, n2.ID, "2024-01-01T00:00:00Z"))
+			Expect(os.IsNotExist(statErr)).To(BeTrue())
+			_, statErr = os.Stat(env.Lookup.VersionPath(n2.SpaceID, n2.ID, "2024-06-01T00:00:00Z"))
+			Expect(statErr).ToNot(HaveOccurred())
+		})
+
+		It("returns an error when the revision does not exist", func() {
+			n, err := env.Lookup.NodeFromResource(env.Ctx, fileRef)
+			Expect(err).ToNot(HaveOccurred())
+
+			Expect(n.RevertUpload(env.Ctx, "2023-01-01T00:00:00Z")).To(HaveOccurred())
+
+			n2, err := env.Lookup.NodeFromResource(env.Ctx, fileRef)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(n2.Exists).To(BeTrue())
+		})
+
+		It("returns an error when the versionID is empty", func() {
+			n, err := env.Lookup.NodeFromResource(env.Ctx, fileRef)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(n.Exists).To(BeTrue())
+
+			Expect(n.RevertUpload(env.Ctx, "")).To(HaveOccurred())
+
+			n2, err := env.Lookup.NodeFromResource(env.Ctx, fileRef)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(n2.Exists).To(BeTrue())
+		})
+	})
+
+	Describe("getLatestRevision", func() {
+		var n *node.Node
+
+		BeforeEach(func() {
+			var err error
+			n, err = env.Lookup.NodeFromResource(env.Ctx, &provider.Reference{
+				ResourceId: env.SpaceRootRes,
+				Path:       "/dir1/file1",
+			})
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		It("returns an empty string when there are no revisions", func() {
+			Expect(n.GetLatestRevisionForTest(env.Ctx)).To(BeEmpty())
+		})
+
+		It("returns the revision with the latest timestamp", func() {
+			_, err := env.Tree.CreateRevision(env.Ctx, n, "2024-01-01T00:00:00Z")
+			Expect(err).ToNot(HaveOccurred())
+			_, err = env.Tree.CreateRevision(env.Ctx, n, "2024-06-01T00:00:00Z")
+			Expect(err).ToNot(HaveOccurred())
+
+			latest, err := n.GetLatestRevisionForTest(env.Ctx)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(strings.Contains(latest, "2024-06-01T00:00:00Z")).To(BeTrue())
+		})
+
+		It("ignores .mpk metadata files", func() {
+			_, err := env.Tree.CreateRevision(env.Ctx, n, "2024-01-01T00:00:00Z")
+			Expect(err).ToNot(HaveOccurred())
+
+			// a later .mpk companion must be ignored by the lookup
+			mpkPath := env.Lookup.VersionPath(n.SpaceID, n.ID, "2024-12-01T00:00:00Z.mpk")
+			Expect(os.MkdirAll(filepath.Dir(mpkPath), 0700)).To(Succeed())
+			Expect(os.WriteFile(mpkPath, nil, 0600)).To(Succeed())
+
+			latest, err := n.GetLatestRevisionForTest(env.Ctx)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(strings.Contains(latest, "2024-12-01T00:00:00Z")).To(BeFalse())
+			Expect(strings.Contains(latest, "2024-01-01T00:00:00Z")).To(BeTrue())
+		})
 	})
 })
