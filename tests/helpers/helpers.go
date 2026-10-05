@@ -29,6 +29,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strconv"
+	"syscall"
 
 	"github.com/opencloud-eu/opencloud/services/webdav/pkg/net"
 	"github.com/pkg/errors"
@@ -63,6 +64,63 @@ func TempDir(name string) (string, error) {
 	}
 
 	return tmpRoot, nil
+}
+
+// CrossDeviceTempDir creates a temporary directory on a device other than the one base is on.
+// It lets tests trigger the EXDEV rename failures that make file based blobstores fall back
+// to copying instead of moving a file into place.
+func CrossDeviceTempDir(base, pattern string) (string, error) {
+	var baseStat syscall.Stat_t
+	if err := syscall.Stat(base, &baseStat); err != nil {
+		return "", errors.Wrapf(err, "could not stat '%s'", base)
+	}
+
+	for _, candidate := range []string{"/dev/shm", os.TempDir()} {
+		var stat syscall.Stat_t
+		if err := syscall.Stat(candidate, &stat); err != nil || stat.Dev == baseStat.Dev {
+			continue
+		}
+		if dir, err := os.MkdirTemp(candidate, pattern); err == nil {
+			return dir, nil
+		}
+	}
+
+	return "", errors.New("no writable device other than the one holding the base directory")
+}
+
+// OpenFDsPointingTo returns the file descriptors of the current process that refer to the file
+// at target, which is how leaked descriptors are detected. It is only available on Linux,
+// where the open files of a process can be inspected via /proc/self/fd.
+func OpenFDsPointingTo(target string) ([]string, error) {
+	if runtime.GOOS != "linux" {
+		return nil, errors.New("inspecting file descriptors requires /proc/self/fd")
+	}
+
+	var targetStat syscall.Stat_t
+	if err := syscall.Stat(target, &targetStat); err != nil {
+		if os.IsNotExist(err) {
+			// nothing can have a descriptor open on a file that does not exist
+			return nil, nil
+		}
+		return nil, errors.Wrapf(err, "could not stat '%s'", target)
+	}
+
+	entries, err := os.ReadDir("/proc/self/fd")
+	if err != nil {
+		return nil, errors.Wrap(err, "could not read /proc/self/fd")
+	}
+
+	found := []string{}
+	for _, entry := range entries {
+		var stat syscall.Stat_t
+		if err := syscall.Stat(filepath.Join("/proc/self/fd", entry.Name()), &stat); err != nil {
+			continue
+		}
+		if stat.Dev == targetStat.Dev && stat.Ino == targetStat.Ino {
+			found = append(found, entry.Name())
+		}
+	}
+	return found, nil
 }
 
 // TempFile creates a temporary file returning its path.
