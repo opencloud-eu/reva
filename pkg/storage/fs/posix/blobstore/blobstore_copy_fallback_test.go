@@ -13,6 +13,7 @@ import (
 
 	posixblobstore "github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/blobstore"
 	posixhelpers "github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/testhelpers"
+	"github.com/opencloud-eu/reva/v2/tests/helpers"
 )
 
 var _ = Describe("Blobstore with copy fallback", func() {
@@ -59,4 +60,25 @@ var _ = Describe("Blobstore with copy fallback", func() {
 		Entry("small file", 1024),
 		Entry("large file bigger than the 16MiB fsync window", 17<<20),
 	)
+
+	Describe("failing copy", func() {
+		It("closes the temp file when the copy fails", func() {
+			n, err := env.CreateTestFile("blob.bin", "", env.SpaceRootRes.OpaqueId, env.SpaceRootRes.SpaceId, 1024)
+			Expect(err).ToNot(HaveOccurred())
+
+			// a directory can be opened for reading but not read, so the copy breaks after
+			// the temp file has been created
+			source := filepath.Join(env.Root, "not-a-file")
+			Expect(os.MkdirAll(source, 0700)).To(Succeed())
+
+			Expect(bs.Upload(n, source, "")).To(HaveOccurred())
+
+			tempName := filepath.Join(n.SpaceRoot.InternalPath(), posixblobstore.TMPDir, filepath.Base(source))
+			leaked, err := helpers.OpenFDsPointingTo(tempName)
+			if err != nil {
+				Skip(err.Error())
+			}
+			Expect(leaked).To(BeEmpty())
+		})
+	})
 })
