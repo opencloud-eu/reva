@@ -393,12 +393,19 @@ var _ = Describe("gateway", func() {
 				"permissionssvc":      revads["permissions"].GrpcAddress,
 				"treesize_accounting": true,
 				"treetime_accounting": true,
+				// match the storage provider, which runs without a file metadata cache
+				"filemetadatacache": map[string]interface{}{
+					"cache_store": "noop",
+				},
 			}, nil, &zerolog.Logger{})
 			Expect(err).ToNot(HaveOccurred())
 
 			r, err := serviceClient.CreateHome(ctx, &storagep.CreateHomeRequest{})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(r.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+
+			Expect(path.Join(revads["storage"].StorageRoot, "indexes", "by-type", "personal.mpk")).
+				To(BeAnExistingFile())
 
 			spaces, err := fs.ListStorageSpaces(ctx, []*storagep.ListStorageSpacesRequest_Filter{}, false)
 			Expect(err).ToNot(HaveOccurred())
