@@ -89,7 +89,7 @@ func (p SyncPropagator) Propagate(ctx context.Context, n *node.Node, sizeDiff in
 	return nil
 }
 
-func (p SyncPropagator) propagateItem(ctx context.Context, n *node.Node, sTime time.Time, sizeDiff int64, log zerolog.Logger) (*node.Node, bool, error) {
+func (p SyncPropagator) propagateItem(ctx context.Context, n *node.Node, sTime time.Time, sizeDiff int64, log zerolog.Logger) (resultNode *node.Node, stop bool, err error) {
 	log.Debug().Msg("propagating")
 
 	attrs := node.Attributes{}
@@ -99,7 +99,7 @@ func (p SyncPropagator) propagateItem(ctx context.Context, n *node.Node, sTime t
 
 	_, subspan := tracer.Start(ctx, "lockedfile.OpenFile")
 	parentFilename := p.lookup.MetadataBackend().LockfilePath(n.ParentPath())
-	f, err := lockedfile.OpenFile(parentFilename, os.O_RDWR|os.O_CREATE, 0600)
+	f, err = lockedfile.OpenFile(parentFilename, os.O_RDWR|os.O_CREATE, 0600)
 	subspan.End()
 	if err != nil {
 		log.Error().Err(err).
