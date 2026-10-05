@@ -1,5 +1,38 @@
 # Changelog
 
+## [2.51.0](https://github.com/opencloud-eu/reva/releases/tag/v2.51.0) - 2026-10-05
+
+### ❤️ Thanks to all contributors! ❤️
+
+@NickWalters, @aduffeck, @butonic, @fschade, @maki5, @micbar, @pReya, @rhafer
+
+### ✨ Features
+
+- Add "guestlinks" authmanager [[#822](https://github.com/opencloud-eu/reva/pull/822)]
+
+### ✅ Tests
+
+- remove flakiness from tests [[#846](https://github.com/opencloud-eu/reva/pull/846)]
+
+### 📈 Enhancement
+
+- Add new editor roles [[#834](https://github.com/opencloud-eu/reva/pull/834)]
+- feat(appprovider): forward the mobile parameter to the app [[#830](https://github.com/opencloud-eu/reva/pull/830)]
+
+### 🐛 Bug Fixes
+
+- Issue/827 [[#829](https://github.com/opencloud-eu/reva/pull/829)]
+
+### 📦️ Dependencies
+
+- chore(deps): bump github.com/gofrs/flock from 0.13.0 to 0.13.1 [[#823](https://github.com/opencloud-eu/reva/pull/823)]
+- chore(deps): bump github.com/go-sql-driver/mysql from 1.10.0 to 1.10.1 [[#824](https://github.com/opencloud-eu/reva/pull/824)]
+- chore(deps): bump github.com/coreos/go-oidc/v3 from 3.20.0 to 3.21.0 [[#818](https://github.com/opencloud-eu/reva/pull/818)]
+- chore(deps): bump github.com/go-playground/universal-translator from 0.18.1 to 0.18.2 [[#817](https://github.com/opencloud-eu/reva/pull/817)]
+- chore(deps): bump go.etcd.io/etcd/client/v3 from 3.6.13 to 3.7.1 [[#750](https://github.com/opencloud-eu/reva/pull/750)]
+- chore(deps): bump golang.org/x/oauth2 from 0.36.0 to 0.37.0 [[#815](https://github.com/opencloud-eu/reva/pull/815)]
+- chore(deps): bump go.opentelemetry.io/otel/exporters/otlp/otlptrace from 1.44.0 to 1.46.0 in the go_modules group across 1 directory [[#812](https://github.com/opencloud-eu/reva/pull/812)]
+
 ## [2.50.0](https://github.com/opencloud-eu/reva/releases/tag/v2.50.0) - 2026-09-14
 
 ### ❤️ Thanks to all contributors! ❤️
