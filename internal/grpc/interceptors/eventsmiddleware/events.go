@@ -199,6 +199,10 @@ func NewUnary(m map[string]interface{}) (grpc.UnaryServerInterceptor, int, error
 			if isSuccess(v) {
 				ev = FileUnlocked(v, req.(*provider.UnlockRequest), ownerID, executant)
 			}
+		case *provider.SetArbitraryMetadataResponse:
+			if isSuccess(v) {
+				ev = ArbitraryMetadataUpdated(v, req.(*provider.SetArbitraryMetadataRequest), ownerID, executant)
+			}
 		}
 
 		if ev != nil {

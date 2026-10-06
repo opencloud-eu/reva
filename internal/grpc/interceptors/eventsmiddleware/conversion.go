@@ -486,6 +486,24 @@ func SpaceDeleted(r *provider.DeleteStorageSpaceResponse, req *provider.DeleteSt
 	}
 }
 
+// ArbitraryMetadataUpdated converts the response to an event
+func ArbitraryMetadataUpdated(r *provider.SetArbitraryMetadataResponse, req *provider.SetArbitraryMetadataRequest, spaceOwner *user.UserId, executant *user.User) events.ArbitraryMetadataUpdated {
+	var keys []string
+	if req.ArbitraryMetadata != nil {
+		for k := range req.ArbitraryMetadata.Metadata {
+			keys = append(keys, k)
+		}
+	}
+	return events.ArbitraryMetadataUpdated{
+		SpaceOwner:        spaceOwner,
+		Executant:         executant.GetId(),
+		Ref:               req.Ref,
+		Keys:              keys,
+		Timestamp:         utils.TSNow(),
+		ImpersonatingUser: extractImpersonator(executant),
+	}
+}
+
 func extractOwner(u *user.User) *user.UserId {
 	if u != nil {
 		return u.Id
