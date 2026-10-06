@@ -24,10 +24,11 @@ import (
 	"time"
 
 	"github.com/go-viper/mapstructure/v2"
+	"github.com/pkg/errors"
+
 	"github.com/opencloud-eu/reva/v2/pkg/rgrpc/todo/pool"
 	"github.com/opencloud-eu/reva/v2/pkg/sharedconf"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/cache"
-	"github.com/pkg/errors"
 )
 
 // Option defines a single option function.
@@ -41,6 +42,9 @@ type Options struct {
 
 	// the metadata backend to use, currently supports `xattr` or `ini`
 	MetadataBackend string `mapstructure:"metadata_backend"`
+
+	// the attribute key prefix of the metadata on disk.
+	MetadataPrefix string `mapstructure:"metadata_prefix"`
 
 	// the propagator to use for this fs. currently only `sync` is fully supported, `async` is available as an experimental feature
 	Propagator string `mapstructure:"propagator"`

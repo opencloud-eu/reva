@@ -51,6 +51,7 @@ import (
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/aspects"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/lookup"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata/prefixes"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/node"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/options"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/permissions"
@@ -147,15 +148,20 @@ func NewDefault(m map[string]interface{}, bs node.Blobstore, es events.Stream, l
 		return nil, err
 	}
 
-	var lu *lookup.Lookup
+	var mb metadata.Backend
 	switch o.MetadataBackend {
 	case "xattrs":
-		lu = lookup.New(metadata.NewXattrsBackend(o.FileMetadataCache), o, &timemanager.Manager{})
+		if o.MetadataPrefix != "" && o.MetadataPrefix != prefixes.OcPrefix {
+			return nil, fmt.Errorf("metadata_prefix requires the messagepack metadata backend, got %q", o.MetadataBackend)
+		}
+		mb = metadata.NewXattrsBackend(o.FileMetadataCache)
 	case "messagepack":
-		lu = lookup.New(metadata.NewMessagePackBackend(o.FileMetadataCache), o, &timemanager.Manager{})
+		mb = metadata.NewMessagePackBackend(o.FileMetadataCache).WithPrefix(o.MetadataPrefix)
 	default:
 		return nil, fmt.Errorf("unknown metadata backend %s, only 'messagepack' or 'xattrs' (default) supported", o.MetadataBackend)
 	}
+
+	lu := lookup.New(mb, o, &timemanager.Manager{})
 
 	permissionsSelector, err := pool.PermissionsSelector(o.PermissionsSVC, pool.WithTLSMode(o.PermTLSMode))
 	if err != nil {
