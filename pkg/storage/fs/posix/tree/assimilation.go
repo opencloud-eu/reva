@@ -537,7 +537,7 @@ func (t *Tree) assimilate(item scanItem) error {
 				if fi.IsDir() {
 					// if it was moved and it is a directory we need to propagate the move
 					go func() {
-						if err := t.WarmupIDCache(item.Path, false, true); err != nil {
+						if err := t.WarmupIDCache(item.Path, false, false); err != nil {
 							t.log.Error().Err(err).Str("path", item.Path).Msg("could not warmup id cache")
 						}
 					}()
