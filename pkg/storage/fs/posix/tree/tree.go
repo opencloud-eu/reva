@@ -460,32 +460,40 @@ func (t *Tree) Move(ctx context.Context, oldNode *node.Node, newNode *node.Node)
 
 	_, subspan := tracer.Start(ctx, "os.Rename")
 	// rename node
+	newPath := filepath.Join(newParent, newNode.Name)
 	err = os.Rename(
 		filepath.Join(oldParent, oldNode.Name),
-		filepath.Join(newParent, newNode.Name),
+		newPath,
 	)
 	if err != nil {
 		return errors.Wrap(err, "posixfs: could not move child")
 	}
 	subspan.End()
 
+	// the item is moved on disk now, so finish updating its metadata even if the request is cancelled
+	ctx = context.WithoutCancel(ctx)
+
 	_, subspan = tracer.Start(ctx, "update id cache and attributes")
+	// update target parentid and name right after the rename. The watcher assimilates the item a moment
+	// later and must not take it for a move on disk, or it would move the tree sizes a second time.
+	// Until the id cache is updated, newNode resolves to the old path, so address it by path.
+	attribs := node.Attributes{}
+	attribs.SetString(prefixes.ParentidAttr, newNode.ParentID)
+	attribs.SetString(prefixes.NameAttr, newNode.Name)
+	setErr := t.lookup.MetadataBackend().SetMultiple(ctx, &assimilationNode{spaceID: newNode.SpaceID, nodeId: newNode.ID, path: newPath}, attribs)
+
 	// update the id cache
 	// invalidate old tree
 	err = t.lookup.IDCache.DeleteByPath(ctx, filepath.Join(oldNode.ParentPath(), oldNode.Name))
 	if err != nil {
 		return err
 	}
-	if err := t.lookup.CacheID(ctx, newNode.SpaceID, newNode.ID, filepath.Join(newNode.ParentPath(), newNode.Name)); err != nil {
-		t.log.Error().Err(err).Str("spaceID", newNode.SpaceID).Str("id", newNode.ID).Str("path", filepath.Join(newNode.ParentPath(), newNode.Name)).Msg("could not cache id")
+	if err := t.lookup.CacheID(ctx, newNode.SpaceID, newNode.ID, newPath); err != nil {
+		t.log.Error().Err(err).Str("spaceID", newNode.SpaceID).Str("id", newNode.ID).Str("path", newPath).Msg("could not cache id")
 	}
-
-	// update target parentid and name
-	attribs := node.Attributes{}
-	attribs.SetString(prefixes.ParentidAttr, newNode.ParentID)
-	attribs.SetString(prefixes.NameAttr, newNode.Name)
-	if err := newNode.SetXattrsWithContext(ctx, attribs); err != nil {
-		return errors.Wrap(err, "posixfs: could not update node attributes")
+	// report a failed attribute update only now, so that the id cache still points to the moved item
+	if setErr != nil {
+		return errors.Wrap(setErr, "posixfs: could not update node attributes")
 	}
 
 	subspan.End()
