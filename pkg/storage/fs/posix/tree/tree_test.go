@@ -479,6 +479,54 @@ var _ = Describe("Watching tree", func() {
 					g.Expect(treeSize(g, subtree)).To(Equal(uint64(11)))
 				}, 2*time.Second).Should(Succeed())
 			})
+
+			It("moves the tree size along with a directory and a file moved to another directory", func() {
+				Expect(os.MkdirAll(root+"/source/dir", 0700)).To(Succeed())
+				Expect(os.Mkdir(root+"/target", 0700)).To(Succeed())
+				time.Sleep(100 * time.Millisecond) // Give it some time to settle down
+				Expect(os.WriteFile(root+"/source/dir/file.txt", []byte("hello world"), 0600)).To(Succeed())
+				Expect(os.WriteFile(root+"/source/file.txt", []byte("hello"), 0600)).To(Succeed())
+				Eventually(func(g Gomega) {
+					g.Expect(treeSize(g, subtree+"/source")).To(Equal(uint64(16)))
+					g.Expect(treeSize(g, subtree)).To(Equal(uint64(16)))
+				}).Should(Succeed())
+
+				Expect(os.Rename(root+"/source/dir", root+"/target/dir")).To(Succeed())
+				Expect(os.Rename(root+"/source/file.txt", root+"/target/file.txt")).To(Succeed())
+
+				Eventually(func(g Gomega) {
+					g.Expect(treeSize(g, subtree+"/source")).To(Equal(uint64(0)))
+					g.Expect(treeSize(g, subtree+"/target")).To(Equal(uint64(16)))
+				}).Should(Succeed())
+				Consistently(func(g Gomega) {
+					g.Expect(treeSize(g, subtree+"/source")).To(Equal(uint64(0)))
+					g.Expect(treeSize(g, subtree+"/target")).To(Equal(uint64(16)))
+					g.Expect(treeSize(g, subtree+"/target/dir")).To(Equal(uint64(11)))
+					g.Expect(treeSize(g, subtree)).To(Equal(uint64(16)))
+				}, 2*time.Second).Should(Succeed())
+			})
+
+			It("uses the new size of a file that changes while it is moved to another directory", func() {
+				Expect(os.Mkdir(root+"/source", 0700)).To(Succeed())
+				Expect(os.Mkdir(root+"/target", 0700)).To(Succeed())
+				time.Sleep(100 * time.Millisecond) // Give it some time to settle down
+				Expect(os.WriteFile(root+"/source/file.txt", []byte("hello world"), 0600)).To(Succeed())
+				Eventually(func(g Gomega) {
+					g.Expect(treeSize(g, subtree+"/source")).To(Equal(uint64(11)))
+				}).Should(Succeed())
+
+				Expect(os.Rename(root+"/source/file.txt", root+"/target/file.txt")).To(Succeed())
+				Expect(os.WriteFile(root+"/target/file.txt", []byte("hello"), 0600)).To(Succeed())
+
+				Eventually(func(g Gomega) {
+					g.Expect(treeSize(g, subtree+"/source")).To(Equal(uint64(0)))
+					g.Expect(treeSize(g, subtree+"/target")).To(Equal(uint64(5)))
+				}).Should(Succeed())
+				Consistently(func(g Gomega) {
+					g.Expect(treeSize(g, subtree+"/target")).To(Equal(uint64(5)))
+					g.Expect(treeSize(g, subtree)).To(Equal(uint64(5)))
+				}, 2*time.Second).Should(Succeed())
+			})
 		})
 	})
 
