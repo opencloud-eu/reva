@@ -287,9 +287,12 @@ var _ = Describe("DeleteRevision event", func() {
 
 		var exists bool
 		var blobID string
+		var processing bool
+		// Wait for the handler to be done, not just for the blob metadata to be back:
+		// RevertUpload restores the metadata before UnmarkProcessing clears the flag.
 		waitFor(func() bool {
-			exists, blobID, _, _ = nodeState()
-			return exists && blobID == "orig-blobid"
+			exists, blobID, _, processing = nodeState()
+			return exists && blobID == "orig-blobid" && !processing
 		})
 
 		// redelivery of the same event must not change anything
