@@ -4,7 +4,7 @@
 
 ### ❤️ Thanks to all contributors! ❤️
 
-@butonic
+@aduffeck, @butonic
 
 ### 🐛 Bug Fixes
 
