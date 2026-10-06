@@ -1,5 +1,15 @@
 # Changelog
 
+## [2.51.1](https://github.com/opencloud-eu/reva/releases/tag/v2.51.1) - 2026-10-06
+
+### ❤️ Thanks to all contributors! ❤️
+
+@butonic
+
+### 🐛 Bug Fixes
+
+- fix fildescriptor leaks [[#847](https://github.com/opencloud-eu/reva/pull/847)]
+
 ## [2.51.0](https://github.com/opencloud-eu/reva/releases/tag/v2.51.0) - 2026-10-05
 
 ### ❤️ Thanks to all contributors! ❤️
