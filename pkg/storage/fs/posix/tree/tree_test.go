@@ -376,6 +376,37 @@ var _ = Describe("Watching tree", func() {
 				}).Should(Succeed())
 			})
 
+			It("finds a child by id after its clean parent is moved on disk", func() {
+				Expect(os.Mkdir(root+"/original", 0700)).To(Succeed())
+				time.Sleep(100 * time.Millisecond) // Give it some time to settle down
+				Expect(os.WriteFile(root+"/original/file.txt", []byte("hello world"), 0600)).To(Succeed())
+				fileID := ""
+				Eventually(func(g Gomega) {
+					n, err := env.Lookup.NodeFromResource(env.Ctx, &provider.Reference{
+						ResourceId: env.SpaceRootRes,
+						Path:       subtree + "/original/file.txt",
+					})
+					g.Expect(err).ToNot(HaveOccurred())
+					g.Expect(n.ID).ToNot(BeEmpty())
+					fileID = n.ID
+				}).Should(Succeed())
+				// settle like the startup scan does, which leaves every directory clean
+				Expect(env.Tree.WarmupIDCache(root, false, false)).To(Succeed())
+
+				Expect(os.Rename(root+"/original", root+"/moved")).To(Succeed())
+
+				Eventually(func(g Gomega) {
+					n, err := env.Lookup.NodeFromID(env.Ctx, &provider.ResourceId{
+						SpaceId:  env.SpaceRootRes.SpaceId,
+						OpaqueId: fileID,
+					})
+					g.Expect(err).ToNot(HaveOccurred())
+					g.Expect(n.InternalPath()).ToNot(BeEmpty(), "the id cache has no path for the file")
+					g.Expect(n.InternalPath()).To(Equal(root + "/moved/file.txt"))
+					g.Expect(n.Exists).To(BeTrue())
+				}).Should(Succeed())
+			})
+
 			It("handles moved directories", func() {
 				Expect(os.Mkdir(root+"/original", 0700)).To(Succeed())
 				time.Sleep(100 * time.Millisecond) // Give it some time to settle down
