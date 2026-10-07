@@ -18,7 +18,7 @@ var _ = Describe("FSSafeUserID", func() {
 				OpaqueId: opaqueID,
 			})
 			if encoded {
-				Expect(id.SafeFilename()).To(Equal(base64.RawURLEncoding.EncodeToString([]byte(strings.ToLower(opaqueID)))))
+				Expect(id.SafeFilename()).To(Equal(base64.RawURLEncoding.EncodeToString([]byte(utils.LowerASCII(opaqueID)))))
 			} else {
 				Expect(id.SafeFilename()).To(Equal(opaqueID))
 			}
@@ -32,6 +32,17 @@ var _ = Describe("FSSafeUserID", func() {
 		Entry("handles an empty primary user ID", userpb.UserType_USER_TYPE_PRIMARY, "", false),
 		Entry("handles an empty guest user ID", userpb.UserType_USER_TYPE_GUEST, "", false),
 	)
+
+	It("does not map non-ASCII guest IDs onto ASCII ones", func() {
+		for _, pair := range [][2]string{
+			{"bob@\u0130nfocorp.com", "bob@infocorp.com"}, // dotted capital I
+			{"\u212Aate@corp.com", "kate@corp.com"},       // Kelvin sign
+		} {
+			a := utils.NewFSSafeUserID(&userpb.UserId{Type: userpb.UserType_USER_TYPE_GUEST, OpaqueId: pair[0]})
+			b := utils.NewFSSafeUserID(&userpb.UserId{Type: userpb.UserType_USER_TYPE_GUEST, OpaqueId: pair[1]})
+			Expect(a.SafeFilename()).NotTo(Equal(b.SafeFilename()))
+		}
+	})
 
 	Describe("Decode", func() {
 		It("decodes a guest ID and preserves the wrapped ID", func() {
