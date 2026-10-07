@@ -50,8 +50,9 @@ type Cache struct {
 
 	ReceivedSpaces mtimesyncedcache.Map[string, *Spaces]
 
-	storage metadata.Storage
-	ttl     time.Duration
+	storage  metadata.Storage
+	lockable metadata.LockingStorage
+	ttl      time.Duration
 }
 
 // Spaces holds the received shares of one user per space
@@ -73,11 +74,18 @@ type State struct {
 	Hidden     bool
 }
 
-// New returns a new Cache instance
-func New(s metadata.Storage, ttl time.Duration) Cache {
+// New returns a new Cache instance. Optional metadata.Options (e.g. a shared
+// Locker) may be supplied to control how persisted writes are serialized; when
+// the storage is a LockingStorage the default locker is used.
+func New(s metadata.Storage, ttl time.Duration, opts ...metadata.Option) Cache {
+	var lockable metadata.LockingStorage
+	if ls, ok := s.(metadata.LockingStorage); ok {
+		lockable = ls
+	}
 	return Cache{
 		ReceivedSpaces: mtimesyncedcache.Map[string, *Spaces]{},
 		storage:        s,
+		lockable:       lockable,
 		ttl:            ttl,
 		lockMap:        sync.Map{},
 	}
@@ -111,9 +119,26 @@ func (c *Cache) Add(ctx context.Context, userID utils.FilenameEncoder, spaceID s
 	defer span.End()
 	span.SetAttributes(attribute.String("cs3.userid.key", userIDKey), attribute.String("cs3.spaceid", spaceID))
 
-	persistFunc := func() error {
-		c.initializeIfNeeded(userIDKey, spaceID)
+	log := appctx.GetLogger(ctx).With().
+		Str("hostname", os.Getenv("HOSTNAME")).
+		Str("userIDKey", userIDKey).
+		Str("spaceID", spaceID).Logger()
 
+	var err error
+	if c.lockable != nil {
+		err = c.atomicPersist(ctx, userIDKey, func(existing *Spaces) (*Spaces, error) {
+			if existing.Spaces[spaceID] == nil {
+				existing.Spaces[spaceID] = &Space{States: map[string]*State{}}
+			}
+			existing.Spaces[spaceID].States[rs.Share.Id.GetOpaqueId()] = &State{
+				State:      rs.State,
+				MountPoint: rs.MountPoint,
+				Hidden:     rs.Hidden,
+			}
+			return existing, nil
+		})
+	} else {
+		c.initializeIfNeeded(userIDKey, spaceID)
 		rss, _ := c.ReceivedSpaces.Load(userIDKey)
 		receivedSpace := rss.Spaces[spaceID]
 		if receivedSpace.States == nil {
@@ -124,48 +149,74 @@ func (c *Cache) Add(ctx context.Context, userID utils.FilenameEncoder, spaceID s
 			MountPoint: rs.MountPoint,
 			Hidden:     rs.Hidden,
 		}
-
-		return c.persist(ctx, userID)
+		err = c.persist(ctx, userID)
 	}
 
-	log := appctx.GetLogger(ctx).With().
-		Str("hostname", os.Getenv("HOSTNAME")).
-		Str("userIDKey", userIDKey).
-		Str("spaceID", spaceID).Logger()
-
-	var err error
-	for retries := 100; retries > 0; retries-- {
-		err = persistFunc()
-		switch err.(type) {
-		case nil:
-			span.SetStatus(codes.Ok, "")
-			return nil
-		case errtypes.Aborted:
-			log.Debug().Msg("aborted when persisting added received share: etag changed. retrying...")
-			// this is the expected status code from the server when the if-match etag check fails
-			// continue with sync below
-		case errtypes.PreconditionFailed:
-			log.Debug().Msg("precondition failed when persisting added received share: etag changed. retrying...")
-			// actually, this is the wrong status code and we treat it like errtypes.Aborted because of inconsistencies on the server side
-			// continue with sync below
-		case errtypes.AlreadyExists:
-			log.Debug().Msg("already exists when persisting added received share. retrying...")
-			// CS3 uses an already exists error instead of precondition failed when using an If-None-Match=* header / IfExists flag in the InitiateFileUpload call.
-			// Thas happens when the cache thinks there is no file.
-			// continue with sync below
-		default:
-			span.SetStatus(codes.Error, fmt.Sprintf("persisting added received share failed. giving up: %s", err.Error()))
-			log.Error().Err(err).Msg("persisting added received share failed")
-			return err
-		}
-		if err := c.syncWithLock(ctx, userID); err != nil {
-			span.RecordError(err)
-			span.SetStatus(codes.Error, err.Error())
-			log.Error().Err(err).Msg("persisting added received share failed. giving up.")
-			return err
-		}
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, fmt.Sprintf("persisting added received share failed: %s", err.Error()))
+		log.Error().Err(err).Msg("persisting added received share failed")
+		return err
 	}
-	return err
+	span.SetStatus(codes.Ok, "")
+	return nil
+}
+
+// atomicPersist performs a locked read-modify-write of the user's received.json.
+// fn receives the current on-storage state (a zero Spaces when the file does not
+// yet exist) and returns the state to persist; returning nil aborts the write.
+// On success the in-memory cache is refreshed in place from the written bytes so
+// that the etag and content stay consistent with the storage.
+func (c *Cache) atomicPersist(ctx context.Context, userIDKey string, fn func(existing *Spaces) (*Spaces, error)) error {
+	_, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "atomicPersist")
+	defer span.End()
+
+	jsonPath := userJSONPath(userIDKey)
+	var written []byte
+	res, err := c.lockable.UploadWithLock(ctx, metadata.UploadRequest{Path: jsonPath}, func(existing []byte) ([]byte, error) {
+		var rss *Spaces
+		if len(existing) > 0 {
+			rss = &Spaces{}
+			if err := json.Unmarshal(existing, rss); err != nil {
+				return nil, err
+			}
+			if rss.Spaces == nil {
+				rss.Spaces = map[string]*Space{}
+			}
+		} else {
+			rss = &Spaces{Spaces: map[string]*Space{}}
+		}
+		newState, err := fn(rss)
+		if err != nil || newState == nil {
+			return nil, err
+		}
+		b, err := json.Marshal(newState)
+		if err != nil {
+			return nil, err
+		}
+		written = b
+		return b, nil
+	})
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		return err
+	}
+
+	// Refresh the in-memory cache in place (mutate the existing *Spaces, do not
+	// replace it) so callers holding a reference observe the update.
+	rss, _ := c.ReceivedSpaces.LoadOrStore(userIDKey, &Spaces{Spaces: map[string]*Space{}})
+	if len(written) > 0 {
+		var fresh Spaces
+		if err := json.Unmarshal(written, &fresh); err != nil {
+			return err
+		}
+		rss.Spaces = fresh.Spaces
+	}
+	rss.etag = res.Etag
+
+	span.SetStatus(codes.Ok, "")
+	return nil
 }
 
 // Get returns one entry from the cache
@@ -201,9 +252,24 @@ func (c *Cache) Remove(ctx context.Context, userID utils.FilenameEncoder, spaceI
 	defer span.End()
 	span.SetAttributes(attribute.String("cs3.userid.key", userIDKey), attribute.String("cs3.spaceid", spaceID))
 
-	persistFunc := func() error {
-		c.initializeIfNeeded(userIDKey, spaceID)
+	log := appctx.GetLogger(ctx).With().
+		Str("hostname", os.Getenv("HOSTNAME")).
+		Str("userIDKey", userIDKey).
+		Str("spaceID", spaceID).Logger()
 
+	var err error
+	if c.lockable != nil {
+		err = c.atomicPersist(ctx, userIDKey, func(existing *Spaces) (*Spaces, error) {
+			if receivedSpace := existing.Spaces[spaceID]; receivedSpace != nil {
+				delete(receivedSpace.States, shareID)
+				if len(receivedSpace.States) == 0 {
+					delete(existing.Spaces, spaceID)
+				}
+			}
+			return existing, nil
+		})
+	} else {
+		c.initializeIfNeeded(userIDKey, spaceID)
 		rss, _ := c.ReceivedSpaces.Load(userIDKey)
 		receivedSpace := rss.Spaces[spaceID]
 		if receivedSpace.States == nil {
@@ -213,48 +279,17 @@ func (c *Cache) Remove(ctx context.Context, userID utils.FilenameEncoder, spaceI
 		if len(receivedSpace.States) == 0 {
 			delete(rss.Spaces, spaceID)
 		}
-
-		return c.persist(ctx, userID)
+		err = c.persist(ctx, userID)
 	}
 
-	log := appctx.GetLogger(ctx).With().
-		Str("hostname", os.Getenv("HOSTNAME")).
-		Str("userIDKey", userIDKey).
-		Str("spaceID", spaceID).Logger()
-
-	var err error
-	for retries := 100; retries > 0; retries-- {
-		err = persistFunc()
-		switch err.(type) {
-		case nil:
-			span.SetStatus(codes.Ok, "")
-			return nil
-		case errtypes.Aborted:
-			log.Debug().Msg("aborted when persisting added received share: etag changed. retrying...")
-			// this is the expected status code from the server when the if-match etag check fails
-			// continue with sync below
-		case errtypes.PreconditionFailed:
-			log.Debug().Msg("precondition failed when persisting added received share: etag changed. retrying...")
-			// actually, this is the wrong status code and we treat it like errtypes.Aborted because of inconsistencies on the server side
-			// continue with sync below
-		case errtypes.AlreadyExists:
-			log.Debug().Msg("already exists when persisting added received share. retrying...")
-			// CS3 uses an already exists error instead of precondition failed when using an If-None-Match=* header / IfExists flag in the InitiateFileUpload call.
-			// Thas happens when the cache thinks there is no file.
-			// continue with sync below
-		default:
-			span.SetStatus(codes.Error, fmt.Sprintf("persisting added received share failed. giving up: %s", err.Error()))
-			log.Error().Err(err).Msg("persisting added received share failed")
-			return err
-		}
-		if err := c.syncWithLock(ctx, userID); err != nil {
-			span.RecordError(err)
-			span.SetStatus(codes.Error, err.Error())
-			log.Error().Err(err).Msg("persisting added received share failed. giving up.")
-			return err
-		}
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, fmt.Sprintf("persisting removed received share failed: %s", err.Error()))
+		log.Error().Err(err).Msg("persisting removed received share failed")
+		return err
 	}
-	return err
+	span.SetStatus(codes.Ok, "")
+	return nil
 }
 
 // List returns a list of received shares for a given user
