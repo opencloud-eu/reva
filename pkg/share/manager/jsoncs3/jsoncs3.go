@@ -660,7 +660,32 @@ func (m *Manager) Unshare(ctx context.Context, ref *collaboration.ShareReference
 		return err
 	}
 
+	// only the creator or a user with RemoveGrant on the resource may unshare
+	user := ctxpkg.ContextMustGetUser(ctx)
+	if !share.IsCreatedByUser(s, user) && !m.userHasRemoveGrantPermission(ctx, s) {
+		// TODO why not permission denied?
+		return errtypes.NotFound(ref.String())
+	}
+
 	return m.removeShare(ctx, s, false)
+}
+
+// userHasRemoveGrantPermission reports whether the context user holds RemoveGrant on the share's resource.
+func (m *Manager) userHasRemoveGrantPermission(ctx context.Context, s *collaboration.Share) bool {
+	req := &provider.StatRequest{
+		Ref: &provider.Reference{ResourceId: s.ResourceId},
+		FieldMask: &fieldmaskpb.FieldMask{
+			Paths: []string{"permissions"},
+		},
+	}
+	client, err := m.gatewaySelector.Next()
+	if err != nil {
+		return false
+	}
+	res, err := client.Stat(ctx, req)
+	return err == nil &&
+		res.Status.Code == rpcv1beta1.Code_CODE_OK &&
+		res.Info.PermissionSet.RemoveGrant
 }
 
 // UpdateShare updates the mode of the given share.
