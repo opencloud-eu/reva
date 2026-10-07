@@ -1,10 +1,14 @@
 # Changelog
 
-## [2.51.1](https://github.com/opencloud-eu/reva/releases/tag/v2.51.1) - 2026-10-06
+## [2.52.0](https://github.com/opencloud-eu/reva/releases/tag/v2.52.0) - 2026-10-07
 
 ### ❤️ Thanks to all contributors! ❤️
 
-@aduffeck, @butonic
+@aduffeck, @butonic, @fschade
+
+### 📈 Enhancement
+
+- feat: run decomposedfs on foreign metadata via metadata_prefix [[#859](https://github.com/opencloud-eu/reva/pull/859)]
 
 ### 🐛 Bug Fixes
 
