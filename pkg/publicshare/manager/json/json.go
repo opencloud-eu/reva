@@ -57,13 +57,7 @@ import (
 	"google.golang.org/protobuf/types/known/fieldmaskpb"
 )
 
-// defaultStatConcurrency bounds how many Stat RPCs ListPublicShares may have
-// in flight at once while checking ListGrants on distinct foreign resources.
-// 5 mirrors the default concurrency the decomposedfs share manager clamps to
-// for the same kind of bounded fan-out (see
-// pkg/storage/utils/decomposedfs/options/options.go): enough to make a dent
-// in a large batch of distinct resources without opening so many concurrent
-// Stat RPCs that the gateway itself becomes the bottleneck.
+// defaultStatConcurrency bounds concurrent Stat RPCs in ListPublicShares, mirroring the decomposedfs share manager.
 const defaultStatConcurrency = 5
 
 func init() {
@@ -167,8 +161,7 @@ func (c *commonConfig) init() {
 }
 
 type manager struct {
-	// maxConcurrency bounds how many Stat RPCs ListPublicShares may have in
-	// flight at once while checking ListGrants on distinct foreign resources.
+	// maxConcurrency bounds concurrent Stat RPCs in ListPublicShares.
 	maxConcurrency int
 
 	gatewayAddr string
@@ -498,29 +491,22 @@ func (m *manager) GetPublicShare(ctx context.Context, u *user.User, ref *link.Pu
 	return nil, errtypes.NotFound("no shares found by id:" + ref.GetId().String())
 }
 
-// ListPublicShares retrieves all the shares on the manager that are valid.
-func (m *manager) ListPublicShares(ctx context.Context, u *user.User, filters []*link.ListPublicSharesRequest_Filter, sign bool) ([]*link.PublicShare, error) {
+// collectShares splits the persisted shares into own and foreign ones, plus the distinct resources the foreign ones point at.
+func (m *manager) collectShares(ctx context.Context, u *user.User, filters []*link.ListPublicSharesRequest_Filter) ([]*publicShare, []*publicShare, map[string]*provider.ResourceId, error) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
 	if err := m.init(); err != nil {
-		return nil, err
+		return nil, nil, nil, err
 	}
 
 	log := appctx.GetLogger(ctx)
 
 	db, err := m.persistence.Read(ctx)
 	if err != nil {
-		return nil, err
+		return nil, nil, nil, err
 	}
 
-	// Pass 1 (in-memory, no RPCs): decode every persisted share once, handle
-	// expiry and filters exactly as before, and split the survivors into
-	// shares the caller created (no permission check needed) and foreign
-	// shares (which do need one). While doing so, collect the set of
-	// distinct resources the foreign shares point at, keyed by
-	// storagespace.FormatResourceID, so pass 2 can stat each of them exactly
-	// once.
 	ownShares := make([]*publicShare, 0)
 	foreignShares := make([]*publicShare, 0)
 	foreignResourceIDs := make(map[string]*provider.ResourceId)
@@ -528,7 +514,7 @@ func (m *manager) ListPublicShares(ctx context.Context, u *user.User, filters []
 	for _, v := range db {
 		var local publicShare
 		if err := utils.UnmarshalJSONToProtoV1([]byte(v.(map[string]interface{})["share"].(string)), &local.PublicShare); err != nil {
-			return nil, err
+			return nil, nil, nil, err
 		}
 
 		if publicshare.IsExpired(&local.PublicShare) {
@@ -561,9 +547,18 @@ func (m *manager) ListPublicShares(ctx context.Context, u *user.User, filters []
 		foreignResourceIDs[storagespace.FormatResourceID(local.ResourceId)] = local.ResourceId
 	}
 
-	// Pass 2 (bounded RPCs): stat each distinct foreign resource once,
-	// concurrently, within a time budget. A caller who created every share
-	// (or has no foreign shares surviving the filters) issues no RPC at all.
+	return ownShares, foreignShares, foreignResourceIDs, nil
+}
+
+// ListPublicShares retrieves all the shares on the manager that are valid.
+func (m *manager) ListPublicShares(ctx context.Context, u *user.User, filters []*link.ListPublicSharesRequest_Filter, sign bool) ([]*link.PublicShare, error) {
+	// collectShares holds the lock; nothing below it touches manager state
+	ownShares, foreignShares, foreignResourceIDs, err := m.collectShares(ctx, u, filters)
+	if err != nil {
+		return nil, err
+	}
+
+	// stat each distinct foreign resource once, concurrently, within a time budget
 	var permitted map[string]bool
 	if len(foreignResourceIDs) > 0 {
 		client, err := pool.GetGatewayServiceClient(m.gatewayAddr)
@@ -575,7 +570,7 @@ func (m *manager) ListPublicShares(ctx context.Context, u *user.User, filters []
 
 	shares := make([]*link.PublicShare, 0, len(ownShares)+len(foreignShares))
 	for _, local := range ownShares {
-		if local.PublicShare.PasswordProtected && sign {
+		if local.PasswordProtected && sign {
 			if err := publicshare.AddSignature(&local.PublicShare, local.Password); err != nil {
 				return nil, err
 			}
@@ -583,13 +578,11 @@ func (m *manager) ListPublicShares(ctx context.Context, u *user.User, filters []
 		shares = append(shares, &local.PublicShare)
 	}
 	for _, local := range foreignShares {
-		// Any resource whose permission was never determined (e.g. because
-		// the time budget ran out) is absent here and therefore excluded:
-		// fail closed, never include a share whose permission is unknown.
+		// fail closed: a resource left undecided is absent here and stays excluded
 		if !permitted[storagespace.FormatResourceID(local.ResourceId)] {
 			continue
 		}
-		if local.PublicShare.PasswordProtected && sign {
+		if local.PasswordProtected && sign {
 			if err := publicshare.AddSignature(&local.PublicShare, local.Password); err != nil {
 				return nil, err
 			}
@@ -599,20 +592,7 @@ func (m *manager) ListPublicShares(ctx context.Context, u *user.User, filters []
 	return shares, nil
 }
 
-// statForeignResources stats each of the given distinct resources at most
-// once, using a bounded pool of at most m.maxConcurrency concurrent workers,
-// and returns a map of storagespace.FormatResourceID -> whether the calling
-// user may list grants on that resource.
-//
-// The whole operation is bounded by a time budget derived from the caller's
-// own context deadline, minus a small margin (see statBudgetContext): if the
-// budget runs out before every resource has been stated, statting stops, a
-// single warning is logged naming how many resources were skipped, and the
-// partial map is returned rather than letting the caller block until its own
-// deadline cancels the whole request with code = Canceled (OCISDEV-861). If
-// the caller supplies no deadline, no budget is imposed. Any resource not
-// present in the returned map was never decided and must be treated as not
-// permitted by the caller.
+// statForeignResources stats each resource once within a time budget and reports who may list its grants; anything absent was never decided.
 func (m *manager) statForeignResources(ctx context.Context, u *user.User, client gateway.GatewayAPIClient, resourceIDs map[string]*provider.ResourceId) map[string]bool {
 	log := appctx.GetLogger(ctx)
 
@@ -636,8 +616,7 @@ func (m *manager) statForeignResources(ctx context.Context, u *user.User, client
 
 	g, gctx := errgroup.WithContext(statCtx)
 
-	// Distribute work. Stop feeding jobs once the budget runs out so workers
-	// drain and exit instead of blocking forever on a full channel.
+	// stop feeding jobs once the budget runs out so workers drain instead of blocking
 	g.Go(func() error {
 		defer close(jobs)
 		for _, rid := range resourceIDs {
@@ -650,15 +629,12 @@ func (m *manager) statForeignResources(ctx context.Context, u *user.User, client
 		return nil
 	})
 
-	// Spawn workers that concurrently work the queue, bounded by
-	// numWorkers <= m.maxConcurrency concurrent Stat RPCs in flight.
+	// workers, bounded by numWorkers <= m.maxConcurrency concurrent Stat RPCs
 	for i := 0; i < numWorkers; i++ {
 		g.Go(func() error {
 			for j := range jobs {
 				if gctx.Err() != nil {
-					// Budget exhausted: stop statting. A resource left
-					// undecided is simply absent from the returned map, so
-					// the caller treats it as not permitted.
+					// budget exhausted: leave the rest undecided, the caller treats them as denied
 					continue
 				}
 				m.userCanListGrants(statCtx, client, results, j.rid)
@@ -679,14 +655,7 @@ func (m *manager) statForeignResources(ctx context.Context, u *user.User, client
 	return result
 }
 
-// statBudgetContext derives a child context bounding how long
-// statForeignResources may spend statting resources. The budget is derived
-// solely from the caller's own context deadline, minus a small margin so the
-// rest of the request (decoding, filtering, signing) still has time to run
-// before the caller's deadline fires: this method never imposes a bound of
-// its own. If the incoming context has no deadline, the returned context has
-// none either, and the stat fan-out is unbounded - the same as before this
-// budget existed.
+// statBudgetContext bounds the stat fan-out to the caller's own deadline minus a margin, or not at all if it has none.
 func (m *manager) statBudgetContext(ctx context.Context) (context.Context, context.CancelFunc) {
 	const margin = 200 * time.Millisecond
 
@@ -702,9 +671,7 @@ func (m *manager) statBudgetContext(ctx context.Context) (context.Context, conte
 	return context.WithTimeout(ctx, budget)
 }
 
-// statResults collects ListGrants answers for resources, keyed by
-// storagespace.FormatResourceID. It is safe for concurrent use by the bounded
-// worker pool in statForeignResources.
+// statResults collects ListGrants answers keyed by storagespace.FormatResourceID, safe for concurrent use.
 type statResults struct {
 	mu   sync.Mutex
 	data map[string]bool
@@ -720,9 +687,7 @@ func (r *statResults) set(key string, allowed bool) {
 	r.data[key] = allowed
 }
 
-// snapshot returns a copy of the results collected so far. Call only once no
-// more writers are running (e.g. after an errgroup.Wait), or take a copy
-// under the same lock discipline as set.
+// snapshot copies the results collected so far; call it only once no writers remain.
 func (r *statResults) snapshot() map[string]bool {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -733,12 +698,7 @@ func (r *statResults) snapshot() map[string]bool {
 	return out
 }
 
-// userCanListGrants reports whether the current user may list grants on the
-// given resource and records the answer in results. The resource IDs are
-// already deduplicated by the caller (see the foreignResourceIDs map built
-// in ListPublicShares) before statForeignResources ever runs, so each
-// resource is stated at most once and there is nothing to look up here
-// beforehand.
+// userCanListGrants stats the resource, records whether the user may list its grants, and reports the answer.
 func (m *manager) userCanListGrants(ctx context.Context, client gateway.GatewayAPIClient, results *statResults, rid *provider.ResourceId) bool {
 	log := appctx.GetLogger(ctx)
 	key := storagespace.FormatResourceID(rid)
