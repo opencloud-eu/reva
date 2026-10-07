@@ -182,6 +182,8 @@ func TestCanonicalUserID(t *testing.T) {
 		{name: "nil", expected: ""},
 		{name: "regular user", id: &userpb.UserId{OpaqueId: "MixedCase"}, expected: "MixedCase"},
 		{name: "guest", id: &userpb.UserId{OpaqueId: "Guest@Example.COM", Type: userpb.UserType_USER_TYPE_GUEST}, expected: "guest@example.com"},
+		{name: "guest with dotted capital I", id: &userpb.UserId{OpaqueId: "bob@\u0130nfocorp.com", Type: userpb.UserType_USER_TYPE_GUEST}, expected: "bob@\u0130nfocorp.com"},
+		{name: "guest with Kelvin sign", id: &userpb.UserId{OpaqueId: "\u212Aate@corp.com", Type: userpb.UserType_USER_TYPE_GUEST}, expected: "\u212Aate@corp.com"},
 	}
 
 	for _, tt := range tests {

@@ -528,6 +528,20 @@ var _ = Describe("guestlinks auth manager", func() {
 			assertGenericUnauthenticated(err)
 		})
 
+		It("rejects a guest share anchor with a non-ASCII grantee", func() {
+			serviceAccountAuthOK(gatewayClient)
+			s := validGuestShare()
+			s.Grantee.GetUserId().OpaqueId = "b\u043eb@example.com" // Cyrillic o
+			gatewayClient.On("GetShare", mock.Anything, mock.Anything).Return(getShareOK(s), nil)
+
+			m, err := newTestManager(addr, &logger)
+			Expect(err).ToNot(HaveOccurred())
+
+			_, _, err = m.Authenticate(ctx, "", defaultToken().sign())
+			Expect(err).To(HaveOccurred())
+			assertGenericUnauthenticated(err)
+		})
+
 		It("returns a user/owner scope", func() {
 			serviceAccountAuthOK(gatewayClient)
 			gatewayClient.On("GetShare", mock.Anything, mock.Anything).Return(getShareOK(validGuestShare()), nil)
