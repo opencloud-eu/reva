@@ -28,7 +28,7 @@ require (
 	github.com/go-micro/plugins/v4/store/nats-js v1.2.1
 	github.com/go-micro/plugins/v4/store/nats-js-kv v0.0.0-20240726082623-6831adfdcdc4
 	github.com/go-micro/plugins/v4/store/redis v1.2.1
-	github.com/go-playground/locales v0.14.1
+	github.com/go-playground/locales v0.14.2
 	github.com/go-playground/universal-translator v0.18.2
 	github.com/go-playground/validator/v10 v10.30.3
 	github.com/go-redis/redis/v8 v8.11.5
