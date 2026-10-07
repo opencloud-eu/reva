@@ -67,7 +67,7 @@ type queueItem struct {
 	timer *time.Timer
 }
 
-const dirtyFlag = prefixes.OcPrefix + "dirty"
+func dirtyFlag() string { return prefixes.OcPrefix + "dirty" }
 
 type assimilationNode struct {
 	path    string
@@ -1090,11 +1090,11 @@ func (t *Tree) propagateSizeDiff(n *node.Node, size int64) error {
 }
 
 func (t *Tree) setDirty(path string, dirty bool) error {
-	return xattr.Set(path, dirtyFlag, []byte(fmt.Sprintf("%t", dirty)))
+	return xattr.Set(path, dirtyFlag(), []byte(fmt.Sprintf("%t", dirty)))
 }
 
 func (t *Tree) isDirty(path string) (bool, error) {
-	dirtyAttr, err := xattr.Get(path, dirtyFlag)
+	dirtyAttr, err := xattr.Get(path, dirtyFlag())
 	if err != nil {
 		if metadata.IsAttrUnset(err) {
 			return true, nil
