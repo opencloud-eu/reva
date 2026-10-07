@@ -4,10 +4,11 @@
 
 ### ❤️ Thanks to all contributors! ❤️
 
-@aduffeck, @butonic, @fschade
+@aduffeck, @butonic, @fschade, @micbar
 
 ### 📈 Enhancement
 
+- Harden unshare [[#856](https://github.com/opencloud-eu/reva/pull/856)]
 - feat: run decomposedfs on foreign metadata via metadata_prefix [[#859](https://github.com/opencloud-eu/reva/pull/859)]
 
 ### 🐛 Bug Fixes
