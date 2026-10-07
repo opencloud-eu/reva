@@ -475,7 +475,7 @@ var _ = Describe("the finish path", func() {
 			_, err := c.finishUpload(ctx, session)
 
 			Expect(err).To(MatchError("session file unreadable"))
-			Expect(fs.calls).To(ContainElement("MarkProcessing(false)"))
+			Expect(fs.calls).To(BeEmpty())
 		})
 
 		// Computed once here, so the driver does not have to re-read the staged file.
@@ -514,7 +514,7 @@ var _ = Describe("the finish path", func() {
 			_, err := c.finishUpload(ctx, session)
 
 			Expect(err).To(BeAssignableToTypeOf(errtypes.BadRequest("")))
-			Expect(fs.calls).To(ContainElement("MarkProcessing(false)"))
+			Expect(fs.calls).To(BeEmpty())
 		})
 
 		It("rejects an if-unmodified-since it cannot parse", func() {
@@ -525,6 +525,20 @@ var _ = Describe("the finish path", func() {
 			_, err := c.finishUpload(ctx, session)
 
 			Expect(err).To(BeAssignableToTypeOf(errtypes.BadRequest("")))
+			Expect(fs.calls).To(BeEmpty())
+		})
+
+		It("rejects bad metadata on a new file before the node is created", func() {
+			session := stagedSession(ctx, store, false)
+			session.SetMetadata("mtime", "not-a-time")
+			Expect(session.Persist(ctx)).To(Succeed())
+
+			_, err := c.finishUpload(ctx, session)
+
+			Expect(err).To(BeAssignableToTypeOf(errtypes.BadRequest("")))
+			Expect(fs.calls).To(BeEmpty())
+			_, statErr := os.Stat(session.BinPath())
+			Expect(os.IsNotExist(statErr)).To(BeTrue(), "staged bytes were kept")
 		})
 	})
 
@@ -542,7 +556,6 @@ var _ = Describe("the finish path", func() {
 		// The bytes are already committed, and the cleanup job resolves the flag.
 		It("succeeds even when the node cannot be unmarked", func() {
 			session := stagedSession(ctx, store, true)
-			fs.markErrAfter = 1
 			fs.markErr = errors.New("flock timeout")
 
 			ri, err := c.finishUpload(ctx, session)
@@ -581,8 +594,10 @@ var _ = Describe("the finish path", func() {
 
 	// An upload whose session cannot be written can never be finished.
 	Describe("when the session cannot be persisted", func() {
-		// The node id TouchFile returned is what would be lost.
-		It("rolls the mark back", func() {
+		// The node id TouchFile returned is what would be lost. The node is marked by
+		// then, so the rollback can purge it without a Delete permission.
+		It("rolls the new node back", func() {
+			fs.prepared = &storage.PrepareUploadResult{SizeDiff: bodyLen}
 			session := &brokenSession{Session: stagedSession(ctx, store, false), failPersist: true}
 
 			_, err := c.finishUpload(ctx, session)
@@ -590,8 +605,8 @@ var _ = Describe("the finish path", func() {
 			Expect(err).To(MatchError("no space left on device"))
 			Expect(fs.calls).To(Equal([]string{
 				"TouchFile(markprocessing=false)",
-				"MarkProcessing(true)",
-				"RollbackUpload(nodeExisted=false,sizeDiff=0)",
+				"PrepareUpload(size=17)",
+				"RollbackUpload(nodeExisted=false,sizeDiff=17)",
 				"MarkProcessing(false)",
 			}))
 		})
@@ -599,22 +614,86 @@ var _ = Describe("the finish path", func() {
 		// The size PrepareUpload propagated is what would be lost.
 		It("rolls the prepared upload back", func() {
 			fs.prepared = &storage.PrepareUploadResult{SizeDiff: bodyLen}
-			// The mark's own persist has to get through for the prepare to be reached.
-			session := &brokenSession{
-				Session:          stagedSession(ctx, store, true),
-				failPersist:      true,
-				failPersistAfter: 1,
-			}
+			session := &brokenSession{Session: stagedSession(ctx, store, true), failPersist: true}
 
 			_, err := c.finishUpload(ctx, session)
 
 			Expect(err).To(MatchError("no space left on device"))
 			Expect(fs.calls).To(Equal([]string{
-				"MarkProcessing(true)",
 				"PrepareUpload(size=17)",
 				"RollbackUpload(nodeExisted=true,sizeDiff=17)",
 				"MarkProcessing(false)",
 			}))
+		})
+	})
+
+	// Each save rewrites the whole session file on the request path.
+	Describe("saving the session", func() {
+		DescribeTable("saves it once",
+			func(nodeExists bool) {
+				session := &brokenSession{Session: stagedSession(ctx, store, nodeExists)}
+
+				_, err := c.finishUpload(ctx, session)
+
+				Expect(err).ToNot(HaveOccurred())
+				Expect(session.persistCalls).To(Equal(1))
+			},
+			Entry("for a new file", false),
+			Entry("for an overwrite", true),
+		)
+
+		// The commit may run in another process, which only has the saved session.
+		It("saves the node id TouchFile returned", func() {
+			fs.touched = &provider.ResourceId{StorageId: mountID, SpaceId: spaceID, OpaqueId: "real-node-id"}
+			session := stagedSession(ctx, store, false)
+			c.async = true
+			c.pub = &fakePublisher{}
+
+			_, err := c.finishUpload(ctx, session)
+			Expect(err).ToNot(HaveOccurred())
+
+			saved, err := store.Get(ctx, session.ID())
+			Expect(err).ToNot(HaveOccurred())
+			Expect(saved.NodeID()).To(Equal("real-node-id"))
+		})
+
+		Describe("the space owner", func() {
+			// savedOwner runs a finish handed to postprocessing, which keeps the session.
+			savedOwner := func() *userpb.UserId {
+				session := stagedSession(ctx, store, false)
+				c.async = true
+				c.pub = &fakePublisher{}
+
+				_, err := c.finishUpload(ctx, session)
+				Expect(err).ToNot(HaveOccurred())
+
+				saved, err := store.Get(ctx, session.ID())
+				Expect(err).ToNot(HaveOccurred())
+				return saved.SpaceOwner()
+			}
+
+			BeforeEach(func() {
+				fs.touchedOwner = &userpb.UserId{OpaqueId: "owner-1", Idp: "idp.example.com", Type: userpb.UserType_USER_TYPE_PRIMARY}
+			})
+
+			It("saves the one PrepareUpload reported", func() {
+				fs.prepared = &storage.PrepareUploadResult{
+					SizeDiff:   bodyLen,
+					SpaceOwner: &userpb.UserId{OpaqueId: "manager-1", Idp: "idp.example.com", Type: userpb.UserType_USER_TYPE_PRIMARY},
+				}
+
+				owner := savedOwner()
+
+				Expect(owner.GetOpaqueId()).To(Equal("manager-1"))
+				Expect(owner.GetIdp()).To(Equal("idp.example.com"))
+			})
+
+			// Drivers other than decomposedfs report it from TouchFile only.
+			It("keeps the one TouchFile reported when PrepareUpload reports none", func() {
+				fs.prepared = &storage.PrepareUploadResult{SizeDiff: bodyLen}
+
+				Expect(savedOwner().GetOpaqueId()).To(Equal("owner-1"))
+			})
 		})
 	})
 
@@ -624,44 +703,11 @@ var _ = Describe("the finish path", func() {
 			session := stagedSession(ctx, store, true)
 			fs.commitErr = errors.New("blobstore unavailable")
 			fs.rollbackErr = errors.New("no such node")
-			fs.markErrAfter = 1
 			fs.markErr = errors.New("flock timeout")
 
 			_, err := c.finishUpload(ctx, session)
 
 			Expect(err).To(MatchError("blobstore unavailable"))
-		})
-
-		// An Uploader-only role may leave the empty file behind.
-		It("still reports the failed mark when the node cannot be deleted", func() {
-			session := stagedSession(ctx, store, false)
-			fs.markErr = errors.New("flock timeout")
-			fs.deleteErr = errtypes.PermissionDenied("report.docx")
-
-			_, err := c.finishUpload(ctx, session)
-
-			Expect(err).To(MatchError("flock timeout"))
-			Expect(fs.calls).To(ContainElement("Delete"))
-		})
-
-		// Nothing was prepared here, so the node is purged rather than reverted.
-		It("still reports the original failure when the purge fails", func() {
-			session := stagedSession(ctx, store, false)
-			fs.prepareErr = errors.New("precondition failed")
-			fs.rollbackErr = errors.New("no such node")
-			fs.markErrAfter = 1
-			fs.markErr = errors.New("flock timeout")
-
-			_, err := c.finishUpload(ctx, session)
-
-			Expect(err).To(MatchError("precondition failed"))
-			Expect(fs.calls).To(Equal([]string{
-				"TouchFile(markprocessing=false)",
-				"MarkProcessing(true)",
-				"PrepareUpload(size=17)",
-				"RollbackUpload(nodeExisted=false,sizeDiff=0)",
-				"MarkProcessing(false)",
-			}))
 		})
 	})
 })

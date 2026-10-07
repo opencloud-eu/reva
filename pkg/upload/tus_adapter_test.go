@@ -131,7 +131,6 @@ var _ = Describe("tusAdapter", func() {
 			Expect(adapterFor(session).FinishUpload(ctx)).To(Succeed())
 			Expect(fs.calls).To(Equal([]string{
 				"TouchFile(markprocessing=false)",
-				"MarkProcessing(true)",
 				"PrepareUpload(size=17)",
 				"CommitUpload(length=17)",
 				"MarkProcessing(false)",
