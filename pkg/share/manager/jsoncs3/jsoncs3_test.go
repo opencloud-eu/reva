@@ -335,6 +335,40 @@ var _ = Describe("Jsoncs3", func() {
 				Expect(shares[0].Id).To(Equal(share.Id))
 			})
 		})
+
+		Describe("Unshare", func() {
+			It("removes a share created by another user when the manager has RemoveGrant permission", func() {
+				mockStat(
+					&provider.Reference{ResourceId: sharedResource.Id},
+					&providerv1beta1.ResourceInfo{PermissionSet: &providerv1beta1.ResourcePermissions{RemoveGrant: true}},
+				)
+
+				err := m.Unshare(managerCtx, &collaboration.ShareReference{
+					Spec: &collaboration.ShareReference_Id{
+						Id: &collaboration.ShareId{
+							OpaqueId: share.Id.OpaqueId,
+						},
+					},
+				})
+				Expect(err).ToNot(HaveOccurred())
+			})
+
+			It("does not remove a share created by another user when the manager lacks RemoveGrant permission", func() {
+				mockStat(
+					&provider.Reference{ResourceId: sharedResource.Id},
+					&providerv1beta1.ResourceInfo{PermissionSet: &providerv1beta1.ResourcePermissions{RemoveGrant: false}},
+				)
+
+				err := m.Unshare(managerCtx, &collaboration.ShareReference{
+					Spec: &collaboration.ShareReference_Id{
+						Id: &collaboration.ShareId{
+							OpaqueId: share.Id.OpaqueId,
+						},
+					},
+				})
+				Expect(err).To(HaveOccurred())
+			})
+		})
 	})
 
 	Context("with an existing share", func() {
@@ -471,6 +505,12 @@ var _ = Describe("Jsoncs3", func() {
 		})
 
 		Describe("UnShare", func() {
+			BeforeEach(func() {
+				mockStat(
+					&provider.Reference{ResourceId: sharedResource.Id},
+					&providerv1beta1.ResourceInfo{PermissionSet: &providerv1beta1.ResourcePermissions{RemoveGrant: false}},
+				)
+			})
 			It("removes an existing share", func() {
 				err := m.Unshare(ctx, &collaboration.ShareReference{
 					Spec: &collaboration.ShareReference_Id{

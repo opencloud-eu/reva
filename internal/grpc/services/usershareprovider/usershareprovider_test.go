@@ -570,9 +570,57 @@ var _ = Describe("user share provider service", func() {
 				Expect(createShareResponse.Status.Code).To(Equal(rpcpb.Code_CODE_OK))
 
 				manager.AssertNumberOfCalls(GinkgoT(), "Share", 1)
+				grant := manager.Calls[0].Arguments.Get(2).(*collaborationpb.ShareGrant)
+				Expect(grant.GetGrantee().GetUserId().GetOpaqueId()).To(Equal("guest@example.com"))
 			})
 
-			It("succeeds when sharing with a guest using a mail address with a quoted localpart including path separators", func() {
+			It("stores guests with an international domain in punycode", func() {
+				createShareResponse, err := provider.CreateShare(ctx, &collaborationpb.CreateShareRequest{
+					ResourceInfo: &providerpb.ResourceInfo{
+						PermissionSet: conversions.RoleFromName("manager").CS3ResourcePermissions(),
+					},
+					Grant: &collaborationpb.ShareGrant{
+						Grantee: &providerpb.Grantee{
+							Type: providerpb.GranteeType_GRANTEE_TYPE_USER,
+							Id:   &providerpb.Grantee_UserId{UserId: &userpb.UserId{OpaqueId: "Guest@\u0130nfocorp.com", TenantId: "tenant1", Type: userpb.UserType_USER_TYPE_GUEST}},
+						},
+						Permissions: &collaborationpb.SharePermissions{
+							Permissions: conversions.RoleFromName("viewer").CS3ResourcePermissions(),
+						},
+					},
+				})
+
+				Expect(err).ToNot(HaveOccurred())
+				Expect(createShareResponse.Status.Code).To(Equal(rpcpb.Code_CODE_OK))
+
+				manager.AssertNumberOfCalls(GinkgoT(), "Share", 1)
+				grant := manager.Calls[0].Arguments.Get(2).(*collaborationpb.ShareGrant)
+				Expect(grant.GetGrantee().GetUserId().GetOpaqueId()).To(Equal("guest@xn--infocorp-o0e.com"))
+			})
+
+			It("fails when sharing with a guest using a mail address with a non-ASCII local part", func() {
+				createShareResponse, err := provider.CreateShare(ctx, &collaborationpb.CreateShareRequest{
+					ResourceInfo: &providerpb.ResourceInfo{
+						PermissionSet: conversions.RoleFromName("manager").CS3ResourcePermissions(),
+					},
+					Grant: &collaborationpb.ShareGrant{
+						Grantee: &providerpb.Grantee{
+							Type: providerpb.GranteeType_GRANTEE_TYPE_USER,
+							Id:   &providerpb.Grantee_UserId{UserId: &userpb.UserId{OpaqueId: "b\u043eb@example.com", TenantId: "tenant1", Type: userpb.UserType_USER_TYPE_GUEST}},
+						},
+						Permissions: &collaborationpb.SharePermissions{
+							Permissions: conversions.RoleFromName("viewer").CS3ResourcePermissions(),
+						},
+					},
+				})
+
+				Expect(err).ToNot(HaveOccurred())
+				Expect(createShareResponse.Status.Code).To(Equal(rpcpb.Code_CODE_INVALID_ARGUMENT))
+
+				manager.AssertNumberOfCalls(GinkgoT(), "Share", 0)
+			})
+
+			It("fails when sharing with a guest using a mail address with a quoted localpart", func() {
 				createShareResponse, err := provider.CreateShare(ctx, &collaborationpb.CreateShareRequest{
 					ResourceInfo: &providerpb.ResourceInfo{
 						PermissionSet: conversions.RoleFromName("manager").CS3ResourcePermissions(),
@@ -589,9 +637,9 @@ var _ = Describe("user share provider service", func() {
 				})
 
 				Expect(err).ToNot(HaveOccurred())
-				Expect(createShareResponse.Status.Code).To(Equal(rpcpb.Code_CODE_OK))
+				Expect(createShareResponse.Status.Code).To(Equal(rpcpb.Code_CODE_INVALID_ARGUMENT))
 
-				manager.AssertNumberOfCalls(GinkgoT(), "Share", 1)
+				manager.AssertNumberOfCalls(GinkgoT(), "Share", 0)
 			})
 
 			It("fails when sharing with a guest using an invalid mail address", func() {
