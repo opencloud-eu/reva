@@ -58,5 +58,7 @@ func TestInitNewNode(t *testing.T) {
 	if _, ok := err.(errtypes.IsAlreadyExists); !ok {
 		t.Fatalf(`initNewNode(with same 'newchild' name), %v, want %v`, err, errtypes.AlreadyExists("newchild"))
 	}
-	_ = unlock2()
+	if unlock2 != nil {
+		t.Fatal("initNewNode(with same 'newchild' name) returned an unlock, want nil: it releases the lock itself")
+	}
 }

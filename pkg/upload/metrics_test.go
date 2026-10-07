@@ -86,16 +86,6 @@ var _ = Describe("the processing gauge", func() {
 		})).To(BeZero())
 	})
 
-	// The mark never went through, so there is nothing to take back off the gauge.
-	It("does not move when the node cannot be flagged", func() {
-		fs.markErr = errors.New("flock timeout")
-
-		Expect(delta(func() {
-			_, err := c.finishUpload(ctx, stagedSession(ctx, store, false))
-			Expect(err).To(HaveOccurred())
-		})).To(BeZero())
-	})
-
 	// A cancel arrives before the mark, so before the gauge ever moved.
 	It("does not move when a transfer is cancelled", func() {
 		session := stagedSession(ctx, store, false)

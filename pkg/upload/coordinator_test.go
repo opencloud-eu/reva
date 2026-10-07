@@ -14,6 +14,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	ctxpkg "github.com/opencloud-eu/reva/v2/pkg/ctx"
+	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
 	"github.com/opencloud-eu/reva/v2/pkg/storage"
 	"github.com/opencloud-eu/reva/v2/pkg/utils"
 )
@@ -89,7 +90,8 @@ var _ = Describe("coordinator", func() {
 
 	Describe("finishUpload", func() {
 		Context("for a new file", func() {
-			It("touches, marks, prepares and commits in that order", func() {
+			// PrepareUpload marks the node in its own write, so there is no separate mark.
+			It("touches, prepares and commits in that order", func() {
 				session := newSession(false)
 
 				ri, err := c.finishUpload(ctx, session)
@@ -98,7 +100,6 @@ var _ = Describe("coordinator", func() {
 				Expect(ri.GetEtag()).To(Equal("etag-after-commit"))
 				Expect(fs.calls).To(Equal([]string{
 					"TouchFile(markprocessing=false)",
-					"MarkProcessing(true)",
 					"PrepareUpload(size=17)",
 					"CommitUpload(length=17)",
 					"MarkProcessing(false)",
@@ -135,6 +136,110 @@ var _ = Describe("coordinator", func() {
 				Expect(err).ToNot(HaveOccurred())
 				Expect(fs.touchSkippedPropagation).To(BeTrue())
 			})
+
+			// TouchFile has created the node, so PrepareUpload must not create another.
+			It("does not tell PrepareUpload where the file goes", func() {
+				session := newSession(false)
+
+				_, err := c.finishUpload(ctx, session)
+
+				Expect(err).ToNot(HaveOccurred())
+				Expect(fs.prepareInfo.ParentID).To(BeEmpty())
+				Expect(fs.prepareInfo.Name).To(BeEmpty())
+			})
+		})
+
+		Context("for a new file on a driver whose PrepareUpload creates it", func() {
+			BeforeEach(func() {
+				c = NewCoordinator(&fakeCreatorFS{fakeFS: fs}, store, "", nil)
+			})
+
+			It("prepares and commits without a TouchFile", func() {
+				session := newSession(false)
+
+				_, err := c.finishUpload(ctx, session)
+
+				Expect(err).ToNot(HaveOccurred())
+				Expect(fs.calls).To(Equal([]string{
+					"PrepareUpload(size=17)",
+					"CommitUpload(length=17)",
+					"MarkProcessing(false)",
+					"GetMD()",
+				}))
+			})
+
+			It("tells PrepareUpload where the file goes", func() {
+				session := newSession(false)
+
+				_, err := c.finishUpload(ctx, session)
+
+				Expect(err).ToNot(HaveOccurred())
+				Expect(fs.prepareInfo.ParentID).To(Equal(parentID))
+				Expect(fs.prepareInfo.Name).To(Equal("report.docx"))
+			})
+
+			// The driver creates the node under the placeholder, which so becomes its id,
+			// and there is no TouchFile to report the space owner. The commit may run in
+			// another process, which only has the saved session.
+			It("saves the node id minted at initiate and the space owner PrepareUpload reported", func() {
+				session := newSession(false)
+				c.async = true
+				c.pub = &fakePublisher{}
+				fs.prepared = &storage.PrepareUploadResult{
+					SizeDiff:   bodyLen,
+					SpaceOwner: &userpb.UserId{OpaqueId: "manager-1", Idp: "idp.example.com", Type: userpb.UserType_USER_TYPE_PRIMARY},
+				}
+
+				_, err := c.finishUpload(ctx, session)
+				Expect(err).ToNot(HaveOccurred())
+
+				saved, err := store.Get(ctx, session.ID())
+				Expect(err).ToNot(HaveOccurred())
+				Expect(saved.NodeID()).To(Equal(nodeID))
+				Expect(saved.SpaceOwner().GetOpaqueId()).To(Equal("manager-1"))
+			})
+
+			// The parent went away, or the share was revoked, while bytes were in flight.
+			It("reports a missing parent as a failed precondition", func() {
+				session := newSession(false)
+				fs.prepareErr = errtypes.NotFound("parent-1")
+
+				_, err := c.finishUpload(ctx, session)
+
+				Expect(err).To(BeAssignableToTypeOf(errtypes.PreconditionFailed("")))
+				Expect(fs.calls).To(Equal([]string{"PrepareUpload(size=17)"}))
+				_, err = os.Stat(session.BinPath())
+				Expect(errors.Is(err, os.ErrNotExist)).To(BeTrue())
+			})
+
+			It("passes any other failure through", func() {
+				session := newSession(false)
+				fs.prepareErr = errtypes.InsufficientStorage("quota exceeded")
+
+				_, err := c.finishUpload(ctx, session)
+
+				Expect(err).To(BeAssignableToTypeOf(errtypes.InsufficientStorage("")))
+			})
+
+			It("does not tell PrepareUpload where an overwrite goes", func() {
+				session := newSession(true)
+
+				_, err := c.finishUpload(ctx, session)
+
+				Expect(err).ToNot(HaveOccurred())
+				Expect(fs.prepareInfo.ParentID).To(BeEmpty())
+				Expect(fs.prepareInfo.Name).To(BeEmpty())
+			})
+
+			// The node itself went away: that is not the parent's precondition.
+			It("leaves an overwrite's missing node not found", func() {
+				session := newSession(true)
+				fs.prepareErr = errtypes.NotFound("node-1")
+
+				_, err := c.finishUpload(ctx, session)
+
+				Expect(err).To(BeAssignableToTypeOf(errtypes.NotFound("")))
+			})
 		})
 
 		Context("for an overwrite", func() {
@@ -145,75 +250,49 @@ var _ = Describe("coordinator", func() {
 
 				Expect(err).ToNot(HaveOccurred())
 				Expect(fs.calls).ToNot(ContainElement(ContainSubstring("TouchFile")))
-				Expect(fs.calls[0]).To(Equal("MarkProcessing(true)"))
+				Expect(fs.calls[0]).To(Equal("PrepareUpload(size=17)"))
 			})
 		})
 
-		Context("when MarkProcessing fails", func() {
-			// The node carries no processing id for RollbackUpload to key off.
-			It("deletes the node it touched and does not roll back", func() {
+		// PrepareUpload undoes its own writes, purges a new file's node and marks the
+		// node only on success, so the coordinator has nothing to roll back or unmark.
+		Context("when PrepareUpload fails", func() {
+			It("leaves the cleanup of a new file's node to PrepareUpload", func() {
 				session := newSession(false)
-				fs.markErr = errors.New("flock timeout")
+				fs.prepareErr = errors.New("insufficient storage")
 
 				_, err := c.finishUpload(ctx, session)
 
-				Expect(err).To(MatchError("flock timeout"))
+				Expect(err).To(MatchError("insufficient storage"))
 				Expect(fs.calls).To(Equal([]string{
 					"TouchFile(markprocessing=false)",
-					"MarkProcessing(true)",
-					"Delete",
+					"PrepareUpload(size=17)",
 				}))
 			})
 
-			It("leaves an existing file alone", func() {
+			It("leaves an existing file to PrepareUpload as well", func() {
 				session := newSession(true)
-				fs.markErr = errors.New("flock timeout")
-
-				_, err := c.finishUpload(ctx, session)
-
-				Expect(err).To(HaveOccurred())
-				Expect(fs.calls).ToNot(ContainElement("Delete"))
-			})
-
-			It("removes the staged files", func() {
-				session := newSession(false)
-				fs.markErr = errors.New("flock timeout")
-
-				_, err := c.finishUpload(ctx, session)
-				Expect(err).To(HaveOccurred())
-
-				_, err = os.Stat(session.BinPath())
-				Expect(errors.Is(err, os.ErrNotExist)).To(BeTrue())
-			})
-		})
-
-		Context("when PrepareUpload fails", func() {
-			// The unmark strips the id the rollback keys off, so it has to run second.
-			It("rolls back before unmarking, with no size to revert", func() {
-				session := newSession(false)
 				fs.prepareErr = errors.New("precondition failed")
 
 				_, err := c.finishUpload(ctx, session)
 
 				Expect(err).To(MatchError("precondition failed"))
 				Expect(fs.calls).To(Equal([]string{
-					"TouchFile(markprocessing=false)",
-					"MarkProcessing(true)",
 					"PrepareUpload(size=17)",
-					"RollbackUpload(nodeExisted=false,sizeDiff=0)",
-					"MarkProcessing(false)",
 				}))
 			})
 
-			It("skips the rollback for an overwrite, which has no revision yet", func() {
-				session := newSession(true)
-				fs.prepareErr = errors.New("precondition failed")
+			It("removes the staged files", func() {
+				session := newSession(false)
+				fs.prepareErr = errors.New("insufficient storage")
 
 				_, err := c.finishUpload(ctx, session)
-
 				Expect(err).To(HaveOccurred())
-				Expect(fs.calls).ToNot(ContainElement(ContainSubstring("RollbackUpload")))
-				Expect(fs.calls).To(ContainElement("MarkProcessing(false)"))
+
+				_, err = os.Stat(session.BinPath())
+				Expect(errors.Is(err, os.ErrNotExist)).To(BeTrue())
+				_, err = store.Get(ctx, session.ID())
+				Expect(err).To(HaveOccurred())
 			})
 		})
 
@@ -228,7 +307,6 @@ var _ = Describe("coordinator", func() {
 
 				Expect(err).To(MatchError("blobstore unavailable"))
 				Expect(fs.calls).To(Equal([]string{
-					"MarkProcessing(true)",
 					"PrepareUpload(size=17)",
 					"CommitUpload(length=17)",
 					"RollbackUpload(nodeExisted=true,sizeDiff=17)",
@@ -238,7 +316,7 @@ var _ = Describe("coordinator", func() {
 		})
 
 		Context("when the announced checksum does not match", func() {
-			It("rolls back before the driver writes anything", func() {
+			It("rejects the upload before the driver is called", func() {
 				session := newSession(false)
 				session.SetMetadata("checksum", "sha1 "+strings.Repeat("0", 40))
 				Expect(session.Persist(ctx)).To(Succeed())
@@ -246,12 +324,21 @@ var _ = Describe("coordinator", func() {
 				_, err := c.finishUpload(ctx, session)
 
 				Expect(err).To(HaveOccurred())
-				Expect(fs.calls).To(Equal([]string{
-					"TouchFile(markprocessing=false)",
-					"MarkProcessing(true)",
-					"RollbackUpload(nodeExisted=false,sizeDiff=0)",
-					"MarkProcessing(false)",
-				}))
+				Expect(fs.calls).To(BeEmpty())
+			})
+
+			It("removes the staged files", func() {
+				session := newSession(false)
+				session.SetMetadata("checksum", "sha1 "+strings.Repeat("0", 40))
+				Expect(session.Persist(ctx)).To(Succeed())
+
+				_, err := c.finishUpload(ctx, session)
+				Expect(err).To(HaveOccurred())
+
+				_, err = os.Stat(session.BinPath())
+				Expect(errors.Is(err, os.ErrNotExist)).To(BeTrue())
+				_, err = store.Get(ctx, session.ID())
+				Expect(err).To(HaveOccurred())
 			})
 		})
 
@@ -318,6 +405,42 @@ var _ = Describe("coordinator", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(ri.GetEtag()).To(Equal("etag-after-commit"))
 			Expect(fs.calls).To(ContainElement("CommitUpload(length=17)"))
+		})
+
+		// An async finish keeps the session for postprocessing, so a PUT can reach it again.
+		It("refuses a session whose bytes were already received", func() {
+			c.async = true
+			c.pub = &fakePublisher{}
+			session := store.New(ctx)
+			session.SetMetadata("providerID", mountID)
+			session.SetMetadata("filename", "report.docx")
+			session.SetStorageValue("SpaceRoot", spaceRoot)
+			session.SetStorageValue("NodeId", nodeID)
+			session.SetStorageValue("NodeParentId", parentID)
+			session.SetExecutant(&userpb.User{Id: &userpb.UserId{OpaqueId: "alice"}})
+			session.SetSize(bodyLen)
+			Expect(session.TouchBin()).To(Succeed())
+			Expect(session.Persist(ctx)).To(Succeed())
+			put := func() error {
+				_, err := c.Upload(ctx, storage.UploadRequest{
+					Ref:    &provider.Reference{Path: "/" + session.ID()},
+					Body:   io.NopCloser(strings.NewReader(body)),
+					Length: bodyLen,
+				}, nil)
+				return err
+			}
+			Expect(put()).To(Succeed())
+			calls := len(fs.calls)
+
+			Expect(put()).To(BeAssignableToTypeOf(errtypes.Aborted("")))
+
+			Expect(fs.calls).To(HaveLen(calls), "the repeated PUT reached the driver")
+			saved, err := store.Get(ctx, session.ID())
+			Expect(err).ToNot(HaveOccurred(), "the session postprocessing needs was discarded")
+			Expect(saved.Offset()).To(Equal(bodyLen))
+			staged, err := os.Stat(session.BinPath())
+			Expect(err).ToNot(HaveOccurred())
+			Expect(staged.Size()).To(Equal(bodyLen), "the repeated PUT appended to the staged bytes")
 		})
 
 		It("rejects a body shorter than the declared length", func() {
