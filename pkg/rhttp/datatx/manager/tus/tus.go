@@ -42,6 +42,7 @@ import (
 	"github.com/opencloud-eu/reva/v2/pkg/rhttp/datatx/metrics"
 	"github.com/opencloud-eu/reva/v2/pkg/storage"
 	"github.com/opencloud-eu/reva/v2/pkg/storagespace"
+	"github.com/opencloud-eu/reva/v2/pkg/upload"
 )
 
 func init() {
@@ -89,20 +90,14 @@ func New(m map[string]interface{}, publisher events.Publisher, log *zerolog.Logg
 	}, nil
 }
 
-func (m *manager) Handler(fs storage.FS) (http.Handler, error) {
-	composable, ok := fs.(storage.ComposableFS)
-	if !ok {
-		return nil, errtypes.NotSupported("file system does not support the tus protocol")
-	}
-
+func (m *manager) Handler(coord upload.Coordinator, fs storage.FS) (http.Handler, error) {
 	// A storage backend for tusd may consist of multiple different parts which
 	// handle upload creation, locking, termination and so on. The composer is a
-	// place where all those separated pieces are joined together. In this example
-	// we only use the file store but you may plug in multiple.
+	// place where all those separated pieces are joined together.
 	composer := tusd.NewStoreComposer()
 
-	// let the composable storage tell tus which extensions it supports
-	composable.UseIn(composer)
+	// the coordinator serves the tus protocol on behalf of every driver
+	coord.UseIn(composer)
 
 	config := tusd.Config{
 		StoreComposer:         composer,
@@ -135,33 +130,29 @@ func (m *manager) Handler(fs storage.FS) (http.Handler, error) {
 		return nil, err
 	}
 
-	if usl, ok := fs.(storage.UploadSessionLister); ok {
-		// We can currently only send updates if the fs is decomposedfs as we read very specific keys from the storage map of the tus info
-		go func() {
-			for {
-				ev := <-handler.CompleteUploads
-				// We should be able to get the upload progress with fs.GetUploadProgress, but currently tus will erase the info files
-				// so we create a Progress instance here that is used to read the correct properties
-				ups, err := usl.ListUploadSessions(context.Background(), storage.UploadSessionFilter{ID: &ev.Upload.ID})
-				if err != nil {
-					appctx.GetLogger(context.Background()).Error().Err(err).Str("session", ev.Upload.ID).Msg("failed to list upload session")
-				} else {
-					if len(ups) < 1 {
-						appctx.GetLogger(context.Background()).Error().Str("session", ev.Upload.ID).Msg("upload session not found")
-						continue
-					}
-					up := ups[0]
-					executant := up.Executant()
-					ref := up.Reference()
-					if m.publisher != nil {
-						if err := datatx.EmitFileUploadedEvent(up.SpaceOwner(), &executant, &ref, m.publisher); err != nil {
-							appctx.GetLogger(context.Background()).Error().Err(err).Msg("failed to publish FileUploaded event")
-						}
-					}
+	go func() {
+		for {
+			ev := <-handler.CompleteUploads
+			// tus erases its info files, so read the session back for the event's properties
+			ups, err := coord.ListUploadSessions(context.Background(), storage.UploadSessionFilter{ID: &ev.Upload.ID})
+			if err != nil {
+				appctx.GetLogger(context.Background()).Error().Err(err).Str("session", ev.Upload.ID).Msg("failed to list upload session")
+				continue
+			}
+			if len(ups) < 1 {
+				appctx.GetLogger(context.Background()).Error().Str("session", ev.Upload.ID).Msg("upload session not found")
+				continue
+			}
+			up := ups[0]
+			executant := up.Executant()
+			ref := up.Reference()
+			if m.publisher != nil {
+				if err := datatx.EmitFileUploadedEvent(up.SpaceOwner(), &executant, &ref, m.publisher); err != nil {
+					appctx.GetLogger(context.Background()).Error().Err(err).Msg("failed to publish FileUploaded event")
 				}
 			}
-		}()
-	}
+		}
+	}()
 
 	h := handler.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		sublog := m.log.With().Str("uploadid", r.URL.Path).Logger()
@@ -179,7 +170,7 @@ func (m *manager) Handler(fs storage.FS) (http.Handler, error) {
 				metrics.UploadsActive.Sub(1)
 			}()
 			// set etag, mtime and file id
-			setHeaders(fs, w, r)
+			setHeaders(coord, w, r)
 			handler.PostFile(w, r)
 		case "HEAD":
 			handler.HeadFile(w, r)
@@ -189,7 +180,7 @@ func (m *manager) Handler(fs storage.FS) (http.Handler, error) {
 				metrics.UploadsActive.Sub(1)
 			}()
 			// set etag, mtime and file id
-			setHeaders(fs, w, r)
+			setHeaders(coord, w, r)
 			handler.PatchFile(w, r)
 		case "DELETE":
 			handler.DelFile(w, r)
@@ -246,15 +237,10 @@ func (m *manager) preFinishResponseCallback(fs storage.FS) func(tusd.HookEvent) 
 	}
 }
 
-func setHeaders(fs storage.FS, w http.ResponseWriter, r *http.Request) {
+func setHeaders(coord upload.Coordinator, w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	id := path.Base(r.URL.Path)
-	datastore, ok := fs.(tusd.DataStore)
-	if !ok {
-		appctx.GetLogger(ctx).Error().Interface("fs", fs).Msg("storage is not a tus datastore")
-		return
-	}
-	upload, err := datastore.GetUpload(ctx, id)
+	upload, err := coord.GetUpload(ctx, id)
 	if err != nil {
 		appctx.GetLogger(ctx).Error().Err(err).Msg("could not get upload from storage")
 		return
@@ -267,6 +253,10 @@ func setHeaders(fs storage.FS, w http.ResponseWriter, r *http.Request) {
 	expires := info.MetaData["expires"]
 	if expires != "" {
 		w.Header().Set(net.HeaderTusUploadExpires, expires)
+	}
+	// the node id is only valid once the upload commits; skip the header for new files
+	if info.Storage["NodeExists"] != "true" {
+		return
 	}
 	resourceid := &provider.ResourceId{
 		StorageId: info.MetaData["providerID"],
