@@ -148,20 +148,19 @@ func NewDefault(m map[string]interface{}, bs node.Blobstore, es events.Stream, l
 		return nil, err
 	}
 
-	var mb metadata.Backend
+	if err := prefixes.SetOcPrefix(o.MetadataPrefix); err != nil {
+		return nil, err
+	}
+
+	var lu *lookup.Lookup
 	switch o.MetadataBackend {
 	case "xattrs":
-		if o.MetadataPrefix != "" && o.MetadataPrefix != prefixes.OcPrefix {
-			return nil, fmt.Errorf("metadata_prefix requires the messagepack metadata backend, got %q", o.MetadataBackend)
-		}
-		mb = metadata.NewXattrsBackend(o.FileMetadataCache)
+		lu = lookup.New(metadata.NewXattrsBackend(o.FileMetadataCache), o, &timemanager.Manager{})
 	case "messagepack":
-		mb = metadata.NewMessagePackBackend(o.FileMetadataCache).WithPrefix(o.MetadataPrefix)
+		lu = lookup.New(metadata.NewMessagePackBackend(o.FileMetadataCache), o, &timemanager.Manager{})
 	default:
 		return nil, fmt.Errorf("unknown metadata backend %s, only 'messagepack' or 'xattrs' (default) supported", o.MetadataBackend)
 	}
-
-	lu := lookup.New(mb, o, &timemanager.Manager{})
 
 	permissionsSelector, err := pool.PermissionsSelector(o.PermissionsSVC, pool.WithTLSMode(o.PermTLSMode))
 	if err != nil {
