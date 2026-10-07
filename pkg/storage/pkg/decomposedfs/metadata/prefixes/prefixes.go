@@ -45,6 +45,11 @@ const (
 	BlobIDAttr   string = OcPrefix + "blobid"
 	BlobsizeAttr string = OcPrefix + "blobsize"
 
+	// PropagatedSizeAttr records the file size that has already been propagated to the ancestors'
+	// treesize. It is the baseline for the next size diff, so a failed propagation can be retried
+	// instead of being lost when blobsize is overwritten with the new size.
+	PropagatedSizeAttr string = OcPrefix + "propagatedsize"
+
 	// statusPrefix is the prefix for the node status
 	StatusPrefix string = OcPrefix + "nodestatus"
 

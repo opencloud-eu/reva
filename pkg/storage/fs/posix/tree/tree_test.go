@@ -190,6 +190,50 @@ var _ = Describe("Watching tree", func() {
 				}).Should(Succeed())
 			})
 
+			It("re-propagates a file's size after a failed propagation", func() {
+				fileRef := &provider.Reference{ResourceId: env.SpaceRootRes, Path: subtree + "/grow.txt"}
+				dirRef := &provider.Reference{ResourceId: env.SpaceRootRes, Path: subtree}
+
+				// assimilate a small file successfully
+				Expect(os.WriteFile(root+"/grow.txt", []byte("hello"), 0600)).To(Succeed())
+				Eventually(func(g Gomega) {
+					n, err := env.Lookup.NodeFromResource(env.Ctx, fileRef)
+					g.Expect(err).ToNot(HaveOccurred())
+					g.Expect(n.Exists).To(BeTrue())
+					g.Expect(n.Blobsize).To(Equal(int64(5)))
+				}).Should(Succeed())
+
+				// break the parent's treesize so propagating to it fails
+				dir, err := env.Lookup.NodeFromResource(env.Ctx, dirRef)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(env.Lookup.MetadataBackend().Set(env.Ctx, dir, prefixes.TreesizeAttr, []byte("not-a-number"))).To(Succeed())
+
+				// grow the file: the propagation fails, but the checkpoint must roll back to the old size
+				Expect(os.WriteFile(root+"/grow.txt", []byte("hello world!"), 0600)).To(Succeed())
+				Eventually(func(g Gomega) {
+					n, err := env.Lookup.NodeFromResource(env.Ctx, fileRef)
+					g.Expect(err).ToNot(HaveOccurred())
+					g.Expect(n.Blobsize).To(Equal(int64(12)))
+					p, err := n.Xattr(env.Ctx, prefixes.PropagatedSizeAttr)
+					g.Expect(err).ToNot(HaveOccurred())
+					g.Expect(string(p)).To(Equal("5"))
+				}).Should(Succeed())
+
+				// repair the parent and touch the file: the outstanding delta must now be propagated
+				dir, err = env.Lookup.NodeFromResource(env.Ctx, dirRef)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(env.Lookup.MetadataBackend().Set(env.Ctx, dir, prefixes.TreesizeAttr, []byte("5"))).To(Succeed())
+				Expect(os.WriteFile(root+"/grow.txt", []byte("hello world!"), 0600)).To(Succeed())
+
+				Eventually(func(g Gomega) {
+					dir, err := env.Lookup.NodeFromResource(env.Ctx, dirRef)
+					g.Expect(err).ToNot(HaveOccurred())
+					size, err := dir.GetTreeSize(env.Ctx)
+					g.Expect(err).ToNot(HaveOccurred())
+					g.Expect(size).To(Equal(uint64(12)))
+				}).Should(Succeed())
+			})
+
 			It("handles deleted files", func() {
 				Expect(os.WriteFile(root+"/deleted.txt", []byte("hello world"), 0600)).To(Succeed())
 
