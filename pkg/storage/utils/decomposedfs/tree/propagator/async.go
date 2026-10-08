@@ -294,9 +294,8 @@ func (p AsyncPropagator) propagate(ctx context.Context, spaceID, nodeID string, 
 	// always log error if closing node fails
 	defer func() {
 		// ignore already closed error
-		cerr := f.Close()
-		if err == nil && cerr != nil && !errors.Is(cerr, os.ErrClosed) {
-			err = cerr // only overwrite err with en error from close if the former was nil
+		if cerr := f.Close(); cerr != nil && !errors.Is(cerr, os.ErrClosed) {
+			log.Error().Err(cerr).Msg("Failed to close node and release lock")
 		}
 	}()
 

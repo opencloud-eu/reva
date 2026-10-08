@@ -20,6 +20,7 @@ package propagator
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -296,7 +297,12 @@ func (p AsyncPropagator) propagate(ctx context.Context, spaceID, nodeID string, 
 		cleanup()
 		return
 	}
-	defer func() { _ = unlock() }()
+	defer func() {
+		// the lock may already have been released early, ignore that
+		if cerr := unlock(); cerr != nil && !errors.Is(cerr, os.ErrClosed) {
+			log.Error().Err(cerr).Msg("Failed to unlock node")
+		}
+	}()
 
 	if !n.Exists {
 		log.Debug().Str("attr", prefixes.PropagationAttr).Msg("node does not exist anymore, not propagating")
@@ -392,7 +398,9 @@ func (p AsyncPropagator) propagate(ctx context.Context, spaceID, nodeID string, 
 
 	// Release node lock early, ignore already closed error
 	_, subspan = tracer.Start(ctx, "f.Close")
-	_ = unlock()
+	if cerr := unlock(); cerr != nil && !errors.Is(cerr, os.ErrClosed) {
+		log.Error().Err(cerr).Msg("Failed to unlock node")
+	}
 	subspan.End()
 
 	log.Info().Msg("Propagation done. cleaning up")
