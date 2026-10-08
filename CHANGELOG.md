@@ -1,19 +1,20 @@
 # Changelog
 
-## [2.52.0](https://github.com/opencloud-eu/reva/releases/tag/v2.52.0) - 2026-10-07
+## [2.52.0](https://github.com/opencloud-eu/reva/releases/tag/v2.52.0) - 2026-10-08
 
 ### ❤️ Thanks to all contributors! ❤️
 
 @aduffeck, @butonic, @fschade, @micbar
 
+### 🐛 Bug Fixes
+
+- test: wait for the DeleteRevision handler before redelivering [[#861](https://github.com/opencloud-eu/reva/pull/861)]
+- fix filedescriptor leaks [[#847](https://github.com/opencloud-eu/reva/pull/847)]
+
 ### 📈 Enhancement
 
 - Harden unshare [[#856](https://github.com/opencloud-eu/reva/pull/856)]
 - feat: run decomposedfs on foreign metadata via metadata_prefix [[#859](https://github.com/opencloud-eu/reva/pull/859)]
-
-### 🐛 Bug Fixes
-
-- fix filedescriptor leaks [[#847](https://github.com/opencloud-eu/reva/pull/847)]
 
 ## [2.51.0](https://github.com/opencloud-eu/reva/releases/tag/v2.51.0) - 2026-10-05
 
