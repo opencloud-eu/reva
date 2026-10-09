@@ -1,5 +1,28 @@
 # Changelog
 
+## [2.52.0](https://github.com/opencloud-eu/reva/releases/tag/v2.52.0) - 2026-10-09
+
+### ❤️ Thanks to all contributors! ❤️
+
+@aduffeck, @butonic, @fschade, @micbar
+
+### ✅ Tests
+
+- try to remove the share migration lock on SIGTERM [[#869](https://github.com/opencloud-eu/reva/pull/869)]
+- fix: separate cronjobs for different tasks [[#868](https://github.com/opencloud-eu/reva/pull/868)]
+- fix: wait for inotify to react [[#863](https://github.com/opencloud-eu/reva/pull/863)]
+
+### 📈 Enhancement
+
+- feat: make space2share migration repeatable [[#864](https://github.com/opencloud-eu/reva/pull/864)]
+- Harden unshare [[#856](https://github.com/opencloud-eu/reva/pull/856)]
+- feat: run decomposedfs on foreign metadata via metadata_prefix [[#859](https://github.com/opencloud-eu/reva/pull/859)]
+
+### 🐛 Bug Fixes
+
+- test: wait for the DeleteRevision handler before redelivering [[#861](https://github.com/opencloud-eu/reva/pull/861)]
+- fix filedescriptor leaks [[#847](https://github.com/opencloud-eu/reva/pull/847)]
+
 ## [2.51.0](https://github.com/opencloud-eu/reva/releases/tag/v2.51.0) - 2026-10-05
 
 ### ❤️ Thanks to all contributors! ❤️
