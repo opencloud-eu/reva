@@ -688,4 +688,58 @@ var _ = Describe("Async file uploads", Ordered, func() {
 			// Expect(parentSize()).To(Equal(0))
 		})
 	})
+
+	When("two uploads overwrite an existing file in parallel", func() {
+		var (
+			olderUploadID string
+			newerUploadID string
+			olderContent  = []byte("012345678901234")
+		)
+
+		JustBeforeEach(func() {
+			// the file exists with firstContent
+			succeedPostprocessing(uploadID)
+
+			upload := func(content []byte) string {
+				uploadIds, err := fs.InitiateUpload(ctx, ref, int64(len(content)), map[string]string{})
+				Expect(err).ToNot(HaveOccurred())
+				_, err = fs.Upload(ctx, storage.UploadRequest{
+					Ref:    &provider.Reference{Path: "/" + uploadIds["simple"]},
+					Body:   io.NopCloser(bytes.NewReader(content)),
+					Length: int64(len(content)),
+				}, nil)
+				Expect(err).ToNot(HaveOccurred())
+				_, ok := (<-pub).(events.BytesReceived)
+				Expect(ok).To(BeTrue())
+				return uploadIds["simple"]
+			}
+			olderUploadID = upload(olderContent)
+			newerUploadID = upload(secondContent)
+		})
+
+		It("keeps the newer upload when the older one fails after the newer one succeeded", func() {
+			succeedPostprocessing(newerUploadID)
+
+			_, status, size := fileStatus()
+			Expect(status).To(Equal(""))
+			Expect(size).To(Equal(len(secondContent)))
+
+			failPostprocessing(olderUploadID, events.PPOutcomeDelete)
+
+			// rolling back the older upload must not replace the newer content with the old version
+			_, status, size = fileStatus()
+			Expect(status).To(Equal(""))
+			Expect(size).To(Equal(len(secondContent)))
+			Expect(parentSize()).To(Equal(len(secondContent)))
+
+			// the version of the original file is kept
+			revisions, err := fs.ListRevisions(ctx, ref)
+			Expect(err).ToNot(HaveOccurred())
+			sizes := []uint64{}
+			for _, r := range revisions {
+				sizes = append(sizes, r.Size)
+			}
+			Expect(sizes).To(ContainElement(uint64(len(firstContent))))
+		})
+	})
 })
