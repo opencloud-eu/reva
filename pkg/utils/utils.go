@@ -426,17 +426,21 @@ func AppendJSONToOpaque(o *types.Opaque, key string, value interface{}) *types.O
 	return o
 }
 
-// AppendGrantsToOpaque adds the grants as json on the given opaque and returns it. Ignores errors
-func AppendGrantsToOpaque(o *types.Opaque, key string, grants []*provider.Grant) *types.Opaque {
-	o = ensureOpaque(o)
-
+// AppendGrantsToOpaque adds the grants as json on the given opaque and returns it.
+// If the grants can't be marshaled, e.g. because an id is not valid UTF-8, the opaque is returned unchanged.
+func AppendGrantsToOpaque(o *types.Opaque, key string, grants []*provider.Grant) (*types.Opaque, error) {
 	// grantees are oneofs, which only protojson can marshal
-	b, _ := MarshalProtoV1ToJSON(&provider.ListGrantsResponse{Grants: grants})
+	b, err := MarshalProtoV1ToJSON(&provider.ListGrantsResponse{Grants: grants})
+	if err != nil {
+		return o, err
+	}
+
+	o = ensureOpaque(o)
 	o.Map[key] = &types.OpaqueEntry{
 		Decoder: "json",
 		Value:   b,
 	}
-	return o
+	return o, nil
 }
 
 // ReadGrantsFromOpaque reads grants added with AppendGrantsToOpaque from the given opaque map

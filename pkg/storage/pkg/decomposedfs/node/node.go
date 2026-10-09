@@ -972,10 +972,10 @@ func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissi
 	// grants on the node and its ancestors, which tell who has access to it through a share.
 	// Only service accounts get them, users must not learn about grants on ancestors.
 	if _, ok := fieldMaskKeysMap[AncestorGrantsKey]; ok && isServiceAccount(ctx) {
-		if grants, err := n.ancestorGrants(ctx); err == nil {
-			ri.Opaque = utils.AppendGrantsToOpaque(ri.Opaque, AncestorGrantsKey, grants)
-		} else {
+		if grants, err := n.ancestorGrants(ctx); err != nil {
 			sublog.Error().Err(err).Msg("could not read ancestor grants")
+		} else if ri.Opaque, err = utils.AppendGrantsToOpaque(ri.Opaque, AncestorGrantsKey, grants); err != nil {
+			sublog.Error().Err(err).Msg("could not add ancestor grants")
 		}
 	}
 

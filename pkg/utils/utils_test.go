@@ -213,7 +213,10 @@ func TestGrantsOpaque(t *testing.T) {
 		},
 	}
 
-	o := AppendGrantsToOpaque(nil, "grants", grants)
+	o, err := AppendGrantsToOpaque(nil, "grants", grants)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	read, err := ReadGrantsFromOpaque(o, "grants")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -229,5 +232,20 @@ func TestGrantsOpaque(t *testing.T) {
 
 	if _, err := ReadGrantsFromOpaque(o, "missing"); err == nil {
 		t.Error("expected an error for a missing key")
+	}
+
+	// ids that are not valid UTF-8 can't be marshaled, the opaque must stay untouched
+	invalid := []*provider.Grant{{
+		Grantee: &provider.Grantee{
+			Type: provider.GranteeType_GRANTEE_TYPE_USER,
+			Id:   &provider.Grantee_UserId{UserId: &userpb.UserId{OpaqueId: "\xff"}},
+		},
+	}}
+	o, err = AppendGrantsToOpaque(o, "invalid", invalid)
+	if err == nil {
+		t.Error("expected an error for an invalid grant")
+	}
+	if ExistsInOpaque(o, "invalid") || !ExistsInOpaque(o, "grants") {
+		t.Error("expected the opaque to be unchanged")
 	}
 }
