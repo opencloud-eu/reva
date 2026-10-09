@@ -27,6 +27,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -747,6 +748,11 @@ assimilate:
 
 	var n *node.Node
 	sizeDiff := int64(0)
+	// a stored parent id that differs from the parent on disk means the item was moved on disk.
+	// Like Tree.Move, its size then moves from the old parents to the new ones.
+	oldParentID := previousAttribs.String(prefixes.ParentidAttr)
+	moved := len(oldParentID) > 0 && len(parentID) > 0 && oldParentID != parentID
+	movedSize := int64(0)
 	if fi.IsDir() {
 		// The Space's name attribute might not match the directory name. Use the name as
 		// it was set before. Also the space root doesn't have a 'type' attribute
@@ -766,6 +772,10 @@ assimilate:
 		treeSize, err := attributes.Int64(prefixes.TreesizeAttr)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to parse treesize")
+		}
+		if moved {
+			movedSize = treeSize
+			sizeDiff = treeSize
 		}
 		n = node.New(spaceID, id, parentID, filepath.Base(path), treeSize, "", provider.ResourceType_RESOURCE_TYPE_CONTAINER, nil, t.lookup)
 	} else {
@@ -798,7 +808,11 @@ assimilate:
 		if err != nil || prevBlobSize < 0 {
 			prevBlobSize = 0
 		}
-		if prevBlobSize != fi.Size() {
+		switch {
+		case moved:
+			movedSize = prevBlobSize
+			sizeDiff = fi.Size()
+		case prevBlobSize != fi.Size():
 			sizeDiff = fi.Size() - prevBlobSize
 		}
 	}
@@ -881,6 +895,14 @@ assimilate:
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "failed to propagate")
 	}
+	// take the stored size off the old parents last, so that a common ancestor that undercounts is not clamped at 0 in between
+	if movedSize > 0 {
+		oldNode := node.New(spaceID, id, oldParentID, "", 0, "", provider.ResourceType_RESOURCE_TYPE_INVALID, nil, t.lookup)
+		oldNode.SpaceRoot = n.SpaceRoot
+		if err := t.Propagate(context.Background(), oldNode, -movedSize); err != nil {
+			t.log.Error().Err(err).Str("path", path).Str("oldParentID", oldParentID).Msg("could not propagate size of moved item to its old parent")
+		}
+	}
 
 	// clear the status attribute if it was set before, if there was any upload to this file in progress
 	// it needs notice that this file was changes meanwhile.
@@ -920,6 +942,12 @@ func (t *Tree) WarmupIDCache(root string, assimilate, onlyDirty bool) error {
 	}
 
 	sizes := make(map[string]int64)
+	addToParents := func(path string, size int64) {
+		for dir := path; dir != root; {
+			dir = filepath.Clean(filepath.Dir(dir))
+			sizes[dir] += size
+		}
+	}
 	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
@@ -948,25 +976,27 @@ func (t *Tree) WarmupIDCache(root string, assimilate, onlyDirty bool) error {
 
 		// calculate tree sizes
 		if !info.IsDir() {
-			dir := path
-			for dir != root {
-				dir = filepath.Clean(filepath.Dir(dir))
-				sizes[dir] += info.Size()
-			}
+			addToParents(path, info.Size())
 		} else {
-			sizes[path] += 0 // Make sure to set the size to 0 for empty directories
 			if onlyDirty {
 				dirty, err := t.isDirty(path)
 				if err != nil {
 					return err
 				}
 				if !dirty {
-					return filepath.SkipDir
+					// the stored tree size of a clean directory is still valid. Count it for the
+					// parents instead of overwriting it with the size of the files we skip.
+					if size, ok := t.storedTreeSize(path); ok {
+						addToParents(path, size)
+						return filepath.SkipDir
+					}
+					// without a valid stored tree size, walk the directory to calculate it
 				}
 			}
+			sizes[path] += 0 // Make sure to set the size to 0 for empty directories
 		}
 
-		nodeSpaceID, id, _, _, err := t.lookup.MetadataBackend().IdentifyPath(context.Background(), path)
+		nodeSpaceID, id, storedParentID, _, err := t.lookup.MetadataBackend().IdentifyPath(context.Background(), path)
 		if err == nil && len(id) > 0 {
 			if len(nodeSpaceID) > 0 {
 				spaceID = nodeSpaceID
@@ -1030,6 +1060,9 @@ func (t *Tree) WarmupIDCache(root string, assimilate, onlyDirty bool) error {
 					if err := t.lookup.CacheID(context.Background(), spaceID, id, path); err != nil {
 						t.log.Error().Err(err).Str("spaceID", spaceID).Str("id", id).Str("path", path).Msg("could not cache id")
 					}
+					if !onlyDirty {
+						t.updateMovedParentID(root, path, spaceID, id, storedParentID)
+					}
 				}
 			}
 		} else if assimilate {
@@ -1076,6 +1109,27 @@ func (t *Tree) WarmupIDCache(root string, assimilate, onlyDirty bool) error {
 	return nil
 }
 
+// updateMovedParentID stores the new parent id of an item that was moved on disk while nothing watched it.
+// A full walk from root calculates the tree sizes from disk, so it can do that when the old parent is under
+// root too. Otherwise the next assimilation of the item would move its size from the old parent a second time.
+func (t *Tree) updateMovedParentID(root, path, spaceID, id, storedParentID string) {
+	if storedParentID == "" {
+		return
+	}
+	_, parentID, err := t.lookup.IDsForPath(context.Background(), filepath.Dir(path))
+	if err != nil || parentID == storedParentID {
+		return
+	}
+	oldParentPath, err := t.lookup.GetCachedID(context.Background(), spaceID, storedParentID)
+	if err != nil || (oldParentPath != root && !strings.HasPrefix(oldParentPath, root+string(filepath.Separator))) {
+		return
+	}
+	n := &assimilationNode{spaceID: spaceID, nodeId: id, path: path}
+	if err := t.lookup.MetadataBackend().Set(context.Background(), n, prefixes.ParentidAttr, []byte(parentID)); err != nil {
+		t.log.Error().Err(err).Str("path", path).Msg("could not update the parent id of a moved item")
+	}
+}
+
 func (t *Tree) propagateSizeDiff(n *node.Node, size int64) error {
 	attrs, err := t.lookup.MetadataBackend().All(context.Background(), n)
 	if err != nil {
@@ -1091,6 +1145,15 @@ func (t *Tree) propagateSizeDiff(n *node.Node, size int64) error {
 
 func (t *Tree) setDirty(path string, dirty bool) error {
 	return xattr.Set(path, dirtyFlag(), []byte(fmt.Sprintf("%t", dirty)))
+}
+
+func (t *Tree) storedTreeSize(path string) (int64, bool) {
+	b, err := xattr.Get(path, prefixes.TreesizeAttr)
+	if err != nil {
+		return 0, false
+	}
+	size, err := strconv.ParseInt(string(b), 10, 64)
+	return size, err == nil && size >= 0
 }
 
 func (t *Tree) isDirty(path string) (bool, error) {

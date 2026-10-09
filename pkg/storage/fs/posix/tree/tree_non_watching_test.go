@@ -1,6 +1,7 @@
 package tree_test
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"time"
@@ -228,5 +229,71 @@ var _ = Describe("Non-watching tree", func() {
 		dir, err = non_watching_env.Lookup.NodeFromResource(non_watching_env.Ctx, ref)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(dir.GetTreeSize(non_watching_env.Ctx)).To(BeZero())
+	})
+
+	It("finishes a move when the request is cancelled after the rename", func() {
+		Expect(os.MkdirAll(root+"/source/dir", 0700)).To(Succeed())
+		Expect(os.Mkdir(root+"/target", 0700)).To(Succeed())
+		Expect(os.WriteFile(root+"/source/dir/file.txt", []byte("hello world"), 0600)).To(Succeed())
+		Expect(non_watching_env.Tree.WarmupIDCache(root, true, false)).To(Succeed())
+
+		nodeFor := func(path string) *node.Node {
+			n, err := non_watching_env.Lookup.NodeFromResource(non_watching_env.Ctx, &provider.Reference{
+				ResourceId: non_watching_env.SpaceRootRes,
+				Path:       subtree + path,
+			})
+			Expect(err).ToNot(HaveOccurred())
+			return n
+		}
+		treeSize := func(path string) uint64 {
+			size, err := nodeFor(path).GetTreeSize(non_watching_env.Ctx)
+			Expect(err).ToNot(HaveOccurred())
+			return size
+		}
+		Expect(treeSize("/source")).To(Equal(uint64(11)))
+
+		ctx, cancel := context.WithCancel(non_watching_env.Ctx)
+		cancel()
+		Expect(non_watching_env.Tree.Move(ctx, nodeFor("/source/dir"), nodeFor("/target/dir"))).To(Succeed())
+
+		Expect(treeSize("/source")).To(Equal(uint64(0)))
+		Expect(treeSize("/target")).To(Equal(uint64(11)))
+		Expect(treeSize("/target/dir")).To(Equal(uint64(11)))
+		Expect(treeSize("")).To(Equal(uint64(11)))
+	})
+
+	It("does not move the size again after a full scan picked up a move on disk", func() {
+		Expect(os.Mkdir(root+"/source", 0700)).To(Succeed())
+		Expect(os.Mkdir(root+"/target", 0700)).To(Succeed())
+		Expect(os.WriteFile(root+"/source/file.txt", []byte("hello world"), 0600)).To(Succeed())
+		Expect(non_watching_env.Tree.WarmupIDCache(root, true, false)).To(Succeed())
+
+		nodeFor := func(path string) *node.Node {
+			n, err := non_watching_env.Lookup.NodeFromResource(non_watching_env.Ctx, &provider.Reference{
+				ResourceId: non_watching_env.SpaceRootRes,
+				Path:       subtree + path,
+			})
+			Expect(err).ToNot(HaveOccurred())
+			return n
+		}
+		treeSize := func(path string) uint64 {
+			size, err := nodeFor(path).GetTreeSize(non_watching_env.Ctx)
+			Expect(err).ToNot(HaveOccurred())
+			return size
+		}
+
+		// moved while nothing watched, then picked up by a full scan like the one at startup
+		Expect(os.Rename(root+"/source/file.txt", root+"/target/file.txt")).To(Succeed())
+		Expect(non_watching_env.Tree.WarmupIDCache(root, true, false)).To(Succeed())
+		Expect(treeSize("/source")).To(Equal(uint64(0)))
+		Expect(treeSize("/target")).To(Equal(uint64(11)))
+
+		// the next assimilation of the file must only add its change in size
+		Expect(os.WriteFile(root+"/target/file.txt", []byte("hello world!!"), 0600)).To(Succeed())
+		Expect(non_watching_env.Tree.Assimilate(root + "/target/file.txt")).To(Succeed())
+
+		Expect(treeSize("/target")).To(Equal(uint64(13)))
+		Expect(treeSize("/source")).To(Equal(uint64(0)))
+		Expect(treeSize("")).To(Equal(uint64(13)))
 	})
 })

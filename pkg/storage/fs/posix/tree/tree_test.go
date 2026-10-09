@@ -317,6 +317,17 @@ var _ = Describe("Watching tree", func() {
 		})
 
 		Describe("of directories", func() {
+			treeSize := func(g Gomega, path string) uint64 {
+				n, err := env.Lookup.NodeFromResource(env.Ctx, &provider.Reference{
+					ResourceId: env.SpaceRootRes,
+					Path:       path,
+				})
+				g.Expect(err).ToNot(HaveOccurred())
+				size, err := n.GetTreeSize(env.Ctx)
+				g.Expect(err).ToNot(HaveOccurred())
+				return size
+			}
+
 			It("handles new directories", func() {
 				Expect(os.Mkdir(root+"/assimilated", 0700)).To(Succeed())
 
@@ -418,6 +429,103 @@ var _ = Describe("Watching tree", func() {
 					g.Expect(n.ID).To(Equal(dirId))
 					g.Expect(n.GetTreeSize(env.Ctx)).To(Equal(uint64(11)))
 				}).Should(Succeed())
+			})
+
+			It("keeps the tree size of a sibling when a directory is deleted", func() {
+				for _, dir := range []string{"/kept", "/deleted"} {
+					Expect(os.Mkdir(root+dir, 0700)).To(Succeed())
+					time.Sleep(100 * time.Millisecond) // Give it some time to settle down
+					Expect(os.WriteFile(root+dir+"/file.txt", []byte("hello world"), 0600)).To(Succeed())
+				}
+				Eventually(func(g Gomega) {
+					g.Expect(treeSize(g, subtree+"/kept")).To(Equal(uint64(11)))
+					g.Expect(treeSize(g, subtree)).To(Equal(uint64(22)))
+				}).Should(Succeed())
+
+				// settle like the startup scan does, which leaves every directory clean
+				Expect(env.Tree.WarmupIDCache(root, false, false)).To(Succeed())
+
+				Expect(os.RemoveAll(root + "/deleted")).To(Succeed())
+
+				Eventually(func(g Gomega) {
+					g.Expect(treeSize(g, subtree)).To(Equal(uint64(11)))
+				}).Should(Succeed())
+				// the parent is scanned again after the delete, which must not reset the clean sibling
+				Consistently(func(g Gomega) {
+					g.Expect(treeSize(g, subtree+"/kept")).To(Equal(uint64(11)))
+					g.Expect(treeSize(g, subtree)).To(Equal(uint64(11)))
+				}, 2*time.Second).Should(Succeed())
+			})
+
+			It("keeps the tree size of a clean directory when it is moved", func() {
+				Expect(os.Mkdir(root+"/original", 0700)).To(Succeed())
+				time.Sleep(100 * time.Millisecond) // Give it some time to settle down
+				Expect(os.WriteFile(root+"/original/file.txt", []byte("hello world"), 0600)).To(Succeed())
+				Eventually(func(g Gomega) {
+					g.Expect(treeSize(g, subtree+"/original")).To(Equal(uint64(11)))
+				}).Should(Succeed())
+
+				// settle like the startup scan does, which leaves every directory clean
+				Expect(env.Tree.WarmupIDCache(root, false, false)).To(Succeed())
+
+				Expect(os.Rename(root+"/original", root+"/moved")).To(Succeed())
+
+				Eventually(func(g Gomega) {
+					g.Expect(treeSize(g, subtree+"/moved")).To(Equal(uint64(11)))
+				}).Should(Succeed())
+				// the moved directory is scanned after the move, which must not reset it
+				Consistently(func(g Gomega) {
+					g.Expect(treeSize(g, subtree+"/moved")).To(Equal(uint64(11)))
+					g.Expect(treeSize(g, subtree)).To(Equal(uint64(11)))
+				}, 2*time.Second).Should(Succeed())
+			})
+
+			It("moves the tree size along with a directory and a file moved to another directory", func() {
+				Expect(os.MkdirAll(root+"/source/dir", 0700)).To(Succeed())
+				Expect(os.Mkdir(root+"/target", 0700)).To(Succeed())
+				time.Sleep(100 * time.Millisecond) // Give it some time to settle down
+				Expect(os.WriteFile(root+"/source/dir/file.txt", []byte("hello world"), 0600)).To(Succeed())
+				Expect(os.WriteFile(root+"/source/file.txt", []byte("hello"), 0600)).To(Succeed())
+				Eventually(func(g Gomega) {
+					g.Expect(treeSize(g, subtree+"/source")).To(Equal(uint64(16)))
+					g.Expect(treeSize(g, subtree)).To(Equal(uint64(16)))
+				}).Should(Succeed())
+
+				Expect(os.Rename(root+"/source/dir", root+"/target/dir")).To(Succeed())
+				Expect(os.Rename(root+"/source/file.txt", root+"/target/file.txt")).To(Succeed())
+
+				Eventually(func(g Gomega) {
+					g.Expect(treeSize(g, subtree+"/source")).To(Equal(uint64(0)))
+					g.Expect(treeSize(g, subtree+"/target")).To(Equal(uint64(16)))
+				}).Should(Succeed())
+				Consistently(func(g Gomega) {
+					g.Expect(treeSize(g, subtree+"/source")).To(Equal(uint64(0)))
+					g.Expect(treeSize(g, subtree+"/target")).To(Equal(uint64(16)))
+					g.Expect(treeSize(g, subtree+"/target/dir")).To(Equal(uint64(11)))
+					g.Expect(treeSize(g, subtree)).To(Equal(uint64(16)))
+				}, 2*time.Second).Should(Succeed())
+			})
+
+			It("uses the new size of a file that changes while it is moved to another directory", func() {
+				Expect(os.Mkdir(root+"/source", 0700)).To(Succeed())
+				Expect(os.Mkdir(root+"/target", 0700)).To(Succeed())
+				time.Sleep(100 * time.Millisecond) // Give it some time to settle down
+				Expect(os.WriteFile(root+"/source/file.txt", []byte("hello world"), 0600)).To(Succeed())
+				Eventually(func(g Gomega) {
+					g.Expect(treeSize(g, subtree+"/source")).To(Equal(uint64(11)))
+				}).Should(Succeed())
+
+				Expect(os.Rename(root+"/source/file.txt", root+"/target/file.txt")).To(Succeed())
+				Expect(os.WriteFile(root+"/target/file.txt", []byte("hello"), 0600)).To(Succeed())
+
+				Eventually(func(g Gomega) {
+					g.Expect(treeSize(g, subtree+"/source")).To(Equal(uint64(0)))
+					g.Expect(treeSize(g, subtree+"/target")).To(Equal(uint64(5)))
+				}).Should(Succeed())
+				Consistently(func(g Gomega) {
+					g.Expect(treeSize(g, subtree+"/target")).To(Equal(uint64(5)))
+					g.Expect(treeSize(g, subtree)).To(Equal(uint64(5)))
+				}, 2*time.Second).Should(Succeed())
 			})
 		})
 	})
