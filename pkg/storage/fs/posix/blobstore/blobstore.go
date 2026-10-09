@@ -26,6 +26,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -46,15 +47,17 @@ const (
 type Blobstore struct {
 	root string
 
-	canUseRenameForUpload bool
+	// canUseRenameForUpload is read and written by concurrent uploads
+	canUseRenameForUpload atomic.Bool
 }
 
 // New returns a new Blobstore
 func New(root string) (*Blobstore, error) {
-	return &Blobstore{
-		root:                  root,
-		canUseRenameForUpload: true, // let's assume the upload area is on the same device as the blobstore root by default
-	}, nil
+	bs := &Blobstore{
+		root: root,
+	}
+	bs.canUseRenameForUpload.Store(true) // let's assume the upload area is on the same device as the blobstore root by default
+	return bs, nil
 }
 
 // Upload is responsible for transferring data from a source file (upload) to its final location;
@@ -67,20 +70,22 @@ func (bs *Blobstore) Upload(n *node.Node, source, copyTarget string) error {
 		return err
 	}
 
-	if bs.canUseRenameForUpload {
+	canUseRename := bs.canUseRenameForUpload.Load()
+	if canUseRename {
 		err := os.Rename(source, tempName)
 		switch {
 		case err == nil:
 			// continue
 		case errors.Is(err, syscall.EXDEV):
 			// the upload and target file are on different devices, we need to copy the file instead of renaming it
-			bs.canUseRenameForUpload = false
+			bs.canUseRenameForUpload.Store(false)
+			canUseRename = false
 		default:
 			return fmt.Errorf("failed to move source file '%s' to temp file '%s' - %v", source, tempName, err)
 		}
 	}
 
-	if !bs.canUseRenameForUpload {
+	if !canUseRename {
 		sourceFile, err := os.Open(source)
 		if err != nil {
 			return fmt.Errorf("failed to open source file '%s': %v", source, err)
@@ -154,10 +159,11 @@ func (bs *Blobstore) Upload(n *node.Node, source, copyTarget string) error {
 		return nil
 	}
 
-	// also "upload" the file to a local path, e.g., for keeping the "current" version of the file
-	sourceFile, err := os.Open(source)
+	// also "upload" the file to a local path, e.g., for keeping the "current" version of the file.
+	// Read it from its final location: the source may have been renamed away above.
+	sourceFile, err := os.Open(n.InternalPath())
 	if err != nil {
-		return errors.Wrapf(err, "could not open source file '%s' for reading", source)
+		return errors.Wrapf(err, "could not open node file '%s' for reading", n.InternalPath())
 	}
 	defer func() {
 		_ = sourceFile.Close()
@@ -177,6 +183,12 @@ func (bs *Blobstore) Upload(n *node.Node, source, copyTarget string) error {
 
 	if err := copyWithPeriodicSync(copyFile, sourceFile); err != nil {
 		return errors.Wrapf(err, "could not write blob copy of '%s' to '%s'", n.InternalPath(), copyTarget)
+	}
+	if err := copyFile.Sync(); err != nil {
+		return errors.Wrapf(err, "could not sync blob copy '%s'", copyTarget)
+	}
+	if err := copyFile.Close(); err != nil {
+		return errors.Wrapf(err, "could not close blob copy '%s'", copyTarget)
 	}
 
 	return nil
