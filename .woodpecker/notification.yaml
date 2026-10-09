@@ -22,7 +22,7 @@ depends_on:
   - api-integration-test-on-decomposedS3
   - api-integration-test-on-posixfs
   - cs3api-validator-decomposed
-  - test
+  - unit-test
   - test-benchmark
   - test-integration
 
