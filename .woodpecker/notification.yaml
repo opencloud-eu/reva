@@ -13,16 +13,16 @@ when:
     branch:
       - ${CI_REPO_DEFAULT_BRANCH}
       - feature/*
-  - event:
-      - pull_request
-      - cron
+  - event: pull_request
+  - event: cron
+    cron: nightly
 
 depends_on:
   - api-integration-test-on-decomposed
   - api-integration-test-on-decomposedS3
   - api-integration-test-on-posixfs
   - cs3api-validator-decomposed
-  - test
+  - unit-test
   - test-benchmark
   - test-integration
 
