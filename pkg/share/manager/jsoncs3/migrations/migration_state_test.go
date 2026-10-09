@@ -383,6 +383,19 @@ var _ = Describe("RunMigrations / loadState / saveState", func() {
 				}()
 				Eventually(done, 500*time.Millisecond, 10*time.Millisecond).Should(BeClosed())
 			})
+
+			It("removes the lock file even when the context was cancelled", func() {
+				ctx, cancel := context.WithCancel(context.Background())
+				_, err := m.acquireLock(ctx)
+				Expect(err).NotTo(HaveOccurred())
+
+				cancel()
+				m.storage = ctxStorage{stor}
+				m.releaseLock(ctx)
+
+				_, err = stor.SimpleDownload(context.Background(), lockFile)
+				Expect(err).To(HaveOccurred())
+			})
 		})
 
 		Context("RunMigrations with two concurrent instances", func() {
@@ -404,3 +417,15 @@ var _ = Describe("RunMigrations / loadState / saveState", func() {
 		})
 	})
 })
+
+// ctxStorage fails Delete on a cancelled context, like the CS3 storage does.
+type ctxStorage struct {
+	metadata.Storage
+}
+
+func (s ctxStorage) Delete(ctx context.Context, path string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	return s.Storage.Delete(ctx, path)
+}
