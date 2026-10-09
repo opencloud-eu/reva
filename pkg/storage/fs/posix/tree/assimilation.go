@@ -27,6 +27,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -747,6 +748,7 @@ assimilate:
 
 	var n *node.Node
 	sizeDiff := int64(0)
+	propagatedSize := int64(0)
 	if fi.IsDir() {
 		// The Space's name attribute might not match the directory name. Use the name as
 		// it was set before. Also the space root doesn't have a 'type' attribute
@@ -794,13 +796,21 @@ assimilate:
 			Exists:   true,
 		}
 
-		prevBlobSize, err := previousAttribs.Int64(prefixes.BlobsizeAttr)
-		if err != nil || prevBlobSize < 0 {
-			prevBlobSize = 0
+		// The ancestors currently reflect propagatedSize for this file. Fall back to blobsize for
+		// nodes assimilated before the checkpoint existed, and 0 for a brand new file. The outstanding
+		// delta is the difference to the new size; blobsize can't be the baseline because it is
+		// overwritten below before the propagation is confirmed.
+		propagatedSize, err = previousAttribs.Int64(prefixes.PropagatedSizeAttr)
+		if err != nil {
+			propagatedSize, err = previousAttribs.Int64(prefixes.BlobsizeAttr)
+			if err != nil || propagatedSize < 0 {
+				propagatedSize = 0
+			}
 		}
-		if prevBlobSize != fi.Size() {
-			sizeDiff = fi.Size() - prevBlobSize
-		}
+		sizeDiff = fi.Size() - propagatedSize
+		// Optimistically record the new size as propagated; it is rolled back to propagatedSize if the
+		// propagation below fails, so the next attempt recomputes the outstanding delta.
+		attributes.SetInt64(prefixes.PropagatedSizeAttr, fi.Size())
 	}
 	attributes.SetTime(prefixes.MTimeAttr, fi.ModTime())
 
@@ -875,11 +885,19 @@ assimilate:
 		return nil, nil, errors.Wrap(err, "failed to set attributes")
 	}
 
-	// only propagate once the attributes are stored. If storing them failed after propagating, the file
-	// would still have no blobsize and the next attempt would propagate its whole size again.
-	err = t.Propagate(context.Background(), n, sizeDiff)
-	if err != nil {
-		return nil, nil, errors.Wrap(err, "failed to propagate")
+	// Propagate the outstanding delta. The checkpoint was optimistically set to the new size by
+	// SetMultiple above; if the propagation fails, roll it back to the last propagated size so the next
+	// attempt recomputes the same delta instead of treating blobsize as already propagated. The file's
+	// metadata lock is already held by assimilate; the sync propagator locks each ancestor one at a time
+	// as it walks up, so this doesn't widen the lock set.
+	if sizeDiff != 0 {
+		err = t.Propagate(context.Background(), n, sizeDiff)
+		if err != nil {
+			if undoErr := t.lookup.MetadataBackend().Set(context.Background(), bn, prefixes.PropagatedSizeAttr, []byte(strconv.FormatInt(propagatedSize, 10))); undoErr != nil {
+				t.log.Error().Err(undoErr).Str("path", path).Msg("could not roll back propagated size after propagation failed, tree size may be short until the next rescan")
+			}
+			return nil, nil, errors.Wrap(err, "failed to propagate")
+		}
 	}
 
 	// clear the status attribute if it was set before, if there was any upload to this file in progress
