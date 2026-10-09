@@ -1,10 +1,14 @@
 # Changelog
 
-## [2.52.0](https://github.com/opencloud-eu/reva/releases/tag/v2.52.0) - 2026-10-08
+## [2.52.0](https://github.com/opencloud-eu/reva/releases/tag/v2.52.0) - 2026-10-09
 
 ### ❤️ Thanks to all contributors! ❤️
 
 @aduffeck, @butonic, @fschade, @micbar
+
+### ✅ Tests
+
+- fix: wait for inotify to react [[#863](https://github.com/opencloud-eu/reva/pull/863)]
 
 ### 📈 Enhancement
 
