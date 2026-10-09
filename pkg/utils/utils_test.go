@@ -21,8 +21,10 @@ package utils
 import (
 	"testing"
 
+	grouppb "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"google.golang.org/protobuf/proto"
 )
 
 var skipTests = []struct {
@@ -190,5 +192,42 @@ func TestCanonicalUserID(t *testing.T) {
 				t.Errorf("expected %q, got %q", tt.expected, actual)
 			}
 		})
+	}
+}
+
+func TestGrantsOpaque(t *testing.T) {
+	grants := []*provider.Grant{
+		{
+			Grantee: &provider.Grantee{
+				Type: provider.GranteeType_GRANTEE_TYPE_USER,
+				Id:   &provider.Grantee_UserId{UserId: &userpb.UserId{OpaqueId: "guest@example.com", Type: userpb.UserType_USER_TYPE_GUEST}},
+			},
+			Permissions: &provider.ResourcePermissions{Stat: true},
+		},
+		{
+			Grantee: &provider.Grantee{
+				Type: provider.GranteeType_GRANTEE_TYPE_GROUP,
+				Id:   &provider.Grantee_GroupId{GroupId: &grouppb.GroupId{OpaqueId: "group"}},
+			},
+			Permissions: &provider.ResourcePermissions{},
+		},
+	}
+
+	o := AppendGrantsToOpaque(nil, "grants", grants)
+	read, err := ReadGrantsFromOpaque(o, "grants")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(read) != len(grants) {
+		t.Fatalf("expected %d grants, got %d", len(grants), len(read))
+	}
+	for i := range grants {
+		if !proto.Equal(read[i], grants[i]) {
+			t.Errorf("grant %d: expected %v, got %v", i, grants[i], read[i])
+		}
+	}
+
+	if _, err := ReadGrantsFromOpaque(o, "missing"); err == nil {
+		t.Error("expected an error for a missing key")
 	}
 }

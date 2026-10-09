@@ -69,6 +69,8 @@ const (
 	ChecksumsKey     = "http://owncloud.org/ns/checksums"
 	UserShareType    = "0"
 	QuotaKey         = "quota"
+	// AncestorGrantsKey is the field mask and opaque key of the grants on a node and its ancestors
+	AncestorGrantsKey = "ancestor-grants"
 
 	QuotaUnlimited    = "0"
 	QuotaUncalculated = "-1"
@@ -967,6 +969,16 @@ func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissi
 		}
 	}
 
+	// grants on the node and its ancestors, which tell who has access to it through a share.
+	// Only service accounts get them, users must not learn about grants on ancestors.
+	if _, ok := fieldMaskKeysMap[AncestorGrantsKey]; ok && isServiceAccount(ctx) {
+		if grants, err := n.ancestorGrants(ctx); err == nil {
+			ri.Opaque = utils.AppendGrantsToOpaque(ri.Opaque, AncestorGrantsKey, grants)
+		} else {
+			sublog.Error().Err(err).Msg("could not read ancestor grants")
+		}
+	}
+
 	// checksums
 	// FIXME move to fieldmask
 	if _, ok := mdKeysMap[ChecksumsKey]; (nodeType == provider.ResourceType_RESOURCE_TYPE_FILE) && (returnAllMetadata || ok) {
@@ -1379,6 +1391,33 @@ func (n *Node) getGranteeTypes(ctx context.Context) []provider.GranteeType {
 		}
 	}
 	return types
+}
+
+// ancestorGrants returns the active grants on the node and all its ancestors. The grants on the
+// space root are not included, they are the space memberships.
+func (n *Node) ancestorGrants(ctx context.Context) ([]*provider.Grant, error) {
+	grants := []*provider.Grant{}
+	for cn := n; !cn.IsSpaceRoot(ctx); {
+		gs, err := cn.ListGrants(ctx)
+		if err != nil {
+			return nil, err
+		}
+		for _, g := range gs {
+			if !isGrantExpired(g) {
+				grants = append(grants, g)
+			}
+		}
+
+		if cn, err = cn.Parent(ctx); err != nil {
+			return nil, err
+		}
+	}
+	return grants, nil
+}
+
+func isServiceAccount(ctx context.Context) bool {
+	u, ok := ctxpkg.ContextGetUser(ctx)
+	return ok && u.GetId().GetType() == userpb.UserType_USER_TYPE_SERVICE
 }
 
 // FindStorageSpaceRoot calls n.Parent() and climbs the tree

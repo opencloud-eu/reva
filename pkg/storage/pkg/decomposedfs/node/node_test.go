@@ -19,6 +19,7 @@
 package node_test
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -26,8 +27,10 @@ import (
 	"strings"
 	"time"
 
+	grouppb "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	ocsconv "github.com/opencloud-eu/reva/v2/pkg/conversions"
@@ -35,7 +38,9 @@ import (
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata/prefixes"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/node"
 	helpers "github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/testhelpers"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/ace"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/grants"
+	"github.com/opencloud-eu/reva/v2/pkg/utils"
 	"github.com/stretchr/testify/mock"
 	"google.golang.org/protobuf/testing/protocmp"
 )
@@ -255,6 +260,95 @@ var _ = Describe("Node", func() {
 			Expect(err).ToNot(HaveOccurred())
 			slices.Sort(storedFavorites)
 			Expect(storedFavorites).To(Equal([]string{"user1", "user2"}))
+		})
+
+		Describe("the ancestor grants", func() {
+			var (
+				saCtx context.Context
+			)
+
+			userGrant := func(userID *userpb.UserId, perms *provider.ResourcePermissions) *provider.Grant {
+				return &provider.Grant{
+					Grantee:     &provider.Grantee{Type: provider.GranteeType_GRANTEE_TYPE_USER, Id: &provider.Grantee_UserId{UserId: userID}},
+					Permissions: perms,
+				}
+			}
+			setGrant := func(n *node.Node, g *provider.Grant) {
+				principal, value := ace.FromGrant(g).Marshal()
+				Expect(n.SetXattr(env.Ctx, prefixes.GrantPrefix+principal, value)).To(Succeed())
+			}
+			granteeIDs := func(ri *provider.ResourceInfo) []string {
+				gs, err := utils.ReadGrantsFromOpaque(ri.GetOpaque(), node.AncestorGrantsKey)
+				Expect(err).ToNot(HaveOccurred())
+				ids := []string{}
+				for _, g := range gs {
+					ids = append(ids, g.GetGrantee().GetUserId().GetOpaqueId()+g.GetGrantee().GetGroupId().GetOpaqueId())
+				}
+				return ids
+			}
+
+			BeforeEach(func() {
+				saCtx = ctxpkg.ContextSetUser(env.Ctx, &userpb.User{Id: &userpb.UserId{OpaqueId: "service-account", Type: userpb.UserType_USER_TYPE_SERVICE}})
+
+				dir1, err := n.Parent(env.Ctx)
+				Expect(err).ToNot(HaveOccurred())
+				root, err := env.Lookup.NodeFromSpaceID(env.Ctx, env.SpaceRootRes.SpaceId)
+				Expect(err).ToNot(HaveOccurred())
+
+				viewer := ocsconv.NewViewerRole().CS3ResourcePermissions()
+				setGrant(n, userGrant(&userpb.UserId{OpaqueId: "file-user"}, viewer))
+				setGrant(n, &provider.Grant{
+					Grantee:     &provider.Grantee{Type: provider.GranteeType_GRANTEE_TYPE_GROUP, Id: &provider.Grantee_GroupId{GroupId: &grouppb.GroupId{OpaqueId: "file-group"}}},
+					Permissions: viewer,
+				})
+				setGrant(dir1, userGrant(&userpb.UserId{OpaqueId: "guest@example.com", Type: userpb.UserType_USER_TYPE_GUEST}, viewer))
+				setGrant(dir1, userGrant(&userpb.UserId{OpaqueId: "denied-user"}, ocsconv.NewDeniedRole().CS3ResourcePermissions()))
+				expired := userGrant(&userpb.UserId{OpaqueId: "expired-user"}, viewer)
+				expired.Expiration = &typesv1beta1.Timestamp{Seconds: 1}
+				setGrant(dir1, expired)
+				setGrant(root, userGrant(&userpb.UserId{OpaqueId: "space-member"}, viewer))
+			})
+
+			It("returns the active grants of the node and its ancestors, without the space root", func() {
+				ri, err := n.AsResourceInfo(saCtx, node.ServiceAccountPermissions(), []string{}, []string{node.AncestorGrantsKey}, false)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(granteeIDs(ri)).To(ConsistOf("file-user", "file-group", "guest@example.com", "denied-user"))
+			})
+
+			It("keeps denials and guests intact", func() {
+				ri, err := n.AsResourceInfo(saCtx, node.ServiceAccountPermissions(), []string{}, []string{node.AncestorGrantsKey}, false)
+				Expect(err).ToNot(HaveOccurred())
+				gs, err := utils.ReadGrantsFromOpaque(ri.GetOpaque(), node.AncestorGrantsKey)
+				Expect(err).ToNot(HaveOccurred())
+				for _, g := range gs {
+					switch g.GetGrantee().GetUserId().GetOpaqueId() {
+					case "denied-user":
+						Expect(grants.PermissionsEqual(g.GetPermissions(), &provider.ResourcePermissions{})).To(BeTrue())
+					case "guest@example.com":
+						Expect(g.GetGrantee().GetUserId().GetType()).To(Equal(userpb.UserType_USER_TYPE_GUEST))
+					}
+				}
+			})
+
+			It("returns an empty list for the space root", func() {
+				root, err := env.Lookup.NodeFromSpaceID(env.Ctx, env.SpaceRootRes.SpaceId)
+				Expect(err).ToNot(HaveOccurred())
+				ri, err := root.AsResourceInfo(saCtx, node.ServiceAccountPermissions(), []string{}, []string{node.AncestorGrantsKey}, false)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(granteeIDs(ri)).To(BeEmpty())
+			})
+
+			It("is only returned when requested", func() {
+				ri, err := n.AsResourceInfo(saCtx, node.ServiceAccountPermissions(), []string{}, []string{}, false)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(utils.ExistsInOpaque(ri.GetOpaque(), node.AncestorGrantsKey)).To(BeFalse())
+			})
+
+			It("is not returned to users", func() {
+				ri, err := n.AsResourceInfo(env.Ctx, node.OwnerPermissions(), []string{}, []string{node.AncestorGrantsKey}, false)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(utils.ExistsInOpaque(ri.GetOpaque(), node.AncestorGrantsKey)).To(BeFalse())
+			})
 		})
 	})
 
