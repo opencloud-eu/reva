@@ -426,6 +426,10 @@ func AppendJSONToOpaque(o *types.Opaque, key string, value interface{}) *types.O
 	return o
 }
 
+// AncestorGrantsKey is the field mask path to request the active grants on a resource and its
+// ancestors from a storage, and the opaque key they are returned under (see ReadGrantsFromOpaque).
+const AncestorGrantsKey = "ancestor-grants"
+
 // AppendGrantsToOpaque adds the grants as json on the given opaque and returns it.
 // If the grants can't be marshaled, e.g. because an id is not valid UTF-8, the opaque is returned unchanged.
 func AppendGrantsToOpaque(o *types.Opaque, key string, grants []*provider.Grant) (*types.Opaque, error) {

@@ -278,7 +278,7 @@ var _ = Describe("Node", func() {
 				Expect(n.SetXattr(env.Ctx, prefixes.GrantPrefix+principal, value)).To(Succeed())
 			}
 			granteeIDs := func(ri *provider.ResourceInfo) []string {
-				gs, err := utils.ReadGrantsFromOpaque(ri.GetOpaque(), node.AncestorGrantsKey)
+				gs, err := utils.ReadGrantsFromOpaque(ri.GetOpaque(), utils.AncestorGrantsKey)
 				Expect(err).ToNot(HaveOccurred())
 				ids := []string{}
 				for _, g := range gs {
@@ -310,15 +310,15 @@ var _ = Describe("Node", func() {
 			})
 
 			It("returns the active grants of the node and its ancestors, without the space root", func() {
-				ri, err := n.AsResourceInfo(saCtx, node.ServiceAccountPermissions(), []string{}, []string{node.AncestorGrantsKey}, false)
+				ri, err := n.AsResourceInfo(saCtx, node.ServiceAccountPermissions(), []string{}, []string{utils.AncestorGrantsKey}, false)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(granteeIDs(ri)).To(ConsistOf("file-user", "file-group", "guest@example.com", "denied-user"))
 			})
 
 			It("keeps denials and guests intact", func() {
-				ri, err := n.AsResourceInfo(saCtx, node.ServiceAccountPermissions(), []string{}, []string{node.AncestorGrantsKey}, false)
+				ri, err := n.AsResourceInfo(saCtx, node.ServiceAccountPermissions(), []string{}, []string{utils.AncestorGrantsKey}, false)
 				Expect(err).ToNot(HaveOccurred())
-				gs, err := utils.ReadGrantsFromOpaque(ri.GetOpaque(), node.AncestorGrantsKey)
+				gs, err := utils.ReadGrantsFromOpaque(ri.GetOpaque(), utils.AncestorGrantsKey)
 				Expect(err).ToNot(HaveOccurred())
 				for _, g := range gs {
 					switch g.GetGrantee().GetUserId().GetOpaqueId() {
@@ -333,7 +333,7 @@ var _ = Describe("Node", func() {
 			It("returns an empty list for the space root", func() {
 				root, err := env.Lookup.NodeFromSpaceID(env.Ctx, env.SpaceRootRes.SpaceId)
 				Expect(err).ToNot(HaveOccurred())
-				ri, err := root.AsResourceInfo(saCtx, node.ServiceAccountPermissions(), []string{}, []string{node.AncestorGrantsKey}, false)
+				ri, err := root.AsResourceInfo(saCtx, node.ServiceAccountPermissions(), []string{}, []string{utils.AncestorGrantsKey}, false)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(granteeIDs(ri)).To(BeEmpty())
 			})
@@ -341,13 +341,13 @@ var _ = Describe("Node", func() {
 			It("is only returned when requested", func() {
 				ri, err := n.AsResourceInfo(saCtx, node.ServiceAccountPermissions(), []string{}, []string{}, false)
 				Expect(err).ToNot(HaveOccurred())
-				Expect(utils.ExistsInOpaque(ri.GetOpaque(), node.AncestorGrantsKey)).To(BeFalse())
+				Expect(utils.ExistsInOpaque(ri.GetOpaque(), utils.AncestorGrantsKey)).To(BeFalse())
 			})
 
 			It("is not returned to users", func() {
-				ri, err := n.AsResourceInfo(env.Ctx, node.OwnerPermissions(), []string{}, []string{node.AncestorGrantsKey}, false)
+				ri, err := n.AsResourceInfo(env.Ctx, node.OwnerPermissions(), []string{}, []string{utils.AncestorGrantsKey}, false)
 				Expect(err).ToNot(HaveOccurred())
-				Expect(utils.ExistsInOpaque(ri.GetOpaque(), node.AncestorGrantsKey)).To(BeFalse())
+				Expect(utils.ExistsInOpaque(ri.GetOpaque(), utils.AncestorGrantsKey)).To(BeFalse())
 			})
 		})
 	})

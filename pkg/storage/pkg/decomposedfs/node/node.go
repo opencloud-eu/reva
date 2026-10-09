@@ -69,8 +69,6 @@ const (
 	ChecksumsKey     = "http://owncloud.org/ns/checksums"
 	UserShareType    = "0"
 	QuotaKey         = "quota"
-	// AncestorGrantsKey is the field mask and opaque key of the grants on a node and its ancestors
-	AncestorGrantsKey = "ancestor-grants"
 
 	QuotaUnlimited    = "0"
 	QuotaUncalculated = "-1"
@@ -971,10 +969,10 @@ func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissi
 
 	// grants on the node and its ancestors, which tell who has access to it through a share.
 	// Only service accounts get them, users must not learn about grants on ancestors.
-	if _, ok := fieldMaskKeysMap[AncestorGrantsKey]; ok && isServiceAccount(ctx) {
+	if _, ok := fieldMaskKeysMap[utils.AncestorGrantsKey]; ok && isServiceAccount(ctx) {
 		if grants, err := n.ancestorGrants(ctx); err != nil {
 			sublog.Error().Err(err).Msg("could not read ancestor grants")
-		} else if ri.Opaque, err = utils.AppendGrantsToOpaque(ri.Opaque, AncestorGrantsKey, grants); err != nil {
+		} else if ri.Opaque, err = utils.AppendGrantsToOpaque(ri.Opaque, utils.AncestorGrantsKey, grants); err != nil {
 			sublog.Error().Err(err).Msg("could not add ancestor grants")
 		}
 	}
