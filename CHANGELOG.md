@@ -8,6 +8,7 @@
 
 ### ✅ Tests
 
+- fix: separate cronjobs for different tasks [[#868](https://github.com/opencloud-eu/reva/pull/868)]
 - fix: wait for inotify to react [[#863](https://github.com/opencloud-eu/reva/pull/863)]
 
 ### 📈 Enhancement
