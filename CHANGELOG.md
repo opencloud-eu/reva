@@ -8,6 +8,7 @@
 
 ### ✅ Tests
 
+- try to remove the share migration lock on SIGTERM [[#869](https://github.com/opencloud-eu/reva/pull/869)]
 - fix: separate cronjobs for different tasks [[#868](https://github.com/opencloud-eu/reva/pull/868)]
 - fix: wait for inotify to react [[#863](https://github.com/opencloud-eu/reva/pull/863)]
 
