@@ -327,6 +327,14 @@ var _ = Describe("Watching tree", func() {
 				g.Expect(err).ToNot(HaveOccurred())
 				return size
 			}
+			breakTreeSize := func(path string) {
+				n, err := env.Lookup.NodeFromResource(env.Ctx, &provider.Reference{
+					ResourceId: env.SpaceRootRes,
+					Path:       path,
+				})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(env.Lookup.MetadataBackend().Set(env.Ctx, n, prefixes.TreesizeAttr, []byte("not-a-number"))).To(Succeed())
+			}
 
 			It("handles new directories", func() {
 				Expect(os.Mkdir(root+"/assimilated", 0700)).To(Succeed())
@@ -556,6 +564,75 @@ var _ = Describe("Watching tree", func() {
 				Consistently(func(g Gomega) {
 					g.Expect(treeSize(g, subtree+"/target")).To(Equal(uint64(5)))
 					g.Expect(treeSize(g, subtree)).To(Equal(uint64(5)))
+				}, 2*time.Second).Should(Succeed())
+			})
+
+			// these specs break a parent's treesize so that propagating to it fails. That also breaks the baseline the
+			// recalculation propagates further up from, so they only check the direct parents.
+			It("recalculates the parent when the size diff of a file can't be propagated", func() {
+				Expect(os.WriteFile(root+"/file.txt", []byte("hello"), 0600)).To(Succeed())
+				Eventually(func(g Gomega) {
+					g.Expect(treeSize(g, subtree)).To(Equal(uint64(5)))
+				}).Should(Succeed())
+
+				breakTreeSize(subtree)
+				Expect(os.WriteFile(root+"/file.txt", []byte("hello world!"), 0600)).To(Succeed())
+				Eventually(func(g Gomega) {
+					g.Expect(treeSize(g, subtree)).To(Equal(uint64(12)))
+				}).Should(Succeed())
+
+				// a later change adds only its own diff
+				Expect(os.WriteFile(root+"/file.txt", []byte("hello world!!"), 0600)).To(Succeed())
+				Eventually(func(g Gomega) {
+					g.Expect(treeSize(g, subtree)).To(Equal(uint64(13)))
+				}).Should(Succeed())
+				Consistently(func(g Gomega) {
+					g.Expect(treeSize(g, subtree)).To(Equal(uint64(13)))
+				}, 2*time.Second).Should(Succeed())
+			})
+
+			It("recalculates both parents when the size of a moved file can't be added to the new parent", func() {
+				Expect(os.Mkdir(root+"/source", 0700)).To(Succeed())
+				Expect(os.Mkdir(root+"/target", 0700)).To(Succeed())
+				time.Sleep(100 * time.Millisecond) // Give it some time to settle down
+				Expect(os.WriteFile(root+"/source/file.txt", []byte("hello"), 0600)).To(Succeed())
+				Eventually(func(g Gomega) {
+					g.Expect(treeSize(g, subtree+"/source")).To(Equal(uint64(5)))
+					g.Expect(treeSize(g, subtree+"/target")).To(Equal(uint64(0)))
+				}).Should(Succeed())
+
+				breakTreeSize(subtree + "/target")
+				Expect(os.Rename(root+"/source/file.txt", root+"/target/file.txt")).To(Succeed())
+
+				Eventually(func(g Gomega) {
+					g.Expect(treeSize(g, subtree+"/source")).To(Equal(uint64(0)))
+					g.Expect(treeSize(g, subtree+"/target")).To(Equal(uint64(5)))
+				}).Should(Succeed())
+				Consistently(func(g Gomega) {
+					g.Expect(treeSize(g, subtree+"/source")).To(Equal(uint64(0)))
+					g.Expect(treeSize(g, subtree+"/target")).To(Equal(uint64(5)))
+				}, 2*time.Second).Should(Succeed())
+			})
+
+			It("recalculates the old parent when the size of a moved file can't be taken off it", func() {
+				Expect(os.Mkdir(root+"/source", 0700)).To(Succeed())
+				Expect(os.Mkdir(root+"/target", 0700)).To(Succeed())
+				time.Sleep(100 * time.Millisecond) // Give it some time to settle down
+				Expect(os.WriteFile(root+"/source/file.txt", []byte("hello"), 0600)).To(Succeed())
+				Eventually(func(g Gomega) {
+					g.Expect(treeSize(g, subtree+"/source")).To(Equal(uint64(5)))
+				}).Should(Succeed())
+
+				breakTreeSize(subtree + "/source")
+				Expect(os.Rename(root+"/source/file.txt", root+"/target/file.txt")).To(Succeed())
+
+				Eventually(func(g Gomega) {
+					g.Expect(treeSize(g, subtree+"/source")).To(Equal(uint64(0)))
+					g.Expect(treeSize(g, subtree+"/target")).To(Equal(uint64(5)))
+				}).Should(Succeed())
+				Consistently(func(g Gomega) {
+					g.Expect(treeSize(g, subtree+"/source")).To(Equal(uint64(0)))
+					g.Expect(treeSize(g, subtree+"/target")).To(Equal(uint64(5)))
 				}, 2*time.Second).Should(Succeed())
 			})
 		})
