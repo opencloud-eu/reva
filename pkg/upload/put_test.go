@@ -62,7 +62,7 @@ var _ = Describe("Upload", func() {
 
 	// put is the call the dataprovider makes: the session id rides in the ref path.
 	put := func(session Session, content string) (*provider.ResourceInfo, error) {
-		return c.Upload(ctx, storage.UploadRequest{
+		return c.Upload(ctx, Request{
 			Ref:    &provider.Reference{Path: "/" + session.ID()},
 			Body:   io.NopCloser(strings.NewReader(content)),
 			Length: int64(len(content)),
@@ -100,7 +100,7 @@ var _ = Describe("Upload", func() {
 	})
 
 	It("reports an unknown session id as not found", func() {
-		_, err := c.Upload(ctx, storage.UploadRequest{
+		_, err := c.Upload(ctx, Request{
 			Ref:    &provider.Reference{Path: "/no-such-session"},
 			Body:   io.NopCloser(strings.NewReader(body)),
 			Length: bodyLen,
@@ -114,7 +114,7 @@ var _ = Describe("Upload", func() {
 	It("rejects a body shorter than the declared length", func() {
 		session := initiated("")
 
-		_, err := c.Upload(ctx, storage.UploadRequest{
+		_, err := c.Upload(ctx, Request{
 			Ref:    &provider.Reference{Path: "/" + session.ID()},
 			Body:   io.NopCloser(strings.NewReader("short")),
 			Length: bodyLen,
@@ -140,7 +140,7 @@ var _ = Describe("Upload", func() {
 	It("propagates a failure to read the body", func() {
 		session := initiated("")
 
-		_, err := c.Upload(ctx, storage.UploadRequest{
+		_, err := c.Upload(ctx, Request{
 			Ref:    &provider.Reference{Path: "/" + session.ID()},
 			Body:   io.NopCloser(failingReader{err: errors.New("connection reset by peer")}),
 			Length: bodyLen,
@@ -166,7 +166,7 @@ var _ = Describe("Upload", func() {
 			var gotRef *provider.Reference
 			var gotExecutant *userpb.UserId
 
-			_, err := c.Upload(ctx, storage.UploadRequest{
+			_, err := c.Upload(ctx, Request{
 				Ref:    &provider.Reference{Path: "/" + session.ID()},
 				Body:   io.NopCloser(strings.NewReader(body)),
 				Length: bodyLen,
@@ -185,7 +185,7 @@ var _ = Describe("Upload", func() {
 			fs.commitErr = errors.New("blobstore unavailable")
 			called := false
 
-			_, err := c.Upload(ctx, storage.UploadRequest{
+			_, err := c.Upload(ctx, Request{
 				Ref:    &provider.Reference{Path: "/" + session.ID()},
 				Body:   io.NopCloser(strings.NewReader(body)),
 				Length: bodyLen,

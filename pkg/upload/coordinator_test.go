@@ -399,7 +399,7 @@ var _ = Describe("coordinator", func() {
 			Expect(session.TouchBin()).To(Succeed())
 			Expect(session.Persist(ctx)).To(Succeed())
 
-			ri, err := c.Upload(ctx, storage.UploadRequest{
+			ri, err := c.Upload(ctx, Request{
 				Ref:    &provider.Reference{Path: "/" + session.ID()},
 				Body:   io.NopCloser(strings.NewReader(body)),
 				Length: bodyLen,
@@ -425,7 +425,7 @@ var _ = Describe("coordinator", func() {
 			Expect(session.TouchBin()).To(Succeed())
 			Expect(session.Persist(ctx)).To(Succeed())
 			put := func() error {
-				_, err := c.Upload(ctx, storage.UploadRequest{
+				_, err := c.Upload(ctx, Request{
 					Ref:    &provider.Reference{Path: "/" + session.ID()},
 					Body:   io.NopCloser(strings.NewReader(body)),
 					Length: bodyLen,
@@ -455,7 +455,7 @@ var _ = Describe("coordinator", func() {
 			Expect(session.TouchBin()).To(Succeed())
 			Expect(session.Persist(ctx)).To(Succeed())
 
-			_, err := c.Upload(ctx, storage.UploadRequest{
+			_, err := c.Upload(ctx, Request{
 				Ref:    &provider.Reference{Path: "/" + session.ID()},
 				Body:   io.NopCloser(strings.NewReader("short")),
 				Length: bodyLen,
@@ -476,7 +476,7 @@ var _ = Describe("coordinator", func() {
 			Expect(session.TouchBin()).To(Succeed())
 			Expect(session.Persist(ctx)).To(Succeed())
 
-			_, err := c.Upload(ctx, storage.UploadRequest{
+			_, err := c.Upload(ctx, Request{
 				Ref:    &provider.Reference{Path: "/" + session.ID()},
 				Body:   io.NopCloser(strings.NewReader(body)),
 				Length: bodyLen,
