@@ -21,9 +21,7 @@ package decomposedfs_test
 import (
 	"bytes"
 	"context"
-	"errors"
 	"io"
-	"net/http"
 	"os"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -31,7 +29,6 @@ import (
 	v1beta11 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	ruser "github.com/opencloud-eu/reva/v2/pkg/ctx"
-	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
 	"github.com/opencloud-eu/reva/v2/pkg/rgrpc/todo/pool"
 	"github.com/opencloud-eu/reva/v2/pkg/storage"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/cache"
@@ -39,8 +36,6 @@ import (
 	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/decomposedfs/aspects"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/decomposedfs/lookup"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/decomposedfs/metadata"
-	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/decomposedfs/metadata/prefixes"
-	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/decomposedfs/node"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/decomposedfs/options"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/decomposedfs/permissions"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/decomposedfs/permissions/mocks"
@@ -49,10 +44,10 @@ import (
 	treemocks "github.com/opencloud-eu/reva/v2/pkg/storage/utils/decomposedfs/tree/mocks"
 	"github.com/opencloud-eu/reva/v2/pkg/storagespace"
 	"github.com/opencloud-eu/reva/v2/pkg/store"
+	"github.com/opencloud-eu/reva/v2/pkg/upload"
 	"github.com/opencloud-eu/reva/v2/tests/helpers"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/mock"
-	tusd "github.com/tus/tusd/v2/pkg/handler"
 	"google.golang.org/grpc"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -64,6 +59,7 @@ var _ = Describe("File uploads", func() {
 		ref     *provider.Reference
 		rootRef *provider.Reference
 		fs      storage.FS
+		coord   upload.Coordinator
 		user    *userpb.User
 		ctx     context.Context
 
@@ -151,6 +147,13 @@ var _ = Describe("File uploads", func() {
 		fs, err = decomposedfs.New(o, aspects, &zerolog.Logger{})
 		Expect(err).ToNot(HaveOccurred())
 
+		// The coordinator owns the upload flow; the driver only sees the slim contract.
+		// No publisher and no chunking: without a postprocessing consumer an upload
+		// finishes synchronously, so the specs below observe the driver's final state.
+		log := zerolog.Nop()
+		coord, err = upload.NewCoordinatorFromConfig(GinkgoT().TempDir(), nil, fs, nil, &log, false)
+		Expect(err).ToNot(HaveOccurred())
+
 		resp, err := fs.CreateStorageSpace(ctx, &provider.CreateStorageSpaceRequest{Owner: user, Type: "personal"})
 		Expect(err).ToNot(HaveOccurred())
 		Expect(resp.Status.Code).To(Equal(v1beta11.Code_CODE_OK))
@@ -159,63 +162,9 @@ var _ = Describe("File uploads", func() {
 		ref.ResourceId = &resID
 	})
 
-	Context("the user's quota is exceeded", func() {
-		BeforeEach(func() {
-			pmock.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(&provider.ResourcePermissions{
-				Stat:     true,
-				GetQuota: true,
-			}, nil)
-		})
-		When("the user wants to initiate a file upload", func() {
-			It("fails", func() {
-				var originalFunc = node.CheckQuota
-				node.CheckQuota = func(ctx context.Context, spaceRoot *node.Node, overwrite bool, oldSize, newSize uint64) (quotaSufficient bool, err error) {
-					return false, errtypes.InsufficientStorage("quota exceeded")
-				}
-				_, err := fs.InitiateUpload(ctx, ref, 10, map[string]string{})
-				Expect(err).To(MatchError(errtypes.InsufficientStorage("quota exceeded")))
-				node.CheckQuota = originalFunc
-			})
-		})
-	})
-
-	Context("the user has insufficient permissions", func() {
-		BeforeEach(func() {
-			pmock.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(&provider.ResourcePermissions{
-				Stat: true,
-			}, nil)
-		})
-
-		When("the user wants to initiate a file upload", func() {
-			It("fails", func() {
-				msg := "error: permission denied: u-s-e-r-id!u-s-e-r-id/foo"
-				_, err := fs.InitiateUpload(ctx, ref, 10, map[string]string{})
-				Expect(err).To(MatchError(msg))
-			})
-		})
-	})
-
-	Context("with insufficient permissions, home node", func() {
-		JustBeforeEach(func() {
-			var err error
-			// the space name attribute is the stop condition in the lookup
-			h, err := lu.NodeFromResource(ctx, rootRef)
-			Expect(err).ToNot(HaveOccurred())
-			err = h.SetXattrString(ctx, prefixes.SpaceNameAttr, "username")
-			Expect(err).ToNot(HaveOccurred())
-			pmock.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(&provider.ResourcePermissions{
-				Stat: true,
-			}, nil)
-		})
-
-		When("the user wants to initiate a file upload", func() {
-			It("fails", func() {
-				msg := "error: permission denied: u-s-e-r-id!u-s-e-r-id/foo"
-				_, err := fs.InitiateUpload(ctx, ref, 10, map[string]string{})
-				Expect(err).To(MatchError(msg))
-			})
-		})
-	})
+	// The quota and permission checks now live in the coordinator, which resolves them
+	// through GetQuota/GetMD rather than node.CheckQuota. They are asserted against the
+	// coordinator directly in pkg/upload/initiate_test.go.
 
 	Context("with sufficient permissions", func() {
 		BeforeEach(func() {
@@ -230,7 +179,7 @@ var _ = Describe("File uploads", func() {
 
 		When("the user initiates a non zero byte file upload", func() {
 			It("succeeds", func() {
-				uploadIds, err := fs.InitiateUpload(ctx, ref, 10, map[string]string{})
+				uploadIds, err := coord.InitiateUpload(ctx, ref, 10, map[string]string{})
 
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(uploadIds)).To(Equal(2))
@@ -245,9 +194,9 @@ var _ = Describe("File uploads", func() {
 
 		When("the user initiates a zero byte file upload", func() {
 			It("succeeds", func() {
-				bs.On("Upload", mock.AnythingOfType("*node.Node"), mock.AnythingOfType("string"), mock.Anything).
+				bs.On("UploadFromReader", mock.AnythingOfType("*node.Node"), mock.Anything, mock.AnythingOfType("int64")).
 					Return(nil)
-				uploadIds, err := fs.InitiateUpload(ctx, ref, 0, map[string]string{})
+				uploadIds, err := coord.InitiateUpload(ctx, ref, 0, map[string]string{})
 
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(uploadIds)).To(Equal(2))
@@ -260,9 +209,9 @@ var _ = Describe("File uploads", func() {
 			})
 
 			It("fails when trying to upload empty data. 0-byte uploads are finished during initialization already", func() {
-				bs.On("Upload", mock.AnythingOfType("*node.Node"), mock.AnythingOfType("string"), mock.Anything).
+				bs.On("UploadFromReader", mock.AnythingOfType("*node.Node"), mock.Anything, mock.AnythingOfType("int64")).
 					Return(nil)
-				uploadIds, err := fs.InitiateUpload(ctx, ref, 0, map[string]string{})
+				uploadIds, err := coord.InitiateUpload(ctx, ref, 0, map[string]string{})
 
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(uploadIds)).To(Equal(2))
@@ -270,7 +219,7 @@ var _ = Describe("File uploads", func() {
 
 				uploadRef := &provider.Reference{Path: "/" + uploadIds["simple"]}
 
-				_, err = fs.Upload(ctx, storage.UploadRequest{
+				_, err = coord.Upload(ctx, upload.Request{
 					Ref:    uploadRef,
 					Body:   io.NopCloser(bytes.NewReader([]byte(""))),
 					Length: 0,
@@ -286,7 +235,7 @@ var _ = Describe("File uploads", func() {
 					fileContent = []byte("0123456789")
 				)
 
-				uploadIds, err := fs.InitiateUpload(ctx, ref, 10, map[string]string{})
+				uploadIds, err := coord.InitiateUpload(ctx, ref, 10, map[string]string{})
 
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(uploadIds)).To(Equal(2))
@@ -295,63 +244,31 @@ var _ = Describe("File uploads", func() {
 
 				uploadRef := &provider.Reference{Path: "/" + uploadIds["simple"]}
 
-				bs.On("Upload", mock.AnythingOfType("*node.Node"), mock.AnythingOfType("string"), mock.Anything).
+				bs.On("UploadFromReader", mock.AnythingOfType("*node.Node"), mock.Anything, mock.AnythingOfType("int64")).
 					Return(nil).
 					Run(func(args mock.Arguments) {
-						data, err := os.ReadFile(args.Get(1).(string))
+						// CommitUpload streams the staged bytes to the blobstore,
+						// so assert on the reader's content rather than a path.
+						data, err := io.ReadAll(args.Get(1).(io.Reader))
 
 						Expect(err).ToNot(HaveOccurred())
 						Expect(data).To(Equal([]byte("0123456789")))
 					})
 
-				_, err = fs.Upload(ctx, storage.UploadRequest{
+				_, err = coord.Upload(ctx, upload.Request{
 					Ref:    uploadRef,
 					Body:   io.NopCloser(bytes.NewReader(fileContent)),
 					Length: int64(len(fileContent)),
 				}, nil)
 
 				Expect(err).ToNot(HaveOccurred())
-				bs.AssertCalled(GinkgoT(), "Upload", mock.Anything, mock.Anything, mock.Anything)
+				bs.AssertCalled(GinkgoT(), "UploadFromReader", mock.Anything, mock.Anything, mock.Anything)
 
 				resources, err := fs.ListFolder(ctx, rootRef, []string{}, []string{})
 
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(resources)).To(Equal(1))
 				Expect(resources[0].Path).To(Equal(ref.Path))
-			})
-		})
-
-		When("the quota is exceeded when the upload is finished", func() {
-			It("fails with insufficient storage instead of an internal server error", func() {
-				var (
-					fileContent = []byte("0123456789")
-				)
-
-				uploadIds, err := fs.InitiateUpload(ctx, ref, 10, map[string]string{})
-				Expect(err).ToNot(HaveOccurred())
-
-				session, err := fs.(tusd.DataStore).GetUpload(ctx, uploadIds["tus"])
-				Expect(err).ToNot(HaveOccurred())
-
-				_, err = session.WriteChunk(ctx, 0, bytes.NewReader(fileContent))
-				Expect(err).ToNot(HaveOccurred())
-
-				// the quota is only exceeded once the upload is finished, e.g. because
-				// another upload into the same space filled it up in the meantime
-				originalFunc := node.CheckQuota
-				node.CheckQuota = func(ctx context.Context, spaceRoot *node.Node, overwrite bool, oldSize, newSize uint64) (bool, error) {
-					return false, errtypes.InsufficientStorage("quota exceeded")
-				}
-				defer func() { node.CheckQuota = originalFunc }()
-
-				err = session.FinishUpload(ctx)
-
-				// tusd only maps its own errors to a status code, everything else
-				// becomes an internal server error
-				var tusErr tusd.Error
-				Expect(errors.As(err, &tusErr)).To(BeTrue())
-				Expect(tusErr.ErrorCode).To(Equal("ERR_INSUFFICIENT_STORAGE"))
-				Expect(tusErr.HTTPResponse.StatusCode).To(Equal(http.StatusInsufficientStorage))
 			})
 		})
 
@@ -362,7 +279,7 @@ var _ = Describe("File uploads", func() {
 				)
 
 				uploadRef := &provider.Reference{Path: "/some-non-existent-upload-reference"}
-				_, err := fs.Upload(ctx, storage.UploadRequest{
+				_, err := coord.Upload(ctx, upload.Request{
 					Ref:    uploadRef,
 					Body:   io.NopCloser(bytes.NewReader(fileContent)),
 					Length: int64(len(fileContent)),
