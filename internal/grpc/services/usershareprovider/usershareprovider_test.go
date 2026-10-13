@@ -40,6 +40,7 @@ import (
 	"github.com/opencloud-eu/reva/v2/internal/grpc/services/usershareprovider"
 	"github.com/opencloud-eu/reva/v2/pkg/conversions"
 	ctxpkg "github.com/opencloud-eu/reva/v2/pkg/ctx"
+	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
 	"github.com/opencloud-eu/reva/v2/pkg/permission"
 	"github.com/opencloud-eu/reva/v2/pkg/rgrpc/status"
 	"github.com/opencloud-eu/reva/v2/pkg/rgrpc/todo/pool"
@@ -1106,6 +1107,19 @@ var _ = Describe("user share provider service", func() {
 			}
 
 			manager.On("Unshare", mock.Anything, mock.Anything).Return(nil)
+		})
+
+		It("returns not found for a share that does not exist", func() {
+			manager.On("GetShare", mock.Anything, mock.Anything).Unset()
+			manager.On("GetShare", mock.Anything, mock.Anything).Return(nil, errtypes.NotFound("share-to-remove"))
+
+			removeShareResponse, err := provider.RemoveShare(ctx, &collaborationpb.RemoveShareRequest{
+				Ref: removeShareRef,
+			})
+
+			Expect(err).ToNot(HaveOccurred())
+			Expect(removeShareResponse.Status.Code).To(Equal(rpcpb.Code_CODE_NOT_FOUND))
+			manager.AssertNumberOfCalls(GinkgoT(), "Unshare", 0)
 		})
 
 		// When removing a Space Member, we want to ensure that at least one Grantee remains that has Permission
