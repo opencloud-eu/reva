@@ -1000,7 +1000,7 @@ func registerWithMicroReg(ns string, p *registrypb.ProviderInfo) error {
 	node.Metadata[ns+".app-provider.icon"] = p.Icon
 
 	node.Metadata[ns+".app-provider.allow_creation"] = registrypb.ProviderInfo_Capability_name[int32(p.Capability)]
-	node.Metadata[ns+".app-provider.priority"] = getPriority(p)
+	node.Metadata[ns+".app-provider.priority"] = GetPriority(p)
 	if p.DesktopOnly {
 		node.Metadata[ns+".app-provider.desktop_only"] = "true"
 	}

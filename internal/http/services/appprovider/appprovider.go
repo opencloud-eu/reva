@@ -35,6 +35,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-viper/mapstructure/v2"
 	ua "github.com/mileusna/useragent"
+	"github.com/opencloud-eu/reva/v2/pkg/app/registry/micro"
 	ctxpkg "github.com/opencloud-eu/reva/v2/pkg/ctx"
 	"github.com/opencloud-eu/reva/v2/pkg/rgrpc/status"
 	"github.com/opencloud-eu/reva/v2/pkg/rgrpc/todo/pool"
@@ -403,22 +404,30 @@ func (s *svc) handleOpen(openMode int) http.HandlerFunc {
 
 		appName := r.Form.Get("app_name")
 		if appName == "" {
-			apps, err := client.GetAppProviders(ctx, &appregistry.GetAppProvidersRequest{
-				ResourceInfo: statRes.GetInfo(),
+			defRes, err := client.GetDefaultAppProviderForMimeType(ctx, &appregistry.GetDefaultAppProviderForMimeTypeRequest{
+				MimeType: statRes.GetInfo().GetMimeType(),
 			})
-			if err != nil {
-				writeError(w, r, appErrorServerError, "error getting app providers", err)
-				return
+			if err == nil && defRes.GetStatus().GetCode() == rpc.Code_CODE_OK && defRes.GetProvider() != nil {
+				appName = defRes.GetProvider().GetName()
+			} else {
+				apps, err := client.GetAppProviders(ctx, &appregistry.GetAppProvidersRequest{
+					ResourceInfo: statRes.GetInfo(),
+				})
+				if err != nil {
+					writeError(w, r, appErrorServerError, "error getting app providers", err)
+					return
+				}
+				if apps.GetStatus().GetCode() != rpc.Code_CODE_OK {
+					writeError(w, r, appErrorServerError, "error getting app providers", nil)
+					return
+				}
+				if len(apps.GetProviders()) == 0 {
+					writeError(w, r, appErrorProviderNotFound, "no app providers found", nil)
+					return
+				}
+				micro.SortByPriorityThenName(apps.Providers)
+				appName = apps.GetProviders()[0].GetName()
 			}
-			if apps.GetStatus().GetCode() != rpc.Code_CODE_OK {
-				writeError(w, r, appErrorServerError, "error getting app providers", nil)
-				return
-			}
-			if len(apps.GetProviders()) == 0 {
-				writeError(w, r, appErrorProviderNotFound, "no app providers found", nil)
-				return
-			}
-			appName = apps.GetProviders()[0].GetName()
 		}
 
 		openReq := gateway.OpenInAppRequest{

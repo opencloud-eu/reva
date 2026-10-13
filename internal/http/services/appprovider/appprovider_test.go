@@ -18,6 +18,7 @@ import (
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/opencloud-eu/reva/v2/pkg/rgrpc/status"
+	"github.com/opencloud-eu/reva/v2/pkg/utils"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
@@ -26,7 +27,8 @@ import (
 type gatewayServer struct {
 	gateway.UnimplementedGatewayAPIServer
 
-	providers []*appregistry.ProviderInfo
+	defaultApp string
+	providers  []*appregistry.ProviderInfo
 
 	mu        sync.Mutex
 	openedApp string
@@ -43,6 +45,16 @@ func (g *gatewayServer) Stat(ctx context.Context, _ *provider.StatRequest) (*pro
 				InitiateFileUpload:   true,
 			},
 		},
+	}, nil
+}
+
+func (g *gatewayServer) GetDefaultAppProviderForMimeType(ctx context.Context, _ *appregistry.GetDefaultAppProviderForMimeTypeRequest) (*appregistry.GetDefaultAppProviderForMimeTypeResponse, error) {
+	if g.defaultApp == "" {
+		return &appregistry.GetDefaultAppProviderForMimeTypeResponse{Status: status.NewNotFound(ctx, "no default app")}, nil
+	}
+	return &appregistry.GetDefaultAppProviderForMimeTypeResponse{
+		Status:   status.NewOK(ctx),
+		Provider: &appregistry.ProviderInfo{Name: g.defaultApp},
 	}, nil
 }
 
@@ -79,6 +91,7 @@ func TestOpenWithWebAppFallback(t *testing.T) {
 	cases := []struct {
 		name       string
 		appName    string
+		defaultApp string
 		providers  []*appregistry.ProviderInfo
 		wantStatus int
 		wantApp    string
@@ -87,18 +100,35 @@ func TestOpenWithWebAppFallback(t *testing.T) {
 		{
 			name:       "requested app is used",
 			appName:    "OnlyOffice",
+			defaultApp: "Collabora",
 			providers:  []*appregistry.ProviderInfo{{Name: "Collabora"}},
 			wantStatus: http.StatusOK,
 			wantApp:    "OnlyOffice",
 		},
 		{
-			name:       "no app falls back to the first provider",
+			name:       "no app takes the default app of the mime type",
+			defaultApp: "OnlyOffice",
 			providers:  []*appregistry.ProviderInfo{{Name: "Collabora"}, {Name: "OnlyOffice"}},
+			wantStatus: http.StatusOK,
+			wantApp:    "OnlyOffice",
+		},
+		{
+			name:       "no app and no default sorts the providers by name",
+			providers:  []*appregistry.ProviderInfo{{Name: "OnlyOffice"}, {Name: "Collabora"}},
 			wantStatus: http.StatusOK,
 			wantApp:    "Collabora",
 		},
 		{
-			name:       "no app and no provider is not found",
+			name: "no app and no default prefers the lower priority over the name",
+			providers: []*appregistry.ProviderInfo{
+				{Name: "Collabora", Opaque: utils.AppendPlainToOpaque(nil, "priority", "10")},
+				{Name: "OnlyOffice", Opaque: utils.AppendPlainToOpaque(nil, "priority", "5")},
+			},
+			wantStatus: http.StatusOK,
+			wantApp:    "OnlyOffice",
+		},
+		{
+			name:       "no app, no default and no provider is not found",
 			wantStatus: http.StatusNotFound,
 			wantCode:   appErrorProviderNotFound,
 		},
@@ -106,7 +136,7 @@ func TestOpenWithWebAppFallback(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			gw := &gatewayServer{providers: tc.providers}
+			gw := &gatewayServer{defaultApp: tc.defaultApp, providers: tc.providers}
 			logger := zerolog.Nop()
 			s, err := New(map[string]interface{}{
 				"gatewaysvc": startGateway(t, gw),
