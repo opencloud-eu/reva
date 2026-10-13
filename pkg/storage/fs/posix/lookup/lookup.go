@@ -52,6 +52,8 @@ const (
 	IndexesDir  = dfslookup.IndexesDir
 	MetadataDir = ".oc-nodes"
 	TrashDir    = ".Trash"
+	// PurgeDirPrefix prefixes the name a space root is renamed to while it is being purged
+	PurgeDirPrefix = ".oc-purge-"
 )
 
 var _spaceTypePersonal = "personal"
