@@ -8,6 +8,7 @@
 
 ### 🐛 Bug Fixes
 
+- fix: return not found when deleting unknown shares or spaces without … [[#874](https://github.com/opencloud-eu/reva/pull/874)]
 - fix(posix): keep files findable by id after their folder is renamed on disk [[#850](https://github.com/opencloud-eu/reva/pull/850)]
 - fix(posix): stop on-disk deletes and moves from resetting tree sizes to 0 [[#849](https://github.com/opencloud-eu/reva/pull/849)]
 - fix(posix): keep a handle on the blob for the copy target [[#807](https://github.com/opencloud-eu/reva/pull/807)]
