@@ -32,6 +32,7 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/opencloud-eu/reva/v2/internal/grpc/services/storageprovider"
 	ctxpkg "github.com/opencloud-eu/reva/v2/pkg/ctx"
+	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/node"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/spaceidindex"
 	helpers "github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/testhelpers"
@@ -212,6 +213,18 @@ var _ = Describe("Spaces", func() {
 				ctx := ctxpkg.ContextSetUser(context.Background(), env.DeleteHomeSpacesUser)
 				err := env.Fs.DeleteStorageSpace(ctx, delReq)
 				Expect(err).To(HaveOccurred())
+			})
+			It("returns not found when a non-member disables an active space", func() {
+				resp, err := env.Fs.CreateStorageSpace(env.Ctx, &provider.CreateStorageSpaceRequest{Name: "Hidden", Type: "project"})
+				Expect(err).ToNot(HaveOccurred())
+				ctx := ctxpkg.ContextSetUser(context.Background(), env.Users[1])
+				err = env.Fs.DeleteStorageSpace(ctx, &provider.DeleteStorageSpaceRequest{Id: resp.StorageSpace.GetId()})
+				Expect(err).To(BeAssignableToTypeOf(errtypes.NotFound("")))
+			})
+			It("keeps permission denied when a non-member purges a disabled space", func() {
+				ctx := ctxpkg.ContextSetUser(context.Background(), env.Users[1])
+				err := env.Fs.DeleteStorageSpace(ctx, delReq)
+				Expect(err).To(BeAssignableToTypeOf(errtypes.PermissionDenied("")))
 			})
 			It("succeeds as a user with 'delete-all-spaces privilege", func() {
 				ctx := ctxpkg.ContextSetUser(context.Background(), env.DeleteAllSpacesUser)
