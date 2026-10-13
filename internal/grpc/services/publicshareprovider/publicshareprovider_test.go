@@ -751,9 +751,28 @@ var _ = Describe("PublicShareProvider", func() {
 				},
 			}
 			res, err := provider.RemovePublicShare(ctx, req)
-			Expect(err).To(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(res.GetStatus().GetCode()).To(Equal(rpc.Code_CODE_INTERNAL))
 			Expect(res.GetStatus().GetMessage()).To(Equal("error loading public share"))
+		})
+		It("returns not found for a share that does not exist", func() {
+			manager.
+				EXPECT().
+				GetPublicShare(mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+				Return(nil, errtypes.NotFound("share-id"))
+
+			req := &link.RemovePublicShareRequest{
+				Ref: &link.PublicShareReference{
+					Spec: &link.PublicShareReference_Id{
+						Id: &link.PublicShareId{
+							OpaqueId: "share-id",
+						},
+					},
+				},
+			}
+			res, err := provider.RemovePublicShare(ctx, req)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(res.GetStatus().GetCode()).To(Equal(rpc.Code_CODE_NOT_FOUND))
 		})
 		It("can remove an existing share as a creator", func() {
 			manager.
