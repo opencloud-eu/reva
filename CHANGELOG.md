@@ -6,6 +6,13 @@
 
 @NickWalters, @aduffeck, @butonic, @fschade, @micbar, @v-scharf
 
+### 🐛 Bug Fixes
+
+- fix(posix): stop on-disk deletes and moves from resetting tree sizes to 0 [[#849](https://github.com/opencloud-eu/reva/pull/849)]
+- fix(posix): keep a handle on the blob for the copy target [[#807](https://github.com/opencloud-eu/reva/pull/807)]
+- test: wait for the DeleteRevision handler before redelivering [[#861](https://github.com/opencloud-eu/reva/pull/861)]
+- fix filedescriptor leaks [[#847](https://github.com/opencloud-eu/reva/pull/847)]
+
 ### ✅ Tests
 
 - try to remove the share migration lock on SIGTERM [[#869](https://github.com/opencloud-eu/reva/pull/869)]
@@ -17,11 +24,6 @@
 - feat: make space2share migration repeatable [[#864](https://github.com/opencloud-eu/reva/pull/864)]
 - Harden unshare [[#856](https://github.com/opencloud-eu/reva/pull/856)]
 - feat: run decomposedfs on foreign metadata via metadata_prefix [[#859](https://github.com/opencloud-eu/reva/pull/859)]
-
-### 🐛 Bug Fixes
-
-- test: wait for the DeleteRevision handler before redelivering [[#861](https://github.com/opencloud-eu/reva/pull/861)]
-- fix filedescriptor leaks [[#847](https://github.com/opencloud-eu/reva/pull/847)]
 
 ## [2.51.0](https://github.com/opencloud-eu/reva/releases/tag/v2.51.0) - 2026-10-05
 
