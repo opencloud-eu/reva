@@ -691,7 +691,14 @@ func (t *Tree) Delete(ctx context.Context, n *node.Node) error {
 		}
 		sizeDiff = -int64(treesize)
 	} else {
-		sizeDiff = -n.Blobsize
+		// The ancestors hold propagatedsize for this file, not necessarily blobsize: a file whose
+		// propagation failed has a blobsize the ancestors never received. Fall back to blobsize for
+		// nodes assimilated before the checkpoint existed.
+		propagated, perr := n.XattrInt64(ctx, prefixes.PropagatedSizeAttr)
+		if perr != nil {
+			propagated = n.Blobsize
+		}
+		sizeDiff = -propagated
 	}
 
 	// Remove lock file if it exists

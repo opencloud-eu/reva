@@ -8,6 +8,7 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/lookup"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata/prefixes"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/node"
 	"golang.org/x/sys/unix"
 
@@ -228,5 +229,49 @@ var _ = Describe("Non-watching tree", func() {
 		dir, err = non_watching_env.Lookup.NodeFromResource(non_watching_env.Ctx, ref)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(dir.GetTreeSize(non_watching_env.Ctx)).To(BeZero())
+	})
+
+	It("subtracts the propagated size when deleting a file", func() {
+		content := []byte("some content")
+		fileSize := uint64(len(content))
+		path := filepath.Join(root, "delete")
+		Expect(os.WriteFile(path, content, 0600)).To(Succeed())
+
+		ref := &provider.Reference{ResourceId: non_watching_env.SpaceRootRes, Path: subtree}
+		dir, err := non_watching_env.Lookup.NodeFromResource(non_watching_env.Ctx, ref)
+		Expect(err).ToNot(HaveOccurred())
+		_, err = non_watching_env.Tree.ListFolder(non_watching_env.Ctx, dir)
+		Expect(err).ToNot(HaveOccurred())
+
+		// the file is assimilated: blobsize and the propagated-size checkpoint agree
+		n, err := non_watching_env.Lookup.NodeFromResource(non_watching_env.Ctx, &provider.Reference{
+			ResourceId: non_watching_env.SpaceRootRes,
+			Path:       subtree + "/delete",
+		})
+		Expect(err).ToNot(HaveOccurred())
+		Expect(n.Exists).To(BeTrue())
+		Expect(n.Blobsize).To(Equal(int64(fileSize)))
+		dir, err = non_watching_env.Lookup.NodeFromResource(non_watching_env.Ctx, ref)
+		Expect(err).ToNot(HaveOccurred())
+		size, err := dir.GetTreeSize(non_watching_env.Ctx)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(size).To(Equal(fileSize))
+
+		// simulate a file whose size was only partially propagated: the ancestors hold 5, not 12
+		Expect(non_watching_env.Lookup.MetadataBackend().Set(non_watching_env.Ctx, n, prefixes.PropagatedSizeAttr, []byte("5"))).To(Succeed())
+
+		// deleting must remove what the ancestors actually hold (5), not blobsize (12)
+		n, err = non_watching_env.Lookup.NodeFromResource(non_watching_env.Ctx, &provider.Reference{
+			ResourceId: non_watching_env.SpaceRootRes,
+			Path:       subtree + "/delete",
+		})
+		Expect(err).ToNot(HaveOccurred())
+		Expect(non_watching_env.Tree.Delete(non_watching_env.Ctx, n)).To(Succeed())
+
+		dir, err = non_watching_env.Lookup.NodeFromResource(non_watching_env.Ctx, ref)
+		Expect(err).ToNot(HaveOccurred())
+		size, err = dir.GetTreeSize(non_watching_env.Ctx)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(size).To(Equal(fileSize - 5))
 	})
 })
