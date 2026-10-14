@@ -81,6 +81,26 @@ var _ = Describe("Failures", func() {
 		Expect(f.Recent(path, lstat())).To(Succeed())
 	})
 
+	It("retries an item after a fix that only shows in its ctime", func() {
+		f.Record(path, lstat(), failure)
+		Expect(f.Recent(path, lstat())).To(MatchError(failure))
+
+		// setfacl and chattr change none of the attributes above, but they do change the ctime.
+		// A chmod to the mode the file already has does the same. Some kernels stamp the ctime
+		// from a coarse clock, so repeat the chmod until the ctime really moved.
+		before := cTime(lstat())
+		Eventually(func() bool {
+			Expect(os.Chmod(path, 0600)).To(Succeed())
+			return cTime(lstat()).After(before)
+		}).Should(BeTrue())
+		Expect(f.Recent(path, lstat())).To(Succeed())
+
+		// the fix did not work, and the delay keeps doubling instead of starting over
+		f.Record(path, lstat(), failure)
+		last, _ := f.lru.Peek(path)
+		Expect(last.delay).To(Equal(2 * minRetryDelay))
+	})
+
 	It("keeps the stored failures when it is full", func() {
 		for i := range maxFailures {
 			f.Record(fmt.Sprintf("/failed/%d", i), lstat(), failure)
