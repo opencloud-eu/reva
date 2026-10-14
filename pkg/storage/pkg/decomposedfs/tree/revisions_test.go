@@ -4,15 +4,20 @@
 package tree_test
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/mock"
 
+	"github.com/opencloud-eu/reva/v2/pkg/appctx"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata/prefixes"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/node"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/revisioncleanup"
@@ -159,6 +164,27 @@ var _ = Describe("Revisions", func() {
 			Expect(counterValue(revisionsDeleted)).To(Equal(deleted + 1))
 			Expect(counterValue(bytesDeleted)).To(Equal(bytes + float64(size)))
 			Expect(counterValue(purgeFailures)).To(Equal(failures))
+		})
+
+		It("logs why it purged a revision", func() {
+			expectBlobDeletion(blobOfRevision(2))
+			var buf bytes.Buffer
+			logger := zerolog.New(&buf).Level(zerolog.DebugLevel)
+
+			cleaner.Cleanup(appctx.WithLogger(env.Ctx, &logger), env.Lookup, env.Tree, n)
+
+			var purged map[string]any
+			for _, line := range strings.Split(strings.TrimSpace(buf.String()), "\n") {
+				var entry map[string]any
+				Expect(json.Unmarshal([]byte(line), &entry)).To(Succeed())
+				if entry["message"] == "revision cleanup: purged revision" {
+					purged = entry
+				}
+			}
+			Expect(purged).ToNot(BeNil(), buf.String())
+			Expect(purged["revision"]).To(Equal(keys[2]))
+			// keys[2] is 100 days old, beyond the 30 days of "7d, auto, 30d"
+			Expect(purged["reason"]).To(HavePrefix(`deleted by "30d": older than `))
 		})
 
 		It("counts revisions whose blob it failed to delete as failures", func() {

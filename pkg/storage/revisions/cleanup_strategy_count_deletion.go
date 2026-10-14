@@ -5,6 +5,8 @@ package revisions
 
 import (
 	"context"
+	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/rs/zerolog"
@@ -48,12 +50,18 @@ func (s *countDeletionRevisionCleanupStrategy) cleanupInChain(now time.Time, rev
 	// the safeguarded revisions already use up part of the limit, and if there are more
 	// of them than the limit allows, all remaining revisions have to go
 	keep := max(s.maxVersionsPerFile-safeguarded, 0)
+	spec := strconv.Itoa(s.maxVersionsPerFile)
+	counted := ""
+	if safeguarded > 0 {
+		counted = fmt.Sprintf(", counting the %d protected ones", safeguarded)
+	}
+	retained := fmt.Sprintf("kept by %q: one of the %d newest%s", spec, s.maxVersionsPerFile, counted)
 	if len(revs) <= keep {
-		plan.Retain(revs...)
+		plan.Retain(retained, revs...)
 		return plan, nil
 	}
 	// no need to sort revisions, they are guaranteed to be sorted from newest to oldest
-	plan.Delete(revs[keep:]...)
-	plan.Retain(revs[:keep]...)
+	plan.Delete(fmt.Sprintf("deleted by %q: beyond the %d newest%s", spec, s.maxVersionsPerFile, counted), revs[keep:]...)
+	plan.Retain(retained, revs[:keep]...)
 	return plan, nil
 }
