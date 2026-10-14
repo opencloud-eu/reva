@@ -5,6 +5,7 @@ package revisions
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/rs/zerolog"
@@ -32,58 +33,57 @@ func newAutoRevisionCleanupStrategyFromString(config string) (RevisionCleanupStr
 
 // bucketPolicy defines a time window and the resolution slot within that window.
 type bucketPolicy struct {
-	name     string        // value only matters for debugging, but must be unique
-	ageLimit time.Duration // Max age relative to 'now' to belong to this bucket
-	interval time.Duration // Slot duration (<=0 means keep all)
-	maxKeep  int           // Max revisions to keep per slot (<=0 means keep all, >0 caps per slot)
-}
-
-type bucketExplanation struct {
-	retain []Revision
-	delete []Revision
+	name        string        // value only matters for debugging, but must be unique
+	description string        // the time window in words, for the reasons in the Plan
+	ageLimit    time.Duration // Max age relative to 'now' to belong to this bucket
+	interval    time.Duration // Slot duration (<=0 means keep all)
+	maxKeep     int           // Max revisions to keep per slot (<=0 means keep all, >0 caps per slot)
 }
 
 // Standard GFS (Grandfather-Father-Son) style retention tiers.
 var defaultPolicy = []bucketPolicy{
 	{
-		name:     "LastMinute",
-		ageLimit: 1 * time.Minute,  // last minute
-		maxKeep:  1,                // one version
-		interval: 10 * time.Second, // is kept every 10 seconds
+		name:        "LastMinute",
+		description: "last minute",
+		ageLimit:    1 * time.Minute,  // last minute
+		maxKeep:     1,                // one version
+		interval:    10 * time.Second, // is kept every 10 seconds
 	},
 	{
-		name:     "LastHour",
-		ageLimit: 1 * time.Hour,   // last hour
-		maxKeep:  1,               // one version
-		interval: 1 * time.Minute, // is kept every minute
+		name:        "LastHour",
+		description: "last hour",
+		ageLimit:    1 * time.Hour,   // last hour
+		maxKeep:     1,               // one version
+		interval:    1 * time.Minute, // is kept every minute
 	},
 	{
-		name:     "Last24H",
-		ageLimit: 24 * time.Hour, // last 24 hours
-		maxKeep:  1,              // one version
-		interval: 1 * time.Hour,  // is kept every hour
+		name:        "Last24H",
+		description: "last 24 hours",
+		ageLimit:    24 * time.Hour, // last 24 hours
+		maxKeep:     1,              // one version
+		interval:    1 * time.Hour,  // is kept every hour
 	},
 	{
-		name:     "Last30D",
-		ageLimit: 30 * 24 * time.Hour, // last 30 days
-		maxKeep:  1,                   // one version
-		interval: 24 * time.Hour,      // is kept every day
+		name:        "Last30D",
+		description: "last 30 days",
+		ageLimit:    30 * 24 * time.Hour, // last 30 days
+		maxKeep:     1,                   // one version
+		interval:    24 * time.Hour,      // is kept every day
 	},
 	{
-		name:     "Older30D",
-		ageLimit: 0,                  // older than 30 days (0 AgeLimit denotes the catch-all "older" tier)
-		maxKeep:  1,                  // one version
-		interval: 7 * 24 * time.Hour, // s kept every week
+		name:        "Older30D",
+		description: "older than 30 days",
+		ageLimit:    0,                  // older than 30 days (0 AgeLimit denotes the catch-all "older" tier)
+		maxKeep:     1,                  // one version
+		interval:    7 * 24 * time.Hour, // s kept every week
 	},
 }
 
 // evaluateRetention thins revisions across dynamic time tiers based on interval slots.
-func evaluateRetention(revisions []Revision, policies []bucketPolicy, now time.Time, explain bool) (Plan, map[string]bucketExplanation) {
-	var explanation map[string]bucketExplanation
-	if explain {
-		explanation = make(map[string]bucketExplanation, len(policies))
-	}
-
+// Every decision in the returned Plan comes with a reason that names the tier and, for tiers
+// with slots, the slot, so that the outcome of this not quite trivial bucket system can be
+// explained (e.g. in the debug log or in verbose output).
+func evaluateRetention(revisions []Revision, policies []bucketPolicy, now time.Time) Plan {
 	// First, iterate over all revisions to group/sort them into discrete,
 	// mutually exclusive buckets (one revision can only ever be in one bucket).
 	// One bucket (of revisions) corresponds to one bucketPolicy.
@@ -118,15 +118,8 @@ func evaluateRetention(revisions []Revision, policies []bucketPolicy, now time.T
 		if len(items) == 0 {
 			continue // let's stop right here, nothing to do
 		}
-
-		var bucketPlan bucketExplanation
-		if explain {
-			if found, ok := explanation[policy.name]; ok {
-				bucketPlan = found
-			} else {
-				bucketPlan = bucketExplanation{}
-			}
-		}
+		kept := fmt.Sprintf("kept by %q (%s): ", autoStrategy, policy.description)
+		deleted := fmt.Sprintf("deleted by %q (%s): ", autoStrategy, policy.description)
 
 		if policy.interval <= 0 {
 			// if interval is not set (<=0), then we just keep maxKeep items across the whole bucket:
@@ -135,29 +128,18 @@ func evaluateRetention(revisions []Revision, policies []bucketPolicy, now time.T
 			switch {
 			case policy.maxKeep <= 0:
 				// if maxKeep is not set (<=0), then we retain *all* of the revisions in the bucket
-				plan.Retain(items...)
-				if explain {
-					bucketPlan.retain = append(bucketPlan.retain, items...)
-				}
+				plan.Retain(kept+"all revisions are kept", items...)
 			case policy.maxKeep < len(items):
 				// we keep less revisions than we have in total in this bucket
 				// => we need to do something: since they are sorted in newest-first order,
 				// we can simply split the revisions slice in two:
 				retain := items[:policy.maxKeep] // the first ones up to maxKeep are retained
 				delete := items[policy.maxKeep:] // everything after maxKeep is deleted
-				plan.Retain(retain...)
-				plan.Delete(delete...)
-				if explain {
-					bucketPlan.retain = append(bucketPlan.retain, retain...)
-					bucketPlan.delete = append(bucketPlan.delete, delete...)
-				}
+				plan.Retain(kept+fmt.Sprintf("one of the %d newest", policy.maxKeep), retain...)
+				plan.Delete(deleted+fmt.Sprintf("beyond the %d newest", policy.maxKeep), delete...)
 			default:
 				// maxKeep is larger than the number of items => retain everything
-				retain := items
-				plan.Retain(retain...)
-				if explain {
-					bucketPlan.retain = append(bucketPlan.retain, retain...)
-				}
+				plan.Retain(kept+fmt.Sprintf("one of the %d newest", policy.maxKeep), items...)
 			}
 		} else {
 			// interval is set for this bucket, in which case we need to apply the slightly
@@ -169,46 +151,45 @@ func evaluateRetention(revisions []Revision, policies []bucketPolicy, now time.T
 			// just as a performance improvement to avoid using time.Duration objects
 			slotCounts := make(map[int64]int)
 
-			// now we TODO
 			for _, rev := range items {
 				// we take the revision's mtime, but truncate it to the interval for this
 				// bucket (e.g. 1m or 1h), in order to count how many revisions we have
 				// in each slot within the bucket; note that we also transform the
 				// time.Duration into an int64 to use that as the key in the slot map
 				slotKey := rev.LastModificationTime().Truncate(policy.interval).UnixNano()
+				slot := fmt.Sprintf("its slot of %s starting %s", humanDuration(policy.interval), formatTime(time.Unix(0, slotKey).UTC()))
 
 				count := slotCounts[slotKey]
-				if policy.maxKeep <= 0 || count < policy.maxKeep {
+				switch {
+				case policy.maxKeep <= 0:
 					// if maxKeep is not set (<=0), then we keep them all anyways
-					// or
+					plan.Retain(kept+"all revisions are kept", rev)
+				case count < policy.maxKeep:
 					// if the current count of revisions in this slot is smaller than maxKeep,
 					// then we also keep this revision
 					slotCounts[slotKey] = count + 1
-					plan.Retain(rev)
-					if explain {
-						bucketPlan.retain = append(bucketPlan.retain, rev)
+					if policy.maxKeep == 1 {
+						plan.Retain(kept+"the newest in "+slot, rev)
+					} else {
+						plan.Retain(kept+fmt.Sprintf("one of the %d newest in %s", policy.maxKeep, slot), rev)
 					}
-				} else {
+				default:
 					// if maxKeep is set (>0) and the count of revisions within its assigned
 					// slot is higher than maxKeep, then the revision must be deleted
-					plan.Delete(rev)
-					if explain {
-						bucketPlan.delete = append(bucketPlan.delete, rev)
+					if policy.maxKeep == 1 {
+						plan.Delete(deleted+slot+" already keeps a newer revision", rev)
+					} else {
+						plan.Delete(deleted+fmt.Sprintf("%s already keeps %d newer revisions", slot, policy.maxKeep), rev)
 					}
 				}
 			}
 		}
-
-		if explain {
-			explanation[policy.name] = bucketPlan
-		}
 	}
 
-	return plan, explanation
+	return plan
 }
 
 func (s *autoRevisionCleanupStrategy) Cleanup(now time.Time, revs []Revision, ctx context.Context, logger *zerolog.Logger) (Plan, error) {
 	// no need to sort revisions, they are guaranteed to be sorted from newest to oldest
-	plan, _ := evaluateRetention(revs, defaultPolicy, now, false)
-	return plan, nil
+	return evaluateRetention(revs, defaultPolicy, now), nil
 }
