@@ -34,6 +34,7 @@ import (
 	providerv1beta1 "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/opencloud-eu/reva/v2/pkg/conversions"
 	ctxpkg "github.com/opencloud-eu/reva/v2/pkg/ctx"
+	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
 	"github.com/opencloud-eu/reva/v2/pkg/rgrpc/status"
 	"github.com/opencloud-eu/reva/v2/pkg/rgrpc/todo/pool"
 	sharespkg "github.com/opencloud-eu/reva/v2/pkg/share"
@@ -409,6 +410,18 @@ var _ = Describe("Jsoncs3", func() {
 				})
 				Expect(s).To(BeNil())
 				Expect(err).To(HaveOccurred())
+			})
+
+			It("returns not found for ids that are no share ids", func() {
+				s, err := m.GetShare(ctx, &collaboration.ShareReference{
+					Spec: &collaboration.ShareReference_Id{
+						Id: &collaboration.ShareId{
+							OpaqueId: "public-link-id",
+						},
+					},
+				})
+				Expect(s).To(BeNil())
+				Expect(err).To(BeAssignableToTypeOf(errtypes.NotFound("")))
 			})
 
 			It("handles unknown keys", func() {
