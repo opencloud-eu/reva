@@ -46,6 +46,7 @@ import (
 	"github.com/opencloud-eu/reva/v2/pkg/rgrpc/todo/pool"
 	sdk "github.com/opencloud-eu/reva/v2/pkg/sdk/common"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/lookup"
+	dfslookup "github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/lookup"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata/prefixes"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/node"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/permissions"
@@ -1222,7 +1223,7 @@ func isGrantExpired(g *provider.Grant) bool {
 // still lock nodes of the space and recreate lock files inside it, which makes an in-place
 // RemoveAll fail with "directory not empty". Once the space root is gone they can't do that anymore.
 func removeSpaceRoot(spaceRoot string) error {
-	tombstone := filepath.Join(filepath.Dir(spaceRoot), lookup.PurgeDirPrefix+filepath.Base(spaceRoot)+"-"+uuid.NewString())
+	tombstone := filepath.Join(filepath.Dir(spaceRoot), dfslookup.PurgeDirPrefix+filepath.Base(spaceRoot)+"-"+uuid.NewString())
 	if err := os.Rename(spaceRoot, tombstone); err != nil {
 		if os.IsNotExist(err) {
 			return nil
