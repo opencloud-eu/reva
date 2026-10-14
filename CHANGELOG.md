@@ -6,15 +6,9 @@
 
 @NickWalters, @aduffeck, @butonic, @dragonchaser, @fschade, @micbar, @v-scharf
 
-### 📈 Enhancement
-
-- fix(appprovider): pick a deterministic app when open with web names none [[#875](https://github.com/opencloud-eu/reva/pull/875)]
-- feat: make space2share migration repeatable [[#864](https://github.com/opencloud-eu/reva/pull/864)]
-- Harden unshare [[#856](https://github.com/opencloud-eu/reva/pull/856)]
-- feat: run decomposedfs on foreign metadata via metadata_prefix [[#859](https://github.com/opencloud-eu/reva/pull/859)]
-
 ### 🐛 Bug Fixes
 
+- fix: add config to skip share manager migrations [[#877](https://github.com/opencloud-eu/reva/pull/877)]
 - fix: status code during share removal [[#878](https://github.com/opencloud-eu/reva/pull/878)]
 - fix: return not found when deleting unknown shares or spaces without … [[#874](https://github.com/opencloud-eu/reva/pull/874)]
 - fix(posix): keep files findable by id after their folder is renamed on disk [[#850](https://github.com/opencloud-eu/reva/pull/850)]
@@ -22,6 +16,13 @@
 - fix(posix): keep a handle on the blob for the copy target [[#807](https://github.com/opencloud-eu/reva/pull/807)]
 - test: wait for the DeleteRevision handler before redelivering [[#861](https://github.com/opencloud-eu/reva/pull/861)]
 - fix filedescriptor leaks [[#847](https://github.com/opencloud-eu/reva/pull/847)]
+
+### 📈 Enhancement
+
+- fix(appprovider): pick a deterministic app when open with web names none [[#875](https://github.com/opencloud-eu/reva/pull/875)]
+- feat: make space2share migration repeatable [[#864](https://github.com/opencloud-eu/reva/pull/864)]
+- Harden unshare [[#856](https://github.com/opencloud-eu/reva/pull/856)]
+- feat: run decomposedfs on foreign metadata via metadata_prefix [[#859](https://github.com/opencloud-eu/reva/pull/859)]
 
 ### ✅ Tests
 
