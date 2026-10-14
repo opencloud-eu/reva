@@ -1,8 +1,12 @@
 package ignore
 
 import (
+	"errors"
+	"io/fs"
+	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 
 	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/blobstore"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/lookup"
@@ -24,20 +28,38 @@ type needle string
 
 // Ignorer handles checking if paths should be ignored in posix operations
 type Ignorer struct {
-	options            *options.Options
-	log                *zerolog.Logger
-	personalSpacesRoot string
-	projectSpacesRoot  string
+	options *options.Options
+	log     *zerolog.Logger
+	root    string
+	// prefix is what a path in the storage starts with, the root and a separator
+	prefix string
+	// the space path templates as path segments of filepath.Match patterns
+	templates [][]string
 }
 
 // NewIgnorer creates a new Ignorer given the posix options and logger
 func NewIgnorer(options *options.Options, log *zerolog.Logger) *Ignorer {
-	return &Ignorer{
-		options:            options,
-		log:                log,
-		personalSpacesRoot: filepath.Clean(filepath.Join(options.Root, templates.Base(options.PersonalSpacePathTemplate))),
-		projectSpacesRoot:  filepath.Clean(filepath.Join(options.Root, templates.Base(options.GeneralSpacePathTemplate))),
+	i := &Ignorer{
+		options: options,
+		log:     log,
 	}
+	i.root = filepath.Clean(options.Root)
+	switch i.root {
+	case ".":
+		// filepath.Join(".", "users") is "users"
+		i.prefix = ""
+	case string(filepath.Separator):
+		i.prefix = i.root
+	default:
+		i.prefix = i.root + string(filepath.Separator)
+	}
+	for _, tpl := range []string{options.PersonalSpacePathTemplate, options.GeneralSpacePathTemplate} {
+		if tpl == "" {
+			continue
+		}
+		i.templates = append(i.templates, strings.Split(strings.TrimPrefix(templates.Glob(tpl), "/"), "/"))
+	}
+	return i
 }
 
 // IsIgnored checking if paths should be ignored in posix operations
@@ -62,18 +84,123 @@ func (i *Ignorer) IsIndex(path string) bool {
 }
 
 func (i *Ignorer) IsUpload(path string) bool {
-	return strings.HasPrefix(path, i.options.UploadDirectory)
+	return i.options.UploadDirectory != "" && strings.HasPrefix(path, i.options.UploadDirectory)
 }
 
+// IsRootPath reports whether path is the storage root or a directory between
+// the storage root and the space roots
 func (i *Ignorer) IsRootPath(path string) bool {
-	return path == i.options.Root ||
-		path == i.personalSpacesRoot ||
-		path == i.projectSpacesRoot
+	if path == i.options.Root {
+		return true
+	}
+	_, rootPath := i.classify(path)
+	return rootPath
 }
 
+// IsSpaceRoot reports whether path is where the space path templates put a
+// space root
 func (i *Ignorer) IsSpaceRoot(path string) bool {
-	parent := filepath.Dir(path)
-	return parent == i.personalSpacesRoot || parent == i.projectSpacesRoot
+	spaceRoot, _ := i.classify(path)
+	return spaceRoot
+}
+
+// classify matches path against the space path templates. A path below a
+// space root is neither a space root nor a root path, even if a template
+// matches it, e.g. users/alice/docs for {{.SpaceType}}/{{.SpaceName}}/{{.SpaceId}}.
+func (i *Ignorer) classify(path string) (spaceRoot, rootPath bool) {
+	if i.isStorageInternal(path) {
+		return false, false
+	}
+	rel, ok := strings.CutPrefix(path, i.prefix)
+	if !ok || rel == "" || path == i.root {
+		return false, path == i.root
+	}
+	segments := strings.Split(rel, string(filepath.Separator))
+	for n := 1; n <= len(segments); n++ {
+		spaceRoot, rootPath := i.match(segments[:n])
+		switch {
+		case spaceRoot:
+			return n == len(segments), false
+		case !rootPath:
+			return false, false
+		case n == len(segments):
+			return false, true
+		}
+	}
+	return false, false
+}
+
+// match reports whether segments match a whole template (a space root) or
+// its leading segments (a root path). If both match, the match with more
+// literal segments wins, e.g. users is a root path for users/{{.User.Id.OpaqueId}}
+// and not a space root for {{.SpaceId}}. A tie goes to the space root.
+func (i *Ignorer) match(segments []string) (spaceRoot, rootPath bool) {
+	spaceScore, rootScore := -1, -1
+	for _, tpl := range i.templates {
+		if len(segments) > len(tpl) {
+			continue
+		}
+		score := 0
+		for n, segment := range segments {
+			if ok, _ := filepath.Match(tpl[n], segment); !ok {
+				score = -1
+				break
+			}
+			if tpl[n] != "*" {
+				score++
+			}
+		}
+		if len(segments) == len(tpl) {
+			spaceScore = max(spaceScore, score)
+		} else {
+			rootScore = max(rootScore, score)
+		}
+	}
+	if spaceScore >= 0 && spaceScore >= rootScore {
+		return true, false
+	}
+	return false, rootScore >= 0
+}
+
+// SpaceRoots returns the paths in the storage that are space roots according
+// to the space path templates
+func (i *Ignorer) SpaceRoots() ([]string, error) {
+	var roots []string
+	seen := map[string]bool{}
+	for _, tpl := range i.templates {
+		dirs := []string{i.root}
+		for _, pattern := range tpl {
+			var next []string
+			for _, dir := range dirs {
+				entries, err := os.ReadDir(dir)
+				// a pattern can match a file, e.g. a .DS_Store in the storage root
+				if errors.Is(err, fs.ErrNotExist) || errors.Is(err, syscall.ENOTDIR) {
+					continue
+				}
+				if err != nil {
+					return nil, err
+				}
+				for _, entry := range entries {
+					if ok, _ := filepath.Match(pattern, entry.Name()); ok {
+						next = append(next, filepath.Join(dir, entry.Name()))
+					}
+				}
+			}
+			dirs = next
+		}
+		for _, dir := range dirs {
+			if !seen[dir] && i.IsSpaceRoot(dir) {
+				seen[dir] = true
+				roots = append(roots, dir)
+			}
+		}
+	}
+	return roots, nil
+}
+
+// the path templates can match these directories, but they never hold spaces
+func (i *Ignorer) isStorageInternal(path string) bool {
+	return i.IsChanges(path) || i.IsIndex(path) || i.IsUpload(path)
 }
 
 func IsLockFile(path string) bool {
@@ -106,9 +233,9 @@ func (i *Ignorer) isInternalDir(path string, match needle) bool {
 		return false
 	}
 
-	// get the path of the parent dir, e.g. "/a/match" ->  index of "match" is 3
-	// so parentPath is path[:2] -> "/a"
-	parentPath := path[:idx-1]
+	// get the path of the parent dir, e.g. "/a/.Trash" -> the needle "/.Trash"
+	// starts at index 2, so parentPath is path[:2] -> "/a"
+	parentPath := path[:idx]
 
 	return len(parentPath) > 0 && i.IsSpaceRoot(parentPath)
 }

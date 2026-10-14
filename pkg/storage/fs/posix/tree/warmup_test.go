@@ -132,3 +132,50 @@ var _ = Describe("WarmupIDCache", func() {
 		})
 	})
 })
+
+var _ = Describe("WarmupIDCache with a space path template that starts with an action", func() {
+	var (
+		env       *posixhelpers.TestEnv
+		spaceRoot string
+	)
+
+	BeforeEach(func() {
+		var err error
+		env, err = posixhelpers.NewTestEnv(map[string]interface{}{
+			"generalspacepath_template": "{{.SpaceType}}/{{.SpaceId}}",
+		})
+		Expect(err).ToNot(HaveOccurred())
+		space, err := env.CreateTestStorageSpace("project", nil)
+		Expect(err).ToNot(HaveOccurred())
+		spaceRoot = filepath.Join(env.Root, "project", space.SpaceId)
+		Expect(spaceRoot).To(BeADirectory())
+	})
+
+	AfterEach(func() {
+		env.Cleanup()
+	})
+
+	It("does not assimilate the internal directories of a space", func() {
+		Expect(os.MkdirAll(filepath.Join(spaceRoot, "sub"), 0755)).To(Succeed())
+		Expect(os.WriteFile(filepath.Join(spaceRoot, "sub", "test.txt"), []byte("hello world"), 0644)).To(Succeed())
+		Expect(os.MkdirAll(filepath.Join(spaceRoot, ".Trash", "files"), 0755)).To(Succeed())
+		Expect(os.WriteFile(filepath.Join(spaceRoot, ".Trash", "files", "deleted.txt"), []byte("hello"), 0644)).To(Succeed())
+		name, err := xattr.Get(spaceRoot, "user.oc.name")
+		Expect(err).ToNot(HaveOccurred())
+
+		Expect(env.Tree.WarmupIDCache(env.Root, true, false)).To(Succeed())
+
+		_, err = xattr.Get(filepath.Join(spaceRoot, "sub", "test.txt"), "user.oc.id")
+		Expect(err).ToNot(HaveOccurred())
+		for _, p := range []string{".Trash", ".Trash/files", ".Trash/files/deleted.txt", ".oc-nodes"} {
+			_, err = xattr.Get(filepath.Join(spaceRoot, p), "user.oc.id")
+			Expect(err).To(HaveOccurred(), p)
+		}
+		// the space root keeps its name and the directory above it is not a node
+		Expect(xattr.Get(spaceRoot, "user.oc.name")).To(Equal(name))
+		_, err = xattr.Get(filepath.Join(env.Root, "project"), "user.oc.id")
+		Expect(err).To(HaveOccurred())
+		// file1 of the test env (1234 bytes) and test.txt (11 bytes), without the trash
+		Expect(xattr.Get(spaceRoot, "user.oc.treesize")).To(Equal([]byte("1245")))
+	})
+})
