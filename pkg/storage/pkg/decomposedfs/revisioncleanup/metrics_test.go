@@ -247,6 +247,6 @@ func TestMetricsOnDemandRun(t *testing.T) {
 	require.Equal(t, capacity, metricValue(t, mCapacity))
 
 	// Run uses such a Service
-	require.NoError(t, Run(context.Background(), nil, nil, nil, cleaner, false, AsyncOptions{Enabled: true}, nil, nil))
+	require.NoError(t, Run(context.Background(), nil, nil, nil, cleaner, RunOptions{Async: AsyncOptions{Enabled: true}}, nil, nil))
 	require.Equal(t, float64(0), metricValue(t, mEnabled))
 }

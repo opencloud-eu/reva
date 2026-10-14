@@ -604,3 +604,111 @@ func TestServiceWaitIgnoresDroppedAndAbandonedCleanups(t *testing.T) {
 	require.NoError(t, <-stopped)
 	requireWaitReturned(t, returned)
 }
+
+// onDemand turns ts into the Service of an on-demand Run, which reports its results; it
+// returns the reported results.
+func (ts *testService) onDemand() func() []Result {
+	var mu sync.Mutex
+	var results []Result
+	ts.Service.onDemand = true
+	ts.report = func(r Result) {
+		mu.Lock()
+		defer mu.Unlock()
+		results = append(results, r)
+	}
+	return func() []Result {
+		mu.Lock()
+		defer mu.Unlock()
+		return append([]Result{}, results...)
+	}
+}
+
+// An on-demand Run is stopped through its context: a caller blocked on a full queue gives up,
+// and Shutdown reports the files still queued, all of them as skipped.
+func TestServiceOnDemandStopsWithTheContext(t *testing.T) {
+	ts := newTestService(t, 1, 1, QueueFullBlock)
+	results := ts.onDemand()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	ts.HandleRevisionCreated(ctx, testNode("a"))
+	ts.waitStarted("a")
+	ts.HandleRevisionCreated(ctx, testNode("b")) // fills the queue
+	returned := make(chan struct{})
+	go func() {
+		ts.HandleRevisionCreated(ctx, testNode("c")) // blocks until the run is stopped
+		close(returned)
+	}()
+	ts.waitWaiting("c")
+
+	cancel()
+	select {
+	case <-returned:
+	case <-time.After(5 * time.Second):
+		t.Fatal("HandleRevisionCreated did not return after the context ended")
+	}
+	require.Equal(t, []Result{{SpaceID: "space", NodeID: "c", Skipped: skippedStopped}}, results())
+
+	// stopping the run: a finishes, b is abandoned and reported
+	stopped := make(chan error, 1)
+	go func() { stopped <- ts.Shutdown(context.Background()) }()
+	ts.waitShuttingDown()
+	ts.releaseOne()
+	require.NoError(t, <-stopped)
+	require.Equal(t, []Result{
+		{SpaceID: "space", NodeID: "c", Skipped: skippedStopped},
+		{SpaceID: "space", NodeID: "b", Skipped: skippedStopped},
+	}, results())
+	require.Equal(t, []processed{{"a", nil}}, ts.processedNodes())
+}
+
+// The Service of a storage driver never gives up on a full queue with policy "block", even
+// when the context of the triggering request ends: the cleanup must not be lost.
+func TestServiceBlocksDespiteTheContext(t *testing.T) {
+	ts := newTestService(t, 1, 1, QueueFullBlock)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	ts.HandleRevisionCreated(ctx, testNode("a"))
+	ts.waitStarted("a")
+	ts.HandleRevisionCreated(ctx, testNode("b"))
+	returned := make(chan struct{})
+	go func() {
+		ts.HandleRevisionCreated(ctx, testNode("c"))
+		close(returned)
+	}()
+	ts.waitWaiting("c")
+	cancel()
+	select {
+	case <-returned:
+		t.Fatal("HandleRevisionCreated gave up on the full queue")
+	case <-time.After(200 * time.Millisecond):
+	}
+
+	ts.releaseOne()
+	ts.waitStarted("b")
+	<-returned
+	ts.releaseOne()
+	ts.waitStarted("c")
+	ts.releaseOne()
+}
+
+// A node to clean up once more, as it got new revisions while it was being cleaned up, is
+// reported as skipped when an on-demand run stops before that.
+func TestServiceOnDemandReportsAbandonedNodesToCleanUpOnceMore(t *testing.T) {
+	ts := newTestService(t, 1, 1, QueueFullBlock)
+	results := ts.onDemand()
+	ctx := context.Background()
+
+	ts.HandleRevisionCreated(ctx, testNode("a"))
+	ts.waitStarted("a")
+	ts.HandleRevisionCreated(ctx, testNode("a"))
+
+	stopped := make(chan error, 1)
+	go func() { stopped <- ts.Shutdown(ctx) }()
+	ts.waitShuttingDown()
+	ts.releaseOne()
+	require.NoError(t, <-stopped)
+	require.Equal(t, []Result{{SpaceID: "space", NodeID: "a", Skipped: skippedStopped}}, results())
+	require.Len(t, ts.processedNodes(), 1)
+}
