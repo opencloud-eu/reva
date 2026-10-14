@@ -832,6 +832,12 @@ assimilate:
 			currentPath := currentNode.InternalPath()
 			stat, err := os.Stat(currentPath)
 			if err == nil {
+				// Named after the mtime of '.CURRENT', i.e. the time the content it preserves was
+				// copied there, when the previous change was picked up (normally right after that
+				// content was written), not after the time of this change. The revision cleanup
+				// takes the age of a revision from this name (see revisioncleanup.revisionTime);
+				// whether it should rather be the time of this change is discussed in
+				// https://github.com/opencloud-eu/opencloud/issues/3735.
 				revisionPath := t.lookup.VersionPath(n.SpaceID, n.ID, stat.ModTime().UTC().Format(time.RFC3339Nano))
 
 				err = os.Rename(currentPath, revisionPath)

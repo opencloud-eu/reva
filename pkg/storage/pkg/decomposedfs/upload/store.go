@@ -361,6 +361,9 @@ func (store DecomposedFsStore) updateExistingNode(ctx context.Context, session *
 
 	if !store.disableVersioning {
 		span.AddEvent("CreateVersion")
+		// the revision is named after the mtime of the content it preserves, not after the
+		// time it is created; the revision cleanup takes the age of a revision from this
+		// name (see revisioncleanup.revisionTime)
 		timestamp := oldNodeMtime.UTC().Format(time.RFC3339Nano)
 		versionID := n.ID + node.RevisionIDDelimiter + timestamp
 		versionPath, err := session.store.tp.CreateRevision(ctx, n, timestamp)

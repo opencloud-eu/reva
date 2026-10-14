@@ -369,6 +369,20 @@ func (c *Cleaner) Cleanup(ctx context.Context, lu node.PathLookup, rs RevisionSt
 // '<nodeid>.REV.<RFC3339Nano>' with an optional '.<n>' suffix for colliding revisions.
 // The mtime of the revision file is used as a fallback.
 //
+// This is the age the strategies work with, and it is the age of the revision's *content*:
+// revisions are named after the mtime of the content they preserve (see
+// DecomposedFsStore.updateExistingNode, the posix assimilation and RestoreRevision), not after
+// the time the revision was created, i.e. when that content was replaced. The time a revision
+// was created is not recorded anywhere. For a file that was unchanged for two months and is
+// changed today, the new revision therefore counts as two months old, and a strategy deleting
+// by duration, e.g. "30d", deletes it right away. See "How the age of a revision is measured"
+// in README.md.
+// For changes on disk with posix, the name is the time the content was copied to '.CURRENT',
+// when that change was picked up, normally right after the content was written (see the posix
+// assimilation).
+// Whether the age should rather be the time a revision was created, i.e. when its content was
+// replaced, is discussed in https://github.com/opencloud-eu/opencloud/issues/3735.
+//
 // The key is preferred over the file mtime because the file mtime is not reliable:
 // the upload code only sets it to the mtime of the old content (os.Chtimes in
 // DecomposedFsStore.updateExistingNode) after CreateRevision has returned, and the
