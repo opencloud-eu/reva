@@ -286,6 +286,76 @@ var _ = Describe("Non-watching tree", func() {
 		Expect(treeSize("")).To(Equal(uint64(11)))
 	})
 
+	It("renames an item and updates its parent id under the item's lock", func() {
+		Expect(os.Mkdir(root+"/source", 0700)).To(Succeed())
+		Expect(os.Mkdir(root+"/target", 0700)).To(Succeed())
+		Expect(os.WriteFile(root+"/source/file.txt", []byte("hello world"), 0600)).To(Succeed())
+		Expect(non_watching_env.Tree.WarmupIDCache(root, true, false)).To(Succeed())
+
+		nodeFor := func(path string) *node.Node {
+			n, err := non_watching_env.Lookup.NodeFromResource(non_watching_env.Ctx, &provider.Reference{
+				ResourceId: non_watching_env.SpaceRootRes,
+				Path:       subtree + path,
+			})
+			Expect(err).ToNot(HaveOccurred())
+			return n
+		}
+		oldNode, newNode := nodeFor("/source/file.txt"), nodeFor("/target/file.txt")
+
+		// hold the lock the watcher would take to assimilate the item
+		unlock, err := non_watching_env.Lookup.MetadataBackend().Lock(node.NewBaseNode(oldNode.SpaceID, oldNode.ID, non_watching_env.Lookup))
+		Expect(err).ToNot(HaveOccurred())
+		done := make(chan struct{})
+		go func() {
+			defer GinkgoRecover()
+			defer close(done)
+			Expect(non_watching_env.Tree.Move(non_watching_env.Ctx, oldNode, newNode)).To(Succeed())
+		}()
+		// the move waits for the lock before it renames the item
+		Consistently(func() error {
+			_, err := os.Stat(root + "/source/file.txt")
+			return err
+		}, 500*time.Millisecond).Should(Succeed())
+		Expect(unlock()).To(Succeed())
+		Eventually(done).Should(BeClosed())
+
+		_, err = os.Stat(root + "/target/file.txt")
+		Expect(err).ToNot(HaveOccurred())
+	})
+
+	It("updates the parent id of a moved item whose old parent the walk visits later", func() {
+		Expect(os.Mkdir(root+"/z-source", 0700)).To(Succeed())
+		Expect(os.Mkdir(root+"/a-target", 0700)).To(Succeed())
+		Expect(os.WriteFile(root+"/z-source/file.txt", []byte("hello world"), 0600)).To(Succeed())
+		Expect(non_watching_env.Tree.WarmupIDCache(root, true, false)).To(Succeed())
+
+		treeSize := func(path string) uint64 {
+			n, err := non_watching_env.Lookup.NodeFromResource(non_watching_env.Ctx, &provider.Reference{
+				ResourceId: non_watching_env.SpaceRootRes,
+				Path:       subtree + path,
+			})
+			Expect(err).ToNot(HaveOccurred())
+			size, err := n.GetTreeSize(non_watching_env.Ctx)
+			Expect(err).ToNot(HaveOccurred())
+			return size
+		}
+
+		// moved while nothing watched. The id cache has lost the old parent, like a cold cache at startup,
+		// so the walk only learns where the old parent is after it visited the new one.
+		Expect(os.Rename(root+"/z-source/file.txt", root+"/a-target/file.txt")).To(Succeed())
+		Expect(non_watching_env.Lookup.IDCache.DeleteByPath(non_watching_env.Ctx, root+"/z-source")).To(Succeed())
+		Expect(non_watching_env.Tree.WarmupIDCache(root, true, false)).To(Succeed())
+		Expect(treeSize("/a-target")).To(Equal(uint64(11)))
+
+		// the next assimilation of the file must only add its change in size
+		Expect(os.WriteFile(root+"/a-target/file.txt", []byte("hello world!!"), 0600)).To(Succeed())
+		Expect(non_watching_env.Tree.Assimilate(root + "/a-target/file.txt")).To(Succeed())
+
+		Expect(treeSize("/a-target")).To(Equal(uint64(13)))
+		Expect(treeSize("/z-source")).To(Equal(uint64(0)))
+		Expect(treeSize("")).To(Equal(uint64(13)))
+	})
+
 	It("does not move the size again after a full scan picked up a move on disk", func() {
 		Expect(os.Mkdir(root+"/source", 0700)).To(Succeed())
 		Expect(os.Mkdir(root+"/target", 0700)).To(Succeed())

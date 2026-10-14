@@ -27,6 +27,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -99,6 +100,9 @@ type Tree struct {
 
 	options *options.Options
 	Ignorer *ignore.Ignorer
+
+	// recalculating makes recalculateTreeSizes run one walk at a time
+	recalculating sync.Mutex
 
 	userMapper    usermapper.Mapper
 	idCache       *idcache.IDCache
@@ -458,14 +462,25 @@ func (t *Tree) Move(ctx context.Context, oldNode *node.Node, newNode *node.Node)
 		newNode.ID = oldNode.ID
 	}
 
+	// hold the item's lock from the rename until its new parent id is written. The watcher assimilates the item
+	// under the same lock, so it can't see it at the new path with the old parent id and move the tree sizes a
+	// second time.
+	newPath := filepath.Join(newParent, newNode.Name)
+	movedNode := &assimilationNode{spaceID: newNode.SpaceID, nodeId: newNode.ID, path: newPath}
+	unlock, err := t.lookup.MetadataBackend().Lock(movedNode)
+	if err != nil {
+		return errors.Wrap(err, "posixfs: could not lock the moved item")
+	}
+	movedNode.SetLockHeld(true)
+
 	_, subspan := tracer.Start(ctx, "os.Rename")
 	// rename node
-	newPath := filepath.Join(newParent, newNode.Name)
 	err = os.Rename(
 		filepath.Join(oldParent, oldNode.Name),
 		newPath,
 	)
 	if err != nil {
+		_ = unlock()
 		return errors.Wrap(err, "posixfs: could not move child")
 	}
 	subspan.End()
@@ -474,13 +489,13 @@ func (t *Tree) Move(ctx context.Context, oldNode *node.Node, newNode *node.Node)
 	ctx = context.WithoutCancel(ctx)
 
 	_, subspan = tracer.Start(ctx, "update id cache and attributes")
-	// update target parentid and name right after the rename. The watcher assimilates the item a moment
-	// later and must not take it for a move on disk, or it would move the tree sizes a second time.
+	// update target parentid and name right after the rename, while we still hold the lock.
 	// Until the id cache is updated, newNode resolves to the old path, so address it by path.
 	attribs := node.Attributes{}
 	attribs.SetString(prefixes.ParentidAttr, newNode.ParentID)
 	attribs.SetString(prefixes.NameAttr, newNode.Name)
-	setErr := t.lookup.MetadataBackend().SetMultiple(ctx, &assimilationNode{spaceID: newNode.SpaceID, nodeId: newNode.ID, path: newPath}, attribs)
+	setErr := t.lookup.MetadataBackend().SetMultiple(ctx, movedNode, attribs)
+	_ = unlock()
 
 	// update the id cache
 	// invalidate old tree

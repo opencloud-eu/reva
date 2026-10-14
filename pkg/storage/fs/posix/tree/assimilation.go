@@ -962,6 +962,7 @@ func (t *Tree) WarmupIDCache(root string, assimilate, onlyDirty bool) error {
 	}
 
 	sizes := make(map[string]int64)
+	var retry []func()
 	addToParents := func(path string, size int64) {
 		for dir := path; dir != root; {
 			dir = filepath.Clean(filepath.Dir(dir))
@@ -1101,8 +1102,10 @@ func (t *Tree) WarmupIDCache(root string, assimilate, onlyDirty bool) error {
 					if err := t.lookup.CacheID(context.Background(), spaceID, id, path); err != nil {
 						t.log.Error().Err(err).Str("spaceID", spaceID).Str("id", id).Str("path", path).Msg("could not cache id")
 					}
-					if !onlyDirty {
-						t.updateMovedParentID(root, path, spaceID, id, parentID)
+					if !onlyDirty && !t.updateMovedParentID(root, path, spaceID, id, parentID) {
+						// the walk may cache the old parent later, so try again after it
+						p, s, i, sp := path, spaceID, id, parentID
+						retry = append(retry, func() { t.updateMovedParentID(root, p, s, i, sp) })
 					}
 				}
 			}
@@ -1117,6 +1120,9 @@ func (t *Tree) WarmupIDCache(root string, assimilate, onlyDirty bool) error {
 		}
 		return nil
 	})
+	for _, f := range retry {
+		f()
+	}
 
 	for dir, size := range sizes {
 		if t.Ignorer.IsRootPath(dir) {
@@ -1171,22 +1177,27 @@ func (t *Tree) metadataIsStale(path string) bool {
 // updateMovedParentID stores the new parent id of an item that was moved on disk while nothing watched it.
 // A full walk from root calculates the tree sizes from disk, so it can do that when the old parent is under
 // root too. Otherwise the next assimilation of the item would move its size from the old parent a second time.
-func (t *Tree) updateMovedParentID(root, path, spaceID, id, storedParentID string) {
+// It returns false when the id cache doesn't know the old parent (yet).
+func (t *Tree) updateMovedParentID(root, path, spaceID, id, storedParentID string) bool {
 	if storedParentID == "" {
-		return
+		return true
 	}
 	_, parentID, err := t.lookup.IDsForPath(context.Background(), filepath.Dir(path))
 	if err != nil || parentID == storedParentID {
-		return
+		return true
 	}
 	oldParentPath, err := t.lookup.GetCachedID(context.Background(), spaceID, storedParentID)
-	if err != nil || (oldParentPath != root && !strings.HasPrefix(oldParentPath, root+string(filepath.Separator))) {
-		return
+	if err != nil || oldParentPath == "" {
+		return false
+	}
+	if oldParentPath != root && !strings.HasPrefix(oldParentPath, root+string(filepath.Separator)) {
+		return true
 	}
 	n := &assimilationNode{spaceID: spaceID, nodeId: id, path: path}
 	if err := t.lookup.MetadataBackend().Set(context.Background(), n, prefixes.ParentidAttr, []byte(parentID)); err != nil {
 		t.log.Error().Err(err).Str("path", path).Msg("could not update the parent id of a moved item")
 	}
+	return true
 }
 
 // oldParentPath returns the path of the old parent of a moved item, if the id cache still knows it
@@ -1207,8 +1218,12 @@ func (t *Tree) recalculateTreeSizes(dirs ...string) {
 			t.log.Error().Err(err).Str("path", dir).Msg("could not mark directory dirty")
 			continue
 		}
-		// the caller still holds the lock of the item, so don't wait for the walk
+		// the caller still holds the lock of the item, so don't wait for the walk. Run one walk at a time:
+		// two walks of the same directory would both read the old tree size and propagate the same diff.
+		// One lock for all of them is enough, because recalculations only follow failed propagations.
 		go func() {
+			t.recalculating.Lock()
+			defer t.recalculating.Unlock()
 			if err := t.WarmupIDCache(dir, true, true); err != nil {
 				t.log.Error().Err(err).Str("path", dir).Msg("could not recalculate the tree size")
 			}

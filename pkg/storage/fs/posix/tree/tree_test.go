@@ -536,6 +536,8 @@ var _ = Describe("Watching tree", func() {
 				Eventually(func(g Gomega) {
 					g.Expect(treeSize(g, subtree+"/source")).To(Equal(uint64(0)))
 					g.Expect(treeSize(g, subtree+"/target")).To(Equal(uint64(16)))
+					g.Expect(treeSize(g, subtree+"/target/dir")).To(Equal(uint64(11)))
+					g.Expect(treeSize(g, subtree)).To(Equal(uint64(16)))
 				}).Should(Succeed())
 				Consistently(func(g Gomega) {
 					g.Expect(treeSize(g, subtree+"/source")).To(Equal(uint64(0)))
@@ -560,6 +562,7 @@ var _ = Describe("Watching tree", func() {
 				Eventually(func(g Gomega) {
 					g.Expect(treeSize(g, subtree+"/source")).To(Equal(uint64(0)))
 					g.Expect(treeSize(g, subtree+"/target")).To(Equal(uint64(5)))
+					g.Expect(treeSize(g, subtree)).To(Equal(uint64(5)))
 				}).Should(Succeed())
 				Consistently(func(g Gomega) {
 					g.Expect(treeSize(g, subtree+"/target")).To(Equal(uint64(5)))
