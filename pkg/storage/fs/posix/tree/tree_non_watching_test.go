@@ -10,6 +10,7 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/lookup"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/timemanager"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/node"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -155,7 +156,9 @@ var _ = Describe("Non-watching tree", func() {
 		ctime := func() time.Time {
 			fi, err := os.Lstat(path)
 			Expect(err).ToNot(HaveOccurred())
-			return time.Unix(fi.Sys().(*syscall.Stat_t).Ctim.Unix())
+			ts := timemanager.StatCTime(fi.Sys().(*syscall.Stat_t))
+			//nolint:unconvert
+			return time.Unix(int64(ts.Sec), int64(ts.Nsec))
 		}
 		before := ctime()
 		Eventually(func() bool {
