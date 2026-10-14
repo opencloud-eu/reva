@@ -498,10 +498,10 @@ func (t *Tree) Move(ctx context.Context, oldNode *node.Node, newNode *node.Node)
 	_ = unlock()
 
 	// update the id cache
-	// invalidate old tree
-	err = t.lookup.IDCache.DeleteByPath(ctx, filepath.Join(oldNode.ParentPath(), oldNode.Name))
-	if err != nil {
-		return err
+	// invalidate old tree. Don't return on an error: the item is moved and has its new parent id, so the sizes
+	// below still have to move with it. The watcher won't do it, because it sees no move.
+	if err := t.lookup.IDCache.DeleteByPath(ctx, filepath.Join(oldNode.ParentPath(), oldNode.Name)); err != nil {
+		t.log.Error().Err(err).Str("path", filepath.Join(oldNode.ParentPath(), oldNode.Name)).Msg("could not delete the old id cache entry")
 	}
 	if err := t.lookup.CacheID(ctx, newNode.SpaceID, newNode.ID, newPath); err != nil {
 		t.log.Error().Err(err).Str("spaceID", newNode.SpaceID).Str("id", newNode.ID).Str("path", newPath).Msg("could not cache id")
