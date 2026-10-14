@@ -7,6 +7,8 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"slices"
+	"strings"
 	"sync"
 	"time"
 
@@ -60,8 +62,16 @@ var _ = Describe("On-demand revision cleanup", func() {
 		defer deletedMu.Unlock()
 		return append([]string{}, deleted...)
 	}
+	var resultsMu sync.Mutex
 	collect := func(result revisioncleanup.Result) {
+		resultsMu.Lock()
+		defer resultsMu.Unlock()
 		results = append(results, result)
+	}
+	safeResults := func() []revisioncleanup.Result {
+		resultsMu.Lock()
+		defer resultsMu.Unlock()
+		return append([]revisioncleanup.Result{}, results...)
 	}
 	resultOf := func(n *node.Node) *revisioncleanup.Result {
 		for i := range results {
@@ -138,7 +148,7 @@ var _ = Describe("On-demand revision cleanup", func() {
 		Expect(err).ToNot(HaveOccurred())
 		w := &scopingWalker{Walker: env.Tree}
 
-		Expect(revisioncleanup.Run(toolCtx, env.Lookup, w, []*node.Node{root}, cleaner, false, revisioncleanup.AsyncOptions{}, collect, nil)).To(Succeed())
+		Expect(revisioncleanup.Run(toolCtx, env.Lookup, w, []*node.Node{root}, cleaner, revisioncleanup.RunOptions{}, collect, nil)).To(Succeed())
 
 		Expect(revisionCount(file1)).To(BeZero())
 		Expect(w.scoped).To(ContainElement(spaceID))
@@ -333,8 +343,8 @@ var _ = Describe("On-demand revision cleanup", func() {
 		log := zerolog.Nop()
 
 		// file1 was found before the space was disabled, the worker reads it again
-		async := revisioncleanup.AsyncOptions{Enabled: true, Workers: 1, QueueSize: 1}
-		Expect(revisioncleanup.Run(toolCtx, env.Lookup, w, []*node.Node{file1}, cleaner, false, async, collect, &log)).To(Succeed())
+		o := revisioncleanup.RunOptions{Async: revisioncleanup.AsyncOptions{Enabled: true, Workers: 1, QueueSize: 1}}
+		Expect(revisioncleanup.Run(toolCtx, env.Lookup, w, []*node.Node{file1}, cleaner, o, collect, &log)).To(Succeed())
 
 		Expect(resultOf(file1)).ToNot(BeNil())
 		Expect(resultOf(file1).Err).ToNot(HaveOccurred())
@@ -351,6 +361,215 @@ var _ = Describe("On-demand revision cleanup", func() {
 		Expect(resultOf(file1).Path).To(Equal("/dir1/file1"))
 		Expect(revisionCount(file1)).To(Equal(2))
 		Expect(revisionCount(file2)).To(BeZero())
+	})
+
+	Describe("stopped through its context", func() {
+		var (
+			ctx    context.Context
+			cancel context.CancelFunc
+		)
+		BeforeEach(func() {
+			ctx, cancel = context.WithCancel(toolCtx)
+			DeferCleanup(func() { cancel() })
+			// stop the run while the first revision is being deleted
+			env.Blobstore.ExpectedCalls = nil
+			env.Blobstore.On("Delete", mock.Anything).Run(func(args mock.Arguments) {
+				deletedMu.Lock()
+				defer deletedMu.Unlock()
+				deleted = append(deleted, args.Get(0).(*node.Node).BlobID)
+				cancel()
+			}).Return(nil)
+		})
+		// every file was either cleaned up completely, reported as skipped, or not reached
+		expectStoppedGracefully := func() {
+			for n, untouched := range map[*node.Node]int{file1: 2, file2: 1} {
+				result := resultOf(n)
+				switch {
+				case result == nil:
+					Expect(revisionCount(n)).To(Equal(untouched))
+				case result.Skipped != "":
+					Expect(result.Skipped).To(ContainSubstring("stopped"))
+				default:
+					Expect(result.Err).ToNot(HaveOccurred())
+					for _, rev := range result.Revisions {
+						Expect(rev.Err).ToNot(HaveOccurred())
+					}
+					Expect(revisionCount(n)).To(BeZero())
+				}
+			}
+		}
+
+		It("finishes the file it is cleaning up and stops", func() {
+			err := env.Fs.CleanupRevisionsUnchecked(ctx, revisioncleanup.Request{SpaceIDs: []string{spaceID}, Strategy: "0"}, collect)
+
+			Expect(err).To(MatchError(context.Canceled))
+			// files without revisions may come first, the run stops after the first file with some
+			withDeletions := 0
+			for _, result := range results {
+				if count, _ := result.DeletedCount(); count > 0 {
+					withDeletions++
+				}
+			}
+			Expect(withDeletions).To(Equal(1))
+			count, _ := results[len(results)-1].DeletedCount()
+			Expect(count).ToNot(BeZero(), "the run stops after the file it was cleaning up")
+			expectStoppedGracefully()
+		})
+
+		It("finishes the running cleanups and reports the queued ones as skipped, in the background", func() {
+			async := &revisioncleanup.AsyncOptions{Enabled: true, Workers: 1, QueueSize: 1}
+			err := env.Fs.CleanupRevisionsUnchecked(ctx, revisioncleanup.Request{SpaceIDs: []string{spaceID}, Strategy: "0", Async: async}, collect)
+
+			Expect(err).To(MatchError(context.Canceled))
+			Expect(results).ToNot(BeEmpty())
+			expectStoppedGracefully()
+		})
+	})
+
+	Describe("run directly, with a tree that controls the timing", func() {
+		var (
+			ctx    context.Context
+			cancel context.CancelFunc
+			roots  []*node.Node
+		)
+		BeforeEach(func() {
+			ctx, cancel = context.WithCancel(toolCtx)
+			DeferCleanup(func() { cancel() })
+			root, err := env.Lookup.NodeFromSpaceID(env.Ctx, spaceID)
+			Expect(err).ToNot(HaveOccurred())
+			roots = []*node.Node{root}
+		})
+		run := func(w revisioncleanup.Walker, async revisioncleanup.AsyncOptions) error {
+			cleaner, err := revisioncleanup.New("0")
+			Expect(err).ToNot(HaveOccurred())
+			return revisioncleanup.Run(ctx, env.Lookup, w, roots, cleaner, revisioncleanup.RunOptions{Async: async}, collect, nil)
+		}
+
+		It("doesn't stop in the middle of a file", func() {
+			w := &stoppingTree{Tree: env.Tree, onList: func(fileCtx context.Context) error {
+				cancel()
+				return fileCtx.Err()
+			}}
+
+			Expect(run(w, revisioncleanup.AsyncOptions{})).To(MatchError(context.Canceled))
+			Expect(w.errs).To(HaveLen(1), "the run stopped after the first file")
+			Expect(w.errs[0]).ToNot(HaveOccurred(), "the context of the file's cleanup ended")
+		})
+
+		It("doesn't report a folder whose listing was stopped as an error", func() {
+			w := &stoppingTree{Tree: env.Tree, onList: func(context.Context) error { return nil },
+				onListFolder: func(ctx context.Context) error {
+					cancel()
+					return ctx.Err()
+				}}
+
+			Expect(run(w, revisioncleanup.AsyncOptions{})).To(MatchError(context.Canceled))
+			Expect(results).To(BeEmpty())
+		})
+
+		It("reports a folder that could not be listed, with its location on disk", func() {
+			w := &stoppingTree{Tree: env.Tree, onList: func(context.Context) error { return nil },
+				onListFolder: func(context.Context) error { return fmt.Errorf("permission denied") }}
+
+			Expect(run(w, revisioncleanup.AsyncOptions{})).To(Succeed())
+			Expect(results).To(HaveLen(1))
+			Expect(results[0].NodeID).To(Equal(roots[0].ID))
+			Expect(results[0].Err).To(MatchError(And(
+				ContainSubstring(fmt.Sprintf("%q", roots[0].InternalPath())),
+				ContainSubstring("permission denied"))))
+		})
+
+		It("stops a walk that waits for room in the full queue", func() {
+			// a third file, so that one fills the queue and the next one waits for room
+			subdir1, err := env.Lookup.NodeFromResource(env.Ctx, &provider.Reference{ResourceId: env.SpaceRootRes, Path: "/dir1/subdir1"})
+			Expect(err).ToNot(HaveOccurred())
+			_, err = env.CreateTestFile("file3", "file3-blobid", subdir1.ID, subdir1.SpaceID, 10)
+			Expect(err).ToNot(HaveOccurred())
+
+			entered, release := make(chan struct{}), make(chan struct{})
+			var once sync.Once
+			w := &stoppingTree{Tree: env.Tree, onList: func(context.Context) error {
+				once.Do(func() { close(entered) }) // the first file blocks the only worker
+				<-release
+				return nil
+			}}
+			returned := make(chan error, 1)
+			go func() {
+				returned <- run(w, revisioncleanup.AsyncOptions{Enabled: true, Workers: 1, QueueSize: 1, QueueFull: revisioncleanup.QueueFullBlock})
+			}()
+
+			Eventually(entered).Should(BeClosed())
+			time.Sleep(200 * time.Millisecond) // the walk fills the queue and waits for room
+			cancel()
+			// the waiting walk gives up and reports its file right away, while the worker is still busy
+			Eventually(func() []revisioncleanup.Result { return safeResults() }).Should(ContainElement(
+				HaveField("Skipped", ContainSubstring("stopped"))))
+			close(release)
+			Eventually(returned).Should(Receive(MatchError(context.Canceled)))
+		})
+	})
+
+	It("shuffles the spaces on request", func() {
+		// the first space it tries is the one the error is about
+		spaceIDs := []string{"s1", "s2", "s3", "s4", "s5", "s6", "s7", "s8"}
+		firstSpace := func(shuffle bool) string {
+			err := env.Fs.CleanupRevisionsUnchecked(toolCtx, revisioncleanup.Request{SpaceIDs: spaceIDs, Strategy: "0", Shuffle: shuffle}, collect)
+			Expect(err).To(HaveOccurred())
+			for _, id := range spaceIDs {
+				if strings.Contains(err.Error(), `"`+id+`"`) {
+					return id
+				}
+			}
+			Fail("no space in " + err.Error())
+			return ""
+		}
+
+		seen := map[string]bool{}
+		for range 20 {
+			Expect(firstSpace(false)).To(Equal("s1"))
+			seen[firstSpace(true)] = true
+		}
+		Expect(len(seen)).To(BeNumerically(">", 1))
+		Expect(spaceIDs[0]).To(Equal("s1"), "the request is left alone")
+	})
+
+	It("shuffles the files and folders within a folder on request", func() {
+		subdir1, err := env.Lookup.NodeFromResource(env.Ctx, &provider.Reference{ResourceId: env.SpaceRootRes, Path: "/dir1/subdir1"})
+		Expect(err).ToNot(HaveOccurred())
+		for i := range 5 {
+			_, err := env.CreateTestFile(fmt.Sprintf("more%d", i), fmt.Sprintf("more%d-blobid", i), subdir1.ID, subdir1.SpaceID, 10)
+			Expect(err).ToNot(HaveOccurred())
+		}
+		cleaner, err := revisioncleanup.New("0")
+		Expect(err).ToNot(HaveOccurred())
+		// the tree lists folders in parallel, in no particular order: sort them, so that only the shuffle changes it
+		w := &stoppingTree{Tree: env.Tree, onList: func(context.Context) error { return nil }, sortFolders: true}
+		// the order in which the files are cleaned up, in synchronous mode
+		order := func(shuffle bool) string {
+			results = nil
+			o := revisioncleanup.RunOptions{DryRun: true, Shuffle: shuffle}
+			Expect(revisioncleanup.Run(toolCtx, env.Lookup, w, []*node.Node{subdir1}, cleaner, o, collect, nil)).To(Succeed())
+			Expect(results).To(HaveLen(6))
+			ids := make([]string, len(results))
+			for i, result := range results {
+				ids[i] = result.NodeID
+			}
+			return strings.Join(ids, ",")
+		}
+
+		unshuffled := order(false)
+		shuffled := map[string]bool{}
+		for range 10 {
+			Expect(order(false)).To(Equal(unshuffled))
+			shuffled[order(true)] = true
+		}
+		Expect(len(shuffled)).To(BeNumerically(">", 1))
+
+		// a shuffled request runs as well; its order can't be checked, as the tree lists folders in no particular order
+		results = nil
+		req := revisioncleanup.Request{SpaceIDs: []string{spaceID}, Path: "dir1/subdir1", Strategy: "0", DryRun: true, Shuffle: true}
+		Expect(env.Fs.CleanupRevisionsUnchecked(toolCtx, req, collect)).To(Succeed())
+		Expect(results).To(HaveLen(6))
 	})
 
 	DescribeTable("rejects invalid requests",
@@ -413,4 +632,38 @@ func (w *scopingWalker) ListFolderKnownUnchecked(ctx context.Context, n *node.No
 	}
 	w.mu.Unlock()
 	return w.Walker.ListFolderKnownUnchecked(ctx, n)
+}
+
+// stoppingTree calls onList whenever the cleanup of a file lists its revisions, with the
+// context of that cleanup, and records what it returns. onListFolder, if set, replaces the
+// listing of folders: an error it returns is the listing's error. sortFolders lists the
+// entries of folders sorted by name.
+type stoppingTree struct {
+	node.Tree
+	onList       func(ctx context.Context) error
+	onListFolder func(ctx context.Context) error
+	sortFolders  bool
+	mu           sync.Mutex
+	errs         []error
+}
+
+func (t *stoppingTree) ListRevisionsUnchecked(ctx context.Context, n *node.Node) ([]*provider.FileVersion, error) {
+	err := t.onList(ctx)
+	t.mu.Lock()
+	t.errs = append(t.errs, err)
+	t.mu.Unlock()
+	return t.Tree.ListRevisionsUnchecked(ctx, n)
+}
+
+func (t *stoppingTree) ListFolderKnownUnchecked(ctx context.Context, n *node.Node) ([]*node.Node, error) {
+	if t.onListFolder != nil {
+		if err := t.onListFolder(ctx); err != nil {
+			return nil, err
+		}
+	}
+	children, err := t.Tree.(revisioncleanup.Walker).ListFolderKnownUnchecked(ctx, n)
+	if t.sortFolders {
+		slices.SortFunc(children, func(a, b *node.Node) int { return strings.Compare(a.Name, b.Name) })
+	}
+	return children, err
 }

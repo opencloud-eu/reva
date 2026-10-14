@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"maps"
+	"math/rand/v2"
 	"os"
 	"slices"
 	"strings"
@@ -62,19 +63,19 @@ func (fs *Decomposedfs) CleanupRevisionsUnchecked(ctx context.Context, req revis
 	if !cleaner.Enabled() {
 		return errors.New("no revisions cleanup strategy configured or given")
 	}
-	opts := revisioncleanup.AsyncOptionsFromOptions(fs.o)
+	o := revisioncleanup.RunOptions{Async: revisioncleanup.AsyncOptionsFromOptions(fs.o), DryRun: req.DryRun, Shuffle: req.Shuffle}
 	// a run queues the files as fast as it finds them: dropping them, or giving up after
 	// the timeout meant for uploads, would skip most of them
-	opts.QueueFull, opts.QueueFullTimeout = revisioncleanup.QueueFullBlock, 0
+	o.Async.QueueFull, o.Async.QueueFullTimeout = revisioncleanup.QueueFullBlock, 0
 	if req.Async != nil {
-		opts = *req.Async
+		o.Async = *req.Async
 	}
 
 	roots, err := fs.revisionCleanupRoots(ctx, req, report)
 	if err != nil {
 		return err
 	}
-	return revisioncleanup.Run(ctx, fs.lu, w, roots, cleaner, req.DryRun, opts, report, fs.log)
+	return revisioncleanup.Run(ctx, fs.lu, w, roots, cleaner, o, report, fs.log)
 }
 
 // errSpaceDisabled is the error for a space that is disabled, i.e. in the trash
@@ -91,6 +92,13 @@ func (fs *Decomposedfs) revisionCleanupRoots(ctx context.Context, req revisioncl
 			return nil, err
 		}
 		spaceIDs = ids
+	}
+	// Request.Shuffle randomizes the order in two places: here, the order of the spaces, and in
+	// revisioncleanup.Run, the order of the files and folders within each folder it walks
+	// through (RunOptions.Shuffle).
+	if req.Shuffle {
+		spaceIDs = slices.Clone(spaceIDs)
+		rand.Shuffle(len(spaceIDs), func(i, j int) { spaceIDs[i], spaceIDs[j] = spaceIDs[j], spaceIDs[i] })
 	}
 
 	roots := make([]*node.Node, 0, len(spaceIDs))
