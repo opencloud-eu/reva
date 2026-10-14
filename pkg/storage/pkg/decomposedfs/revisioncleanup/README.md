@@ -120,7 +120,11 @@ increase(reva_revision_cleanup_purge_failures_total[1h]) > 0
 
 - At startup with background workers: one info line `revision cleanup: running in the background` with the strategy, workers, queue size, queue full policy and timeout.
 - Per cleaned file: one info line `revision cleanup: purged old revisions` with the strategy (`config`), the number and size of the deleted revisions, and how many revisions the file had. Nothing is logged for files where nothing was deleted.
-- Every deleted revision is logged at debug level.
+- Every deleted revision is logged at debug level (`revision cleanup: purged revision`), with its `size` and the `reason`: which rule of the strategy deleted it, and the boundary it was evaluated with. This is particularly useful to understand the time slots of `auto`. Examples:
+  - `deleted by "30d": older than 2026-09-14T10:00:00Z`
+  - `deleted by "10": beyond the 10 newest, counting the 3 protected ones`
+  - `deleted by "auto" (last hour): its slot of 1 minute starting 2026-10-14T09:05:00Z already keeps a newer revision`
+- A revision dated in the future is logged as a warning (`revision cleanup: revision dated in the future, it counts as the newest one`), every time its file is cleaned up, and its reason ends in `dated in the future (...), so it counts as the newest`. Its time is the modification time of its content, which comes from the client or from the change on disk, e.g. a client with a wrong clock. Such a revision takes the first places of a number of revisions to keep, and no duration deletes it before its date has passed, which can make the cleanup delete the actual newest revisions instead: check the client or the clock.
 - With `drop`, or when `block` gives up after its timeout, a skipped cleanup is logged as a warning; on shutdown, the number of abandoned queued cleanups is logged.
 
 ## Limitations

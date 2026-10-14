@@ -7,6 +7,7 @@ type SimplePlan struct {
 	retained    []Revision
 	deleted     []Revision
 	safeguarded []Revision
+	reasons     map[string]string // by revision key
 }
 
 var _ Plan = &SimplePlan{}
@@ -16,19 +17,29 @@ func NewSimplePlan() Plan {
 		retained:    []Revision{},
 		deleted:     []Revision{},
 		safeguarded: []Revision{},
+		reasons:     map[string]string{},
 	}
 }
 
-func (p *SimplePlan) Delete(rev ...Revision) {
-	p.deleted = append(p.deleted, rev...)
+func (p *SimplePlan) Delete(reason string, revs ...Revision) {
+	p.deleted = append(p.deleted, revs...)
+	p.setReason(reason, revs)
 }
 
-func (p *SimplePlan) Retain(rev ...Revision) {
-	p.retained = append(p.retained, rev...)
+func (p *SimplePlan) Retain(reason string, revs ...Revision) {
+	p.retained = append(p.retained, revs...)
+	p.setReason(reason, revs)
 }
 
-func (p *SimplePlan) Safeguard(rev ...Revision) {
-	p.safeguarded = append(p.safeguarded, rev...)
+func (p *SimplePlan) Safeguard(reason string, revs ...Revision) {
+	p.safeguarded = append(p.safeguarded, revs...)
+	p.setReason(reason, revs)
+}
+
+func (p *SimplePlan) setReason(reason string, revs []Revision) {
+	for _, rev := range revs {
+		p.reasons[rev.Key()] = reason
+	}
 }
 
 func (p *SimplePlan) Deleted() []Revision {
@@ -41,4 +52,8 @@ func (p *SimplePlan) Retained() []Revision {
 
 func (p *SimplePlan) Safeguarded() []Revision {
 	return p.safeguarded
+}
+
+func (p *SimplePlan) Reason(key string) string {
+	return p.reasons[key]
 }

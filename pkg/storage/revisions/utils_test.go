@@ -4,6 +4,7 @@
 package revisions
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"math/rand/v2"
@@ -105,21 +106,24 @@ func TestExecuteCleanupStrategy(t *testing.T) {
 		plan := NewSimplePlan()
 		for _, rev := range revs {
 			if rev.Size() > 150 {
-				plan.Delete(rev)
+				plan.Delete("larger than 150", rev)
 			} else {
-				plan.Retain(rev)
+				plan.Retain("not larger than 150", rev)
 			}
 		}
 		return plan, nil
 	}
 
 	deleted := []Revision{}
-	err := ExecuteCleanupStrategy(now, strategy, revs, ctx, &logger, func(rev Revision) error {
+	reasons := []string{}
+	err := ExecuteCleanupStrategy(now, strategy, revs, ctx, &logger, func(rev Revision, reason string) error {
 		deleted = append(deleted, rev)
+		reasons = append(reasons, reason)
 		return nil
 	})
 	require.NoError(err)
 	require.Equal([]Revision{b, a}, deleted)
+	require.Equal([]string{"larger than 150", "larger than 150"}, reasons)
 }
 
 // Revisions with the same time are ordered by the collision suffix of their keys, newest first,
@@ -232,4 +236,75 @@ func TestAutoThenCountAppliesTheCountFirst(t *testing.T) {
 	require.Equal(t, 6, kept("auto"))
 	// the 10 newest only, and of those one per hour
 	require.Equal(t, 1, kept("auto, 10"))
+}
+
+func TestReasonFormatting(t *testing.T) {
+	for _, tt := range []struct {
+		d        time.Duration
+		midnight bool
+		spec     string
+		human    string
+	}{
+		{0, false, "0s", "0s"},
+		{0, true, "0D", "0s"},
+		{2 * week, false, "2w", "2 weeks"},
+		{3 * day, true, "3D", "3 days"},
+		{5 * time.Hour, false, "5h", "5 hours"},
+		{time.Minute, false, "1m", "1 minute"},
+		{10 * time.Second, false, "10s", "10 seconds"},
+		{90 * time.Second, false, "90s", "90 seconds"},
+		{1500 * time.Millisecond, false, "1s", "1.5s"},
+	} {
+		require.Equal(t, tt.spec, formatDurationSpec(tt.d, tt.midnight), "spec of %v", tt.d)
+		require.Equal(t, tt.human, humanDuration(tt.d), "human readable %v", tt.d)
+	}
+}
+
+// Revisions dated in the future count as the newest ones; the reasons and the log point it out.
+func TestFutureDatesAreVisible(t *testing.T) {
+	now := time.Date(2026, 10, 14, 15, 0, 0, 0, time.UTC)
+	future1 := newPlainRevision("future1", now.AddDate(1, 0, 0), 1)
+	future2 := newPlainRevision("future2", now.AddDate(1, 0, 1), 1)
+	recent1 := newPlainRevision("recent1", now.Add(-time.Hour), 1)
+	recent2 := newPlainRevision("recent2", now.Add(-2*time.Hour), 1)
+	revs := []Revision{future2, future1, recent1, recent2}
+	strategy, err := NewRevisionCleanupStrategy("2")
+	require.NoError(t, err)
+	var logs bytes.Buffer
+	logger := zerolog.New(&logs)
+
+	plan, err := strategy.Cleanup(now, revs, context.Background(), &logger)
+	require.NoError(t, err)
+	plan = withFutureDates(plan, revs, now, &logger)
+
+	// as before: the future ones take the places of the 2 newest
+	require.ElementsMatch(t, []Revision{recent1, recent2}, plan.Deleted())
+	for _, rev := range []Revision{future1, future2} {
+		require.Contains(t, plan.Reason(rev.Key()), "dated in the future ("+formatTime(rev.LastModificationTime())+")")
+	}
+	for _, rev := range []Revision{recent1, recent2} {
+		require.NotEmpty(t, plan.Reason(rev.Key()))
+		require.NotContains(t, plan.Reason(rev.Key()), "future")
+	}
+	require.Equal(t, 2, strings.Count(logs.String(), "dated in the future"))
+	require.Contains(t, logs.String(), `"revision":"future1"`)
+
+	// ExecuteCleanupStrategy hands the reasons with the note to the cleanup
+	everything, err := NewRevisionCleanupStrategy("0")
+	require.NoError(t, err)
+	reasons := map[string]string{}
+	err = ExecuteCleanupStrategy(now, everything, revs, context.Background(), &logger, func(rev Revision, reason string) error {
+		reasons[rev.Key()] = reason
+		return nil
+	})
+	require.NoError(t, err)
+	require.Contains(t, reasons["future1"], "dated in the future")
+	require.NotContains(t, reasons["recent1"], "future")
+
+	// without revisions dated in the future, the plan stays as it is
+	logs.Reset()
+	plain, err := strategy.Cleanup(now, []Revision{recent1, recent2}, context.Background(), &logger)
+	require.NoError(t, err)
+	require.Same(t, plain, withFutureDates(plain, []Revision{recent1, recent2}, now, &logger))
+	require.Empty(t, logs.String())
 }

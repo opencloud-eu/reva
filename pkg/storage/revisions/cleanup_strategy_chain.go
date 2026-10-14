@@ -43,6 +43,7 @@ func newChainRevisionCleanupStrategy(chain []RevisionCleanupStrategy) (RevisionC
 func (s *chainRevisionCleanupStrategy) Cleanup(now time.Time, revs []Revision, ctx context.Context, logger *zerolog.Logger) (Plan, error) {
 	masterPlan := NewSimplePlan()
 	remaining := slices.Clone(revs)
+	var last Plan
 	for _, strategy := range s.chain {
 		var plan Plan
 		var err error
@@ -55,10 +56,23 @@ func (s *chainRevisionCleanupStrategy) Cleanup(now time.Time, revs []Revision, c
 			return nil, err
 		}
 
-		masterPlan.Delete(plan.Deleted()...)
-		masterPlan.Safeguard(plan.Safeguarded()...)
+		// the decisions of this step are final, they keep the reasons this step gave
+		for _, rev := range plan.Deleted() {
+			masterPlan.Delete(plan.Reason(rev.Key()), rev)
+		}
+		for _, rev := range plan.Safeguarded() {
+			masterPlan.Safeguard(plan.Reason(rev.Key()), rev)
+		}
 		remaining = slices.Clone(plan.Retained())
+		last = plan
 	}
-	masterPlan.Retain(remaining...)
+	// the revisions no step decided about are kept, with the reason the last step gave
+	for _, rev := range remaining {
+		reason := "kept: not decided by any rule"
+		if last != nil && last.Reason(rev.Key()) != "" {
+			reason = last.Reason(rev.Key())
+		}
+		masterPlan.Retain(reason, rev)
+	}
 	return masterPlan, nil
 }

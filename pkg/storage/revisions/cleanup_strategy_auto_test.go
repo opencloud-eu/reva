@@ -16,20 +16,20 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func explain(t *testing.T, plan Plan, explanation map[string]bucketExplanation) {
+// explain logs every decision of the plan with its reason, to see why the bucket system
+// decided as it did when a test fails (or with go test -v)
+func explain(t *testing.T, plan Plan) {
 	var buf strings.Builder
-	fmt.Fprintf(&buf, "plan: retain=[%s] delete=[%s]\n", strings.Join(keysOf(plan.Retained()), ", "), strings.Join(keysOf(plan.Deleted()), ", "))
-	for _, policy := range defaultPolicy {
-		bucket := explanation[policy.name]
-		if len(bucket.retain)+len(bucket.delete) < 1 {
-			continue
-		}
-		fmt.Fprintf(&buf, "* %s:\n", policy.name)
-		if len(bucket.retain) > 0 {
-			fmt.Fprintf(&buf, "  - retain: %s\n", strings.Join(keysOf(bucket.retain), ", "))
-		}
-		if len(bucket.delete) > 0 {
-			fmt.Fprintf(&buf, "  - delete: %s\n", strings.Join(keysOf(bucket.delete), ", "))
+	for _, group := range []struct {
+		decision string
+		revs     []Revision
+	}{
+		{"retain", plan.Retained()},
+		{"delete", plan.Deleted()},
+		{"safeguard", plan.Safeguarded()},
+	} {
+		for _, rev := range group.revs {
+			fmt.Fprintf(&buf, "  %-9s %s: %s\n", group.decision, rev.Key(), plan.Reason(rev.Key()))
 		}
 	}
 	t.Log("\n" + buf.String())
@@ -48,8 +48,8 @@ func TestEvaluationRetentionOneRevInEachSlotKeepsAll(t *testing.T) {
 	SortRevisionsCanonically(revs)
 
 	checkRevs(t, revs)
-	plan, explanation := evaluateRetention(revs, defaultPolicy, now, true)
-	explain(t, plan, explanation)
+	plan := evaluateRetention(revs, defaultPolicy, now)
+	explain(t, plan)
 
 	require.ElementsMatch([]Revision{a, b, c, d, e}, plan.Retained())
 	require.Empty(plan.Deleted())
@@ -66,8 +66,8 @@ func TestEvaluationRetentionMultipleRevsInFirstBucketKeepsOnlyTheFirst(t *testin
 	SortRevisionsCanonically(revs)
 
 	checkRevs(t, revs)
-	plan, explanation := evaluateRetention(revs, defaultPolicy, now, true)
-	explain(t, plan, explanation)
+	plan := evaluateRetention(revs, defaultPolicy, now)
+	explain(t, plan)
 
 	require.ElementsMatch([]Revision{c}, plan.Retained())
 	require.ElementsMatch([]Revision{a, b}, plan.Deleted())
@@ -135,8 +135,8 @@ func TestEvaluationRetentionWithoutAnyRevisions(t *testing.T) {
 	now := rfc3339(t, "2026-09-22T11:00:00.000Z")
 	revs := []Revision{}
 	checkRevs(t, revs)
-	plan, explanation := evaluateRetention(revs, defaultPolicy, now, true)
-	explain(t, plan, explanation)
+	plan := evaluateRetention(revs, defaultPolicy, now)
+	explain(t, plan)
 	require.Empty(plan.Retained())
 	require.Empty(plan.Deleted())
 }
@@ -313,8 +313,8 @@ func TestEvaluationRetentionWithThreeRevisionsInEachBucket(t *testing.T) {
 
 	r := slices.Clone(revs)
 	checkRevs(t, r)
-	plan, explanation := evaluateRetention(r, defaultPolicy, now, true)
-	explain(t, plan, explanation)
+	plan := evaluateRetention(r, defaultPolicy, now)
+	explain(t, plan)
 
 	require.ElementsMatch([]Revision{
 		ax3, ay3, az3,
@@ -354,5 +354,61 @@ func TestEvaluationRetentionWithThreeRevisionsInEachBucket(t *testing.T) {
 		strategy, err := newAutoRevisionCleanupStrategyFromString("not" + autoStrategy)
 		require.NoError(err)
 		require.Nil(strategy)
+	}
+}
+
+// The default tiers all have slots (an interval) and keep one revision per slot. Tiers
+// without an interval, or keeping more than one revision per slot, are not used by them,
+// but are supported so that the tiers can be made configurable; this keeps them working.
+func TestEvaluationRetentionCustomTiers(t *testing.T) {
+	require := require.New(t)
+
+	tiers := []bucketPolicy{
+		// no interval, maxKeep <= 0: all revisions are kept
+		{name: "Recent", description: "recent", ageLimit: time.Hour, interval: 0, maxKeep: 0},
+		// no interval, fewer to keep than there are revisions: the newest are kept
+		{name: "Today", description: "today", ageLimit: 24 * time.Hour, interval: 0, maxKeep: 2},
+		// slots keeping more than one revision
+		{name: "Week", description: "this week", ageLimit: 7 * 24 * time.Hour, interval: 24 * time.Hour, maxKeep: 2},
+		// slots, maxKeep <= 0: all revisions are kept
+		{name: "Month", description: "this month", ageLimit: 30 * 24 * time.Hour, interval: 24 * time.Hour, maxKeep: 0},
+		// no interval, more to keep than there are revisions: all are kept; catch-all tier
+		{name: "Older", description: "older", ageLimit: 0, interval: 0, maxKeep: 5},
+	}
+
+	now := rfc3339(t, "2026-09-22T12:00:00.000Z")
+	r1 := newPlainRevision("r1", rfc3339(t, "2026-09-22T11:50:00.000Z"), 1) // recent
+	r2 := newPlainRevision("r2", rfc3339(t, "2026-09-22T11:40:00.000Z"), 1) // recent
+	t1 := newPlainRevision("t1", rfc3339(t, "2026-09-22T08:00:00.000Z"), 1) // today
+	t2 := newPlainRevision("t2", rfc3339(t, "2026-09-22T07:00:00.000Z"), 1) // today
+	t3 := newPlainRevision("t3", rfc3339(t, "2026-09-22T06:00:00.000Z"), 1) // today
+	w1 := newPlainRevision("w1", rfc3339(t, "2026-09-19T18:00:00.000Z"), 1) // this week, same day
+	w2 := newPlainRevision("w2", rfc3339(t, "2026-09-19T12:00:00.000Z"), 1) // this week, same day
+	w3 := newPlainRevision("w3", rfc3339(t, "2026-09-19T06:00:00.000Z"), 1) // this week, same day
+	m1 := newPlainRevision("m1", rfc3339(t, "2026-09-01T12:00:00.000Z"), 1) // this month
+	m2 := newPlainRevision("m2", rfc3339(t, "2026-09-01T06:00:00.000Z"), 1) // this month, same day
+	o1 := newPlainRevision("o1", rfc3339(t, "2026-08-01T00:00:00.000Z"), 1) // older
+	o2 := newPlainRevision("o2", rfc3339(t, "2026-07-01T00:00:00.000Z"), 1) // older
+	revs := []Revision{r1, r2, t1, t2, t3, w1, w2, w3, m1, m2, o1, o2}
+	SortRevisionsCanonically(revs)
+	checkRevs(t, revs)
+
+	plan := evaluateRetention(revs, tiers, now)
+	explain(t, plan)
+
+	require.ElementsMatch([]Revision{r1, r2, t1, t2, w1, w2, m1, m2, o1, o2}, plan.Retained())
+	require.ElementsMatch([]Revision{t3, w3}, plan.Deleted())
+	require.Empty(plan.Safeguarded())
+
+	for key, reason := range map[string]string{
+		"r1": `kept by "auto" (recent): all revisions are kept`,
+		"t1": `kept by "auto" (today): one of the 2 newest`,
+		"t3": `deleted by "auto" (today): beyond the 2 newest`,
+		"w1": `kept by "auto" (this week): one of the 2 newest in its slot of 1 day starting 2026-09-19T00:00:00Z`,
+		"w3": `deleted by "auto" (this week): its slot of 1 day starting 2026-09-19T00:00:00Z already keeps 2 newer revisions`,
+		"m2": `kept by "auto" (this month): all revisions are kept`,
+		"o1": `kept by "auto" (older): one of the 5 newest`,
+	} {
+		require.Equal(reason, plan.Reason(key), key)
 	}
 }

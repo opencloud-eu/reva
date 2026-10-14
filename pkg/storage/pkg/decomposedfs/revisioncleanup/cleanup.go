@@ -332,7 +332,7 @@ func (c *Cleaner) Cleanup(ctx context.Context, lu node.PathLookup, rs RevisionSt
 	// decide correctly. keep is only applied to the strategy's deletion plan.
 	purged := 0
 	var purgedBytes uint64
-	err = revisions.ExecuteCleanupStrategy(time.Now(), c.strategy, revs, ctx, &log, func(rev revisions.Revision) error {
+	err = revisions.ExecuteCleanupStrategy(time.Now(), c.strategy, revs, ctx, &log, func(rev revisions.Revision, reason string) error {
 		for _, k := range keep {
 			if rev.Key() == k {
 				return nil
@@ -346,7 +346,9 @@ func (c *Cleaner) Cleanup(ctx context.Context, lu node.PathLookup, rs RevisionSt
 		blobs = append(blobs, pendingBlob{key: rev.Key(), blobID: blobID, size: rev.Size()})
 		purged++
 		purgedBytes += rev.Size()
-		log.Debug().Str("revision", rev.Key()).Uint64("size", rev.Size()).Msg("revision cleanup: purged revision")
+		// the reason explains which rule deleted the revision, e.g. which slot of the 'auto'
+		// strategy, see revisions.Plan
+		log.Debug().Str("revision", rev.Key()).Uint64("size", rev.Size()).Str("reason", reason).Msg("revision cleanup: purged revision")
 		return nil
 	})
 	// One summary per node at info level, so that admins can see the cleanup at work
