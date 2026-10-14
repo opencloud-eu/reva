@@ -166,12 +166,19 @@ var _ = Describe("Ignore", func() {
 				filepath.Join(root, "project/Other/id2"),
 			))
 
+			if os.Geteuid() == 0 {
+				return
+			}
+			// only a wildcard matches project, so it is skipped
 			Expect(os.Chmod(filepath.Join(root, "project"), 0o000)).To(Succeed())
 			DeferCleanup(os.Chmod, filepath.Join(root, "project"), os.FileMode(0o700))
-			if os.Geteuid() != 0 {
-				_, err := i.SpaceRoots()
-				Expect(err).To(HaveOccurred())
-			}
+			Expect(i.SpaceRoots()).To(ConsistOf(filepath.Join(root, "users/alice")))
+
+			// the template names users, so it must be readable
+			Expect(os.Chmod(filepath.Join(root, "users"), 0o000)).To(Succeed())
+			DeferCleanup(os.Chmod, filepath.Join(root, "users"), os.FileMode(0o700))
+			_, err := i.SpaceRoots()
+			Expect(err).To(HaveOccurred())
 		})
 	})
 })

@@ -169,6 +169,9 @@ func (i *Ignorer) SpaceRoots() ([]string, error) {
 	seen := map[string]bool{}
 	for _, tpl := range i.templates {
 		dirs := []string{i.root}
+		// a directory that only a wildcard matched can be unrelated to the
+		// storage, e.g. a lost+found in the storage root
+		wildcard := false
 		for _, pattern := range tpl {
 			var next []string
 			for _, dir := range dirs {
@@ -177,16 +180,22 @@ func (i *Ignorer) SpaceRoots() ([]string, error) {
 				if errors.Is(err, fs.ErrNotExist) || errors.Is(err, syscall.ENOTDIR) {
 					continue
 				}
+				if err != nil && wildcard {
+					i.log.Warn().Err(err).Str("path", dir).Msg("could not read a directory while looking for space roots, skipping it")
+					continue
+				}
 				if err != nil {
 					return nil, err
 				}
 				for _, entry := range entries {
-					if ok, _ := filepath.Match(pattern, entry.Name()); ok {
-						next = append(next, filepath.Join(dir, entry.Name()))
+					path := filepath.Join(dir, entry.Name())
+					if ok, _ := filepath.Match(pattern, entry.Name()); ok && !i.isStorageInternal(path) {
+						next = append(next, path)
 					}
 				}
 			}
 			dirs = next
+			wildcard = wildcard || pattern == "*"
 		}
 		for _, dir := range dirs {
 			if !seen[dir] && i.IsSpaceRoot(dir) {
