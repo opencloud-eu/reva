@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/rand/v2"
 	"path"
 	"sync"
 
@@ -45,6 +46,12 @@ type Request struct {
 	Async *AsyncOptions
 	// DryRun only decides which revisions would be deleted, without deleting anything.
 	DryRun bool
+	// Shuffle cleans up the spaces, and the files and folders within each folder, in a random
+	// order instead of the same order every time. A run that is stopped early through its
+	// context (e.g. by a timeout) starts over from the beginning the next time; shuffled,
+	// repeated runs start in different places, and eventually reach all files, also within a
+	// space that is too large for a single run.
+	Shuffle bool
 }
 
 // Validate checks the scope of the request.
@@ -70,6 +77,10 @@ func (r Request) Validate() error {
 // and hands the Result of every file to report, one at a time, including the files that were
 // skipped. It returns once all cleanups are done. It returns an error if the request is invalid or
 // the cleanup could not be run; errors with single files are only reported.
+//
+// The end of ctx, e.g. a timeout, stops the cleanup gracefully: the files being cleaned up
+// are finished, and the files already queued are reported as skipped. It then returns ctx's
+// error.
 type OnDemand interface {
 	CleanupRevisionsUnchecked(ctx context.Context, req Request, report func(Result)) error
 }
@@ -91,8 +102,19 @@ type Walker interface {
 	ListFolderKnownUnchecked(ctx context.Context, n *node.Node) ([]*node.Node, error)
 }
 
+// RunOptions are the settings of an on-demand Run.
+type RunOptions struct {
+	// Async are the AsyncOptions of the run's own Service.
+	Async AsyncOptions
+	// DryRun only decides which revisions would be deleted, without deleting anything.
+	DryRun bool
+	// Shuffle walks the files and folders within each folder in a random order, see
+	// Request.Shuffle. The order of the roots is the caller's.
+	Shuffle bool
+}
+
 // Run cleans up the revisions of the given roots, files or folders (recursively, e.g. space roots),
-// with the given Cleaner and AsyncOptions, and hands the Result of every file to report, one at a
+// with the given Cleaner and RunOptions, and hands the Result of every file to report, one at a
 // time. It is the common implementation of OnDemand.CleanupRevisionsUnchecked for the storage
 // drivers.
 //
@@ -103,11 +125,13 @@ type Walker interface {
 // of the storage driver's queue and workers alone; the deleted revisions are counted.
 //
 // It returns an error if a cleanup could not be run at all, or ctx's error if it ends. Errors
-// with single files or folders are only reported.
+// with single files or folders are only reported. When ctx ends, Run stops gracefully: it
+// finishes the cleanups that are running, reports the files that are still queued as skipped,
+// and doesn't look at the remaining ones.
 //
 // It checks no permissions: the Walker lists folders without them, and neither do the
 // cleanups.
-func Run(ctx context.Context, lu node.PathLookup, w Walker, roots []*node.Node, cleaner *Cleaner, dryRun bool, opts AsyncOptions, report func(Result), log *zerolog.Logger) error {
+func Run(ctx context.Context, lu node.PathLookup, w Walker, roots []*node.Node, cleaner *Cleaner, o RunOptions, report func(Result), log *zerolog.Logger) error {
 	if !cleaner.Enabled() {
 		return errors.New("no revisions cleanup strategy configured or given")
 	}
@@ -144,7 +168,7 @@ func Run(ctx context.Context, lu node.PathLookup, w Walker, roots []*node.Node, 
 		paths[key] = &queuedPath{path: path, count: 1}
 	}
 
-	s, err := newService(cleaner, lu, w, opts, log, true, dryRun, serialized)
+	s, err := newService(cleaner, lu, w, o.Async, log, true, o.DryRun, serialized)
 	if err != nil {
 		return err
 	}
@@ -152,7 +176,7 @@ func Run(ctx context.Context, lu node.PathLookup, w Walker, roots []*node.Node, 
 	defer func() { _ = s.Shutdown(context.WithoutCancel(ctx)) }()
 
 	for _, root := range roots {
-		if err := walkScoped(ctx, lu, w, root, s, dryRun, serialized, remember); err != nil {
+		if err := walkScoped(ctx, lu, w, root, s, o, serialized, remember); err != nil {
 			return err
 		}
 	}
@@ -162,14 +186,14 @@ func Run(ctx context.Context, lu node.PathLookup, w Walker, roots []*node.Node, 
 // walkScoped walks root, see walk, switched to the group of its space if w is a SpaceScoper,
 // so that the folders can be listed, see SpaceScoper. A space whose group can't be switched to
 // is reported and left out.
-func walkScoped(ctx context.Context, lu node.PathLookup, w Walker, root *node.Node, s *Service, dryRun bool, report func(Result), remember func(n *node.Node, path string)) error {
+func walkScoped(ctx context.Context, lu node.PathLookup, w Walker, root *node.Node, s *Service, o RunOptions, report func(Result), remember func(n *node.Node, path string)) error {
 	ctx, unscope, err := scopeToSpace(ctx, w, root.SpaceID)
 	if err != nil {
-		report(Result{SpaceID: root.SpaceID, NodeID: root.ID, DryRun: dryRun, Err: fmt.Errorf("could not switch to the group of the space: %w", err)})
+		report(Result{SpaceID: root.SpaceID, NodeID: root.ID, DryRun: o.DryRun, Err: fmt.Errorf("could not switch to the group of the space: %w", err)})
 		return nil
 	}
 	defer func() { _ = unscope() }()
-	return walk(ctx, w, root, rootPath(ctx, lu, root), s, dryRun, report, remember)
+	return walk(ctx, w, root, rootPath(ctx, lu, root), s, o, report, remember)
 }
 
 // queuedPath is the path of a queued file, see Run
@@ -194,7 +218,7 @@ func rootPath(ctx context.Context, lu node.PathLookup, root *node.Node) string {
 // walk queues the cleanup of n, if it is a file, or of all files below it, if it is a folder.
 // rootPath is the path of n within its space, the paths of the files below it are derived
 // from it and handed to remember before they are queued.
-func walk(ctx context.Context, w Walker, n *node.Node, rootPath string, s *Service, dryRun bool, report func(Result), remember func(n *node.Node, path string)) error {
+func walk(ctx context.Context, w Walker, n *node.Node, rootPath string, s *Service, o RunOptions, report func(Result), remember func(n *node.Node, path string)) error {
 	type entry struct {
 		n    *node.Node
 		path string
@@ -213,9 +237,19 @@ func walk(ctx context.Context, w Walker, n *node.Node, rootPath string, s *Servi
 			s.HandleRevisionCreated(ctx, current.n)
 		case provider.ResourceType_RESOURCE_TYPE_CONTAINER:
 			children, err := w.ListFolderKnownUnchecked(ctx, current.n)
+			if err != nil && ctx.Err() != nil {
+				return ctx.Err() // stopped while listing, not an error of the folder
+			}
 			if err != nil {
-				report(Result{SpaceID: current.n.SpaceID, NodeID: current.n.ID, Path: current.path, DryRun: dryRun, Err: fmt.Errorf("could not list the folder at %q: %w", current.n.InternalPath(), err)})
+				report(Result{SpaceID: current.n.SpaceID, NodeID: current.n.ID, Path: current.path, DryRun: o.DryRun, Err: fmt.Errorf("could not list the folder at %q: %w", current.n.InternalPath(), err)})
 				continue
+			}
+			// The second part of Request.Shuffle, after the order of the spaces (see
+			// Decomposedfs.CleanupRevisionsUnchecked): the order of the children of this folder,
+			// files and folders alike. As the walk takes them from a stack, depth first, this also
+			// changes the order in which the subfolders are walked through.
+			if o.Shuffle {
+				rand.Shuffle(len(children), func(i, j int) { children[i], children[j] = children[j], children[i] })
 			}
 			for _, child := range children {
 				childPath := ""
