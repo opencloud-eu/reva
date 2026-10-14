@@ -27,6 +27,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -99,6 +100,9 @@ type Tree struct {
 
 	options *options.Options
 	Ignorer *ignore.Ignorer
+
+	// recalculating makes recalculateTreeSizes run one walk at a time
+	recalculating sync.Mutex
 
 	userMapper    usermapper.Mapper
 	idCache       *idcache.IDCache
@@ -458,34 +462,53 @@ func (t *Tree) Move(ctx context.Context, oldNode *node.Node, newNode *node.Node)
 		newNode.ID = oldNode.ID
 	}
 
+	// hold the item's lock from the rename until its new parent id is written. The watcher assimilates the item
+	// under the same lock, so it can't see it at the new path with the old parent id and move the tree sizes a
+	// second time.
+	newPath := filepath.Join(newParent, newNode.Name)
+	movedNode := &assimilationNode{spaceID: newNode.SpaceID, nodeId: newNode.ID, path: newPath}
+	unlock, err := t.lookup.MetadataBackend().Lock(movedNode)
+	if err != nil {
+		return errors.Wrap(err, "posixfs: could not lock the moved item")
+	}
+	movedNode.SetLockHeld(true)
+
 	_, subspan := tracer.Start(ctx, "os.Rename")
 	// rename node
 	err = os.Rename(
 		filepath.Join(oldParent, oldNode.Name),
-		filepath.Join(newParent, newNode.Name),
+		newPath,
 	)
 	if err != nil {
+		_ = unlock()
 		return errors.Wrap(err, "posixfs: could not move child")
 	}
 	subspan.End()
 
-	_, subspan = tracer.Start(ctx, "update id cache and attributes")
-	// update the id cache
-	// invalidate old tree
-	err = t.lookup.IDCache.DeleteByPath(ctx, filepath.Join(oldNode.ParentPath(), oldNode.Name))
-	if err != nil {
-		return err
-	}
-	if err := t.lookup.CacheID(ctx, newNode.SpaceID, newNode.ID, filepath.Join(newNode.ParentPath(), newNode.Name)); err != nil {
-		t.log.Error().Err(err).Str("spaceID", newNode.SpaceID).Str("id", newNode.ID).Str("path", filepath.Join(newNode.ParentPath(), newNode.Name)).Msg("could not cache id")
-	}
+	// the item is moved on disk now, so finish updating its metadata even if the request is cancelled
+	ctx = context.WithoutCancel(ctx)
 
-	// update target parentid and name
+	_, subspan = tracer.Start(ctx, "update id cache and attributes")
+	// update target parentid and name right after the rename, while we still hold the lock.
+	// Until the id cache is updated, newNode resolves to the old path, so address it by path.
 	attribs := node.Attributes{}
 	attribs.SetString(prefixes.ParentidAttr, newNode.ParentID)
 	attribs.SetString(prefixes.NameAttr, newNode.Name)
-	if err := newNode.SetXattrsWithContext(ctx, attribs); err != nil {
-		return errors.Wrap(err, "posixfs: could not update node attributes")
+	setErr := t.lookup.MetadataBackend().SetMultiple(ctx, movedNode, attribs)
+	_ = unlock()
+
+	// update the id cache
+	// invalidate old tree. Don't return on an error: the item is moved and has its new parent id, so the sizes
+	// below still have to move with it. The watcher won't do it, because it sees no move.
+	if err := t.lookup.IDCache.DeleteByPath(ctx, filepath.Join(oldNode.ParentPath(), oldNode.Name)); err != nil {
+		t.log.Error().Err(err).Str("path", filepath.Join(oldNode.ParentPath(), oldNode.Name)).Msg("could not delete the old id cache entry")
+	}
+	if err := t.lookup.CacheID(ctx, newNode.SpaceID, newNode.ID, newPath); err != nil {
+		t.log.Error().Err(err).Str("spaceID", newNode.SpaceID).Str("id", newNode.ID).Str("path", newPath).Msg("could not cache id")
+	}
+	// report a failed attribute update only now, so that the id cache still points to the moved item
+	if setErr != nil {
+		return errors.Wrap(setErr, "posixfs: could not update node attributes")
 	}
 
 	subspan.End()
