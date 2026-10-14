@@ -8,6 +8,8 @@
 
 ### 🐛 Bug Fixes
 
+- fix(posix): retry a failed file once its ctime changes [[#809](https://github.com/opencloud-eu/reva/pull/809)]
+- fix(posix): re-assimilate moved and changed files during a scan [[#808](https://github.com/opencloud-eu/reva/pull/808)]
 - fix: add config to skip share manager migrations [[#877](https://github.com/opencloud-eu/reva/pull/877)]
 - fix: status code during share removal [[#878](https://github.com/opencloud-eu/reva/pull/878)]
 - fix: return not found when deleting unknown shares or spaces without … [[#874](https://github.com/opencloud-eu/reva/pull/874)]
