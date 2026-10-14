@@ -5,6 +5,8 @@ package revisions
 
 import (
 	"context"
+	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/rs/zerolog"
@@ -35,7 +37,8 @@ func newCountRetentionRevisionCleanupStrategyFromString(config string) (Revision
 func (s *countRetentionRevisionCleanupStrategy) Cleanup(now time.Time, revs []Revision, ctx context.Context, logger *zerolog.Logger) (Plan, error) {
 	plan := NewSimplePlan()
 	n := min(s.versionsToSafeguard, len(revs))
-	plan.Safeguard(revs[:n]...)
-	plan.Retain(revs[n:]...)
+	spec := strconv.Itoa(s.versionsToSafeguard)
+	plan.Safeguard(fmt.Sprintf("protected by %q: one of the %d newest", spec, s.versionsToSafeguard), revs[:n]...)
+	plan.Retain(fmt.Sprintf("not protected by %q: not one of the %d newest", spec, s.versionsToSafeguard), revs[n:]...)
 	return plan, nil
 }

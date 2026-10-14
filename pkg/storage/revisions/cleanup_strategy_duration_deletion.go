@@ -5,6 +5,8 @@ package revisions
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/rs/zerolog"
@@ -17,6 +19,9 @@ import (
 type durationDeletionRevisionCleanupStrategy struct {
 	retention          time.Duration
 	truncateToMidnight bool
+	// spec is the duration as configured, e.g. "7d", for the reasons in the Plan; when empty,
+	// it is derived from retention, which would turn "7d" into "1w"
+	spec string
 }
 
 var _ RevisionCleanupStrategy = &durationDeletionRevisionCleanupStrategy{}
@@ -34,18 +39,29 @@ func newDurationDeletionRevisionCleanupStrategyFromString(config string) (Revisi
 	} else if err != nil {
 		return nil, err
 	} else {
-		return newDurationDeletionRevisionCleanupStrategy(duration, truncateToMidnight)
+		strategy, err := newDurationDeletionRevisionCleanupStrategy(duration, truncateToMidnight)
+		if err != nil {
+			return nil, err
+		}
+		strategy.(*durationDeletionRevisionCleanupStrategy).spec = strings.TrimSpace(config)
+		return strategy, nil
 	}
 }
 
 func (s *durationDeletionRevisionCleanupStrategy) Cleanup(now time.Time, revs []Revision, ctx context.Context, logger *zerolog.Logger) (Plan, error) {
 	cutoff := computeCutoffFromRetention(now, -s.retention, s.truncateToMidnight)
+	spec := s.spec
+	if spec == "" {
+		spec = formatDurationSpec(s.retention, s.truncateToMidnight)
+	}
+	deleted := fmt.Sprintf("deleted by %q: older than %s", spec, formatTime(cutoff))
+	retained := fmt.Sprintf("kept by %q: not older than %s", spec, formatTime(cutoff))
 	plan := NewSimplePlan()
 	for _, rev := range revs {
 		if rev.LastModificationTime().Before(cutoff) {
-			plan.Delete(rev)
+			plan.Delete(deleted, rev)
 		} else {
-			plan.Retain(rev)
+			plan.Retain(retained, rev)
 		}
 	}
 	return plan, nil

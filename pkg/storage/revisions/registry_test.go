@@ -205,6 +205,10 @@ var _ = Describe("RevisionCleanupStrategy", func() {
 			Expect(keysOf(plan.Safeguarded())).To(ConsistOf(safeguarded))
 			Expect(keysOf(plan.Retained())).To(ConsistOf(retained))
 			Expect(keysOf(plan.Deleted())).To(ConsistOf(deleted))
+			// every decision is explained
+			for _, rev := range revs {
+				Expect(plan.Reason(rev.Key())).ToNot(BeEmpty(), "no reason for %s", rev.Key())
+			}
 		},
 
 		// "X": plain deletion, no thinning
@@ -317,6 +321,41 @@ var _ = Describe("RevisionCleanupStrategy", func() {
 		Entry("tabs", "auto,\t90d"),
 		Entry("'auto' with spaces around it", " auto "),
 		Entry("'X' with spaces around it", " 30d "),
+	)
+
+	// now is 2026-09-28T15:00:00Z, see the fixture above
+	DescribeTable("explains its decisions",
+		func(config string, expected map[string]string) {
+			strategy, err := NewRevisionCleanupStrategy(config)
+			Expect(err).NotTo(HaveOccurred())
+			plan, err := strategy.Cleanup(now, revs, context.TODO(), logger)
+			Expect(err).NotTo(HaveOccurred())
+			for key, reason := range expected {
+				Expect(plan.Reason(key)).To(Equal(reason), key)
+			}
+		},
+		Entry("with a duration, a slot of 'auto' and a deletion by duration", "1d, auto, 2d", map[string]string{
+			"a1": `protected by "1d": newer than 2026-09-27T15:00:00Z`,
+			"b1": `kept by "auto" (last 30 days): the newest in its slot of 1 day starting 2026-09-27T00:00:00Z`,
+			"b2": `deleted by "auto" (last 30 days): its slot of 1 day starting 2026-09-27T00:00:00Z already keeps a newer revision`,
+			"c1": `deleted by "2d": older than 2026-09-26T15:00:00Z`,
+		}),
+		Entry("with a count, counting the protected revisions", "1d, 4", map[string]string{
+			"b1": `kept by "4": one of the 4 newest, counting the 3 protected ones`,
+			"b2": `deleted by "4": beyond the 4 newest, counting the 3 protected ones`,
+		}),
+		Entry("with protection by count and deletion by duration", "4, 2d", map[string]string{
+			"b1": `protected by "4": one of the 4 newest`,
+			"b2": `kept by "2d": not older than 2026-09-26T15:00:00Z`,
+			"c1": `deleted by "2d": older than 2026-09-26T15:00:00Z`,
+		}),
+		Entry("with a duration aligned to midnight", "1D", map[string]string{
+			"b1": `kept by "1D": not older than 2026-09-27T00:00:00Z`,
+			"c1": `deleted by "1D": older than 2026-09-27T00:00:00Z`,
+		}),
+		Entry("with the durations as configured, not normalized", "7d, auto", map[string]string{
+			"a1": `protected by "7d": newer than 2026-09-21T15:00:00Z`,
+		}),
 	)
 
 	DescribeTable("rejects",

@@ -25,9 +25,9 @@ func (m mockRevisionCleanupStrategy) Cleanup(now time.Time, revs []Revision, ctx
 	plan := NewSimplePlan()
 	for _, rev := range revs {
 		if slices.Contains(m.keysToDelete, rev.Key()) {
-			plan.Delete(rev)
+			plan.Delete("deleted by the mock", rev)
 		} else {
-			plan.Retain(rev)
+			plan.Retain("kept by the mock", rev)
 		}
 	}
 	return plan, nil
