@@ -71,6 +71,11 @@ var (
 // were all saved within the same minute yesterday, "auto, 10" keeps a single version, while
 // "auto" would keep one of them plus older ones. This is easily misread as "thin out first,
 // then keep at most 10", which is not what it means.
+//
+// The age of a version, which durations are compared with, is Revision.LastModificationTime:
+// the time its content was written, i.e. the modification time the file had before the change
+// that turned it into a version, not the time of that change (see revisioncleanup.revisionTime). A version created today from content that was unchanged for
+// two months is two months old.
 func NewRevisionCleanupStrategy(config string) (RevisionCleanupStrategy, error) {
 	config = strings.TrimSpace(config)
 

@@ -61,6 +61,23 @@ Rules worth knowing:
 - **In `X1, auto, X2` with two values of the same kind, `X1` must be smaller than `X2`**, otherwise `auto` would never apply.
 - **`0` deletes all revisions.** Unlike `disable_versioning`, which only stops creating new revisions, this also removes the ones that have accumulated, over time (see the limitations below).
 
+## How the age of a revision is measured
+
+A revision's age is the time **its content was written**, i.e. the modification time the file had before it was changed.
+That is also the time the revision is named after on disk, and the date the version list shows for it.
+It is **not** the time the file was changed, which turned that content into a revision; that time is not recorded anywhere.
+Revisions are never modified after they were created; the point is only which of the two times the cleanup looks at.
+
+For files that change often, both dates are close together. For files that sit unchanged for a long time, they are far apart:
+
+1. On August 14, a document is saved.
+2. Nobody touches it for two months.
+3. On October 14, it is changed. A revision is created to keep the previous content, dated August 14.
+4. The cleanup runs right after the change. The revision counts as 61 days old.
+
+With a strategy that deletes by duration, e.g. `30d`, `auto, 30d` or `7d, 30d`, that revision is deleted right away, and the content the document had until that morning is gone.
+To always keep the most recent versions of a file regardless of their age, combine the duration with a number of revisions, e.g. `5, 30d`, or use `auto`, which keeps one revision per week even for old content.
+
 ## When the cleanup runs
 
 The cleanup of a file runs after the file got a new revision:

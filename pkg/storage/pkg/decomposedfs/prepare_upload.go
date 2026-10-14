@@ -276,6 +276,9 @@ func (fs *Decomposedfs) PrepareUpload(ctx context.Context, ref *provider.Referen
 		supersededMark := oldAttrs[prefixes.StatusPrefix]
 		superseding := strings.HasPrefix(string(supersededMark), node.ProcessingStatus)
 		if !fs.o.DisableVersioning || superseding {
+			// the revision is named after the mtime of the content it preserves, not after the
+			// time it is created; the revision cleanup takes the age of a revision from this
+			// name (see revisioncleanup.revisionTime)
 			timestamp := oldMtime.UTC().Format(time.RFC3339Nano)
 			versionPath, err := fs.tp.CreateRevision(ctx, n, timestamp)
 			if err != nil {
