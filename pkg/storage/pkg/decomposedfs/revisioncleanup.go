@@ -29,6 +29,9 @@ var _ revisioncleanup.OnDemand = (*Decomposedfs)(nil)
 // (in the trash) is reported as skipped, any other one as failed. A space requested by its id
 // fails the request instead.
 //
+// Paths on disk (Request.FSPath) are not supported: the decomposed layout stores files under
+// their ids. The posix driver resolves them before it calls this.
+//
 // The strategy and the AsyncOptions default to the configured ones (the
 // revisions_cleanup_* options) and can be overridden in the request; without AsyncOptions in
 // the request, the run waits for room in a full queue as long as it takes, see
@@ -36,6 +39,9 @@ var _ revisioncleanup.OnDemand = (*Decomposedfs)(nil)
 func (fs *Decomposedfs) CleanupRevisionsUnchecked(ctx context.Context, req revisioncleanup.Request, report func(revisioncleanup.Result)) error {
 	if err := req.Validate(); err != nil {
 		return err
+	}
+	if req.FSPath != "" {
+		return errtypes.NotSupported("cleaning up revisions by a path on disk, only the posix driver supports it")
 	}
 	w, ok := fs.tp.(revisioncleanup.Walker)
 	if !ok {
