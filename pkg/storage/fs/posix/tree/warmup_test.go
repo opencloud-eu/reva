@@ -91,6 +91,27 @@ var _ = Describe("WarmupIDCache", func() {
 		Expect(string(parentID)).To(Equal(string(dirID)))
 	})
 
+	It("picks up a rename on disk that the id cache already knows about", func() {
+		filePath := filepath.Join(spaceRoot, "old-name.txt")
+		Expect(os.WriteFile(filePath, []byte("hello world"), 0644)).To(Succeed())
+
+		Expect(env.Tree.WarmupIDCache(spaceRoot, true, false)).To(Succeed())
+
+		id, err := xattr.Get(filePath, "user.oc.id")
+		Expect(err).ToNot(HaveOccurred())
+
+		// the id cache already has the new path, but the name in the metadata is still the old one
+		renamedPath := filepath.Join(spaceRoot, "new-name.txt")
+		Expect(os.Rename(filePath, renamedPath)).To(Succeed())
+		Expect(env.Lookup.CacheID(env.Ctx, env.SpaceRootRes.SpaceId, string(id), renamedPath)).To(Succeed())
+
+		Expect(env.Tree.WarmupIDCache(spaceRoot, true, false)).To(Succeed())
+
+		b, err := xattr.Get(renamedPath, "user.oc.name")
+		Expect(err).ToNot(HaveOccurred())
+		Expect(string(b)).To(Equal("new-name.txt"))
+	})
+
 	It("leaves the children of a renamed directory alone", func() {
 		dir := filepath.Join(spaceRoot, "dir")
 		Expect(os.MkdirAll(dir, 0755)).To(Succeed())

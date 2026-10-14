@@ -493,8 +493,9 @@ func (t *Tree) assimilate(item scanItem) error {
 		}
 
 		// compare metadata mtime with actual mtime. if it matches AND the path hasn't changed (move operation)
-		// we can skip the assimilation because the file was handled by us
-		if previousPath == item.Path && mtime.Equal(fi.ModTime()) {
+		// we can skip the assimilation because the file was handled by us. A stored name that differs from the
+		// name on disk means a rename was missed, even if the id cache already has the new path.
+		if previousPath == item.Path && mtime.Equal(fi.ModTime()) && !t.nameIsStale(assimilationNode, item.Path) {
 			return _errSkipAlreadyKnown
 		}
 
@@ -1048,7 +1049,8 @@ func (t *Tree) WarmupIDCache(root string, assimilate, onlyDirty bool) error {
 				// when a child is added or removed, and the walk visits those children anyway.
 				isChanged := !info.IsDir() && !mtime.IsZero() && !mtime.Equal(info.ModTime())
 
-				if isCopy || (assimilate && (isMove || isChanged)) {
+				if isCopy || (assimilate && (isMove || isChanged ||
+					t.nameIsStale(&assimilationNode{spaceID: spaceID, nodeId: id, path: path}, path))) {
 					// a copy with a clashing id, a move or a change on disk -> re-assimilate.
 					// assimilate skips items whose path and mtime still match the metadata
 					err := t.assimilate(scanItem{Path: path})
@@ -1104,6 +1106,16 @@ func (t *Tree) WarmupIDCache(root string, assimilate, onlyDirty bool) error {
 	}
 
 	return nil
+}
+
+// nameIsStale reports whether the name stored for an item differs from its name on disk. Space roots are
+// left out, because their name doesn't have to match the name of their directory.
+func (t *Tree) nameIsStale(n metadata.MetadataNode, path string) bool {
+	if t.Ignorer.IsSpaceRoot(path) {
+		return false
+	}
+	name, err := t.lookup.MetadataBackend().Get(context.Background(), n, prefixes.NameAttr)
+	return err == nil && string(name) != filepath.Base(path)
 }
 
 func (t *Tree) propagateSizeDiff(n *node.Node, size int64) error {
