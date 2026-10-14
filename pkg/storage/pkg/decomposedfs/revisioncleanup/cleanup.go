@@ -92,6 +92,7 @@ package revisioncleanup
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -235,6 +236,10 @@ func (c *Cleaner) Enabled() bool {
 	return c != nil && c.strategy != nil
 }
 
+// keptOnRequest is the reason for revisions that the operation triggering the cleanup asked
+// to keep, see Cleanup.
+const keptOnRequest = "protected: kept on request of the operation that triggered the cleanup (e.g. the state from before a restore)"
+
 // Cleanup deletes the revisions of n that the strategy does not want to keep.
 // Revisions with a key in keep are never deleted.
 //
@@ -245,22 +250,39 @@ func (c *Cleaner) Enabled() bool {
 // deleted after the lock is released. If rs is a SpaceScoper, it switches to the group of the
 // space of n first.
 //
-// Errors are logged but not returned, a failed cleanup must not fail the
-// operation that triggered it.
+// Errors are logged, and reported in the Result, but not returned: a failed cleanup must
+// not fail the operation that triggered it. Callers that don't report on the cleanup can
+// ignore the Result.
 //
 // It checks no permissions: it is housekeeping on behalf of the system, e.g. after async
 // postprocessing, where there is no suitable user in the context. Callers decide which nodes
 // to clean up.
-func (c *Cleaner) Cleanup(ctx context.Context, lu node.PathLookup, rs RevisionStore, n *node.Node, keep ...string) {
+func (c *Cleaner) Cleanup(ctx context.Context, lu node.PathLookup, rs RevisionStore, n *node.Node, keep ...string) Result {
+	return c.run(ctx, lu, rs, n, false, keep)
+}
+
+// DryRun decides like Cleanup, but deletes nothing: the Result tells which revisions would
+// be deleted, kept or protected, and why. It neither counts metrics nor logs purges.
+//
+// Like Cleanup, it checks no permissions.
+func (c *Cleaner) DryRun(ctx context.Context, lu node.PathLookup, rs RevisionStore, n *node.Node, keep ...string) Result {
+	return c.run(ctx, lu, rs, n, true, keep)
+}
+
+// The result is named, so that the deletion of the blobs, which runs deferred, can report its
+// errors in it.
+func (c *Cleaner) run(ctx context.Context, lu node.PathLookup, rs RevisionStore, n *node.Node, dryRun bool, keep []string) (result Result) {
 	if !c.Enabled() || n == nil {
-		return
+		return Result{DryRun: dryRun, Skipped: "the revision cleanup is disabled"}
 	}
+	result = Result{SpaceID: n.SpaceID, NodeID: n.ID, DryRun: dryRun}
 	log := appctx.GetLogger(ctx).With().Str("spaceid", n.SpaceID).Str("nodeid", n.ID).Logger()
 
 	ctx, unscope, err := scopeToSpace(ctx, rs, n.SpaceID)
 	if err != nil {
 		log.Error().Err(err).Msg("revision cleanup: could not switch to the group of the space")
-		return
+		result.Err = fmt.Errorf("could not switch to the group of the space: %w", err)
+		return result
 	}
 	defer func() { _ = unscope() }()
 
@@ -280,6 +302,11 @@ func (c *Cleaner) Cleanup(ctx context.Context, lu node.PathLookup, rs RevisionSt
 				// the revision is gone, but not its blob: that's a failure, not a deletion
 				PurgeFailures.Inc()
 				log.Error().Err(err).Str("revision", b.key).Str("blobid", b.blobID).Msg("revision cleanup: could not delete the blob of a purged revision")
+				for i := range result.Revisions {
+					if result.Revisions[i].Key == b.key {
+						result.Revisions[i].Err = fmt.Errorf("the revision was deleted, but not its blob %q: %w", b.blobID, err)
+					}
+				}
 				continue
 			}
 			RevisionsDeleted.Inc()
@@ -291,11 +318,13 @@ func (c *Cleaner) Cleanup(ctx context.Context, lu node.PathLookup, rs RevisionSt
 	// those create revisions and mark the node as processing while holding it, so
 	// the processing check below cannot race with a new upload starting.
 	// Revisions have their own lockfiles, purging them while holding the node lock
-	// does not deadlock.
+	// does not deadlock. A dry run takes the lock as well, to decide on the same
+	// consistent state a real cleanup would see.
 	unlock, err := lu.MetadataBackend().Lock(n)
 	if err != nil {
 		log.Error().Err(err).Msg("revision cleanup: could not lock node")
-		return
+		result.Err = fmt.Errorf("could not lock node: %w", err)
+		return result
 	}
 	defer func() { _ = unlock() }()
 
@@ -307,19 +336,22 @@ func (c *Cleaner) Cleanup(ctx context.Context, lu node.PathLookup, rs RevisionSt
 	switch {
 	case err != nil && !metadata.IsAttrUnset(err):
 		log.Error().Err(err).Msg("revision cleanup: could not read node status")
-		return
+		result.Err = fmt.Errorf("could not read node status: %w", err)
+		return result
 	case strings.HasPrefix(string(status), node.ProcessingStatus):
 		log.Debug().Msg("revision cleanup: node is processing, skipping")
-		return
+		result.Skipped = "an upload to the file is still being processed"
+		return result
 	}
 
 	versions, err := rs.ListRevisionsUnchecked(ctx, n)
 	if err != nil {
 		log.Error().Err(err).Msg("revision cleanup: could not list revisions")
-		return
+		result.Err = fmt.Errorf("could not list revisions: %w", err)
+		return result
 	}
 	if len(versions) == 0 {
-		return
+		return result
 	}
 
 	revs := make([]revisions.Revision, len(versions))
@@ -330,17 +362,17 @@ func (c *Cleaner) Cleanup(ctx context.Context, lu node.PathLookup, rs RevisionSt
 	// All revisions, including the ones in keep, are handed to the strategy, as
 	// count based strategies ("keep the n newest") need to see the complete set to
 	// decide correctly. keep is only applied to the strategy's deletion plan.
+	purgeErrs := map[string]error{}
 	purged := 0
 	var purgedBytes uint64
-	err = revisions.ExecuteCleanupStrategy(time.Now(), c.strategy, revs, ctx, &log, func(rev revisions.Revision, reason string) error {
-		for _, k := range keep {
-			if rev.Key() == k {
-				return nil
-			}
+	plan, err := revisions.ExecuteCleanupStrategy(time.Now(), c.strategy, revs, ctx, &log, func(rev revisions.Revision, reason string) error {
+		if dryRun || slices.Contains(keep, rev.Key()) {
+			return nil
 		}
 		blobID, err := removeRevisionUnchecked(ctx, n, rev.Key())
 		if err != nil {
 			PurgeFailures.Inc()
+			purgeErrs[rev.Key()] = err
 			return fmt.Errorf("could not purge revision %q: %w", rev.Key(), err)
 		}
 		blobs = append(blobs, pendingBlob{key: rev.Key(), blobID: blobID, size: rev.Size()})
@@ -351,6 +383,14 @@ func (c *Cleaner) Cleanup(ctx context.Context, lu node.PathLookup, rs RevisionSt
 		log.Debug().Str("revision", rev.Key()).Uint64("size", rev.Size()).Str("reason", reason).Msg("revision cleanup: purged revision")
 		return nil
 	})
+	if plan == nil {
+		// the strategy itself failed
+		log.Error().Err(err).Msg("revision cleanup: failed")
+		result.Err = err
+		return result
+	}
+	result.Revisions = revisionResults(revs, plan, keep, purgeErrs)
+
 	// One summary per node at info level, so that admins can see the cleanup at work
 	// without the per revision debug logging. Nothing is logged when nothing was purged,
 	// which is the common case for nodes with few revisions.
@@ -363,6 +403,42 @@ func (c *Cleaner) Cleanup(ctx context.Context, lu node.PathLookup, rs RevisionSt
 		// by the next cleanup of this node
 		log.Error().Err(err).Msg("revision cleanup: failed")
 	}
+	return result
+}
+
+// revisionResults turns the plan of the strategy into one RevisionResult per revision, in the
+// order of revs (newest first).
+func revisionResults(revs []revisions.Revision, plan revisions.Plan, keep []string, purgeErrs map[string]error) []RevisionResult {
+	decisions := map[string]Decision{}
+	for _, rev := range plan.Deleted() {
+		decisions[rev.Key()] = Deleted
+	}
+	for _, rev := range plan.Retained() {
+		decisions[rev.Key()] = Kept
+	}
+	for _, rev := range plan.Safeguarded() {
+		decisions[rev.Key()] = Protected
+	}
+
+	results := make([]RevisionResult, 0, len(revs))
+	sorted := slices.Clone(revs)
+	revisions.SortRevisionsCanonically(sorted)
+	for _, rev := range sorted {
+		r := RevisionResult{
+			Key:      rev.Key(),
+			Time:     rev.LastModificationTime(),
+			Size:     rev.Size(),
+			Decision: decisions[rev.Key()],
+			Reason:   plan.Reason(rev.Key()),
+			Err:      purgeErrs[rev.Key()],
+		}
+		if r.Decision == Deleted && slices.Contains(keep, rev.Key()) {
+			r.Decision = Protected
+			r.Reason = keptOnRequest
+		}
+		results = append(results, r)
+	}
+	return results
 }
 
 // revisionTime determines when a revision was last modified from the timestamp in its key,
