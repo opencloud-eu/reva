@@ -132,6 +132,37 @@ var _ = Describe("Revisions", func() {
 			Expect(results).To(HaveLen(1))
 			Expect(listKeys()).To(BeEmpty())
 		})
+
+		It("finds files and folders by their path on disk", func() {
+			env := non_watching_env
+			spaceID := env.SpaceRootRes.SpaceId
+			dir := filepath.Dir(n.InternalPath())
+
+			for fsPath, path := range map[string]string{
+				n.InternalPath():  "dir1/" + n.Name,
+				dir:               "dir1",
+				dir + "/":         "dir1",
+				dir + "/../dir1":  "dir1",
+				filepath.Dir(dir): "", // the space root
+			} {
+				s, p, err := env.Lookup.SpacePathFromFSPath(env.Ctx, fsPath)
+				Expect(err).ToNot(HaveOccurred(), fsPath)
+				Expect(s).To(Equal(spaceID), fsPath)
+				Expect(p).To(Equal(path), fsPath)
+			}
+
+			_, _, err := env.Lookup.SpacePathFromFSPath(env.Ctx, filepath.Dir(env.Lookup.InternalRoot()))
+			Expect(err).To(BeAssignableToTypeOf(errtypes.BadRequest("")))
+			_, _, err = env.Lookup.SpacePathFromFSPath(env.Ctx, filepath.Join(dir, "unknown"))
+			Expect(err).To(BeAssignableToTypeOf(errtypes.NotFound("")))
+
+			// what posixFS does with a request with a path on disk
+			s, p, err := env.Lookup.SpacePathFromFSPath(env.Ctx, n.InternalPath())
+			Expect(err).ToNot(HaveOccurred())
+			req := revisioncleanup.Request{SpaceIDs: []string{s}, Path: p, Strategy: "0"}
+			Expect(env.Fs.CleanupRevisionsUnchecked(context.Background(), req, nil)).To(Succeed())
+			Expect(listKeys()).To(BeEmpty())
+		})
 	})
 
 	Describe("the on-demand cleanup of a folder with a file the storage doesn't know yet", func() {
