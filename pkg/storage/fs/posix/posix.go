@@ -73,6 +73,12 @@ type posixFS struct {
 	// the inner Decomposedfs, for the on-demand revision cleanup: storage.FS is the
 	// middleware wrapping it, which doesn't pass optional interfaces through
 	revisions revisioncleanup.OnDemand
+	// resolves Request.FSPath for the on-demand revision cleanup
+	fsPaths fsPathResolver
+}
+
+type fsPathResolver interface {
+	SpacePathFromFSPath(ctx context.Context, p string) (string, string, error)
 }
 
 var _ revisioncleanup.OnDemand = (*posixFS)(nil)
@@ -246,6 +252,7 @@ func New(o *options.Options, stream events.Stream, cache, historyCache *idcache.
 	if onDemand, ok := dfs.(revisioncleanup.OnDemand); ok {
 		fs.revisions = onDemand
 	}
+	fs.fsPaths = lu
 	fs.tree = tp
 	fs.um = um
 
@@ -261,9 +268,22 @@ func (fs *posixFS) WithDisabledSpaces() storage.FS {
 // CleanupRevisionsUnchecked cleans up revisions on demand, see revisioncleanup.OnDemand. It goes to
 // the inner Decomposedfs directly, bypassing the middleware: its space group hooks only matter for
 // creating files, the cleanup only deletes revisions.
+//
+// A path on disk (Request.FSPath) is resolved here to its space and its path within the space,
+// which the Decomposedfs doesn't know about.
 func (fs *posixFS) CleanupRevisionsUnchecked(ctx context.Context, req revisioncleanup.Request, report func(revisioncleanup.Result)) error {
 	if fs.revisions == nil {
 		return errtypes.NotSupported("on-demand revision cleanup")
+	}
+	if req.FSPath != "" {
+		if err := req.Validate(); err != nil {
+			return err
+		}
+		spaceID, path, err := fs.fsPaths.SpacePathFromFSPath(ctx, req.FSPath)
+		if err != nil {
+			return err
+		}
+		req.SpaceIDs, req.Path, req.FSPath = []string{spaceID}, path, ""
 	}
 	return fs.revisions.CleanupRevisionsUnchecked(ctx, req, report)
 }
