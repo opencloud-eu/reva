@@ -11,6 +11,8 @@ import (
 	"github.com/pkg/xattr"
 
 	posixhelpers "github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/testhelpers"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata/prefixes"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/node"
 )
 
 var _ = Describe("WarmupIDCache", func() {
@@ -110,6 +112,83 @@ var _ = Describe("WarmupIDCache", func() {
 		b, err := xattr.Get(renamedPath, "user.oc.name")
 		Expect(err).ToNot(HaveOccurred())
 		Expect(string(b)).To(Equal("new-name.txt"))
+	})
+
+	It("picks up a move on disk that the id cache already knows about", func() {
+		from := filepath.Join(spaceRoot, "from")
+		to := filepath.Join(spaceRoot, "to")
+		Expect(os.MkdirAll(from, 0755)).To(Succeed())
+		Expect(os.MkdirAll(to, 0755)).To(Succeed())
+		filePath := filepath.Join(from, "moved.txt")
+		Expect(os.WriteFile(filePath, []byte("hello world"), 0644)).To(Succeed())
+
+		Expect(env.Tree.WarmupIDCache(spaceRoot, true, false)).To(Succeed())
+
+		id, err := xattr.Get(filePath, "user.oc.id")
+		Expect(err).ToNot(HaveOccurred())
+
+		// same name, other parent. The id cache already has the new path, the metadata still has the old parent
+		movedPath := filepath.Join(to, "moved.txt")
+		Expect(os.Rename(filePath, movedPath)).To(Succeed())
+		Expect(env.Lookup.CacheID(env.Ctx, env.SpaceRootRes.SpaceId, string(id), movedPath)).To(Succeed())
+
+		Expect(env.Tree.WarmupIDCache(spaceRoot, true, false)).To(Succeed())
+
+		toID, err := xattr.Get(to, "user.oc.id")
+		Expect(err).ToNot(HaveOccurred())
+		parentID, err := xattr.Get(movedPath, "user.oc.parentid")
+		Expect(err).ToNot(HaveOccurred())
+		Expect(string(parentID)).To(Equal(string(toID)))
+	})
+
+	It("doesn't read an unchanged file in the space root again", func() {
+		filePath := filepath.Join(spaceRoot, "unchanged.txt")
+		Expect(os.WriteFile(filePath, []byte("hello world"), 0644)).To(Succeed())
+
+		Expect(env.Tree.WarmupIDCache(spaceRoot, true, false)).To(Succeed())
+		blobID, err := xattr.Get(filePath, "user.oc.blobid")
+		Expect(err).ToNot(HaveOccurred())
+
+		Expect(env.Tree.WarmupIDCache(spaceRoot, true, false)).To(Succeed())
+		b, err := xattr.Get(filePath, "user.oc.blobid")
+		Expect(err).ToNot(HaveOccurred())
+		Expect(b).To(Equal(blobID))
+	})
+
+	It("doesn't re-assimilate a file whose mtime an upload is still writing", func() {
+		filePath := filepath.Join(spaceRoot, "upload.txt")
+		Expect(os.WriteFile(filePath, []byte("hello world"), 0644)).To(Succeed())
+
+		Expect(env.Tree.WarmupIDCache(spaceRoot, true, false)).To(Succeed())
+		id, err := xattr.Get(filePath, "user.oc.id")
+		Expect(err).ToNot(HaveOccurred())
+		blobID, err := xattr.Get(filePath, "user.oc.blobid")
+		Expect(err).ToNot(HaveOccurred())
+
+		// do what an upload does: take the lock, set the mtime on disk, then write the mtime attribute
+		n := node.NewBaseNode(env.SpaceRootRes.SpaceId, string(id), env.Lookup)
+		unlock, err := env.Lookup.MetadataBackend().Lock(n)
+		Expect(err).ToNot(HaveOccurred())
+		n.SetLockHeld(true)
+		mtime := time.Now().Add(-time.Hour).Truncate(time.Microsecond)
+		Expect(os.Chtimes(filePath, mtime, mtime)).To(Succeed())
+
+		// the scan sees the new mtime on disk and waits for the lock
+		done := make(chan struct{})
+		go func() {
+			defer GinkgoRecover()
+			defer close(done)
+			Expect(env.Tree.WarmupIDCache(spaceRoot, true, false)).To(Succeed())
+		}()
+		Consistently(done, 500*time.Millisecond).ShouldNot(BeClosed())
+
+		Expect(env.Lookup.MetadataBackend().Set(env.Ctx, n, prefixes.MTimeAttr, []byte(mtime.UTC().Format(time.RFC3339Nano)))).To(Succeed())
+		Expect(unlock()).To(Succeed())
+		Eventually(done).Should(BeClosed())
+
+		b, err := xattr.Get(filePath, "user.oc.blobid")
+		Expect(err).ToNot(HaveOccurred())
+		Expect(b).To(Equal(blobID))
 	})
 
 	It("leaves the children of a renamed directory alone", func() {
