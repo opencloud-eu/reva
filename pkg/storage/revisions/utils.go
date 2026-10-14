@@ -73,17 +73,21 @@ func (f CleanupStrategyFunc) Cleanup(now time.Time, revs []Revision, ctx context
 // that is passed as a parameter, together with the reason the strategy gave for deleting
 // the revision (see Plan).
 //
+// It returns the Plan of the strategy, so that callers can report on all revisions, also
+// the ones that were kept or protected, together with the errors of the cleanup function.
+// The Plan is nil if the strategy failed.
+//
 // Note that this implementation is assuming that it is used in a single-threaded
 // fashion as it does not perform any locking of anything.
 func ExecuteCleanupStrategy(now time.Time, strategy RevisionCleanupStrategy, revs []Revision, ctx context.Context, logger *zerolog.Logger,
 	cleanup func(rev Revision, reason string) error,
-) error {
+) (Plan, error) {
 	revs = slices.Clone(revs)
 	SortRevisionsCanonically(revs)
 
 	plan, err := strategy.Cleanup(now, revs, ctx, logger)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	plan = withFutureDates(plan, revs, now, logger)
 
@@ -94,7 +98,7 @@ func ExecuteCleanupStrategy(now time.Time, strategy RevisionCleanupStrategy, rev
 		err := cleanup(rev, plan.Reason(rev.Key()))
 		errs[i] = err
 	}
-	return errors.Join(errs...)
+	return plan, errors.Join(errs...)
 }
 
 var (

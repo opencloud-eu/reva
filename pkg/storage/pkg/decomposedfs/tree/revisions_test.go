@@ -277,6 +277,106 @@ var _ = Describe("Revisions", func() {
 		})
 	})
 
+	Describe("revisioncleanup.Cleaner results", func() {
+		var cleaner *revisioncleanup.Cleaner
+
+		BeforeEach(func() {
+			var err error
+			// keep everything younger than 7 days, delete everything older than 30 days, thin out in between
+			cleaner, err = revisioncleanup.New("7d, auto, 30d")
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		decisions := func(result revisioncleanup.Result) map[string]revisioncleanup.Decision {
+			d := map[string]revisioncleanup.Decision{}
+			for _, rev := range result.Revisions {
+				d[rev.Key] = rev.Decision
+			}
+			return d
+		}
+
+		It("reports what a dry run would do, without deleting anything", func() {
+			deleted := counterValue(revisionsDeleted)
+
+			result := cleaner.DryRun(env.Ctx, env.Lookup, env.Tree, n)
+
+			Expect(result.DryRun).To(BeTrue())
+			Expect(result.Skipped).To(BeEmpty())
+			Expect(result.Err).ToNot(HaveOccurred())
+			Expect(result.SpaceID).To(Equal(n.SpaceID))
+			Expect(result.NodeID).To(Equal(n.ID))
+			Expect(decisions(result)).To(Equal(map[string]revisioncleanup.Decision{
+				keys[0]: revisioncleanup.Protected, // 1 hour old
+				keys[1]: revisioncleanup.Kept,      // 10 days old
+				keys[2]: revisioncleanup.Deleted,   // 100 days old
+			}))
+			// newest first, with reasons
+			Expect(result.Revisions[0].Key).To(Equal(keys[0]))
+			Expect(result.Revisions[0].Reason).To(HavePrefix(`protected by "7d": newer than `))
+			Expect(result.Revisions[2].Reason).To(HavePrefix(`deleted by "30d": older than `))
+			count, _ := result.DeletedCount()
+			Expect(count).To(Equal(1))
+
+			Expect(listKeys()).To(ConsistOf(keys))
+			env.Blobstore.AssertNotCalled(GinkgoT(), "Delete", mock.Anything)
+			Expect(counterValue(revisionsDeleted)).To(Equal(deleted))
+		})
+
+		It("reports what the cleanup did", func() {
+			expectBlobDeletion(blobOfRevision(2))
+
+			result := cleaner.Cleanup(env.Ctx, env.Lookup, env.Tree, n)
+
+			Expect(result.DryRun).To(BeFalse())
+			Expect(decisions(result)[keys[2]]).To(Equal(revisioncleanup.Deleted))
+			Expect(result.Revisions[2].Err).ToNot(HaveOccurred())
+			Expect(listKeys()).To(ConsistOf(keys[0], keys[1]))
+		})
+
+		It("reports revisions it failed to delete", func() {
+			env.Blobstore.On("Delete", mock.Anything).Return(errors.New("blobstore unavailable")).Once()
+
+			result := cleaner.Cleanup(env.Ctx, env.Lookup, env.Tree, n)
+
+			Expect(result.Revisions[2].Decision).To(Equal(revisioncleanup.Deleted))
+			Expect(result.Revisions[2].Err).To(MatchError(ContainSubstring("blobstore unavailable")))
+			count, _ := result.DeletedCount()
+			Expect(count).To(BeZero())
+		})
+
+		It("reports revisions kept on request as protected", func() {
+			result := cleaner.Cleanup(env.Ctx, env.Lookup, env.Tree, n, keys[2])
+
+			Expect(result.Revisions[2].Decision).To(Equal(revisioncleanup.Protected))
+			Expect(result.Revisions[2].Reason).To(HavePrefix("protected: kept on request"))
+			Expect(listKeys()).To(ConsistOf(keys))
+		})
+
+		It("reports nodes it skipped", func() {
+			Expect(n.SetXattrString(env.Ctx, prefixes.StatusPrefix, node.ProcessingStatus+"some-upload")).To(Succeed())
+
+			for _, result := range []revisioncleanup.Result{
+				cleaner.DryRun(env.Ctx, env.Lookup, env.Tree, n),
+				cleaner.Cleanup(env.Ctx, env.Lookup, env.Tree, n),
+			} {
+				Expect(result.Skipped).To(ContainSubstring("still being processed"))
+				Expect(result.Revisions).To(BeEmpty())
+			}
+			Expect(listKeys()).To(ConsistOf(keys))
+		})
+
+		It("reports a disabled cleanup as skipped", func() {
+			disabled, err := revisioncleanup.New("disabled")
+			Expect(err).ToNot(HaveOccurred())
+			Expect(disabled.DryRun(env.Ctx, env.Lookup, env.Tree, n).Skipped).To(ContainSubstring("disabled"))
+			Expect(disabled.Cleanup(env.Ctx, env.Lookup, env.Tree, n).Skipped).To(ContainSubstring("disabled"))
+			// a nil Cleaner behaves like a disabled one
+			var none *revisioncleanup.Cleaner
+			Expect(none.DryRun(env.Ctx, env.Lookup, env.Tree, n).Skipped).To(ContainSubstring("disabled"))
+			Expect(listKeys()).To(ConsistOf(keys))
+		})
+	})
+
 	Describe("revisioncleanup.Service", func() {
 		var cleaner *revisioncleanup.Cleaner
 

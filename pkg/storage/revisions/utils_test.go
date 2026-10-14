@@ -116,7 +116,7 @@ func TestExecuteCleanupStrategy(t *testing.T) {
 
 	deleted := []Revision{}
 	reasons := []string{}
-	err := ExecuteCleanupStrategy(now, strategy, revs, ctx, &logger, func(rev Revision, reason string) error {
+	plan, err := ExecuteCleanupStrategy(now, strategy, revs, ctx, &logger, func(rev Revision, reason string) error {
 		deleted = append(deleted, rev)
 		reasons = append(reasons, reason)
 		return nil
@@ -124,6 +124,9 @@ func TestExecuteCleanupStrategy(t *testing.T) {
 	require.NoError(err)
 	require.Equal([]Revision{b, a}, deleted)
 	require.Equal([]string{"larger than 150", "larger than 150"}, reasons)
+	// the whole plan is returned, also the revisions that were kept
+	require.Equal([]Revision{c}, plan.Retained())
+	require.Equal("not larger than 150", plan.Reason(c.Key()))
 }
 
 // Revisions with the same time are ordered by the collision suffix of their keys, newest first,
@@ -293,7 +296,7 @@ func TestFutureDatesAreVisible(t *testing.T) {
 	everything, err := NewRevisionCleanupStrategy("0")
 	require.NoError(t, err)
 	reasons := map[string]string{}
-	err = ExecuteCleanupStrategy(now, everything, revs, context.Background(), &logger, func(rev Revision, reason string) error {
+	_, err = ExecuteCleanupStrategy(now, everything, revs, context.Background(), &logger, func(rev Revision, reason string) error {
 		reasons[rev.Key()] = reason
 		return nil
 	})
