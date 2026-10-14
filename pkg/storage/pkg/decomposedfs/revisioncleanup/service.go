@@ -144,6 +144,10 @@ type Service struct {
 	// is done, nil if there is none; QueueLength counts those requests as well
 	running map[string]*request
 	closed  bool
+	// pending counts the requests from being queued until their cleanup has finished (or they
+	// were dropped or abandoned); idle is closed whenever pending is 0, see Wait
+	pending int
+	idle    chan struct{}
 }
 
 type request struct {
@@ -230,6 +234,8 @@ func (s *Service) startWorkers(workers, queueSize int, policy QueueFullPolicy, p
 	s.done = make(chan struct{})
 	s.queued = make(map[string]*request)
 	s.running = make(map[string]*request)
+	s.idle = make(chan struct{})
+	close(s.idle)
 	s.workers = workers
 	s.queueSize = queueSize
 	Workers.Add(float64(workers))
@@ -331,6 +337,7 @@ func (s *Service) enqueue(r *request) {
 		// being cleaned up right now: it is queued once more when that is done
 		if again == nil {
 			s.running[key] = r
+			s.addPending()
 			QueueLength.Inc()
 		} else {
 			again.merge(r)
@@ -339,6 +346,7 @@ func (s *Service) enqueue(r *request) {
 		return
 	}
 	s.queued[key] = r
+	s.addPending()
 	QueueLength.Inc()
 	s.mu.Unlock()
 	s.send(r)
@@ -397,6 +405,7 @@ func (s *Service) forget(r *request) {
 	if s.queued[r.key()] == r {
 		delete(s.queued, r.key())
 		QueueLength.Dec()
+		s.donePending(1)
 	}
 	s.mu.Unlock()
 }
@@ -446,6 +455,7 @@ func (s *Service) work() {
 			s.mu.Lock()
 			again := s.running[r.key()]
 			delete(s.running, r.key())
+			s.donePending(1)
 			if again == nil || s.closed {
 				// done, or shut down, which abandoned a request to queue again
 				s.mu.Unlock()
@@ -453,7 +463,7 @@ func (s *Service) work() {
 			}
 			// queue the node once more, at the end of the queue, so that the other nodes get
 			// their turn; sending in a goroutine of its own, as a worker must never wait for
-			// room in the queue it empties. QueueLength already counts the request.
+			// room in the queue it empties. QueueLength and pending already count the request.
 			s.queued[again.key()] = again
 			s.mu.Unlock()
 			go s.send(again)
@@ -479,6 +489,49 @@ func (s *Service) cleanupNode(ctx context.Context, spaceID, nodeID string, keep 
 		return
 	}
 	s.cleaner.Cleanup(ctx, s.lu, s.rs, n, keep...)
+}
+
+// addPending counts a new request, s.mu must be held.
+func (s *Service) addPending() {
+	if s.pending == 0 {
+		s.idle = make(chan struct{})
+	}
+	s.pending++
+}
+
+// donePending counts n requests as finished, s.mu must be held.
+func (s *Service) donePending(n int) {
+	if n <= 0 {
+		return
+	}
+	s.pending -= n
+	if s.pending <= 0 {
+		s.pending = 0
+		close(s.idle)
+	}
+}
+
+// Wait waits until no cleanup is queued or running anymore, or until ctx ends, in which case
+// it returns ctx's error. Requests that were dropped (queue full policy "drop") or abandoned
+// by Shutdown don't keep it waiting. In synchronous mode, and for a nil Service, it returns
+// right away, as the cleanups already ran in their callers.
+//
+// Unlike Shutdown, it doesn't stop anything: it is meant for callers that queue a batch of
+// cleanups and need them to be done, e.g. a command cleaning up all files of a space.
+// Cleanups queued while it waits are waited for as well, until the Service is idle once.
+func (s *Service) Wait(ctx context.Context) error {
+	if s == nil || !s.async {
+		return nil
+	}
+	s.mu.Lock()
+	idle := s.idle
+	s.mu.Unlock()
+	select {
+	case <-idle:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 // Shutdown stops the background workers. A cleanup that is running is finished, the ones
@@ -507,6 +560,7 @@ func (s *Service) Shutdown(ctx context.Context) error {
 			s.running[key] = nil
 		}
 	}
+	s.donePending(abandoned)
 	QueueLength.Sub(float64(abandoned))
 	Workers.Sub(float64(s.workers))
 	QueueCapacity.Sub(float64(s.queueSize))

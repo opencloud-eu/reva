@@ -464,3 +464,143 @@ func TestServiceShutdownTimeout(t *testing.T) {
 	require.ErrorIs(t, ts.Shutdown(ctx), context.DeadlineExceeded)
 	ts.releaseOne()
 }
+
+// waitShuttingDown waits until Shutdown has begun, i.e. no new cleanup gets started anymore.
+func (ts *testService) waitShuttingDown() {
+	ts.t.Helper()
+	require.Eventually(ts.t, func() bool {
+		ts.Service.mu.Lock()
+		defer ts.Service.mu.Unlock()
+		return ts.closed
+	}, 5*time.Second, time.Millisecond, "Shutdown has not begun")
+}
+
+// waitReturns runs ts.Wait in a goroutine and returns a channel delivering its result.
+func waitReturns(ts *testService, ctx context.Context) chan error {
+	returned := make(chan error, 1)
+	go func() { returned <- ts.Wait(ctx) }()
+	return returned
+}
+
+func requireStillWaiting(t *testing.T, returned chan error) {
+	t.Helper()
+	select {
+	case err := <-returned:
+		t.Fatalf("Wait returned (%v) while cleanups were still queued or running", err)
+	case <-time.After(100 * time.Millisecond):
+	}
+}
+
+func requireWaitReturned(t *testing.T, returned chan error) {
+	t.Helper()
+	select {
+	case err := <-returned:
+		require.NoError(t, err)
+	case <-time.After(5 * time.Second):
+		t.Fatal("Wait did not return although all cleanups are done")
+	}
+}
+
+func TestServiceWaitWithoutWork(t *testing.T) {
+	// a nil Service, i.e. a disabled cleanup
+	var disabled *Service
+	require.NoError(t, disabled.Wait(context.Background()))
+
+	// a synchronous Service: cleanups already ran in their callers
+	sync := &Service{cleaner: &Cleaner{}}
+	require.NoError(t, sync.Wait(context.Background()))
+
+	// an idle asynchronous Service
+	ts := newTestService(t, 1, 1, QueueFullBlock)
+	require.NoError(t, ts.Wait(context.Background()))
+}
+
+func TestServiceWaitsForQueuedAndRunningCleanups(t *testing.T) {
+	ts := newTestService(t, 1, 5, QueueFullBlock)
+	ctx := context.Background()
+
+	ts.HandleRevisionCreated(ctx, testNode("a"))
+	ts.waitStarted("a") // running
+	ts.HandleRevisionCreated(ctx, testNode("b"))
+	ts.HandleRevisionCreated(ctx, testNode("b")) // merged, still one cleanup to wait for
+	ts.HandleRevisionCreated(ctx, testNode("a")) // queued again while running, a second cleanup
+
+	returned := waitReturns(ts, ctx)
+	requireStillWaiting(t, returned)
+
+	ts.releaseOne() // a done, b running
+	ts.waitStarted("b")
+	requireStillWaiting(t, returned)
+	ts.releaseOne() // b done, a again running
+	ts.waitStarted("a")
+	requireStillWaiting(t, returned)
+	ts.releaseOne() // all done
+	requireWaitReturned(t, returned)
+
+	// the Service can be waited for again after new work
+	ts.HandleRevisionCreated(ctx, testNode("c"))
+	ts.waitStarted("c")
+	returned = waitReturns(ts, ctx)
+	requireStillWaiting(t, returned)
+	ts.releaseOne()
+	requireWaitReturned(t, returned)
+}
+
+func TestServiceWaitHonorsTheContext(t *testing.T) {
+	ts := newTestService(t, 1, 1, QueueFullBlock)
+	ts.HandleRevisionCreated(context.Background(), testNode("a"))
+	ts.waitStarted("a")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+	require.ErrorIs(t, ts.Wait(ctx), context.DeadlineExceeded)
+	ts.releaseOne()
+}
+
+// Wait also waits for a node that is cleaned up once more, as it got new revisions while it
+// was being cleaned up.
+func TestServiceWaitsForNodesToCleanUpOnceMore(t *testing.T) {
+	ts := newTestService(t, 1, 10, QueueFullBlock)
+	ctx := context.Background()
+
+	ts.HandleRevisionCreated(ctx, testNode("a"))
+	ts.waitStarted("a")
+	ts.HandleRevisionCreated(ctx, testNode("a"))
+	returned := waitReturns(ts, ctx)
+
+	ts.releaseOne()
+	ts.waitStarted("a") // once more
+	requireStillWaiting(t, returned)
+	ts.releaseOne()
+	requireWaitReturned(t, returned)
+}
+
+func TestServiceWaitIgnoresDroppedAndAbandonedCleanups(t *testing.T) {
+	ctx := context.Background()
+
+	// dropped: c does not fit into the full queue
+	drop := newTestService(t, 1, 1, QueueFullDrop)
+	drop.HandleRevisionCreated(ctx, testNode("a"))
+	drop.waitStarted("a")
+	drop.HandleRevisionCreated(ctx, testNode("b"))
+	drop.HandleRevisionCreated(ctx, testNode("c")) // dropped
+	returned := waitReturns(drop, ctx)
+	drop.releaseOne()
+	drop.waitStarted("b")
+	drop.releaseOne()
+	requireWaitReturned(t, returned)
+
+	// abandoned: b is still queued when the Service shuts down
+	stop := newTestService(t, 1, 1, QueueFullBlock)
+	stop.HandleRevisionCreated(ctx, testNode("a"))
+	stop.waitStarted("a")
+	stop.HandleRevisionCreated(ctx, testNode("b"))
+	returned = waitReturns(stop, ctx)
+	stopped := make(chan error, 1)
+	go func() { stopped <- stop.Shutdown(ctx) }()
+	// only let a finish once Shutdown has begun, otherwise the worker could still take b
+	stop.waitShuttingDown()
+	stop.releaseOne() // a finishes, b is abandoned
+	require.NoError(t, <-stopped)
+	requireWaitReturned(t, returned)
+}
