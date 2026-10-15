@@ -29,7 +29,7 @@ import (
 type key int
 
 const (
-	sendOwnerChanKey  key = iota
+	sendOwnerChanKey key = iota
 	moveResultSlotKey
 )
 
