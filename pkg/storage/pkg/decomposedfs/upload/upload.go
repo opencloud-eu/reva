@@ -35,6 +35,7 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/pkg/errors"
+	"github.com/rs/zerolog"
 	tusd "github.com/tus/tusd/v2/pkg/handler"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
@@ -473,16 +474,12 @@ func (session *DecomposedFsSession) Cleanup(revertNodeMetadata, cleanBin, cleanI
 						return false
 					}
 					if string(status) != node.ProcessingStatus+session.ID() {
-						sublog.Info().Str("versionID", versionID).Str("status", string(status)).Msg("node was changed by another upload, keeping it and the revision")
+						sublog.Info().Str("versionID", versionID).Str("status", string(status)).Msg("node was changed by another upload, keeping it")
+						session.deleteRevisionCreatedForUpload(ctx, n, sublog)
 						return true
 					}
 
-					sublog.Debug().Str("nodepath", n.InternalPath()).Str("versionID", versionID).Msg("restoring revision")
-					if err := n.RevertUpload(ctx, versionID); err != nil {
-						sublog.Error().Err(err).Str("versionID", versionID).Msg("reverting node metadata failed")
-						return false
-					}
-					return true
+					return session.revertNode(ctx, n, versionID, sublog)
 				}()
 				if !ok {
 					return
@@ -498,8 +495,11 @@ func (session *DecomposedFsSession) Cleanup(revertNodeMetadata, cleanBin, cleanI
 					if err := n.Purge(ctx); err != nil {
 						sublog.Error().Err(err).Str("nodepath", n.InternalPath()).Msg("purging node failed")
 					}
+				} else {
+					// a newer upload has replaced the content since, and may have created a revision for
+					// this upload's content
+					session.deleteRevisionCreatedForUpload(ctx, n, sublog)
 				}
-				// FIXME else if the upload has become a revision, delete the revision, or if it is the last one, delete the node
 			}
 		}
 	}
@@ -530,6 +530,81 @@ func (session *DecomposedFsSession) Cleanup(revertNodeMetadata, cleanBin, cleanI
 			}
 		}
 	}
+}
+
+// deleteRevisionCreatedForUpload deletes the revision that a newer upload created for this
+// upload's content, when this upload failed after the newer one replaced the node: this upload
+// would have written its blob into that revision (see Finalize), so without it, the revision is
+// left without its content. The revision is named after this upload's mtime, and only deleted
+// if it still belongs to this upload, i.e. if its blob id is this session's id.
+func (session *DecomposedFsSession) deleteRevisionCreatedForUpload(ctx context.Context, n *node.Node, log zerolog.Logger) {
+	version := session.MTime().UTC().Format(time.RFC3339Nano)
+	revisionNode := node.NewBaseNode(n.SpaceID, n.ID+node.RevisionIDDelimiter+version, session.store.lu)
+	blobID, err := session.store.lu.MetadataBackend().Get(ctx, revisionNode, prefixes.BlobIDAttr)
+	switch {
+	case err != nil:
+		// no revision was created for this upload, e.g. no newer upload was received while it was processing
+		log.Debug().Err(err).Str("version", version).Msg("no revision created for this upload")
+		return
+	case string(blobID) != session.ID():
+		log.Debug().Str("version", version).Str("blobid", string(blobID)).Msg("the revision belongs to another upload, keeping it")
+		return
+	}
+	log.Debug().Str("version", version).Msg("deleting the revision created for this upload")
+	if _, err := n.DeleteRevision(ctx, version); err != nil {
+		log.Error().Err(err).Str("version", version).Msg("deleting the revision created for this upload failed")
+	}
+}
+
+// revertNode rolls the node back to the revision recorded when this upload was received, after
+// its postprocessing failed. The caller holds the node's lock, and this upload owns the node.
+//
+// If an older upload was still in postprocessing when this upload was received, that revision
+// was created for the older upload's content, which only gets written when the older upload
+// succeeds (see Finalize):
+//   - if the older upload is still in postprocessing, the node gets the revision's metadata and is
+//     marked as processing for the older upload again, as before this upload was received; the
+//     older upload then finishes or rolls back as if this upload had never happened;
+//   - if the older upload has failed in the meantime, it deleted that revision (see
+//     deleteRevisionCreatedForUpload), and the node is rolled back to its latest remaining
+//     revision instead, the content the older upload had replaced.
+func (session *DecomposedFsSession) revertNode(ctx context.Context, n *node.Node, versionID string, log zerolog.Logger) bool {
+	revisionNode := node.NewBaseNode(n.SpaceID, n.ID+node.RevisionIDDelimiter+versionID, session.store.lu)
+	blobID, err := session.store.lu.MetadataBackend().Get(ctx, revisionNode, prefixes.BlobIDAttr)
+	if err != nil {
+		if !metadata.IsNotExist(err) && !metadata.IsAttrUnset(err) {
+			log.Error().Err(err).Str("versionID", versionID).Msg("reading the revision to restore failed")
+			return false
+		}
+		log.Info().Str("versionID", versionID).Msg("the revision to restore is gone, restoring the latest revision")
+		if _, err := n.DeleteRevision(ctx, ""); err != nil {
+			log.Error().Err(err).Msg("restoring the latest revision failed")
+			return false
+		}
+		return true
+	}
+
+	// the revision's blob id is the id of the upload that wrote (or will write) its content
+	pendingUpload := ""
+	if id := string(blobID); id != session.ID() {
+		if other, err := session.store.Get(ctx, id); err == nil && other.IsProcessing() {
+			pendingUpload = id
+		}
+	}
+
+	log.Debug().Str("nodepath", n.InternalPath()).Str("versionID", versionID).Msg("restoring revision")
+	if err := n.RevertUpload(ctx, versionID); err != nil {
+		log.Error().Err(err).Str("versionID", versionID).Msg("reverting node metadata failed")
+		return false
+	}
+	if pendingUpload != "" {
+		log.Info().Str("versionID", versionID).Str("uploadid", pendingUpload).Msg("handing the node back to the older upload that is still in postprocessing")
+		if err := n.SetXattrString(ctx, prefixes.StatusPrefix, node.ProcessingStatus+pendingUpload); err != nil {
+			log.Error().Err(err).Str("uploadid", pendingUpload).Msg("marking the node as processing for the older upload failed")
+			return false
+		}
+	}
+	return true
 }
 
 // URL returns a url to download an upload
