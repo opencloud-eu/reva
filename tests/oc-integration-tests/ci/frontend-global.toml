@@ -22,6 +22,24 @@ allow_credentials = true
 credential_chain = ["basic"]
 
 [http.services.ocdav]
+# the types oc:has-preview is answered with 1 for; an OpenCloud deployment
+# hands in what its thumbnail service can render
+preview_mime_types = [
+  "image/png",
+  "image/jpg",
+  "image/jpeg",
+  "image/gif",
+  "image/bmp",
+  "image/x-ms-bmp",
+  "image/tiff",
+  "image/webp",
+  "text/plain",
+  "audio/flac",
+  "audio/mpeg",
+  "audio/ogg",
+  "application/vnd.geogebra.slides",
+  "application/vnd.geogebra.pinboard",
+]
 # serve ocdav on the root path
 prefix = ""
 # for user lookups
