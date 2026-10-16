@@ -30,6 +30,7 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/opencloud-eu/reva/v2/pkg/events"
 	"github.com/opencloud-eu/reva/v2/pkg/rhttp/router"
+	"github.com/opencloud-eu/reva/v2/pkg/storage"
 	"github.com/opencloud-eu/reva/v2/pkg/storagespace"
 	"github.com/opencloud-eu/reva/v2/pkg/utils"
 )
@@ -284,12 +285,19 @@ func ItemTrashed(r *provider.DeleteResponse, req *provider.DeleteRequest, spaceO
 }
 
 // ItemMoved converts the response to an event
-func ItemMoved(r *provider.MoveResponse, req *provider.MoveRequest, spaceOwner *user.UserId, executant *user.User) events.ItemMoved {
+func ItemMoved(r *provider.MoveResponse, req *provider.MoveRequest, result *storage.MoveResult, executant *user.User) events.ItemMoved {
+	var spaceOwner *user.UserId
+	var newRef, oldRef *provider.Reference
+	if result != nil {
+		spaceOwner = result.SpaceOwner
+		newRef = result.NewReference
+		oldRef = result.OldReference
+	}
 	return events.ItemMoved{
 		SpaceOwner:        spaceOwner,
 		Executant:         executant.GetId(),
-		Ref:               req.Destination,
-		OldReference:      req.Source,
+		Ref:               newRef,
+		OldReference:      oldRef,
 		Timestamp:         utils.TSNow(),
 		ImpersonatingUser: extractImpersonator(executant),
 	}

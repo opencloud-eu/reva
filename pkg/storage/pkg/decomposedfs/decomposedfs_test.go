@@ -21,6 +21,7 @@ package decomposedfs_test
 import (
 	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
 	"github.com/stretchr/testify/mock"
+	"google.golang.org/protobuf/proto"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs"
@@ -130,6 +131,40 @@ var _ = Describe("Decomposed", func() {
 				Expect(err).To(HaveOccurred())
 				Expect(err).Should(MatchError(errtypes.PreconditionFailed("error: not found: dir2")))
 			})
+		})
+	})
+
+	Describe("Move", func() {
+		It("returns the resolved references and space owner", func() {
+			destination := &provider.Reference{
+				ResourceId: env.SpaceRootRes,
+				Path:       "/dir2",
+			}
+
+			result, err := env.Fs.Move(env.Ctx, ref, destination)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(result).ToNot(BeNil())
+			Expect(proto.Equal(result.SpaceOwner, env.Owner.Id)).To(BeTrue())
+			Expect(result.OldReference.Path).To(Equal("/dir1"))
+			Expect(result.NewReference.Path).To(Equal("/dir2"))
+			Expect(result.OldReference.ResourceId.SpaceId).To(Equal(env.SpaceRootRes.SpaceId))
+			Expect(result.NewReference.ResourceId.SpaceId).To(Equal(env.SpaceRootRes.SpaceId))
+
+			_, err = env.Fs.GetMD(env.Ctx, ref, nil, nil)
+			Expect(err).To(HaveOccurred())
+			_, err = env.Fs.GetMD(env.Ctx, destination, nil, nil)
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		It("returns no result when the source is missing", func() {
+			source := &provider.Reference{
+				ResourceId: env.SpaceRootRes,
+				Path:       "/missing",
+			}
+
+			result, err := env.Fs.Move(env.Ctx, source, ref)
+			Expect(err).To(HaveOccurred())
+			Expect(result).To(BeNil())
 		})
 	})
 
