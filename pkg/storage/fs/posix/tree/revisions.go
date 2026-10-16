@@ -26,13 +26,16 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/pkg/errors"
+	"github.com/pkg/xattr"
 
 	"github.com/opencloud-eu/reva/v2/pkg/appctx"
 	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/blobstore"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata/prefixes"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/node"
@@ -280,39 +283,102 @@ func (tp *Tree) RestoreRevision(ctx context.Context, srcNode, targetNode metadat
 	}
 	defer rf.Close()
 
-	wf, err := os.OpenFile(target, os.O_CREATE|os.O_WRONLY, 0600)
+	// Write the revision to a temp file and rename it over the target, like the blobstore does for
+	// uploads. Readers then see either the old or the restored content, never a mix, and a failed
+	// copy leaves the target untouched.
+	tmpDir := filepath.Join(tp.lookup.InternalSpaceRoot(targetNode.GetSpaceID()), blobstore.TMPDir)
+	if err := os.MkdirAll(tmpDir, 0700); err != nil {
+		return err
+	}
+	wf, err := os.CreateTemp(tmpDir, filepath.Base(target)+".restore-*")
 	if err != nil {
 		return err
 	}
-	defer wf.Close()
-	err = wf.Truncate(0)
-	if err != nil {
-		return err
-	}
+	tempName := wf.Name()
+	renamed := false
+	defer func() {
+		_ = wf.Close()
+		if !renamed {
+			_ = os.Remove(tempName)
+		}
+	}()
 
 	if _, err := io.Copy(wf, rf); err != nil {
 		return err
 	}
+	if err := wf.Sync(); err != nil {
+		return err
+	}
 
-	err = tp.lookup.CopyMetadata(ctx, srcNode, targetNode, func(attributeName string, value []byte) (newValue []byte, copy bool) {
-		return value, strings.HasPrefix(attributeName, prefixes.ChecksumPrefix) ||
-			attributeName == prefixes.TypeAttr ||
-			attributeName == prefixes.BlobIDAttr ||
-			attributeName == prefixes.BlobsizeAttr
-	})
+	// keep the mode and owner of the target, the in-place write did not change them
+	fi, err := os.Stat(target)
 	if err != nil {
-		return errtypes.InternalError("failed to copy blob xattrs to old revision to node: " + err.Error())
+		return err
+	}
+	if err := wf.Chmod(fi.Mode().Perm()); err != nil {
+		return err
+	}
+	if st, ok := fi.Sys().(*syscall.Stat_t); ok {
+		if err := wf.Chown(int(st.Uid), int(st.Gid)); err != nil {
+			tp.log.Warn().Err(err).Str("target", target).Msg("could not keep the owner of the restored file")
+		}
+	}
+	if err := wf.Close(); err != nil {
+		return err
+	}
+
+	// the node metadata lives in xattrs on the file itself, so copy it to the temp file before the
+	// rename replaces the target
+	names, err := xattr.List(target)
+	if err != nil {
+		return err
+	}
+	for _, name := range names {
+		if !strings.HasPrefix(name, prefixes.OcPrefix) {
+			continue
+		}
+		value, err := xattr.Get(target, name)
+		if err != nil {
+			return err
+		}
+		if err := xattr.Set(tempName, name, value); err != nil {
+			return err
+		}
+	}
+
+	revisionAttrs, err := tp.lookup.MetadataBackend().All(ctx, srcNode)
+	if err != nil {
+		return errtypes.InternalError("failed to read blob xattrs of old revision: " + err.Error())
+	}
+	for name, value := range revisionAttrs {
+		if strings.HasPrefix(name, prefixes.ChecksumPrefix) ||
+			name == prefixes.TypeAttr ||
+			name == prefixes.BlobIDAttr ||
+			name == prefixes.BlobsizeAttr {
+			if err := xattr.Set(tempName, name, value); err != nil {
+				return errtypes.InternalError("failed to copy blob xattrs to old revision to node: " + err.Error())
+			}
+		}
 	}
 
 	// set the node mtime to the current time if no mtime was provided
 	if mtime.IsZero() {
 		mtime = time.Now()
 	}
-	err = os.Chtimes(target, mtime, mtime)
+	if err := xattr.Set(tempName, prefixes.MTimeAttr, []byte(mtime.UTC().Format(time.RFC3339Nano))); err != nil {
+		return errtypes.InternalError("failed to set mtime attribute on node: " + err.Error())
+	}
+	err = os.Chtimes(tempName, mtime, mtime)
 	if err != nil {
 		return errtypes.InternalError("failed to update times:" + err.Error())
 	}
 
+	if err := os.Rename(tempName, target); err != nil {
+		return err
+	}
+	renamed = true
+
+	// set the mtime again through the metadata backend so that it updates its cache
 	err = tp.lookup.MetadataBackend().SetMultiple(ctx, targetNode,
 		map[string][]byte{
 			prefixes.MTimeAttr: []byte(mtime.UTC().Format(time.RFC3339Nano)),
