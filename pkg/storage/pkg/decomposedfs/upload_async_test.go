@@ -606,8 +606,7 @@ var _ = Describe("Async file uploads", Ordered, func() {
 			Expect(parentSize()).To(Equal(len(secondContent)))
 
 			// file should not have any revisions
-			// FIXME we need to delete the revision
-			// Expect(revisionCount()).To(Equal(0))
+			Expect(revisionCount()).To(Equal(0))
 		})
 
 		It("the first can fail after the second succeeds", func() {
@@ -634,8 +633,7 @@ var _ = Describe("Async file uploads", Ordered, func() {
 			Expect(parentSize()).To(Equal(len(secondContent)))
 
 			// file should not have any revisions
-			// FIXME we need to delete the revision
-			// Expect(revisionCount()).To(Equal(0))
+			Expect(revisionCount()).To(Equal(0))
 		})
 
 		It("the first can fail before the second fails", func() {
@@ -667,8 +665,9 @@ var _ = Describe("Async file uploads", Ordered, func() {
 			failPostprocessing(secondUploadID, events.PPOutcomeDelete)
 
 			_, status, size := fileStatus()
-			// check processing status has been removed because the most recent upload finished and can be downloaded
-			Expect(status).To(Equal(""))
+			// the first upload is still in postprocessing, its content isn't written yet: the file is
+			// processing for it again
+			Expect(status).To(Equal("processing"))
 			// size should match the first upload
 			Expect(size).To(Equal(len(firstContent)))
 
@@ -679,13 +678,147 @@ var _ = Describe("Async file uploads", Ordered, func() {
 
 			// check file has been removed
 			// if all uploads have been processed with outcome delete -> delete the file
-			// exists, _, _ := fileStatus()
-			// FIXME this should be false, but we are not deleting the resource
-			// Expect(exists).To(BeFalse())
+			resources, err := fs.ListFolder(ctx, rootRef, []string{}, []string{})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(resources).To(BeEmpty())
 
 			// parent size should be 0
 			// FIXME we are not correctly reverting the sizediff
 			// Expect(parentSize()).To(Equal(0))
+		})
+	})
+
+	When("two uploads overwrite an existing file in parallel", func() {
+		var (
+			olderUploadID string
+			newerUploadID string
+			olderContent  = []byte("012345678901234")
+		)
+
+		JustBeforeEach(func() {
+			// the file exists with firstContent
+			succeedPostprocessing(uploadID)
+
+			upload := func(content []byte) string {
+				uploadIds, err := fs.InitiateUpload(ctx, ref, int64(len(content)), map[string]string{})
+				Expect(err).ToNot(HaveOccurred())
+				_, err = fs.Upload(ctx, storage.UploadRequest{
+					Ref:    &provider.Reference{Path: "/" + uploadIds["simple"]},
+					Body:   io.NopCloser(bytes.NewReader(content)),
+					Length: int64(len(content)),
+				}, nil)
+				Expect(err).ToNot(HaveOccurred())
+				_, ok := (<-pub).(events.BytesReceived)
+				Expect(ok).To(BeTrue())
+				return uploadIds["simple"]
+			}
+			olderUploadID = upload(olderContent)
+			newerUploadID = upload(secondContent)
+		})
+
+		It("keeps the newer upload when the older one fails after the newer one succeeded", func() {
+			succeedPostprocessing(newerUploadID)
+
+			_, status, size := fileStatus()
+			Expect(status).To(Equal(""))
+			Expect(size).To(Equal(len(secondContent)))
+
+			failPostprocessing(olderUploadID, events.PPOutcomeDelete)
+
+			// rolling back the older upload must not replace the newer content with the old version
+			_, status, size = fileStatus()
+			Expect(status).To(Equal(""))
+			Expect(size).To(Equal(len(secondContent)))
+			Expect(parentSize()).To(Equal(len(secondContent)))
+
+			// the version of the original file is kept
+			revisions, err := fs.ListRevisions(ctx, ref)
+			Expect(err).ToNot(HaveOccurred())
+			sizes := []uint64{}
+			for _, r := range revisions {
+				sizes = append(sizes, r.Size)
+			}
+			Expect(sizes).To(ContainElement(uint64(len(firstContent))))
+		})
+
+		// the sizes of the remaining versions
+		revisionSizes := func() []uint64 {
+			revisions, err := fs.ListRevisions(ctx, ref)
+			Expect(err).ToNot(HaveOccurred())
+			sizes := []uint64{}
+			for _, r := range revisions {
+				sizes = append(sizes, r.Size)
+			}
+			return sizes
+		}
+		// expect checks the file's size and processing status, and the sizes of its versions
+		expect := func(size int, status string, revisions ...int) {
+			GinkgoHelper()
+			_, actualStatus, actualSize := fileStatus()
+			Expect(actualSize).To(Equal(size), "the size of the file")
+			Expect(actualStatus).To(Equal(status), "the processing status of the file")
+			expected := []uint64{}
+			for _, r := range revisions {
+				expected = append(expected, uint64(r))
+			}
+			Expect(revisionSizes()).To(ConsistOf(expected), "the sizes of the versions")
+		}
+
+		// When the newer upload's bytes were received, the file's metadata at that moment, the
+		// older upload's, was kept as a version, into which the older upload writes its content
+		// if it succeeds. These cover what happens to that version in every order.
+
+		It("deletes the version created for the older upload when it fails after the newer one succeeded", func() {
+			succeedPostprocessing(newerUploadID)
+			failPostprocessing(olderUploadID, events.PPOutcomeDelete)
+
+			expect(len(secondContent), "", len(firstContent))
+		})
+
+		It("deletes the version created for the older upload when it fails before the newer one succeeds", func() {
+			failPostprocessing(olderUploadID, events.PPOutcomeDelete)
+			expect(len(secondContent), "processing", len(firstContent))
+
+			succeedPostprocessing(newerUploadID)
+			expect(len(secondContent), "", len(firstContent))
+		})
+
+		It("restores the original when both fail, the older one first", func() {
+			failPostprocessing(olderUploadID, events.PPOutcomeDelete)
+			failPostprocessing(newerUploadID, events.PPOutcomeDelete)
+
+			expect(len(firstContent), "")
+		})
+
+		It("hands the file back to the older upload when the newer one fails first, and restores the original when the older one fails as well", func() {
+			failPostprocessing(newerUploadID, events.PPOutcomeDelete)
+			// the older upload is still in postprocessing
+			expect(len(olderContent), "processing", len(firstContent))
+
+			failPostprocessing(olderUploadID, events.PPOutcomeDelete)
+			expect(len(firstContent), "")
+		})
+
+		It("hands the file back to the older upload when the newer one fails first, which then succeeds", func() {
+			failPostprocessing(newerUploadID, events.PPOutcomeDelete)
+			expect(len(olderContent), "processing", len(firstContent))
+
+			succeedPostprocessing(olderUploadID)
+			expect(len(olderContent), "", len(firstContent))
+		})
+
+		It("keeps both versions when both succeed, the newer one first", func() {
+			succeedPostprocessing(newerUploadID)
+			succeedPostprocessing(olderUploadID)
+
+			expect(len(secondContent), "", len(firstContent), len(olderContent))
+		})
+
+		It("keeps both versions when both succeed, the older one first", func() {
+			succeedPostprocessing(olderUploadID)
+			succeedPostprocessing(newerUploadID)
+
+			expect(len(secondContent), "", len(firstContent), len(olderContent))
 		})
 	})
 })
