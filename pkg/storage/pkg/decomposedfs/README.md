@@ -154,7 +154,7 @@ How to read them:
   - solid arrows are calls at runtime;
   - dotted arrows lead from an interface to the implementation each driver plugs in through `aspects.Aspects`.
 - **Two paths into the storage:** requests from the services enter through `Decomposedfs` for all drivers (posix wraps it in `posixFS` and `middleware.FS` first). Changes made directly on disk enter only through the posix watcher and the tree's assimilation, which bypasses `Decomposedfs` and the upload code entirely.
-- **Not shown:** the shared helpers `permissions`, `spaceidindex`, `node`, `metadata` and `tree/propagator`, and the NATS event stream used for async postprocessing. They are described in the sections below.
+- **Not shown:** the shared helpers `permissions`, `spaceidindex`, `node`, `metadata`, `tree/propagator` and `revisioncleanup`, and the NATS event stream used for async postprocessing. They are described in the sections below.
 
 ## From configuration to a running driver
 
@@ -302,6 +302,7 @@ Shared building blocks that both trees use instead of re-implementing them:
 - `tree/propagator` – tree size and mtime propagation (used by both trees)
 - `upload` – TUS upload sessions, `Finalize`, postprocessing integration
 - `permissions` – CS3 permission assembly from grants and the permissions service
+- `revisioncleanup` – applying the revision cleanup strategy; documented in [`revisioncleanup/README.md`](revisioncleanup/README.md)
 
 ### What differs per component
 

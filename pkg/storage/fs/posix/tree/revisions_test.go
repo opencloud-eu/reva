@@ -22,7 +22,10 @@ var _ = Describe("Revisions", func() {
 	var (
 		n   *node.Node
 		now = time.Now()
-		// revisions of different ages, the ages end up in the revision keys
+		// One revision per age, chosen around the "7d, auto, 30d" strategy used below:
+		// within the 7 day retention, between retention and deletion (where "auto" keeps
+		// it, as it is the only one in its slot), and beyond the 30 day deletion threshold. The ages end up in the revision keys, which is what
+		// the cleanup takes the revision time from.
 		ages = []time.Duration{time.Hour, 10 * 24 * time.Hour, 100 * 24 * time.Hour}
 		keys []string
 	)
@@ -93,6 +96,18 @@ var _ = Describe("Revisions", func() {
 			Expect(revisioncleanup.PurgeRevisionUnchecked(non_watching_env.Ctx, non_watching_env.Tree, other, keys[0])).ToNot(Succeed())
 			Expect(revisioncleanup.PurgeRevisionUnchecked(non_watching_env.Ctx, non_watching_env.Tree, n, n.ID)).ToNot(Succeed())
 			Expect(listKeys()).To(ConsistOf(keys))
+		})
+	})
+
+	Describe("revisioncleanup.Cleaner", func() {
+		It("purges the revisions the strategy wants to delete", func() {
+			// keep everything younger than 7 days, delete everything older than 30 days, thin out in between
+			cleaner, err := revisioncleanup.New("7d, auto, 30d")
+			Expect(err).ToNot(HaveOccurred())
+
+			cleaner.Cleanup(non_watching_env.Ctx, non_watching_env.Lookup, non_watching_env.Tree, n)
+
+			Expect(listKeys()).To(ConsistOf(keys[0], keys[1]))
 		})
 	})
 })
