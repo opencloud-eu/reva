@@ -1663,13 +1663,15 @@ func (n *Node) RevertUpload(ctx context.Context, versionID string) error {
 	return nil
 }
 
-// DeleteRevision deletes a revision of the node and returns the blob id of the
+// DeleteRevisionUnchecked deletes a revision of the node and returns the blob id of the
 // deleted revision, so that the caller can delete the blob. If versionID is
 // empty the node's current revision is deleted: the latest stored revision is
 // restored onto the node (or the node is purged when there is none) and the
 // processing flag is removed, unstalling the node. No blob is returned in that
 // case.
-func (n *Node) DeleteRevision(ctx context.Context, versionID string) (string, error) {
+//
+// It checks no permissions, Decomposedfs.DeleteRevision is the variant that does.
+func (n *Node) DeleteRevisionUnchecked(ctx context.Context, versionID string) (string, error) {
 	if versionID != "" {
 		return n.deleteRevision(ctx, n.ID+RevisionIDDelimiter+versionID)
 	}

@@ -529,7 +529,7 @@ var _ = Describe("Node", func() {
 
 	})
 
-	Describe("DeleteRevision", func() {
+	Describe("DeleteRevisionUnchecked", func() {
 		var fileRef *provider.Reference
 
 		BeforeEach(func() {
@@ -544,7 +544,7 @@ var _ = Describe("Node", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(n.Exists).To(BeTrue())
 
-			_, err = n.DeleteRevision(env.Ctx, "")
+			_, err = n.DeleteRevisionUnchecked(env.Ctx, "")
 			Expect(err).ToNot(HaveOccurred())
 
 			n2, err := env.Lookup.NodeFromResource(env.Ctx, fileRef)
@@ -566,7 +566,7 @@ var _ = Describe("Node", func() {
 			n.Blobsize = 1000
 			Expect(n.SetXattrs(n.NodeMetadata(env.Ctx))).To(Succeed())
 
-			blobID, err := n.DeleteRevision(env.Ctx, "2024-01-01T00:00:00Z")
+			blobID, err := n.DeleteRevisionUnchecked(env.Ctx, "2024-01-01T00:00:00Z")
 			Expect(err).ToNot(HaveOccurred())
 			Expect(blobID).To(Equal(origBlob))
 
@@ -594,7 +594,7 @@ var _ = Describe("Node", func() {
 			n.Blobsize = 42
 			Expect(n.SetXattrs(n.NodeMetadata(env.Ctx))).To(Succeed())
 
-			_, err = n.DeleteRevision(env.Ctx, "")
+			_, err = n.DeleteRevisionUnchecked(env.Ctx, "")
 			Expect(err).ToNot(HaveOccurred())
 
 			n2, err := env.Lookup.NodeFromResource(env.Ctx, fileRef)
@@ -620,7 +620,7 @@ var _ = Describe("Node", func() {
 			Expect(n.SetXattr(env.Ctx, prefixes.StatusPrefix, []byte(node.ProcessingStatus+uploadID))).To(Succeed())
 			Expect(n.IsProcessing(env.Ctx)).To(BeTrue())
 
-			_, err = n.DeleteRevision(env.Ctx, "")
+			_, err = n.DeleteRevisionUnchecked(env.Ctx, "")
 			Expect(err).ToNot(HaveOccurred())
 
 			n2, err := env.Lookup.NodeFromResource(env.Ctx, fileRef)

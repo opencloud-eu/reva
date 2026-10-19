@@ -291,7 +291,7 @@ Typically a method is added to the interface and implemented in both `decomposed
 
 Before adding such a method, check whether the shared code already handles both layouts.
 `Node` methods work through the lookup, so they resolve paths correctly for every driver.
-For example, deleting a single revision needs no driver-specific code: `Node.DeleteRevision` removes the revision and returns its blob id, and `Tree.DeleteBlob` deletes the blob in whichever blobstore the driver uses.
+For example, deleting a single revision needs no driver-specific code: `Node.DeleteRevisionUnchecked` removes the revision and returns its blob id, and `Tree.DeleteBlob` deletes the blob in whichever blobstore the driver uses.
 
 Shared building blocks that both trees use instead of re-implementing them:
 
