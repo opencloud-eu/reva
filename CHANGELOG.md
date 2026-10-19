@@ -1,21 +1,14 @@
 # Changelog
 
-## [2.52.0](https://github.com/opencloud-eu/reva/releases/tag/v2.52.0) - 2026-10-16
+## [2.52.0](https://github.com/opencloud-eu/reva/releases/tag/v2.52.0) - 2026-10-19
 
 ### ❤️ Thanks to all contributors! ❤️
 
 @AlexAndBear, @NickWalters, @aduffeck, @butonic, @dragonchaser, @fschade, @micbar, @v-scharf
 
-### 📈 Enhancement
-
-- feat: add default_quota to the spaces capability [[#880](https://github.com/opencloud-eu/reva/pull/880)]
-- fix(appprovider): pick a deterministic app when open with web names none [[#875](https://github.com/opencloud-eu/reva/pull/875)]
-- feat: make space2share migration repeatable [[#864](https://github.com/opencloud-eu/reva/pull/864)]
-- Harden unshare [[#856](https://github.com/opencloud-eu/reva/pull/856)]
-- feat: run decomposedfs on foreign metadata via metadata_prefix [[#859](https://github.com/opencloud-eu/reva/pull/859)]
-
 ### 🐛 Bug Fixes
 
+- rename the space root before purging it [[#876](https://github.com/opencloud-eu/reva/pull/876)]
 - fix(posix): retry a failed file once its ctime changes [[#809](https://github.com/opencloud-eu/reva/pull/809)]
 - fix(posix): re-assimilate moved and changed files during a scan [[#808](https://github.com/opencloud-eu/reva/pull/808)]
 - fix: add config to skip share manager migrations [[#877](https://github.com/opencloud-eu/reva/pull/877)]
@@ -26,6 +19,14 @@
 - fix(posix): keep a handle on the blob for the copy target [[#807](https://github.com/opencloud-eu/reva/pull/807)]
 - test: wait for the DeleteRevision handler before redelivering [[#861](https://github.com/opencloud-eu/reva/pull/861)]
 - fix filedescriptor leaks [[#847](https://github.com/opencloud-eu/reva/pull/847)]
+
+### 📈 Enhancement
+
+- feat: add default_quota to the spaces capability [[#880](https://github.com/opencloud-eu/reva/pull/880)]
+- fix(appprovider): pick a deterministic app when open with web names none [[#875](https://github.com/opencloud-eu/reva/pull/875)]
+- feat: make space2share migration repeatable [[#864](https://github.com/opencloud-eu/reva/pull/864)]
+- Harden unshare [[#856](https://github.com/opencloud-eu/reva/pull/856)]
+- feat: run decomposedfs on foreign metadata via metadata_prefix [[#859](https://github.com/opencloud-eu/reva/pull/859)]
 
 ### ✅ Tests
 
