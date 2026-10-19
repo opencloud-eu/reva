@@ -495,6 +495,19 @@ func (t *Tree) Move(ctx context.Context, oldNode *node.Node, newNode *node.Node)
 	attribs.SetString(prefixes.ParentidAttr, newNode.ParentID)
 	attribs.SetString(prefixes.NameAttr, newNode.Name)
 	setErr := t.lookup.MetadataBackend().SetMultiple(ctx, movedNode, attribs)
+	// read the size to move while we still hold the lock. A propagation through the item that updates it after the
+	// unlock already goes to the new parent, so a size read later would count that change twice.
+	var sizeDiff int64
+	var sizeErr error
+	if oldNode.ParentID != newNode.ParentID {
+		if oldNode.IsDir(ctx) {
+			sizeDiff, sizeErr = t.lookup.MetadataBackend().GetInt64(ctx, movedNode, prefixes.TreesizeAttr)
+		} else if blobSize, err := t.lookup.MetadataBackend().GetInt64(ctx, movedNode, prefixes.BlobsizeAttr); err == nil {
+			sizeDiff = blobSize
+		} else {
+			sizeDiff = oldNode.Blobsize
+		}
+	}
 	_ = unlock()
 
 	// update the id cache
@@ -520,16 +533,8 @@ func (t *Tree) Move(ctx context.Context, oldNode *node.Node, newNode *node.Node)
 			t.log.Error().Err(err).Str("path", newNode.InternalPath()).Msg("could not propagate size changes for renamed node")
 		}
 	} else {
-		// the size diff is the current treesize or blobsize of the old/source node
-		var sizeDiff int64
-		if oldNode.IsDir(ctx) {
-			treeSize, err := oldNode.GetTreeSize(ctx)
-			if err != nil {
-				return err
-			}
-			sizeDiff = int64(treeSize)
-		} else {
-			sizeDiff = oldNode.Blobsize
+		if sizeErr != nil {
+			return sizeErr
 		}
 
 		_, subspan = tracer.Start(ctx, "propagate size changes")

@@ -286,6 +286,41 @@ var _ = Describe("Non-watching tree", func() {
 		Expect(treeSize("")).To(Equal(uint64(11)))
 	})
 
+	It("moves the tree size a folder has at the time of the move", func() {
+		Expect(os.MkdirAll(root+"/source/dir", 0700)).To(Succeed())
+		Expect(os.Mkdir(root+"/target", 0700)).To(Succeed())
+		Expect(os.WriteFile(root+"/source/dir/file.txt", []byte("hello world"), 0600)).To(Succeed())
+		Expect(non_watching_env.Tree.WarmupIDCache(root, true, false)).To(Succeed())
+
+		nodeFor := func(path string) *node.Node {
+			n, err := non_watching_env.Lookup.NodeFromResource(non_watching_env.Ctx, &provider.Reference{
+				ResourceId: non_watching_env.SpaceRootRes,
+				Path:       subtree + path,
+			})
+			Expect(err).ToNot(HaveOccurred())
+			return n
+		}
+		treeSize := func(path string) uint64 {
+			size, err := nodeFor(path).GetTreeSize(non_watching_env.Ctx)
+			Expect(err).ToNot(HaveOccurred())
+			return size
+		}
+
+		// the request reads the folder before the move, then a change below it propagates
+		oldNode := nodeFor("/source/dir")
+		size, err := oldNode.GetTreeSize(non_watching_env.Ctx)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(size).To(Equal(uint64(11)))
+		Expect(non_watching_env.Tree.Propagate(non_watching_env.Ctx, nodeFor("/source/dir/file.txt"), 5)).To(Succeed())
+		Expect(treeSize("/source")).To(Equal(uint64(16)))
+
+		Expect(non_watching_env.Tree.Move(non_watching_env.Ctx, oldNode, nodeFor("/target/dir"))).To(Succeed())
+
+		Expect(treeSize("/source")).To(Equal(uint64(0)))
+		Expect(treeSize("/target")).To(Equal(uint64(16)))
+		Expect(treeSize("")).To(Equal(uint64(16)))
+	})
+
 	It("renames an item and updates its parent id under the item's lock", func() {
 		Expect(os.Mkdir(root+"/source", 0700)).To(Succeed())
 		Expect(os.Mkdir(root+"/target", 0700)).To(Succeed())
