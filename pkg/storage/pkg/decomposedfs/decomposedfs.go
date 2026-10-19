@@ -301,7 +301,7 @@ func (fs *Decomposedfs) handleRevisionEvent(ctx context.Context, event events.Ev
 				sublog.Debug().Msg("node is not stuck, ignoring")
 				return
 			}
-			_, deleteErr = n.DeleteRevision(ctx, "")
+			_, deleteErr = n.DeleteRevisionUnchecked(ctx, "")
 		} else {
 			versionID := time.Unix(int64(ev.Timestamp.Seconds), int64(ev.Timestamp.Nanos)).UTC().Format(time.RFC3339Nano)
 			deleteErr = fs.deleteRevisionFile(ctx, n, n.ID+node.RevisionIDDelimiter+versionID)
