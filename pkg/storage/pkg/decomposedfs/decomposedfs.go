@@ -16,6 +16,10 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
+// Package decomposedfs is the shared core of the decomposed, decomposeds3 and posix
+// storage drivers. Each driver supplies its storage layout through aspects.Aspects,
+// see README.md in this directory for how the drivers are built and how they
+// delegate to and override the shared code.
 package decomposedfs
 
 import (

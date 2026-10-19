@@ -16,6 +16,11 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
+// Package posix implements the "posix" storage driver, which keeps a regular,
+// browsable directory tree on disk and picks up changes made to it directly.
+// It reuses the decomposedfs core with its own lookup, tree, trashbin and blobstore
+// and wraps the result, see pkg/storage/pkg/decomposedfs/README.md for how it
+// builds itself and how it delegates to and overrides the shared code.
 package posix
 
 import (
