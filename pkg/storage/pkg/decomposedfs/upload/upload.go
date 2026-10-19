@@ -35,6 +35,7 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/pkg/errors"
+	"github.com/rs/zerolog"
 	tusd "github.com/tus/tusd/v2/pkg/handler"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
@@ -482,7 +483,25 @@ func (session *DecomposedFsSession) Cleanup(revertNodeMetadata, cleanBin, cleanI
 						return false
 					}
 					if string(status) != node.ProcessingStatus+session.ID() {
-						sublog.Info().Str("versionID", versionID).Str("status", string(status)).Msg("node was changed by another upload, keeping it and the revision")
+						sublog.Info().Str("versionID", versionID).Str("status", string(status)).Msg("node was changed by another upload, keeping it")
+						session.deleteRevisionCreatedForUpload(ctx, n, sublog)
+						return true
+					}
+
+					// The version to restore was created for an older upload that has failed in the
+					// meantime, and deleted it (see deleteRevisionCreatedForUpload): restore the latest
+					// remaining version instead, the content the older upload had replaced.
+					revisionNode := node.NewBaseNode(n.SpaceID, n.ID+node.RevisionIDDelimiter+versionID, session.store.lu)
+					if _, err := session.store.lu.MetadataBackend().Get(ctx, revisionNode, prefixes.BlobIDAttr); err != nil {
+						if !metadata.IsNotExist(err) && !metadata.IsAttrUnset(err) {
+							sublog.Error().Err(err).Str("versionID", versionID).Msg("reading the version to restore failed")
+							return false
+						}
+						sublog.Info().Str("versionID", versionID).Msg("the version to restore is gone, restoring the latest version")
+						if _, err := n.DeleteRevision(ctx, ""); err != nil {
+							sublog.Error().Err(err).Msg("restoring the latest version failed")
+							return false
+						}
 						return true
 					}
 
@@ -519,8 +538,11 @@ func (session *DecomposedFsSession) Cleanup(revertNodeMetadata, cleanBin, cleanI
 					if err := n.Purge(ctx); err != nil {
 						sublog.Error().Err(err).Str("nodepath", n.InternalPath()).Msg("purging node failed")
 					}
+				} else {
+					// a newer upload has replaced the content since, and may have created a revision for
+					// this upload's content
+					session.deleteRevisionCreatedForUpload(ctx, n, sublog)
 				}
-				// FIXME else if the upload has become a revision, delete the revision, or if it is the last one, delete the node
 			}
 		}
 	}
@@ -550,6 +572,30 @@ func (session *DecomposedFsSession) Cleanup(revertNodeMetadata, cleanBin, cleanI
 				sublog.Info().Err(err).Str("path", n.InternalPath()).Msg("unmarking processing failed")
 			}
 		}
+	}
+}
+
+// deleteRevisionCreatedForUpload deletes the revision that a newer upload created for this
+// upload's content, when this upload failed after the newer one replaced the node: this upload
+// would have written its blob into that revision (see Finalize), so without it, the revision is
+// left without its content. The revision is named after this upload's mtime, and only deleted
+// if it still belongs to this upload, i.e. if its blob id is this session's id.
+func (session *DecomposedFsSession) deleteRevisionCreatedForUpload(ctx context.Context, n *node.Node, log zerolog.Logger) {
+	version := session.MTime().UTC().Format(time.RFC3339Nano)
+	revisionNode := node.NewBaseNode(n.SpaceID, n.ID+node.RevisionIDDelimiter+version, session.store.lu)
+	blobID, err := session.store.lu.MetadataBackend().Get(ctx, revisionNode, prefixes.BlobIDAttr)
+	switch {
+	case err != nil:
+		// no revision was created for this upload, e.g. no newer upload was received while it was processing
+		log.Debug().Err(err).Str("version", version).Msg("no revision created for this upload")
+		return
+	case string(blobID) != session.ID():
+		log.Debug().Str("version", version).Str("blobid", string(blobID)).Msg("the revision belongs to another upload, keeping it")
+		return
+	}
+	log.Debug().Str("version", version).Msg("deleting the revision created for this upload")
+	if _, err := n.DeleteRevision(ctx, version); err != nil {
+		log.Error().Err(err).Str("version", version).Msg("deleting the revision created for this upload failed")
 	}
 }
 
