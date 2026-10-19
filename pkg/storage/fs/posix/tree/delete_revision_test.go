@@ -32,8 +32,8 @@ import (
 // These tests pin the posix layout for revision deletion and revert: on
 // posix, revisions live under <spaceRoot>/.oc-nodes/<pathify(id)>.REV.<ts>
 // rather than next to the node file, so the revision path must be resolved
-// through the layout-aware lookup (VersionPath) or DeleteRevision would find
-// nothing and purge the node instead of restoring it. The file is its own
+// through the layout-aware lookup (VersionPath) or Node.DeleteRevisionUnchecked
+// would find nothing and purge the node instead of restoring it. The file is its own
 // blob on posix, so the blob store is not involved.
 var _ = Describe("DeleteRevision (posix layout)", func() {
 	var (
@@ -138,7 +138,7 @@ var _ = Describe("DeleteRevision (posix layout)", func() {
 		file.Blobsize = 42
 		Expect(file.SetXattrs(file.NodeMetadata(non_watching_env.Ctx))).To(Succeed())
 
-		_, err = file.DeleteRevision(non_watching_env.Ctx, "")
+		_, err = file.DeleteRevisionUnchecked(non_watching_env.Ctx, "")
 		Expect(err).ToNot(HaveOccurred())
 
 		restored, err := node.ReadNode(non_watching_env.Ctx, non_watching_env.Lookup, file.SpaceID, file.ID, "", false, nil, false)
@@ -153,7 +153,7 @@ var _ = Describe("DeleteRevision (posix layout)", func() {
 		Expect(err).ToNot(HaveOccurred())
 		Expect(before.Exists).To(BeTrue())
 
-		_, err = file.DeleteRevision(non_watching_env.Ctx, "")
+		_, err = file.DeleteRevisionUnchecked(non_watching_env.Ctx, "")
 		Expect(err).ToNot(HaveOccurred())
 
 		after, err := node.ReadNode(non_watching_env.Ctx, non_watching_env.Lookup, file.SpaceID, file.ID, "", false, nil, false)
