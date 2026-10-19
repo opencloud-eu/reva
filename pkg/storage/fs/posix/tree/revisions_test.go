@@ -11,6 +11,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/pkg/xattr"
 
 	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/blobstore"
 	helpers "github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/testhelpers"
@@ -74,6 +75,22 @@ var _ = Describe("Revisions", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(string(id)).To(Equal(n.ID))
 			Expect(tmpDirEntries()).To(BeEmpty())
+		})
+
+		It("keeps the xattrs and the mode of the target", func() {
+			n := createFile("file.txt", []byte("old content"))
+			rev := createRevision(n, "2020-01-01T00:00:00Z")
+			Expect(os.WriteFile(n.InternalPath(), []byte("new content"), 0600)).To(Succeed())
+			Expect(xattr.Set(n.InternalPath(), "user.custom", []byte("value"))).To(Succeed())
+			Expect(os.Chmod(n.InternalPath(), 0640|os.ModeSetgid)).To(Succeed())
+
+			Expect(renv.Tree.RestoreRevision(renv.Ctx, rev, n, time.Now())).To(Succeed())
+
+			Expect(os.ReadFile(n.InternalPath())).To(Equal([]byte("old content")))
+			Expect(xattr.Get(n.InternalPath(), "user.custom")).To(Equal([]byte("value")))
+			fi, err := os.Stat(n.InternalPath())
+			Expect(err).ToNot(HaveOccurred())
+			Expect(fi.Mode() & (os.ModePerm | os.ModeSetgid)).To(Equal(0640 | os.ModeSetgid))
 		})
 
 		It("leaves the target untouched when copying the revision fails", func() {

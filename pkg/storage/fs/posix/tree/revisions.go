@@ -285,7 +285,8 @@ func (tp *Tree) RestoreRevision(ctx context.Context, srcNode, targetNode metadat
 
 	// Write the revision to a temp file and rename it over the target, like the blobstore does for
 	// uploads. Readers then see either the old or the restored content, never a mix, and a failed
-	// copy leaves the target untouched.
+	// copy leaves the target untouched. The restored file is a new inode: hard links to the target
+	// keep the replaced content.
 	tmpDir := filepath.Join(tp.lookup.InternalSpaceRoot(targetNode.GetSpaceID()), blobstore.TMPDir)
 	if err := os.MkdirAll(tmpDir, 0700); err != nil {
 		return err
@@ -310,12 +311,10 @@ func (tp *Tree) RestoreRevision(ctx context.Context, srcNode, targetNode metadat
 		return err
 	}
 
-	// keep the mode and owner of the target, the in-place write did not change them
+	// keep the owner and mode of the target, the in-place write did not change them. Chown first,
+	// it clears the setuid and setgid bits.
 	fi, err := os.Stat(target)
 	if err != nil {
-		return err
-	}
-	if err := wf.Chmod(fi.Mode().Perm()); err != nil {
 		return err
 	}
 	if st, ok := fi.Sys().(*syscall.Stat_t); ok {
@@ -323,26 +322,32 @@ func (tp *Tree) RestoreRevision(ctx context.Context, srcNode, targetNode metadat
 			tp.log.Warn().Err(err).Str("target", target).Msg("could not keep the owner of the restored file")
 		}
 	}
+	if err := wf.Chmod(fi.Mode() & (os.ModePerm | os.ModeSetuid | os.ModeSetgid | os.ModeSticky)); err != nil {
+		return err
+	}
 	if err := wf.Close(); err != nil {
 		return err
 	}
 
-	// the node metadata lives in xattrs on the file itself, so copy it to the temp file before the
-	// rename replaces the target
+	// Copy all xattrs of the target to the temp file before the rename replaces it: the node
+	// metadata lives in xattrs on the file itself, and other tools sharing the file keep theirs
+	// there too (e.g. Samba's user.DOSATTRIB, ACLs in system.posix_acl_access). Set after the
+	// chmod, an ACL updates the group bits of the mode the same way it did on the target.
 	names, err := xattr.List(target)
 	if err != nil {
 		return err
 	}
 	for _, name := range names {
-		if !strings.HasPrefix(name, prefixes.OcPrefix) {
-			continue
-		}
 		value, err := xattr.Get(target, name)
 		if err != nil {
 			return err
 		}
 		if err := xattr.Set(tempName, name, value); err != nil {
-			return err
+			if strings.HasPrefix(name, prefixes.OcPrefix) {
+				return err
+			}
+			// e.g. security.* or trusted.* can need privileges we don't have
+			tp.log.Warn().Err(err).Str("target", target).Str("xattr", name).Msg("could not keep an xattr of the restored file")
 		}
 	}
 

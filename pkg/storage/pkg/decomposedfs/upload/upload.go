@@ -447,6 +447,15 @@ func (session *DecomposedFsSession) Cleanup(revertNodeMetadata, cleanBin, cleanI
 	sublog := session.store.log.With().Str("cleanup sessionid", session.ID()).Bool("revertNodeMetadata", revertNodeMetadata).Bool("cleanBin", cleanBin).
 		Bool("cleanInfo", cleanInfo).Bool("unmarkPostprocessing", unmarkPostprocessing).Logger()
 
+	if revertNodeMetadata && !cleanInfo {
+		// the session is kept (e.g. aborted postprocessing), but it is no longer processing. A newer
+		// upload rolling back must not hand the node back to it.
+		session.SetStatus(SessionStatusFailed, "postprocessing failed")
+		if err := session.Persist(ctx); err != nil {
+			sublog.Error().Err(err).Msg("persisting failed status of upload session failed")
+		}
+	}
+
 	if revertNodeMetadata {
 		n, err := session.Node(ctx)
 		if err != nil {
@@ -481,6 +490,18 @@ func (session *DecomposedFsSession) Cleanup(revertNodeMetadata, cleanBin, cleanI
 					if err := n.RevertUpload(ctx, versionID); err != nil {
 						sublog.Error().Err(err).Str("versionID", versionID).Msg("reverting node metadata failed")
 						return false
+					}
+
+					// The restored version belongs to an older upload. If that one is still in
+					// postprocessing, the node is its again: its outcome decides what the file ends up
+					// with, and its own roll back can then revert to the version before it.
+					if olderID := session.info.MetaData["versionProcessingID"]; olderID != "" {
+						if older, err := session.store.Get(ctx, olderID); err == nil && older.IsProcessing() {
+							sublog.Debug().Str("versionID", versionID).Str("olderuploadid", olderID).Msg("handing the node back to the older upload")
+							if err := n.SetXattrString(ctx, prefixes.StatusPrefix, node.ProcessingStatus+olderID); err != nil {
+								sublog.Error().Err(err).Str("olderuploadid", olderID).Msg("marking node as processing for the older upload failed")
+							}
+						}
 					}
 					return true
 				}()
