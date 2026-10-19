@@ -288,10 +288,12 @@ Most `Decomposedfs` methods follow the same pattern: resolve a reference with th
 The interfaces that define those contracts live in `node/node.go` (`Tree`, `PathLookup`, `Blobstore`), `trashbin/trashbin.go` and `permissions/`.
 They are the place to look when a feature needs driver specific behaviour.
 Typically a method is added to the interface and implemented in both `decomposedfs/tree` and `fs/posix/tree`.
+`Tree.ListRevisionsUnchecked` is a recent example, used by the revision cleanup (see `revisioncleanup`).
 
 Before adding such a method, check whether the shared code already handles both layouts.
 `Node` methods work through the lookup, so they resolve paths correctly for every driver.
 For example, deleting a single revision needs no driver-specific code: `Node.DeleteRevisionUnchecked` removes the revision and returns its blob id, and `Tree.DeleteBlob` deletes the blob in whichever blobstore the driver uses.
+`revisioncleanup.PurgeRevisionUnchecked` combines the two for all drivers.
 
 Shared building blocks that both trees use instead of re-implementing them:
 

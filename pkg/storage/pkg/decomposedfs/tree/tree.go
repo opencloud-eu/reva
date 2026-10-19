@@ -68,6 +68,8 @@ type Tree struct {
 	idCache store.Store
 }
 
+var _ node.Tree = &Tree{}
+
 // PermissionCheckFunc defined a function used to check resource permissions
 type PermissionCheckFunc func(rp *provider.ResourcePermissions) bool
 

@@ -145,8 +145,33 @@ type Tree interface {
 	CreateRevision(ctx context.Context, n *Node, version string) (string, error)
 	ListRevisions(ctx context.Context, ref *provider.Reference) ([]*provider.FileVersion, error)
 	DownloadRevision(ctx context.Context, ref *provider.Reference, revisionKey string, openReaderFunc func(md *provider.ResourceInfo) bool) (*provider.ResourceInfo, io.ReadCloser, error)
+	// ListRevisionsUnchecked lists all revisions of n without checking permissions.
+	// ListRevisions performs the permission check for user requests and then
+	// delegates to it. The unchecked variant exists for system housekeeping like
+	// the revision cleanup (see package revisioncleanup), which may run e.g. in
+	// async postprocessing where the context has no user with suitable permissions.
+	ListRevisionsUnchecked(ctx context.Context, n *Node) ([]*provider.FileVersion, error)
 
 	Propagate(ctx context.Context, node *Node, sizeDiff int64) (err error)
+}
+
+// ValidateRevisionKey makes sure that revisionKey denotes a revision of n.
+//
+// Callers that turn a full revision key into a version for Node.DeleteRevisionUnchecked, like
+// revisioncleanup.PurgeRevisionUnchecked, use it to guard against keys that would hit something
+// else, as Node.DeleteRevisionUnchecked does not check permissions:
+//   - a key of another node, which would delete that node's revision
+//   - the bare '<nodeid>.REV.' prefix, or the node id itself: they would turn into an
+//     empty version, for which Node.DeleteRevisionUnchecked deletes the node's *current* revision,
+//     i.e. reverts the node to its latest revision or purges the node if there is none
+//   - path separators, as the key is turned into a file path
+func ValidateRevisionKey(n *Node, revisionKey string) error {
+	if !strings.HasPrefix(revisionKey, n.ID+RevisionIDDelimiter) ||
+		len(revisionKey) == len(n.ID+RevisionIDDelimiter) ||
+		strings.ContainsAny(revisionKey, `/\`) {
+		return errtypes.BadRequest(fmt.Sprintf("invalid revision key %q for node %q", revisionKey, n.ID))
+	}
+	return nil
 }
 
 // PathLookup defines the interface for the lookup component
