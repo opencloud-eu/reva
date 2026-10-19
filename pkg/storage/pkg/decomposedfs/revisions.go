@@ -177,7 +177,7 @@ func (fs *Decomposedfs) deleteRevisionFile(ctx context.Context, n *node.Node, re
 		return errtypes.NotFound(revisionKey)
 	}
 
-	blobID, err := n.DeleteRevision(ctx, kp[1])
+	blobID, err := n.DeleteRevisionUnchecked(ctx, kp[1])
 	if err != nil {
 		return err
 	}
