@@ -4,6 +4,7 @@
 package tree_test
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -14,6 +15,7 @@ import (
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/node"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/revisioncleanup"
 	helpers "github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/testhelpers"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/tree"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -24,7 +26,10 @@ var _ = Describe("Revisions", func() {
 		env *helpers.DecomposedTestEnv
 		n   *node.Node
 		now = time.Now()
-		// revisions of different ages, the ages end up in the revision keys
+		// One revision per age, chosen around the "7d, auto, 30d" strategy used below:
+		// within the 7 day retention, between retention and deletion (where "auto" keeps
+		// it, as it is the only one in its slot), and beyond the 30 day deletion threshold. The ages end up in the revision keys, which is what
+		// the cleanup takes the revision time from.
 		ages = []time.Duration{time.Hour, 10 * 24 * time.Hour, 100 * 24 * time.Hour}
 		keys []string
 	)
@@ -121,4 +126,115 @@ var _ = Describe("Revisions", func() {
 			env.Blobstore.AssertNotCalled(GinkgoT(), "Delete", mock.Anything)
 		})
 	})
+
+	Describe("revisioncleanup.Cleaner", func() {
+		var cleaner *revisioncleanup.Cleaner
+
+		BeforeEach(func() {
+			var err error
+			// keep everything younger than 7 days, delete everything older than 30 days, thin out in between
+			cleaner, err = revisioncleanup.New("7d, auto, 30d")
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		It("purges the revisions the strategy wants to delete", func() {
+			expectBlobDeletion(blobOfRevision(2))
+
+			cleaner.Cleanup(env.Ctx, env.Lookup, env.Tree, n)
+
+			Expect(listKeys()).To(ConsistOf(keys[0], keys[1]))
+			env.Blobstore.AssertExpectations(GinkgoT())
+		})
+
+		It("never purges revisions it was asked to keep", func() {
+			cleaner.Cleanup(env.Ctx, env.Lookup, env.Tree, n, keys[2])
+
+			Expect(listKeys()).To(ConsistOf(keys))
+			env.Blobstore.AssertNotCalled(GinkgoT(), "Delete", mock.Anything)
+		})
+
+		It("does nothing while the node is processing", func() {
+			Expect(n.SetXattrString(env.Ctx, prefixes.StatusPrefix, node.ProcessingStatus+"some-upload")).To(Succeed())
+
+			cleaner.Cleanup(env.Ctx, env.Lookup, env.Tree, n)
+
+			Expect(listKeys()).To(ConsistOf(keys))
+			env.Blobstore.AssertNotCalled(GinkgoT(), "Delete", mock.Anything)
+		})
+
+		It("deletes the blobs only after releasing the node lock", func() {
+			// the lock of the node is not reentrant for another node object
+			locked := func() bool {
+				acquired := make(chan func() error, 1)
+				go func() {
+					if unlock, err := env.Lookup.MetadataBackend().Lock(node.NewBaseNode(n.SpaceID, n.ID, env.Lookup)); err == nil {
+						acquired <- unlock
+					}
+				}()
+				select {
+				case unlock := <-acquired:
+					_ = unlock()
+					return false
+				case <-time.After(time.Second):
+					return true
+				}
+			}
+			var lockedWhileDeleting []bool
+			env.Blobstore.On("Delete", mock.Anything).Run(func(mock.Arguments) {
+				lockedWhileDeleting = append(lockedWhileDeleting, locked())
+			}).Return(nil).Once()
+
+			cleaner.Cleanup(env.Ctx, env.Lookup, env.Tree, n)
+
+			Expect(listKeys()).To(ConsistOf(keys[0], keys[1]))
+			Expect(lockedWhileDeleting).To(Equal([]bool{false}))
+		})
+
+		It("switches to the group of the space with a SpaceScoper", func() {
+			expectBlobDeletion(blobOfRevision(2))
+			st := &scopingTree{Tree: env.Tree}
+
+			cleaner.Cleanup(env.Ctx, env.Lookup, st, n)
+
+			Expect(st.scoped).To(Equal([]string{n.SpaceID}))
+			Expect(st.unscoped).To(Equal(1))
+			Expect(listKeys()).To(ConsistOf(keys[0], keys[1]))
+		})
+
+		It("is disabled when not configured", func() {
+			for _, config := range []string{"", "disabled", "  disabled "} {
+				c, err := revisioncleanup.New(config)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(c).ToNot(BeNil())
+				Expect(c.Enabled()).To(BeFalse())
+				c.Cleanup(env.Ctx, env.Lookup, env.Tree, n)
+			}
+			// a nil Cleaner behaves like a disabled one
+			var none *revisioncleanup.Cleaner
+			Expect(none.Enabled()).To(BeFalse())
+			none.Cleanup(env.Ctx, env.Lookup, env.Tree, n)
+			Expect(listKeys()).To(ConsistOf(keys))
+			Expect(cleaner.Enabled()).To(BeTrue())
+		})
+
+		It("rejects invalid configurations", func() {
+			_, err := revisioncleanup.New("whenever")
+			Expect(err).To(HaveOccurred())
+		})
+	})
 })
+
+// scopingTree records the calls of the revision cleanup to switch to the group of a space.
+type scopingTree struct {
+	*tree.Tree
+	scoped   []string
+	unscoped int
+}
+
+func (t *scopingTree) ScopeToSpace(ctx context.Context, spaceID string) (context.Context, func() error, error) {
+	t.scoped = append(t.scoped, spaceID)
+	return ctx, func() error {
+		t.unscoped++
+		return nil
+	}, nil
+}
