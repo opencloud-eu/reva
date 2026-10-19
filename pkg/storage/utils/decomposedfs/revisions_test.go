@@ -145,6 +145,10 @@ var _ = Describe("Revisions", func() {
 
 	Context("RestoreRevision on a node marked as processing", func() {
 		It("rejects with ResourceProcessing", func() {
+			env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything).Return(&provider.ResourcePermissions{
+				Stat:               true,
+				RestoreFileVersion: true,
+			}, nil)
 			Expect(env.Fs.MarkProcessing(env.Ctx, fileRef, true, "revision-test")).To(Succeed())
 
 			revisionKey := file.ID + node.RevisionIDDelimiter + rev1

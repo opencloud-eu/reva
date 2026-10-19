@@ -977,6 +977,9 @@ func (fs *Decomposedfs) Move(ctx context.Context, oldRef, newRef *provider.Refer
 	if err := oldNode.CheckLock(ctx); err != nil {
 		return err
 	}
+	if oldNode.IsProcessing(ctx) {
+		return errtypes.ResourceProcessing(oldRef.String())
+	}
 
 	if err := fs.tp.Move(ctx, oldNode, newNode); err != nil {
 		return err
@@ -1208,6 +1211,9 @@ func (fs *Decomposedfs) Delete(ctx context.Context, ref *provider.Reference) (er
 
 	if err := node.CheckLock(ctx); err != nil {
 		return err
+	}
+	if node.IsProcessing(ctx) {
+		return errtypes.ResourceProcessing(ref.String())
 	}
 
 	return fs.tp.Delete(ctx, node)

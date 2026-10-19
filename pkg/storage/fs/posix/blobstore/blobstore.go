@@ -188,33 +188,36 @@ func (bs *Blobstore) Upload(n *node.Node, source, copyTarget string) error {
 	return nil
 }
 
-// UploadFromReader stores data from a reader in the blobstore.
-func (bs *Blobstore) UploadFromReader(node *node.Node, r io.Reader, size int64) error {
-	path := node.InternalPath()
-
-	fi, _ := os.Stat(path)
-
-	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0700)
+// UploadFromReader stages data on the space filesystem before atomically replacing the node.
+func (bs *Blobstore) UploadFromReader(n *node.Node, r io.Reader, size int64) error {
+	if n.SpaceRoot == nil {
+		return errors.New("node has no space root")
+	}
+	f, err := os.CreateTemp(n.SpaceRoot.InternalPath(), ".upload-*")
 	if err != nil {
-		return errors.Wrapf(err, "could not open blob '%s' for writing", path)
+		return errors.Wrap(err, "could not create temporary upload file")
 	}
-	defer f.Close()
+	tempPath := f.Name()
+	defer func() { _ = os.Remove(tempPath) }()
 
-	w := bufio.NewWriter(f)
-	if _, err = io.Copy(w, r); err != nil {
-		return errors.Wrapf(err, "could not write blob '%s'", path)
+	written, err := io.Copy(f, r)
+	if err != nil {
+		_ = f.Close()
+		return errors.Wrap(err, "could not write temporary upload file")
 	}
-	if err = w.Flush(); err != nil {
-		return errors.Wrapf(err, "could not flush blob '%s'", path)
+	if written != size {
+		_ = f.Close()
+		return fmt.Errorf("unexpected upload length: expected %d bytes, got %d", size, written)
 	}
-	if err = f.Sync(); err != nil {
-		return errors.Wrapf(err, "could not sync blob '%s' to disk", path)
+	if err := f.Sync(); err != nil {
+		_ = f.Close()
+		return errors.Wrap(err, "could not sync temporary upload file")
+	}
+	if err := f.Close(); err != nil {
+		return errors.Wrap(err, "could not close temporary upload file")
 	}
 
-	if fi != nil {
-		return os.Chtimes(path, fi.ModTime(), fi.ModTime())
-	}
-	return nil
+	return bs.Upload(n, tempPath, "")
 }
 
 // Download retrieves a blob from the blobstore for reading

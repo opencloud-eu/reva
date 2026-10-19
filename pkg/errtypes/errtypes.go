@@ -450,8 +450,6 @@ func NewHTTPStatusCodeFromErrtype(err error) int {
 		return http.StatusServiceUnavailable
 	case ResourceProcessing:
 		return http.StatusTooEarly
-	case TooManyRequests:
-		return http.StatusTooManyRequests
 	case ChecksumMismatch:
 		return StatusChecksumMismatch
 	default:

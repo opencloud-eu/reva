@@ -342,5 +342,56 @@ var _ = Describe("File uploads", func() {
 			})
 		})
 
+		It("commits staged bytes and their metadata", func() {
+			pmock.On("AssemblePermissions", mock.Anything, mock.Anything).Return(&provider.ResourcePermissions{
+				Stat:               true,
+				InitiateFileUpload: true,
+			}, nil).Once()
+			Expect(fs.TouchFile(ctx, ref, false, "")).To(Succeed())
+
+			body := []byte("staged upload")
+			bs.On("UploadFromReader", mock.AnythingOfType("*node.Node"), mock.Anything, int64(len(body))).
+				Run(func(args mock.Arguments) {
+					data, err := io.ReadAll(args.Get(1).(io.Reader))
+					Expect(err).ToNot(HaveOccurred())
+					Expect(data).To(Equal(body))
+				}).Return(nil).Once()
+
+			ri, err := fs.CommitUpload(ctx, ref, storage.UploadSource{
+				Body:     io.NopCloser(bytes.NewReader(body)),
+				Length:   int64(len(body)),
+				Metadata: map[string]string{"providerID": "test-provider"},
+				Checksums: storage.UploadChecksums{
+					SHA1:    []byte("sha1"),
+					MD5:     []byte("md5"),
+					Adler32: []byte("adler32"),
+				},
+			})
+
+			Expect(err).ToNot(HaveOccurred())
+			Expect(ri.Id.OpaqueId).ToNot(BeEmpty())
+			Expect(ri.Id.StorageId).To(Equal("test-provider"))
+			Expect(ri.Etag).ToNot(BeEmpty())
+		})
+
+		It("only clears a processing marker for its owning session", func() {
+			pmock.On("AssemblePermissions", mock.Anything, mock.Anything).Return(&provider.ResourcePermissions{
+				Stat:               true,
+				InitiateFileUpload: true,
+			}, nil).Once()
+			Expect(fs.TouchFile(ctx, ref, false, "")).To(Succeed())
+
+			Expect(fs.MarkProcessing(ctx, ref, true, "session-1")).To(Succeed())
+			Expect(fs.MarkProcessing(ctx, ref, false, "session-2")).To(Succeed())
+			file, err := lu.NodeFromResource(ctx, ref)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(file.IsProcessing(ctx)).To(BeTrue())
+
+			Expect(fs.MarkProcessing(ctx, ref, false, "session-1")).To(Succeed())
+			file, err = lu.NodeFromResource(ctx, ref)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(file.IsProcessing(ctx)).To(BeFalse())
+		})
+
 	})
 })

@@ -146,7 +146,7 @@ var _ = Describe("Decomposed", func() {
 
 		Context("with insufficient permissions", func() {
 			It("returns an error", func() {
-				env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(&provider.ResourcePermissions{
+				env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything).Return(&provider.ResourcePermissions{
 					Stat:   true,
 					Delete: false,
 				}, nil)
@@ -159,7 +159,7 @@ var _ = Describe("Decomposed", func() {
 
 		Context("with sufficient permissions", func() {
 			JustBeforeEach(func() {
-				env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(&provider.ResourcePermissions{
+				env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything).Return(&provider.ResourcePermissions{
 					Stat:   true,
 					Delete: true,
 				}, nil)
@@ -179,14 +179,14 @@ var _ = Describe("Decomposed", func() {
 					ResourceId: env.SpaceRootRes,
 					Path:       "/dir1/file1",
 				}
-				env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(&provider.ResourcePermissions{
+				env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything).Return(&provider.ResourcePermissions{
 					Stat:   true,
 					Delete: true,
 				}, nil)
 
 				Expect(env.Fs.MarkProcessing(env.Ctx, fileRef, true, "test-session")).To(Succeed())
 
-				_, err := env.Fs.Delete(env.Ctx, fileRef)
+				err := env.Fs.Delete(env.Ctx, fileRef)
 
 				Expect(err).To(HaveOccurred())
 				_, ok := err.(errtypes.IsResourceProcessing)
@@ -214,7 +214,7 @@ var _ = Describe("Decomposed", func() {
 
 				Expect(env.Fs.MarkProcessing(env.Ctx, oldRef, true, "test-session")).To(Succeed())
 
-				_, err := env.Fs.Move(env.Ctx, oldRef, newRef)
+				err := env.Fs.Move(env.Ctx, oldRef, newRef)
 
 				Expect(err).To(HaveOccurred())
 				_, ok := err.(errtypes.IsResourceProcessing)

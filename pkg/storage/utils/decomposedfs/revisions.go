@@ -234,7 +234,7 @@ func (fs *Decomposedfs) RestoreRevision(ctx context.Context, ref *provider.Refer
 
 	// check processing
 	if n.IsProcessing(ctx) {
-		return nil, errtypes.ResourceProcessing(ref.String())
+		return errtypes.ResourceProcessing(ref.String())
 	}
 
 	// write lock node before copying metadata

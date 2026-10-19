@@ -192,6 +192,19 @@ func (_c *Blobstore_Upload_Call) RunAndReturn(run func(*node.Node, string, strin
 	return _c
 }
 
+// UploadFromReader provides a mock function with given fields: _a0, reader, size
+func (_m *Blobstore) UploadFromReader(_a0 *node.Node, reader io.Reader, size int64) error {
+	ret := _m.Called(_a0, reader, size)
+	if len(ret) == 0 {
+		panic("no return value specified for UploadFromReader")
+	}
+
+	if rf, ok := ret.Get(0).(func(*node.Node, io.Reader, int64) error); ok {
+		return rf(_a0, reader, size)
+	}
+	return ret.Error(0)
+}
+
 // NewBlobstore creates a new instance of Blobstore. It also registers a testing interface on the mock and a cleanup function to assert the mocks expectations.
 // The first argument is typically a *testing.T value.
 func NewBlobstore(t interface {

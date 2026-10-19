@@ -28,9 +28,9 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"github.com/owncloud/reva/v2/pkg/errtypes"
-	"github.com/owncloud/reva/v2/pkg/storage"
-	helpers "github.com/owncloud/reva/v2/pkg/storage/utils/decomposedfs/testhelpers"
+	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
+	"github.com/opencloud-eu/reva/v2/pkg/storage"
+	helpers "github.com/opencloud-eu/reva/v2/pkg/storage/utils/decomposedfs/testhelpers"
 	"github.com/stretchr/testify/mock"
 )
 
@@ -56,7 +56,7 @@ var _ = Describe("CommitUpload", func() {
 		// TouchFile-first protocol: node must exist before CommitUpload is called.
 		env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).
 			Return(&provider.ResourcePermissions{InitiateFileUpload: true, Stat: true}, nil).Times(1)
-		_, err = env.Fs.TouchFile(env.Ctx, ref, false, "")
+		err = env.Fs.TouchFile(env.Ctx, ref, false, "")
 		Expect(err).ToNot(HaveOccurred())
 	})
 

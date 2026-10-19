@@ -28,8 +28,8 @@ import (
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/google/uuid"
-	"github.com/owncloud/reva/v2/pkg/storage/utils/decomposedfs/metadata"
-	"github.com/owncloud/reva/v2/pkg/storage/utils/decomposedfs/metadata/prefixes"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/decomposedfs/metadata"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/decomposedfs/metadata/prefixes"
 	"github.com/pkg/errors"
 	"github.com/rogpeppe/go-internal/lockedfile"
 	tusd "github.com/tus/tusd/v2/pkg/handler"
