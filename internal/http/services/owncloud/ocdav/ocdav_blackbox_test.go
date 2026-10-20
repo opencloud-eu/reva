@@ -834,6 +834,23 @@ var _ = Describe("ocdav", func() {
 				})
 			})
 
+			When("the source and the destination exist in different spaces", func() {
+				It("does not delete the destination", func() {
+
+					mockPathStat(mReq.Source.Path, status.NewOK(ctx), &cs3storageprovider.ResourceInfo{Id: mReq.Source.ResourceId})
+					mockPathStat(mReq.Destination.Path, status.NewOK(ctx), &cs3storageprovider.ResourceInfo{Id: &cs3storageprovider.ResourceId{
+						StorageId: mReq.Destination.ResourceId.StorageId,
+						SpaceId:   "other-space",
+						OpaqueId:  "other-file",
+					}})
+
+					handler.Handler().ServeHTTP(rr, req)
+					Expect(rr).To(HaveHTTPStatus(http.StatusBadGateway))
+					client.AssertNotCalled(GinkgoT(), "Delete", mock.Anything, mock.Anything)
+					client.AssertNotCalled(GinkgoT(), "Move", mock.Anything, mock.Anything)
+				})
+			})
+
 			When("the gateway returns error when moving file", func() {
 				It("the source Stat error", func() {
 
