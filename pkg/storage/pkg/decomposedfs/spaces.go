@@ -28,6 +28,7 @@ import (
 	"strconv"
 	"strings"
 	"sync/atomic"
+	"syscall"
 	"time"
 
 	"maps"
@@ -1230,7 +1231,16 @@ func removeSpaceRoot(spaceRoot string) error {
 		}
 		return err
 	}
-	return os.RemoveAll(tombstone)
+	// requests that resolved a path into the space root before the rename may still create lock
+	// files in the tombstone. Nothing new can reach it, so retry until they are done.
+	var err error
+	for i := range 10 {
+		if err = os.RemoveAll(tombstone); err == nil || !errors.Is(err, syscall.ENOTEMPTY) {
+			return err
+		}
+		time.Sleep(time.Duration(i+1) * 10 * time.Millisecond)
+	}
+	return err
 }
 
 // Space deletion can be tricky as there are lots of different cases:
