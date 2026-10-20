@@ -4,7 +4,7 @@
 
 ### ❤️ Thanks to all contributors! ❤️
 
-@AlexAndBear, @NickWalters, @VicDeo, @aduffeck, @butonic, @dragonchaser, @fschade, @micbar, @v-scharf
+@AlexAndBear, @NickWalters, @VicDeo, @aduffeck, @butonic, @dragonchaser, @fschade, @maki5, @micbar, @v-scharf
 
 ### ✅ Tests
 
