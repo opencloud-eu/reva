@@ -4,7 +4,11 @@
 package tree_test
 
 import (
+	"context"
 	"os"
+	"path/filepath"
+	"runtime"
+	"strings"
 	"syscall"
 	"time"
 
@@ -115,106 +119,118 @@ var _ = Describe("Revisions", func() {
 	})
 })
 
-var _ = Describe("Revisions created from changes on disk", Ordered, func() {
-	var (
-		fsEnv  *helpers.TestEnv
-		parent *node.Node
-		path   string
-		n      *node.Node
-	)
+var _ = Describe("Revisions created from changes on disk, cleaned up right away", Ordered, changesOnDisk(false))
 
-	listKeys := func() []string {
-		revs, err := fsEnv.Tree.ListRevisionsUnchecked(fsEnv.Ctx, n)
-		Expect(err).ToNot(HaveOccurred())
-		keys := make([]string, len(revs))
-		for i, r := range revs {
-			keys[i] = r.Key
+var _ = Describe("Revisions created from changes on disk, cleaned up in the background", Ordered, changesOnDisk(true))
+
+// changesOnDisk tests the revision cleanup of revisions that assimilation creates from
+// changes on disk, with the cleanup running right away or in background workers.
+func changesOnDisk(async bool) func() {
+	return func() {
+		var (
+			fsEnv  *helpers.TestEnv
+			parent *node.Node
+			path   string
+			n      *node.Node
+		)
+
+		listKeys := func() []string {
+			revs, err := fsEnv.Tree.ListRevisionsUnchecked(fsEnv.Ctx, n)
+			Expect(err).ToNot(HaveOccurred())
+			keys := make([]string, len(revs))
+			for i, r := range revs {
+				keys[i] = r.Key
+			}
+			return keys
 		}
-		return keys
-	}
-	// backdates the copy of the current content, it becomes a revision with that timestamp on the next change:
-	// assimilation names the revision after the mtime of '.CURRENT' when renaming it. This
-	// is the only way to get old revisions from changes on disk without waiting for days.
-	backdateCurrent := func(age time.Duration) string {
-		currentPath := fsEnv.Lookup.CurrentPath(n.SpaceID, n.ID)
-		t := time.Now().Add(-age)
-		Expect(os.Chtimes(currentPath, t, t)).To(Succeed())
-		fi, err := os.Stat(currentPath)
-		Expect(err).ToNot(HaveOccurred())
-		return n.ID + node.RevisionIDDelimiter + fi.ModTime().UTC().Format(time.RFC3339Nano)
-	}
-	// changes the file on disk and assimilates it like the watcher would,
-	// then waits for the asynchronous copy of the new content to the current file
-	// Every change gets a strictly later mtime: assimilation skips a file whose mtime equals
-	// the one it recorded, and two writes in quick succession can get the same mtime, as the
-	// kernel takes file timestamps from a coarse clock.
-	var changeTime time.Time
-	changeAndAssimilate := func(content string) {
-		Expect(os.WriteFile(path, []byte(content), 0600)).To(Succeed())
-		if changeTime.IsZero() {
-			changeTime = time.Now()
+		// backdates the copy of the current content, it becomes a revision with that timestamp on the next change:
+		// assimilation names the revision after the mtime of '.CURRENT' when renaming it. This
+		// is the only way to get old revisions from changes on disk without waiting for days.
+		backdateCurrent := func(age time.Duration) string {
+			currentPath := fsEnv.Lookup.CurrentPath(n.SpaceID, n.ID)
+			t := time.Now().Add(-age)
+			Expect(os.Chtimes(currentPath, t, t)).To(Succeed())
+			fi, err := os.Stat(currentPath)
+			Expect(err).ToNot(HaveOccurred())
+			return n.ID + node.RevisionIDDelimiter + fi.ModTime().UTC().Format(time.RFC3339Nano)
 		}
-		changeTime = changeTime.Add(time.Second)
-		Expect(os.Chtimes(path, changeTime, changeTime)).To(Succeed())
-		Expect(fsEnv.Tree.AssimilateForTest(path)).To(Succeed())
-		Eventually(func(g Gomega) {
-			b, err := os.ReadFile(fsEnv.Lookup.CurrentPath(n.SpaceID, n.ID))
-			g.Expect(err).ToNot(HaveOccurred())
-			g.Expect(string(b)).To(Equal(content))
-		}).WithTimeout(15 * time.Second).ProbeEvery(100 * time.Millisecond).Should(Succeed())
-	}
+		// changes the file on disk and assimilates it like the watcher would,
+		// then waits for the asynchronous copy of the new content to the current file
+		// Every change gets a strictly later mtime: assimilation skips a file whose mtime equals
+		// the one it recorded, and two writes in quick succession can get the same mtime, as the
+		// kernel takes file timestamps from a coarse clock.
+		var changeTime time.Time
+		changeAndAssimilate := func(content string) {
+			Expect(os.WriteFile(path, []byte(content), 0600)).To(Succeed())
+			if changeTime.IsZero() {
+				changeTime = time.Now()
+			}
+			changeTime = changeTime.Add(time.Second)
+			Expect(os.Chtimes(path, changeTime, changeTime)).To(Succeed())
+			Expect(fsEnv.Tree.AssimilateForTest(path)).To(Succeed())
+			Eventually(func(g Gomega) {
+				b, err := os.ReadFile(fsEnv.Lookup.CurrentPath(n.SpaceID, n.ID))
+				g.Expect(err).ToNot(HaveOccurred())
+				g.Expect(string(b)).To(Equal(content))
+			}).WithTimeout(15 * time.Second).ProbeEvery(100 * time.Millisecond).Should(Succeed())
+		}
 
-	BeforeAll(func() {
-		var err error
-		// no watching: starting another inotify watcher would kill the one of the watching test env,
-		// changes are assimilated explicitly instead (see export_test.go)
-		fsEnv, err = helpers.NewTestEnv(map[string]any{
-			"enable_fs_revisions": true,
-			// keep everything younger than 7 days, delete everything older than 30 days, thin out in between
-			"revisions_cleanup_strategy": "7d, auto, 30d",
-		})
-		Expect(err).ToNot(HaveOccurred())
-
-		parent, err = fsEnv.Lookup.NodeFromResource(fsEnv.Ctx, &provider.Reference{
-			ResourceId: fsEnv.SpaceRootRes,
-			Path:       "dir1",
-		})
-		Expect(err).ToNot(HaveOccurred())
-
-		name := uuid.NewString()
-		path = parent.InternalPath() + "/" + name
-		Expect(os.WriteFile(path, []byte("v1"), 0600)).To(Succeed())
-		_, err = fsEnv.Tree.ListFolder(fsEnv.Ctx, parent)
-		Expect(err).ToNot(HaveOccurred())
-		Eventually(func(g Gomega) {
-			n, err = fsEnv.Lookup.NodeFromResource(fsEnv.Ctx, &provider.Reference{
-				ResourceId: fsEnv.SpaceRootRes,
-				Path:       "dir1/" + name,
+		BeforeAll(func() {
+			var err error
+			// no watching: starting another inotify watcher would kill the one of the watching test env,
+			// changes are assimilated explicitly instead (see export_test.go)
+			fsEnv, err = helpers.NewTestEnv(map[string]any{
+				"enable_fs_revisions": true,
+				// keep everything younger than 7 days, delete everything older than 30 days, thin out in between
+				"revisions_cleanup_strategy": "7d, auto, 30d",
+				"revisions_cleanup_async":    async,
 			})
-			g.Expect(err).ToNot(HaveOccurred())
-			g.Expect(n.Exists).To(BeTrue())
-			g.Expect(fsEnv.Lookup.CurrentPath(n.SpaceID, n.ID)).To(BeAnExistingFile())
-		}).WithTimeout(15 * time.Second).ProbeEvery(100 * time.Millisecond).Should(Succeed())
-	})
+			Expect(err).ToNot(HaveOccurred())
 
-	AfterAll(func() {
-		if fsEnv != nil {
-			fsEnv.Cleanup()
-		}
-	})
+			parent, err = fsEnv.Lookup.NodeFromResource(fsEnv.Ctx, &provider.Reference{
+				ResourceId: fsEnv.SpaceRootRes,
+				Path:       "dir1",
+			})
+			Expect(err).ToNot(HaveOccurred())
 
-	It("keeps revisions the strategy wants to keep and purges the others", func() {
-		retained := backdateCurrent(10 * 24 * time.Hour)
-		changeAndAssimilate("v2")
-		Expect(listKeys()).To(ContainElement(retained))
+			name := uuid.NewString()
+			path = parent.InternalPath() + "/" + name
+			Expect(os.WriteFile(path, []byte("v1"), 0600)).To(Succeed())
+			_, err = fsEnv.Tree.ListFolder(fsEnv.Ctx, parent)
+			Expect(err).ToNot(HaveOccurred())
+			Eventually(func(g Gomega) {
+				n, err = fsEnv.Lookup.NodeFromResource(fsEnv.Ctx, &provider.Reference{
+					ResourceId: fsEnv.SpaceRootRes,
+					Path:       "dir1/" + name,
+				})
+				g.Expect(err).ToNot(HaveOccurred())
+				g.Expect(n.Exists).To(BeTrue())
+				g.Expect(fsEnv.Lookup.CurrentPath(n.SpaceID, n.ID)).To(BeAnExistingFile())
+			}).WithTimeout(15 * time.Second).ProbeEvery(100 * time.Millisecond).Should(Succeed())
+		})
 
-		purged := backdateCurrent(100 * 24 * time.Hour)
-		changeAndAssimilate("v3")
-		// the cleanup runs once the new content has been copied to the current file
-		Eventually(listKeys).WithTimeout(15 * time.Second).ProbeEvery(100 * time.Millisecond).
-			Should(And(ContainElement(retained), Not(ContainElement(purged))))
-	})
-})
+		AfterAll(func() {
+			if fsEnv != nil {
+				// stop the background cleanup workers before their files are removed
+				Expect(fsEnv.Fs.Shutdown(context.Background())).To(Succeed())
+				fsEnv.Cleanup()
+			}
+		})
+
+		It("keeps revisions the strategy wants to keep and purges the others", func() {
+			retained := backdateCurrent(10 * 24 * time.Hour)
+			changeAndAssimilate("v2")
+			Expect(listKeys()).To(ContainElement(retained))
+
+			purged := backdateCurrent(100 * 24 * time.Hour)
+			changeAndAssimilate("v3")
+			cleanedUp := And(ContainElement(retained), Not(ContainElement(purged)))
+			// the cleanup runs once the new content has been copied to the current file, and in
+			// the background, a worker runs it eventually
+			Eventually(listKeys).WithTimeout(15 * time.Second).ProbeEvery(100 * time.Millisecond).Should(cleanedUp)
+		})
+	}
+}
 
 var _ = Describe("Revisions of a fresh storage", func() {
 	var fsEnv *helpers.TestEnv
@@ -229,6 +245,30 @@ var _ = Describe("Revisions of a fresh storage", func() {
 		var err error
 		fsEnv, err = helpers.NewTestEnv(map[string]any{"revisions_cleanup_strategy": "whenever"})
 		Expect(err).To(HaveOccurred())
+	})
+
+	It("stops the background workers again when the storage can't be set up", func() {
+		// the cleanup's workers, by their function in the goroutine dump
+		workers := func() int {
+			buf := make([]byte, 1<<22)
+			return strings.Count(string(buf[:runtime.Stack(buf, true)]), "revisioncleanup.(*Service).work(")
+		}
+		before := workers()
+		// a root that is a file: the tree's storage check fails after the cleanup has started
+		root := filepath.Join(GinkgoT().TempDir(), "file")
+		Expect(os.WriteFile(root, nil, 0600)).To(Succeed())
+
+		var err error
+		fsEnv, err = helpers.NewTestEnv(map[string]any{
+			"root":                            root,
+			"revisions_cleanup_strategy":      "auto",
+			"revisions_cleanup_async":         true,
+			"revisions_cleanup_async_workers": 3,
+		})
+		Expect(err).To(MatchError(ContainSubstring("unfit storage")))
+		fsEnv = nil
+
+		Eventually(workers).Should(Equal(before))
 	})
 })
 

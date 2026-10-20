@@ -848,25 +848,19 @@ assimilate:
 				// '.CURRENT' below (or that failed): '.CURRENT' is missing from the rename above
 				// until then, and a change on disk in between would find no '.CURRENT' to create
 				// a revision from, so the cleanup must not make that window any longer.
-				// Cleanup takes the node lock itself. If the assimilation that started this
-				// goroutine still holds it, Cleanup just waits, as nothing waits for this
+				// The cleanup takes the node lock itself. If the assimilation that started this
+				// goroutine still holds it, the cleanup just waits, as nothing waits for this
 				// goroutine there is no deadlock.
 				// context.Background() carries no logger, pass t.log on or the cleanup's
 				// logging would be lost.
-				// The cleanup gets a node of its own: n is still used by the assimilation
+				// The cleanup is handed the ids, not n: n is still used by the assimilation
 				// that started this goroutine, and a node caches state without locking.
-				// It is only read with a strategy configured, so that a disabled cleanup
-				// costs nothing here.
-				if t.revisionsCleanup.Enabled() {
-					defer func() {
-						ctx := appctx.WithLogger(context.Background(), t.log)
-						if cn, err := node.ReadNode(ctx, t.lookup, n.SpaceID, n.ID, "", false, nil, false); err != nil {
-							t.log.Error().Err(err).Str("path", path).Msg("revision cleanup: could not read node")
-						} else {
-							t.revisionsCleanup.Cleanup(ctx, t.lookup, t, cn)
-						}
-					}()
-				}
+				// HandleRevisionCreatedByID reads a node of its own only to clean it up: not
+				// at all if the cleanup is disabled, and in the background only in the worker.
+				defer func() {
+					ctx := appctx.WithLogger(context.Background(), t.log)
+					t.revisionsCleanup.HandleRevisionCreatedByID(ctx, n.SpaceID, n.ID)
+				}()
 			}
 
 			// Copy the new version to the current version

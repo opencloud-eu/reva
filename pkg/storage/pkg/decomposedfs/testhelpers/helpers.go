@@ -224,7 +224,7 @@ func NewTestEnv(config map[string]interface{}) (*DecomposedTestEnv, error) {
 	tree := tree.New(lu, bs, o, permissions.Permissions{}, store.Create(), log)
 	// wire the revision cleanup like decomposedfs.NewDefault does, so that tests can
 	// configure it with the revisions_cleanup_* options
-	revisionsCleanup, err := revisioncleanup.New(o.RevisionsCleanupStrategy)
+	revisionsCleanup, err := revisioncleanup.NewServiceFromOptions(o, lu, tree, log)
 	if err != nil {
 		return nil, err
 	}
@@ -266,6 +266,10 @@ func NewTestEnv(config map[string]interface{}) (*DecomposedTestEnv, error) {
 
 // Cleanup removes all files from disk
 func (t *DecomposedTestEnv) Cleanup() {
+	// stop background workers, e.g. of the revision cleanup, before their files are removed
+	if t.Fs != nil {
+		_ = t.Fs.Shutdown(context.Background())
+	}
 	for range 5 {
 		err := os.RemoveAll(t.Root)
 		if err == nil {

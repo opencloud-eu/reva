@@ -191,12 +191,14 @@ func New(o *options.Options, stream events.Stream, cache, historyCache *idcache.
 		UserMapper:        um,
 		DisableVersioning: o.DisableVersioning,
 		Trashbin:          trashbin,
-		// the tree already parsed the strategy for its own use in assimilation
+		// the tree already created the revision cleanup for its own use in assimilation
 		RevisionsCleanup: tp.RevisionsCleanup(),
 	}
 
 	dfs, err := decomposedfs.New(&o.Options, aspects, log)
 	if err != nil {
+		// the tree already started the revision cleanup, stop its workers again
+		_ = tp.RevisionsCleanup().Shutdown(context.Background())
 		return nil, err
 	}
 

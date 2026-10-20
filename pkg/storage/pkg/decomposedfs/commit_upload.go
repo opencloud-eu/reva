@@ -73,7 +73,7 @@ func (fs *Decomposedfs) MarkProcessing(ctx context.Context, ref *provider.Refere
 		// revisioncleanup), which skipped the node while it was marked. It never fails clearing
 		// the mark. The node lock is released first, for the reasons given in RestoreRevision.
 		unlockNode()
-		fs.revisionsCleanup.Cleanup(ctx, fs.lu, fs.tp, n)
+		fs.revisionsCleanup.HandleRevisionCreated(ctx, n)
 		return nil
 	}
 
