@@ -19,6 +19,8 @@
 package options_test
 
 import (
+	"time"
+
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/options"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -44,6 +46,29 @@ var _ = Describe("Options", func() {
 
 		It("sets defaults", func() {
 			Expect(o.MetadataBackend).ToNot(BeEmpty())
+			Expect(o.RevisionsCleanupAsync).To(BeTrue())
+			Expect(o.RevisionsCleanupAsyncWorkers).To(Equal(0))
+			Expect(o.RevisionsCleanupAsyncQueueSize).To(Equal(0))
+			Expect(o.RevisionsCleanupAsyncQueueFull).To(BeEmpty())
+			Expect(o.RevisionsCleanupAsyncQueueFullTimeout).To(Equal(5 * time.Second))
+		})
+
+		Context("with the revision cleanup configured", func() {
+			BeforeEach(func() {
+				config["revisions_cleanup_async"] = false
+				config["revisions_cleanup_async_workers"] = 3
+				config["revisions_cleanup_async_queue_size"] = 50
+				config["revisions_cleanup_async_queue_full"] = "block"
+				config["revisions_cleanup_async_queue_full_timeout"] = time.Minute
+			})
+
+			It("keeps the configured values, including an explicit false", func() {
+				Expect(o.RevisionsCleanupAsync).To(BeFalse())
+				Expect(o.RevisionsCleanupAsyncWorkers).To(Equal(3))
+				Expect(o.RevisionsCleanupAsyncQueueSize).To(Equal(50))
+				Expect(o.RevisionsCleanupAsyncQueueFull).To(Equal("block"))
+				Expect(o.RevisionsCleanupAsyncQueueFullTimeout).To(Equal(time.Minute))
+			})
 		})
 
 		Context("with unclean root path configuration", func() {

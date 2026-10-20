@@ -10,13 +10,18 @@ For how those drivers are structured, see [`../README.md`](../README.md); for im
 
 ## Configuration
 
-The option is part of the decomposedfs options and therefore applies to all three drivers.
+The options are part of the decomposedfs options and therefore apply to all three drivers.
 
 | Option | Default | Meaning |
 |---|---|---|
 | `revisions_cleanup_strategy` | `""` (disabled) | Which revisions to delete, see below. Empty or `disabled` keeps all revisions. |
+| `revisions_cleanup_async` | `true` | Run the cleanup in background workers, so that it doesn't slow down the upload, restore or change that created the new revision. `false` runs it right away. |
+| `revisions_cleanup_async_workers` | `0` (automatic) | Number of background workers. Automatic: half the available CPUs (respecting container CPU limits), at least 2. |
+| `revisions_cleanup_async_queue_size` | `0` (automatic) | Number of files that can wait for a background cleanup. Automatic: 64 per worker. |
+| `revisions_cleanup_async_queue_full` | `drop` | What happens when the queue is full: `drop` skips the cleanup of that file (logged), it is cleaned up with its next revision; `block` waits for room, up to `revisions_cleanup_async_queue_full_timeout`. |
+| `revisions_cleanup_async_queue_full_timeout` | `5s` | How long `block` waits for room at most, after which the cleanup of that file is skipped as with `drop`. `0` waits as long as it takes, so that no cleanup is ever skipped, but then writes can slow down without bound under heavy load. |
 
-An invalid value makes the storage driver fail at startup.
+An invalid value in any of these options makes the storage driver fail at startup.
 
 ## Strategies
 
@@ -70,9 +75,12 @@ That is safe: if it deletes the revision the older upload writes its content int
 
 ## Logging
 
+- At startup with background workers: one info line `revision cleanup: running in the background` with the strategy, workers, queue size, queue full policy and timeout.
 - Per cleaned file: one info line `revision cleanup: purged old revisions` with the strategy (`config`), the number and size of the deleted revisions, and how many revisions the file had. Nothing is logged for files where nothing was deleted.
 - Every deleted revision is logged at debug level.
+- With `drop`, or when `block` gives up after its timeout, a skipped cleanup is logged as a warning; on shutdown, the number of abandoned queued cleanups is logged.
 
 ## Limitations
 
 - **Only files that get a new revision are cleaned up.** Revisions of files that are never changed again stay until an on-demand cleanup command is available.
+- **Shutdown:** cleanups still waiting in the queue are abandoned when the service stops. They are picked up again with the files' next revisions.

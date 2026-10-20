@@ -200,7 +200,7 @@ type Aspects struct {
 	EventStream       events.Stream             // NATS events, e.g. for async postprocessing
 	DisableVersioning bool
 	UserMapper        usermapper.Mapper         // maps users to unix ids (posix with space groups)
-	RevisionsCleanup  *revisioncleanup.Cleaner  // deletes old revisions, disabled without a strategy
+	RevisionsCleanup  *revisioncleanup.Service // deletes old revisions (in background workers by default), disabled without a strategy
 }
 ```
 
@@ -226,8 +226,8 @@ decomposed.New(config)                      decomposeds3.New(config)
                  options.New(config)
                  lookup.New(metadata backend: messagepack (default) or xattrs)
                  permissions.NewPermissions(...)
-                 revisioncleanup.New(revisions_cleanup_strategy)
                  tree.New(lookup, blobstore, options, permissions, id cache)
+                 revisioncleanup.NewServiceFromOptions(options, lookup, tree)  (starts the cleanup workers)
                  Aspects{Lookup, Tree, Permissions, Trashbin: &DecomposedfsTrashbin{}, ...}
                  decomposedfs.New(options, aspects)
 ```
@@ -250,7 +250,8 @@ posix.NewDefault(config)
     permissions.NewPermissions   (shared with decomposedfs)
     posix trashbin.New + Setup   freedesktop.org style '.Trash' per space
     posix blobstore.New(root)    writes the content into the actual file
-    posix tree.New(...)          starts the fs watcher and the initial scan, if configured
+    posix tree.New(...)          creates the revision cleanup (and its workers), starts the fs
+                                 watcher and the initial scan, if configured
     Aspects{...posix components...}
     decomposedfs.New(options, aspects)       the shared core, as above
     middleware.NewFS(dfs, hooks...)          optional space group scoping hooks
@@ -304,7 +305,7 @@ Shared building blocks that both trees use instead of re-implementing them:
 - `tree/propagator` – tree size and mtime propagation (used by both trees)
 - `upload` – TUS upload sessions, `Finalize`, postprocessing integration
 - `permissions` – CS3 permission assembly from grants and the permissions service
-- `revisioncleanup` – applying the revision cleanup strategy; documented in [`revisioncleanup/README.md`](revisioncleanup/README.md)
+- `revisioncleanup` – applying the revision cleanup strategy, right away or in background workers; documented in [`revisioncleanup/README.md`](revisioncleanup/README.md)
 
 ### What differs per component
 
