@@ -420,6 +420,7 @@ func SpaceEnabled(r *provider.UpdateStorageSpaceResponse, req *provider.UpdateSt
 func SpaceShared(r *collaboration.CreateShareResponse, executant *user.User) events.SpaceShared {
 	id := storagespace.FormatStorageID(r.GetShare().GetResourceId().GetStorageId(), r.GetShare().GetResourceId().GetSpaceId())
 	return events.SpaceShared{
+		ShareID:        r.GetShare().GetId(),
 		Executant:      executant.GetId(),
 		Creator:        r.Share.GetCreator(),
 		GranteeUserID:  r.Share.GetGrantee().GetUserId(),
@@ -433,6 +434,7 @@ func SpaceShared(r *collaboration.CreateShareResponse, executant *user.User) eve
 func SpaceShareUpdated(r *collaboration.UpdateShareResponse, executant *user.User) events.SpaceShareUpdated {
 	id := storagespace.FormatStorageID(r.GetShare().GetResourceId().GetStorageId(), r.GetShare().GetResourceId().GetSpaceId())
 	return events.SpaceShareUpdated{
+		ShareID:        r.GetShare().GetId(),
 		Executant:      executant.GetId(),
 		GranteeUserID:  r.GetShare().GetGrantee().GetUserId(),
 		GranteeGroupID: r.GetShare().GetGrantee().GetGroupId(),
@@ -447,12 +449,15 @@ func SpaceUnshared(r *collaboration.RemoveShareResponse, req *collaboration.Remo
 		userid  *user.UserId
 		groupid *group.GroupId
 		rid     *provider.ResourceId
+		shareid *collaboration.ShareId
 	)
 	_ = utils.ReadJSONFromOpaque(r.Opaque, "granteeuserid", &userid)
 	_ = utils.ReadJSONFromOpaque(r.Opaque, "granteegroupid", &groupid)
 	_ = utils.ReadJSONFromOpaque(r.Opaque, "resourceid", &rid)
+	_ = utils.ReadJSONFromOpaque(r.Opaque, "shareid", &shareid)
 	id := storagespace.FormatStorageID(rid.StorageId, rid.SpaceId)
 	return events.SpaceUnshared{
+		ShareID:        shareid,
 		Executant:      executant.GetId(),
 		GranteeUserID:  userid,
 		GranteeGroupID: groupid,
