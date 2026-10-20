@@ -171,13 +171,13 @@ func (fs *Decomposedfs) RestoreRevision(ctx context.Context, ref *provider.Refer
 	// is a deliberate user action, and the strategy could otherwise drop the very
 	// content the user just replaced, e.g. the 'auto' strategy thins out revisions
 	// that are close in time.
-	// The node lock is released first: Cleanup takes it itself, and when the cleanup runs
-	// in the background, waiting for it while holding the lock could deadlock with a
-	// worker waiting for the lock. Releasing it also removes the lock file, which must not
+	// The node lock is released first: the cleanup takes it itself, and when it runs in the
+	// background, waiting for room in its queue while holding the lock could deadlock with
+	// a worker waiting for the lock. Releasing it also removes the lock file, which must not
 	// happen while the cleanup holds a lock on it, as the next writer would then lock a new
 	// lock file and run concurrently with the cleanup.
 	unlockNode()
-	fs.revisionsCleanup.Cleanup(ctx, fs.lu, fs.tp, n, n.ID+node.RevisionIDDelimiter+newRevision)
+	fs.revisionsCleanup.HandleRevisionCreated(ctx, n, n.ID+node.RevisionIDDelimiter+newRevision)
 	return nil
 }
 

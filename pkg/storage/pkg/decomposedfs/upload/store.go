@@ -67,8 +67,8 @@ type DecomposedFsStore struct {
 	async             bool
 	tknopts           options.TokenOptions
 	disableVersioning bool
-	// deletes old revisions after an upload created a new one, nil if disabled
-	revisionsCleanup *revisioncleanup.Cleaner
+	// deletes old revisions after an upload created a new one, disabled without a strategy
+	revisionsCleanup *revisioncleanup.Service
 	log              *zerolog.Logger
 }
 
@@ -89,11 +89,12 @@ func NewSessionStore(fs storage.FS, aspects aspects.Aspects, root string, async 
 	}
 }
 
-// CleanupRevisions deletes old revisions of the node according to the configured strategy.
+// CleanupRevisions deletes old revisions of the node according to the configured strategy,
+// right away or in the background (see revisioncleanup.Service).
 // It is a noop if no strategy is configured or while an upload to the node is still processing.
 // See package revisioncleanup for when and why it is called.
 func (store DecomposedFsStore) CleanupRevisions(ctx context.Context, n *node.Node) {
-	store.revisionsCleanup.Cleanup(ctx, store.lu, store.tp, n)
+	store.revisionsCleanup.HandleRevisionCreated(ctx, n)
 }
 
 // New returns a new upload session

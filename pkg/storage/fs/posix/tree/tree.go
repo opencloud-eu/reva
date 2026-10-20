@@ -118,8 +118,8 @@ type Tree struct {
 	// files that failed to assimilate, keyed by path, see updateFile()
 	assimilationFailures *assimilation.Failures
 
-	// deletes old revisions after a change on disk created a new one, nil if disabled
-	revisionsCleanup *revisioncleanup.Cleaner
+	// deletes old revisions after a change on disk created a new one, disabled without a strategy
+	revisionsCleanup *revisioncleanup.Service
 
 	es  events.Stream
 	log *zerolog.Logger
@@ -153,16 +153,24 @@ func New(lu node.PathLookup, bs node.Blobstore, um usermapper.Mapper, trashbin *
 	}
 	t.idResolver = t.lookup
 	t.assimilateFunc = t.assimilate
-	// The tree creates the revisions cleaner itself, as assimilation needs it for
+	// The tree creates the revision cleanup itself, as assimilation needs it for
 	// revisions created from changes on disk, and the watcher started below may
-	// assimilate right away. posix.New passes the same instance on to Decomposedfs
-	// through the aspects (see RevisionsCleanup). An invalid strategy fails startup
-	// rather than silently keeping or deleting revisions the admin did not expect.
-	revisionsCleanup, err := revisioncleanup.New(o.RevisionsCleanupStrategy)
+	// assimilate right away. posix.New passes the same instance (with the same background
+	// workers) on to Decomposedfs through the aspects (see RevisionsCleanup), which also
+	// stops the workers on Shutdown. An invalid strategy or invalid async settings fail
+	// startup rather than silently keeping or deleting revisions the admin did not expect.
+	revisionsCleanup, err := revisioncleanup.NewServiceFromOptions(&o.Options, t.lookup, t, log)
 	if err != nil {
-		return nil, errors.Wrap(err, "tree: invalid revisions cleanup strategy")
+		return nil, errors.Wrap(err, "tree: invalid revisions cleanup configuration")
 	}
 	t.revisionsCleanup = revisionsCleanup
+	// stop its workers again if the tree can't be set up after all
+	started := false
+	defer func() {
+		if !started {
+			_ = revisionsCleanup.Shutdown(context.Background())
+		}
+	}()
 	if err := t.checkStorage(); err != nil {
 		return nil, errors.Wrap(err, "tree: unfit storage '"+o.Root+"'")
 	}
@@ -234,6 +242,7 @@ func New(lu node.PathLookup, bs node.Blobstore, um usermapper.Mapper, trashbin *
 		}()
 	}
 
+	started = true
 	return t, nil
 }
 
@@ -785,11 +794,11 @@ func (t *Tree) DeleteBlob(node *node.Node) error {
 	return t.blobstore.Delete(node)
 }
 
-// RevisionsCleanup returns the cleaner deleting old revisions, a disabled one without a
-// strategy.
+// RevisionsCleanup returns the revision cleanup, a disabled one without a strategy.
 // It is used to hand the same instance to Decomposedfs via aspects.Aspects, so that
-// uploads, restores and changes on disk are all cleaned up by the same strategy.
-func (t *Tree) RevisionsCleanup() *revisioncleanup.Cleaner {
+// uploads, restores and changes on disk are all cleaned up by the same strategy and
+// share the same background workers.
+func (t *Tree) RevisionsCleanup() *revisioncleanup.Service {
 	return t.revisionsCleanup
 }
 

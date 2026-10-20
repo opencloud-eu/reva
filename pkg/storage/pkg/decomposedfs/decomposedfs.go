@@ -136,7 +136,7 @@ type Decomposedfs struct {
 
 	// deletes old revisions after uploads and restores created new ones, nil if
 	// disabled. Shared with the upload session store, see aspects.Aspects.
-	revisionsCleanup *revisioncleanup.Cleaner
+	revisionsCleanup *revisioncleanup.Service
 
 	UserCache       *ttlcache.Cache
 	userSpaceIndex  *spaceidindex.Index
@@ -178,13 +178,6 @@ func NewDefault(m map[string]interface{}, bs node.Blobstore, es events.Stream, l
 	}
 	p := permissions.NewPermissions(node.NewPermissions(lu), permissionsSelector)
 
-	// fail at startup on an invalid strategy rather than silently keeping or deleting
-	// revisions the admin did not expect. The posix driver does the same in tree.New.
-	revisionsCleanup, err := revisioncleanup.New(o.RevisionsCleanupStrategy)
-	if err != nil {
-		return nil, errors.Wrap(err, "invalid revisions cleanup strategy")
-	}
-
 	tp := tree.New(lu, bs, o, p, store.Create(
 		store.Store(o.IDCache.Store),
 		store.TTL(o.IDCache.TTL),
@@ -199,6 +192,13 @@ func NewDefault(m map[string]interface{}, bs node.Blobstore, es events.Stream, l
 		store.TLSRootCA(o.IDCache.TLSRootCACertificate),
 	), log)
 
+	// fail at startup on an invalid strategy or async settings rather than silently keeping
+	// or deleting revisions the admin did not expect. The posix driver does the same in tree.New.
+	revisionsCleanup, err := revisioncleanup.NewServiceFromOptions(o, lu, tp, log)
+	if err != nil {
+		return nil, errors.Wrap(err, "invalid revisions cleanup configuration")
+	}
+
 	aspects := aspects.Aspects{
 		Lookup:            lu,
 		Tree:              tp,
@@ -209,7 +209,13 @@ func NewDefault(m map[string]interface{}, bs node.Blobstore, es events.Stream, l
 		RevisionsCleanup:  revisionsCleanup,
 	}
 
-	return New(o, aspects, log)
+	fs, err := New(o, aspects, log)
+	if err != nil {
+		// stop the workers of the revision cleanup again
+		_ = revisionsCleanup.Shutdown(context.Background())
+		return nil, err
+	}
+	return fs, nil
 }
 
 // New returns an implementation of the storage.FS interface that talks to
@@ -432,7 +438,7 @@ func (fs *Decomposedfs) handlePostprocessingEvent(ctx context.Context, event eve
 		// Cleanup itself skips the node if another upload is still processing it.
 		// Pass sublog on, so that the cleanup logs with the event's context.
 		if !failed && isVersion {
-			fs.revisionsCleanup.Cleanup(appctx.WithLogger(ctx, &sublog), fs.lu, fs.tp, n)
+			fs.revisionsCleanup.HandleRevisionCreated(appctx.WithLogger(ctx, &sublog), n)
 		}
 
 		if err := events.Publish(
@@ -691,7 +697,8 @@ func (fs *Decomposedfs) WithDisabledSpaces() storage.FS {
 
 // Shutdown shuts down the storage
 func (fs *Decomposedfs) Shutdown(ctx context.Context) error {
-	return nil
+	// stop the background revision cleanup workers, see revisioncleanup.Service.Shutdown
+	return fs.revisionsCleanup.Shutdown(ctx)
 }
 
 // GetQuota returns the quota available
