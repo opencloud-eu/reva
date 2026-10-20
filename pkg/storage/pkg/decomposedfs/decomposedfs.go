@@ -975,7 +975,7 @@ func (fs *Decomposedfs) Move(ctx context.Context, oldRef, newRef *provider.Refer
 		return nil, err
 	}
 	if oldNode.IsProcessing(ctx) {
-		return errtypes.ResourceProcessing(oldRef.String())
+		return nil, errtypes.ResourceProcessing(oldRef.String())
 	}
 
 	if err := fs.tp.Move(ctx, oldNode, newNode); err != nil {
