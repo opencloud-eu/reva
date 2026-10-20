@@ -1,13 +1,14 @@
 # Changelog
 
-## [2.52.0](https://github.com/opencloud-eu/reva/releases/tag/v2.52.0) - 2026-10-19
+## [2.52.0](https://github.com/opencloud-eu/reva/releases/tag/v2.52.0) - 2026-10-20
 
 ### ❤️ Thanks to all contributors! ❤️
 
-@AlexAndBear, @NickWalters, @aduffeck, @butonic, @dragonchaser, @fschade, @micbar, @v-scharf
+@AlexAndBear, @NickWalters, @VicDeo, @aduffeck, @butonic, @dragonchaser, @fschade, @micbar, @v-scharf
 
 ### 🐛 Bug Fixes
 
+- fix(ocm): use a public-only client for WAYF provider discovery [[#814](https://github.com/opencloud-eu/reva/pull/814)]
 - rename the space root before purging it [[#876](https://github.com/opencloud-eu/reva/pull/876)]
 - fix(posix): retry a failed file once its ctime changes [[#809](https://github.com/opencloud-eu/reva/pull/809)]
 - fix(posix): re-assimilate moved and changed files during a scan [[#808](https://github.com/opencloud-eu/reva/pull/808)]
