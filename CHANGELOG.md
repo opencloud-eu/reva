@@ -6,6 +6,13 @@
 
 @AlexAndBear, @NickWalters, @VicDeo, @aduffeck, @butonic, @dragonchaser, @fschade, @micbar, @v-scharf
 
+### ✅ Tests
+
+- fix: retry removing the tombstone of a purged space [[#889](https://github.com/opencloud-eu/reva/pull/889)]
+- try to remove the share migration lock on SIGTERM [[#869](https://github.com/opencloud-eu/reva/pull/869)]
+- fix: separate cronjobs for different tasks [[#868](https://github.com/opencloud-eu/reva/pull/868)]
+- fix: wait for inotify to react [[#863](https://github.com/opencloud-eu/reva/pull/863)]
+
 ### 🐛 Bug Fixes
 
 - fix(ocm): use a public-only client for WAYF provider discovery [[#814](https://github.com/opencloud-eu/reva/pull/814)]
@@ -28,12 +35,6 @@
 - feat: make space2share migration repeatable [[#864](https://github.com/opencloud-eu/reva/pull/864)]
 - Harden unshare [[#856](https://github.com/opencloud-eu/reva/pull/856)]
 - feat: run decomposedfs on foreign metadata via metadata_prefix [[#859](https://github.com/opencloud-eu/reva/pull/859)]
-
-### ✅ Tests
-
-- try to remove the share migration lock on SIGTERM [[#869](https://github.com/opencloud-eu/reva/pull/869)]
-- fix: separate cronjobs for different tasks [[#868](https://github.com/opencloud-eu/reva/pull/868)]
-- fix: wait for inotify to react [[#863](https://github.com/opencloud-eu/reva/pull/863)]
 
 ## [2.51.0](https://github.com/opencloud-eu/reva/releases/tag/v2.51.0) - 2026-10-05
 
