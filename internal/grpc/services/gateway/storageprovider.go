@@ -787,6 +787,10 @@ func (s *svc) TouchFile(ctx context.Context, req *provider.TouchFileRequest) (*p
 }
 
 func (s *svc) Delete(ctx context.Context, req *provider.DeleteRequest) (*provider.DeleteResponse, error) {
+	if st := s.shareRootDeleteStatus(ctx, req.GetRef()); st != nil {
+		return &provider.DeleteResponse{Status: st}, nil
+	}
+
 	// TODO(ishank011): enable deleting references spread across storage providers, eg. /eos
 	var c provider.ProviderAPIClient
 	var err error
@@ -1353,4 +1357,76 @@ func decodePath(s *provider.StorageSpace) (path string) {
 		}
 	}
 	return
+}
+
+// shareRootDeleteStatus denies deleting the root of a share that was granted to
+// the caller. A grantee may give up their access through the share jail, but
+// must not delete the owner's resource through its id.
+func (s *svc) shareRootDeleteStatus(ctx context.Context, ref *provider.Reference) *rpc.Status {
+	if !isReferenceToResource(ref) {
+		return nil
+	}
+
+	isRoot, err := s.isReceivedShareRoot(ctx, ref.GetResourceId())
+
+	// The caller's token may not list received shares (public link or app
+	// provider tokens). They have their own permission model.
+	if gstatus.Code(err) == codes.PermissionDenied {
+		appctx.GetLogger(ctx).Debug().Err(err).
+			Interface("resourceID", ref.GetResourceId()).
+			Msg("gateway: skipping share root check, token cannot list received shares")
+		return nil
+	}
+
+	if err != nil {
+		appctx.GetLogger(ctx).Error().Err(err).
+			Interface("resourceID", ref.GetResourceId()).
+			Msg("gateway: could not check received shares before delete")
+		return status.NewInternal(ctx, "could not verify share permissions for delete")
+	}
+
+	if isRoot {
+		return status.NewPermissionDenied(ctx, nil, "cannot delete the root of a received share")
+	}
+
+	return nil
+}
+
+// isReferenceToResource reports whether the reference addresses a resource by
+// its id (the resource itself) instead of a path below it. Only these requests
+// can target the root of a share.
+func isReferenceToResource(ref *provider.Reference) bool {
+	if ref.GetResourceId() == nil {
+		return false
+	}
+	return ref.GetPath() == "" || ref.GetPath() == "."
+}
+
+// isReceivedShareRoot reports whether the given resource is the root of a share
+// the current user received. Space shares (space membership) are not considered.
+func (s *svc) isReceivedShareRoot(ctx context.Context, id *provider.ResourceId) (bool, error) {
+	res, err := s.ListReceivedShares(ctx, &collaborationv1beta1.ListReceivedSharesRequest{
+		Filters: []*collaborationv1beta1.Filter{share.SpaceRootFilter(false)},
+	})
+	if err != nil {
+		return false, err
+	}
+	if res.GetStatus().GetCode() != rpc.Code_CODE_OK {
+		return false, errtypes.NewErrtypeFromStatus(res.GetStatus())
+	}
+
+	for _, receivedShare := range res.GetShares() {
+		sharedID := receivedShare.GetShare().GetResourceId()
+		if sharedID.GetSpaceId() != "" && sharedID.GetSpaceId() == sharedID.GetOpaqueId() {
+			continue // space membership, not a share root
+		}
+		// converts shares with backwards compatible ids
+		if sharedID.GetSpaceId() == "" {
+			sharedID.StorageId, sharedID.SpaceId = storagespace.SplitStorageID(sharedID.GetStorageId())
+		}
+		if utils.ResourceIDEqual(sharedID, id) {
+			return true, nil
+		}
+	}
+	return false, nil
 }
