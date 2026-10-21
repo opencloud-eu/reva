@@ -37,6 +37,10 @@ type RevisionResult struct {
 type Result struct {
 	SpaceID string
 	NodeID  string
+	// Path is the path of the file (or folder) within its space, e.g. "/Documents/report.odt".
+	// Only on-demand runs (Run) set it, from the folders they walk through; it is empty when
+	// the path is not known, e.g. for a space that could not be cleaned up.
+	Path string
 	// DryRun is set when nothing was deleted, only decided.
 	DryRun bool
 	// Skipped explains why the node was not cleaned up, e.g. because an upload to it is still

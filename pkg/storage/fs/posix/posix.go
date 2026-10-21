@@ -54,6 +54,7 @@ import (
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata/prefixes"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/node"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/permissions"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/revisioncleanup"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/upload"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/usermapper"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/middleware"
@@ -69,7 +70,12 @@ type posixFS struct {
 
 	tree *tree.Tree
 	um   usermapper.Mapper
+	// the inner Decomposedfs, for the on-demand revision cleanup: storage.FS is the
+	// middleware wrapping it, which doesn't pass optional interfaces through
+	revisions revisioncleanup.OnDemand
 }
+
+var _ revisioncleanup.OnDemand = (*posixFS)(nil)
 
 // New returns an implementation to of the storage.FS interface that talk to
 // a local filesystem.
@@ -237,6 +243,9 @@ func New(o *options.Options, stream events.Stream, cache, historyCache *idcache.
 
 	mw := middleware.NewFS(dfs, hooks...)
 	fs.FS = mw
+	if onDemand, ok := dfs.(revisioncleanup.OnDemand); ok {
+		fs.revisions = onDemand
+	}
 	fs.tree = tp
 	fs.um = um
 
@@ -247,6 +256,16 @@ func (fs *posixFS) WithDisabledSpaces() storage.FS {
 	f := *fs
 	f.FS = fs.FS.(storage.SpaceDisabledListableFS).WithDisabledSpaces()
 	return &f
+}
+
+// CleanupRevisionsUnchecked cleans up revisions on demand, see revisioncleanup.OnDemand. It goes to
+// the inner Decomposedfs directly, bypassing the middleware: its space group hooks only matter for
+// creating files, the cleanup only deletes revisions.
+func (fs *posixFS) CleanupRevisionsUnchecked(ctx context.Context, req revisioncleanup.Request, report func(revisioncleanup.Result)) error {
+	if fs.revisions == nil {
+		return errtypes.NotSupported("on-demand revision cleanup")
+	}
+	return fs.revisions.CleanupRevisionsUnchecked(ctx, req, report)
 }
 
 // WarmupIDCache allows triggering a posix fs scan and id cache warmup manually.

@@ -48,6 +48,10 @@
 //     (assimilation). Those revisions are created by a plain rename and never go
 //     through CreateRevision or the upload code, hence the separate trigger.
 //
+// Besides, the revisions of whole spaces, folders or single files can be cleaned up on demand,
+// e.g. by a command line tool, through the OnDemand interface implemented by the storage drivers
+// (see Request and Run). That cleanup also reaches files that never get a new revision anymore.
+//
 // It deliberately does not run inside Tree.CreateRevision, because revisions are
 // not settled at that point while uploads are in flight:
 //

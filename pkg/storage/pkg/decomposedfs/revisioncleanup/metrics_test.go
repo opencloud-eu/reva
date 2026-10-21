@@ -222,3 +222,31 @@ func TestMetricsOfADisabledService(t *testing.T) {
 	requireDelta(t, mWorkers, workers, 0)
 	requireDelta(t, mCapacity, capacity, 0)
 }
+
+// The Service of an on-demand Run leaves the metrics of the storage drivers' Services alone.
+func TestMetricsOnDemandRun(t *testing.T) {
+	enabled := metricValue(t, mEnabled)
+	Enabled.Set(0)
+	defer Enabled.Set(enabled)
+	workers, capacity := metricValue(t, mWorkers), metricValue(t, mCapacity)
+
+	cleaner, err := New("auto")
+	require.NoError(t, err)
+	s, err := newService(cleaner, nil, nil, AsyncOptions{Enabled: true, Workers: 2, QueueSize: 3}, nil, true, false, nil)
+	require.NoError(t, err)
+
+	require.Equal(t, float64(0), metricValue(t, mEnabled))
+	require.Equal(t, workers, metricValue(t, mWorkers))
+	require.Equal(t, capacity, metricValue(t, mCapacity))
+	m := s.m()
+	require.False(t, m.queueLength == QueueLength || m.running == Running || m.queueFull == QueueFull,
+		"the queue metrics are the exported ones")
+
+	require.NoError(t, s.Shutdown(context.Background()))
+	require.Equal(t, workers, metricValue(t, mWorkers))
+	require.Equal(t, capacity, metricValue(t, mCapacity))
+
+	// Run uses such a Service
+	require.NoError(t, Run(context.Background(), nil, nil, nil, cleaner, false, AsyncOptions{Enabled: true}, nil, nil))
+	require.Equal(t, float64(0), metricValue(t, mEnabled))
+}
