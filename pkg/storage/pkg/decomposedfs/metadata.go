@@ -71,10 +71,11 @@ func (fs *Decomposedfs) SetArbitraryMetadata(ctx context.Context, ref *provider.
 	defer storagespace.ContextSetMetadataResult(ctx, result)
 	if md.Metadata != nil {
 		if val, ok := md.Metadata["mtime"]; ok {
-			result.ChangedKeys = append(result.ChangedKeys, "mtime")
 			delete(md.Metadata, "mtime")
 			if err := n.SetMtimeString(ctx, val); err != nil {
 				errs = append(errs, errors.Wrap(err, "could not set mtime"))
+			} else {
+				result.ChangedKeys = append(result.ChangedKeys, "mtime")
 			}
 		}
 		// TODO(jfd) special handling for atime?
@@ -83,10 +84,11 @@ func (fs *Decomposedfs) SetArbitraryMetadata(ctx context.Context, ref *provider.
 		// TODO unset when file is updated
 		// TODO unset when folder is updated or add timestamp to etag?
 		if val, ok := md.Metadata["etag"]; ok {
-			result.ChangedKeys = append(result.ChangedKeys, "etag")
 			delete(md.Metadata, "etag")
 			if err := n.SetEtag(ctx, val); err != nil {
 				errs = append(errs, errors.Wrap(err, "could not set etag"))
+			} else {
+				result.ChangedKeys = append(result.ChangedKeys, "etag")
 			}
 		}
 	}

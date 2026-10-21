@@ -19,6 +19,7 @@
 package eventsmiddleware
 
 import (
+	"maps"
 	"slices"
 	"strings"
 	"time"
@@ -503,43 +504,31 @@ func SpaceDeleted(r *provider.DeleteStorageSpaceResponse, req *provider.DeleteSt
 // ArbitraryMetadataSet converts a successful SetArbitraryMetadata call to an event.
 // A storage that reports its result wins over the request keys; it returns false when nothing changed.
 func ArbitraryMetadataSet(req *provider.SetArbitraryMetadataRequest, result *storage.MetadataResult, spaceOwner *user.UserId, executant *user.User) (events.ArbitraryMetadataChanged, bool) {
-	var changed, removed []string
-	if result != nil {
-		changed, removed = result.ChangedKeys, result.RemovedKeys
-	} else {
-		for k := range req.GetArbitraryMetadata().GetMetadata() {
-			changed = append(changed, k)
-		}
+	if result == nil {
+		result = &storage.MetadataResult{ChangedKeys: slices.Collect(maps.Keys(req.GetArbitraryMetadata().GetMetadata()))}
 	}
-	return arbitraryMetadataChanged(req.GetRef(), changed, removed, spaceOwner, executant)
+	return arbitraryMetadataChanged(req.GetRef(), result, spaceOwner, executant)
 }
 
 // ArbitraryMetadataUnset converts a successful UnsetArbitraryMetadata call to an event.
 // A storage that reports its result wins over the request keys; it returns false when nothing changed.
 func ArbitraryMetadataUnset(req *provider.UnsetArbitraryMetadataRequest, result *storage.MetadataResult, spaceOwner *user.UserId, executant *user.User) (events.ArbitraryMetadataChanged, bool) {
-	var changed, removed []string
-	if result != nil {
-		changed, removed = result.ChangedKeys, result.RemovedKeys
-	} else {
-		removed = req.GetArbitraryMetadataKeys()
+	if result == nil {
+		result = &storage.MetadataResult{RemovedKeys: req.GetArbitraryMetadataKeys()}
 	}
-	return arbitraryMetadataChanged(req.GetRef(), changed, removed, spaceOwner, executant)
+	return arbitraryMetadataChanged(req.GetRef(), result, spaceOwner, executant)
 }
 
-func arbitraryMetadataChanged(ref *provider.Reference, changed, removed []string, spaceOwner *user.UserId, executant *user.User) (events.ArbitraryMetadataChanged, bool) {
-	if len(changed) == 0 && len(removed) == 0 {
+func arbitraryMetadataChanged(ref *provider.Reference, result *storage.MetadataResult, spaceOwner *user.UserId, executant *user.User) (events.ArbitraryMetadataChanged, bool) {
+	if len(result.ChangedKeys) == 0 && len(result.RemovedKeys) == 0 {
 		return events.ArbitraryMetadataChanged{}, false
 	}
-	changed = slices.Clone(changed)
-	removed = slices.Clone(removed)
-	slices.Sort(changed)
-	slices.Sort(removed)
 	return events.ArbitraryMetadataChanged{
 		SpaceOwner:        spaceOwner,
 		Executant:         executant.GetId(),
 		Ref:               ref,
-		ChangedKeys:       changed,
-		RemovedKeys:       removed,
+		ChangedKeys:       slices.Sorted(slices.Values(result.ChangedKeys)),
+		RemovedKeys:       slices.Sorted(slices.Values(result.RemovedKeys)),
 		Timestamp:         utils.TSNow(),
 		ImpersonatingUser: extractImpersonator(executant),
 	}, true
