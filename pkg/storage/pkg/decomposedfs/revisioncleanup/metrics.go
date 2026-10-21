@@ -87,3 +87,37 @@ const (
 	queueFullBlocked = "blocked"
 	queueFullDropped = "dropped"
 )
+
+// serviceMetrics are the metrics a Service updates about itself: its configuration, its queue
+// and its workers.
+type serviceMetrics struct {
+	enabled, workers, queueCapacity, queueLength, running prometheus.Gauge
+	queueFull                                             *prometheus.CounterVec
+}
+
+// driverMetrics are the exported metrics, updated by the Services of the storage drivers.
+var driverMetrics = serviceMetrics{
+	enabled:       Enabled,
+	workers:       Workers,
+	queueCapacity: QueueCapacity,
+	queueLength:   QueueLength,
+	running:       Running,
+	queueFull:     QueueFull,
+}
+
+// unregisteredMetrics returns metrics that are not registered, for the Service of an on-demand
+// Run: the exported ones describe the cleanup of the storage driver, which a run of its own,
+// with its own queue and workers, must not distort, should it ever run in the same process.
+// The deletions of a run are counted all the same (RevisionsDeleted, BytesDeleted and
+// PurgeFailures), as the Cleaner counts them.
+func unregisteredMetrics() *serviceMetrics {
+	gauge := func() prometheus.Gauge { return prometheus.NewGauge(prometheus.GaugeOpts{Name: "unregistered"}) }
+	return &serviceMetrics{
+		enabled:       gauge(),
+		workers:       gauge(),
+		queueCapacity: gauge(),
+		queueLength:   gauge(),
+		running:       gauge(),
+		queueFull:     prometheus.NewCounterVec(prometheus.CounterOpts{Name: "unregistered"}, []string{"outcome"}),
+	}
+}
