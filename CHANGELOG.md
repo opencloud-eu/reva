@@ -8,6 +8,7 @@
 
 ### 🐛 Bug Fixes
 
+- fix: do not delete the destination of a move across spaces [[#891](https://github.com/opencloud-eu/reva/pull/891)]
 - fix move return [[#892](https://github.com/opencloud-eu/reva/pull/892)]
 - fix(ocm): use a public-only client for WAYF provider discovery [[#814](https://github.com/opencloud-eu/reva/pull/814)]
 - rename the space root before purging it [[#876](https://github.com/opencloud-eu/reva/pull/876)]
