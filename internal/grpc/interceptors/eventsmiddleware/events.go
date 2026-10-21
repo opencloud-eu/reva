@@ -66,6 +66,9 @@ func NewUnary(m map[string]interface{}) (grpc.UnaryServerInterceptor, int, error
 		moveSlot := &storagespace.MoveResultSlot{}
 		ctx = storagespace.ContextRegisterMoveResultSlot(ctx, moveSlot)
 
+		metadataSlot := &storagespace.MetadataResultSlot{}
+		ctx = storagespace.ContextRegisterMetadataResultSlot(ctx, metadataSlot)
+
 		res, err := handler(ctx, req)
 		if err != nil {
 			return res, err
@@ -204,6 +207,18 @@ func NewUnary(m map[string]interface{}) (grpc.UnaryServerInterceptor, int, error
 		case *provider.UnlockResponse:
 			if isSuccess(v) {
 				ev = FileUnlocked(v, req.(*provider.UnlockRequest), ownerID, executant)
+			}
+		case *provider.SetArbitraryMetadataResponse:
+			if isSuccess(v) {
+				if e, ok := ArbitraryMetadataSet(req.(*provider.SetArbitraryMetadataRequest), metadataSlot.Result, ownerID, executant); ok {
+					ev = e
+				}
+			}
+		case *provider.UnsetArbitraryMetadataResponse:
+			if isSuccess(v) {
+				if e, ok := ArbitraryMetadataUnset(req.(*provider.UnsetArbitraryMetadataRequest), metadataSlot.Result, ownerID, executant); ok {
+					ev = e
+				}
 			}
 		}
 

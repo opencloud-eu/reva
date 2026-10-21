@@ -19,6 +19,7 @@
 package eventsmiddleware
 
 import (
+	"slices"
 	"strings"
 	"time"
 
@@ -497,6 +498,51 @@ func SpaceDeleted(r *provider.DeleteStorageSpaceResponse, req *provider.DeleteSt
 		FinalMembers: final,
 		Timestamp:    time.Now(),
 	}
+}
+
+// ArbitraryMetadataSet converts a successful SetArbitraryMetadata call to an event.
+// A storage that reports its result wins over the request keys; it returns false when nothing changed.
+func ArbitraryMetadataSet(req *provider.SetArbitraryMetadataRequest, result *storage.MetadataResult, spaceOwner *user.UserId, executant *user.User) (events.ArbitraryMetadataChanged, bool) {
+	var changed, removed []string
+	if result != nil {
+		changed, removed = result.ChangedKeys, result.RemovedKeys
+	} else {
+		for k := range req.GetArbitraryMetadata().GetMetadata() {
+			changed = append(changed, k)
+		}
+	}
+	return arbitraryMetadataChanged(req.GetRef(), changed, removed, spaceOwner, executant)
+}
+
+// ArbitraryMetadataUnset converts a successful UnsetArbitraryMetadata call to an event.
+// A storage that reports its result wins over the request keys; it returns false when nothing changed.
+func ArbitraryMetadataUnset(req *provider.UnsetArbitraryMetadataRequest, result *storage.MetadataResult, spaceOwner *user.UserId, executant *user.User) (events.ArbitraryMetadataChanged, bool) {
+	var changed, removed []string
+	if result != nil {
+		changed, removed = result.ChangedKeys, result.RemovedKeys
+	} else {
+		removed = req.GetArbitraryMetadataKeys()
+	}
+	return arbitraryMetadataChanged(req.GetRef(), changed, removed, spaceOwner, executant)
+}
+
+func arbitraryMetadataChanged(ref *provider.Reference, changed, removed []string, spaceOwner *user.UserId, executant *user.User) (events.ArbitraryMetadataChanged, bool) {
+	if len(changed) == 0 && len(removed) == 0 {
+		return events.ArbitraryMetadataChanged{}, false
+	}
+	changed = slices.Clone(changed)
+	removed = slices.Clone(removed)
+	slices.Sort(changed)
+	slices.Sort(removed)
+	return events.ArbitraryMetadataChanged{
+		SpaceOwner:        spaceOwner,
+		Executant:         executant.GetId(),
+		Ref:               ref,
+		ChangedKeys:       changed,
+		RemovedKeys:       removed,
+		Timestamp:         utils.TSNow(),
+		ImpersonatingUser: extractImpersonator(executant),
+	}, true
 }
 
 func extractOwner(u *user.User) *user.UserId {

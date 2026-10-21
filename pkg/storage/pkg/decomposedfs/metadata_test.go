@@ -28,6 +28,7 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata/prefixes"
 	helpers "github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/testhelpers"
+	"github.com/opencloud-eu/reva/v2/pkg/storagespace"
 	"github.com/stretchr/testify/mock"
 )
 
@@ -150,6 +151,70 @@ var _ = Describe("SetArbitraryMetadata", func() {
 				Expect(err).ToNot(HaveOccurred())
 				return tmtimeOf()
 			}).Should(BeTemporally(">", afterChange))
+		})
+	})
+
+	Context("with a result slot in the context", func() {
+		var slot *storagespace.MetadataResultSlot
+
+		JustBeforeEach(func() {
+			slot = &storagespace.MetadataResultSlot{}
+			env.Ctx = storagespace.ContextRegisterMetadataResultSlot(env.Ctx, slot)
+		})
+
+		It("reports only the keys that were actually written", func() {
+			err := env.Fs.SetArbitraryMetadata(env.Ctx, ref, &provider.ArbitraryMetadata{
+				Metadata: map[string]string{"foo": "bar", "baz": "qux"},
+			})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(slot.Result).ToNot(BeNil())
+			Expect(slot.Result.ChangedKeys).To(ConsistOf("foo", "baz"))
+			Expect(slot.Result.RemovedKeys).To(BeEmpty())
+
+			err = env.Fs.SetArbitraryMetadata(env.Ctx, ref, &provider.ArbitraryMetadata{
+				Metadata: map[string]string{"foo": "bar", "baz": "changed"},
+			})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(slot.Result.ChangedKeys).To(ConsistOf("baz"))
+		})
+
+		It("reports nothing when the values did not change", func() {
+			err := env.Fs.SetArbitraryMetadata(env.Ctx, ref, &provider.ArbitraryMetadata{
+				Metadata: map[string]string{"foo": "bar"},
+			})
+			Expect(err).ToNot(HaveOccurred())
+
+			err = env.Fs.SetArbitraryMetadata(env.Ctx, ref, &provider.ArbitraryMetadata{
+				Metadata: map[string]string{"foo": "bar"},
+			})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(slot.Result).ToNot(BeNil())
+			Expect(slot.Result.ChangedKeys).To(BeEmpty())
+		})
+
+		It("counts mtime and etag as changed keys", func() {
+			err := env.Fs.SetArbitraryMetadata(env.Ctx, ref, &provider.ArbitraryMetadata{
+				Metadata: map[string]string{"mtime": "1700000000", "etag": "abc"},
+			})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(slot.Result.ChangedKeys).To(ConsistOf("mtime", "etag"))
+		})
+
+		It("reports only the keys that were actually removed", func() {
+			err := env.Fs.SetArbitraryMetadata(env.Ctx, ref, &provider.ArbitraryMetadata{
+				Metadata: map[string]string{"foo": "bar"},
+			})
+			Expect(err).ToNot(HaveOccurred())
+
+			err = env.Fs.UnsetArbitraryMetadata(env.Ctx, ref, []string{"foo", "never-set"})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(slot.Result).ToNot(BeNil())
+			Expect(slot.Result.RemovedKeys).To(ConsistOf("foo"))
+			Expect(slot.Result.ChangedKeys).To(BeEmpty())
+
+			err = env.Fs.UnsetArbitraryMetadata(env.Ctx, ref, []string{"foo"})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(slot.Result.RemovedKeys).To(BeEmpty())
 		})
 	})
 

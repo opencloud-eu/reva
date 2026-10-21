@@ -31,6 +31,7 @@ type key int
 const (
 	sendOwnerChanKey key = iota
 	moveResultSlotKey
+	metadataResultSlotKey
 )
 
 // ContextSendSpaceOwnerID stores the space owner in the context.
@@ -62,6 +63,23 @@ func ContextRegisterMoveResultSlot(ctx context.Context, slot *MoveResultSlot) co
 // ContextSetMoveResult fills the slot registered in ctx with the given result.
 func ContextSetMoveResult(ctx context.Context, r *storage.MoveResult) {
 	if slot, ok := ctx.Value(moveResultSlotKey).(*MoveResultSlot); ok {
+		slot.Result = r
+	}
+}
+
+// MetadataResultSlot is a mutable container for a *storage.MetadataResult.
+type MetadataResultSlot struct {
+	Result *storage.MetadataResult
+}
+
+// ContextRegisterMetadataResultSlot stores an empty slot in ctx so the handler can fill it.
+func ContextRegisterMetadataResultSlot(ctx context.Context, slot *MetadataResultSlot) context.Context {
+	return context.WithValue(ctx, metadataResultSlotKey, slot)
+}
+
+// ContextSetMetadataResult fills the slot registered in ctx with the given result.
+func ContextSetMetadataResult(ctx context.Context, r *storage.MetadataResult) {
+	if slot, ok := ctx.Value(metadataResultSlotKey).(*MetadataResultSlot); ok {
 		slot.Result = r
 	}
 }
