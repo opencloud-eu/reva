@@ -35,6 +35,7 @@ import (
 
 	"github.com/opencloud-eu/reva/v2/pkg/appctx"
 	ctxpkg "github.com/opencloud-eu/reva/v2/pkg/ctx"
+	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/node"
 	"github.com/opencloud-eu/reva/v2/pkg/utils"
 )
@@ -170,6 +171,43 @@ func (session *DecomposedFsSession) HeaderIfUnmodifiedSince() string {
 // Node returns the node for the session
 func (session *DecomposedFsSession) Node(ctx context.Context) (*node.Node, error) {
 	return node.ReadNode(ctx, session.store.lu, session.SpaceID(), session.info.Storage["NodeId"], "", false, nil, true)
+}
+
+// IsOrphaned returns true if the session's target node can no longer be
+// resolved. This happens when the node file still exists but its metadata is
+// gone, e.g. because an ancestor was moved to the trash while the upload was in
+// flight. Such a session can never finish postprocessing: reading the node
+// fails before the destination can be determined.
+func (session *DecomposedFsSession) IsOrphaned(ctx context.Context) bool {
+	_, err := session.Node(ctx)
+	return err != nil
+}
+
+// syntheticNode builds a node from the session metadata alone, without reading
+// the node from disk. It is used to clean up sessions whose node metadata is
+// unreadable: the parent id is still recorded in the session, which is all that
+// is needed to walk up the tree and revert the size propagation.
+func (session *DecomposedFsSession) syntheticNode(ctx context.Context) (*node.Node, error) {
+	if session.NodeID() == "" || session.NodeParentID() == "" {
+		return nil, errtypes.InternalError("session has no node and parent id")
+	}
+	n := node.New(
+		session.SpaceID(),
+		session.NodeID(),
+		session.NodeParentID(),
+		session.Filename(),
+		session.Size(),
+		session.ID(),
+		provider.ResourceType_RESOURCE_TYPE_FILE,
+		nil,
+		session.store.lu,
+	)
+	spaceRoot, err := node.ReadNode(ctx, session.store.lu, session.SpaceID(), session.SpaceID(), "", false, nil, false)
+	if err != nil {
+		return nil, err
+	}
+	n.SpaceRoot = spaceRoot
+	return n, nil
 }
 
 // ID returns the upload session id
