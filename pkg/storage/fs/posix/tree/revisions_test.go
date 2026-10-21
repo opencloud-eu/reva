@@ -106,6 +106,60 @@ var _ = Describe("Revisions", func() {
 		})
 	})
 
+	Describe("the on-demand cleanup", func() {
+		It("cleans up the revisions of a file in the posix layout", func() {
+			req := revisioncleanup.Request{
+				SpaceIDs: []string{non_watching_env.SpaceRootRes.SpaceId},
+				Path:     "dir1/" + n.Name,
+				Strategy: "0", // deletes all revisions
+			}
+			var results []revisioncleanup.Result
+
+			// a dry run first: nothing is deleted
+			req.DryRun = true
+			Expect(non_watching_env.Fs.CleanupRevisionsUnchecked(context.Background(), req, func(r revisioncleanup.Result) { results = append(results, r) })).To(Succeed())
+			Expect(results).To(HaveLen(1))
+			Expect(results[0].Path).To(Equal("/dir1/" + n.Name))
+			Expect(results[0].Revisions).To(HaveLen(len(keys)))
+			Expect(listKeys()).To(ConsistOf(keys))
+
+			req.DryRun = false
+			results = nil
+			Expect(non_watching_env.Fs.CleanupRevisionsUnchecked(context.Background(), req, func(r revisioncleanup.Result) { results = append(results, r) })).To(Succeed())
+			Expect(results).To(HaveLen(1))
+			Expect(listKeys()).To(BeEmpty())
+		})
+	})
+
+	Describe("the on-demand cleanup of a folder with a file the storage doesn't know yet", func() {
+		It("ignores the file instead of registering it", func() {
+			env := non_watching_env
+			unknown := filepath.Join(filepath.Dir(n.InternalPath()), uuid.NewString())
+			Expect(os.WriteFile(unknown, []byte("unknown"), 0600)).To(Succeed())
+			isKnown := func() bool {
+				_, _, err := env.Lookup.IDsForPath(env.Ctx, unknown)
+				return err == nil
+			}
+			Expect(isKnown()).To(BeFalse())
+
+			for _, dryRun := range []bool{true, false} {
+				req := revisioncleanup.Request{SpaceIDs: []string{env.SpaceRootRes.SpaceId}, Path: "dir1", Strategy: "0", DryRun: dryRun}
+				var paths []string
+				Expect(env.Fs.CleanupRevisionsUnchecked(context.Background(), req, func(r revisioncleanup.Result) { paths = append(paths, r.Path) })).To(Succeed())
+				Expect(isKnown()).To(BeFalse(), "dry run %v registered the file", dryRun)
+				Expect(paths).To(ContainElement("/dir1/"+n.Name), "the paths of the files in the folder")
+			}
+			Expect(listKeys()).To(BeEmpty(), "the known file was cleaned up")
+
+			// unlike a regular listing, which registers it
+			dir1, err := env.Lookup.NodeFromResource(env.Ctx, &provider.Reference{ResourceId: env.SpaceRootRes, Path: "dir1"})
+			Expect(err).ToNot(HaveOccurred())
+			_, err = env.Tree.ListFolder(env.Ctx, dir1)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(isKnown()).To(BeTrue())
+		})
+	})
+
 	Describe("revisioncleanup.Cleaner", func() {
 		It("purges the revisions the strategy wants to delete", func() {
 			// keep everything younger than 7 days, delete everything older than 30 days, thin out in between
