@@ -214,7 +214,7 @@ var _ = Describe("Decomposed", func() {
 
 				Expect(env.Fs.MarkProcessing(env.Ctx, oldRef, true, "test-session")).To(Succeed())
 
-				err := env.Fs.Move(env.Ctx, oldRef, newRef)
+				_, err := env.Fs.Move(env.Ctx, oldRef, newRef)
 
 				Expect(err).To(HaveOccurred())
 				_, ok := err.(errtypes.IsResourceProcessing)

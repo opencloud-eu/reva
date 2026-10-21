@@ -929,7 +929,7 @@ func (fs *Decomposedfs) Move(ctx context.Context, oldRef, newRef *provider.Refer
 
 	// check processing on source
 	if oldNode.IsProcessing(ctx) {
-		return errtypes.ResourceProcessing(oldRef.String())
+		return nil, errtypes.ResourceProcessing(oldRef.String())
 	}
 
 	if err := fs.tp.Move(ctx, oldNode, newNode); err != nil {
