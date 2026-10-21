@@ -56,6 +56,10 @@ var (
 	defaultFilePerm = os.FileMode(0664)
 )
 
+// statusChecksumMismatch is the status code the tus checksum extension uses for uploads whose
+// checksum does not match, https://tus.io/protocols/resumable-upload#checksum
+const statusChecksumMismatch = 460
+
 func init() {
 	tracer = otel.Tracer("github.com/opencloud-eu/reva/v2/pkg/storage/utils/decomposedfs/upload")
 }
@@ -136,6 +140,11 @@ func (session *DecomposedFsSession) FinishUpload(ctx context.Context) error {
 		return tusd.NewError("ERR_ALREADY_EXISTS", err.Error(), http.StatusConflict)
 	case errtypes.Aborted:
 		return tusd.NewError("ERR_PRECONDITION_FAILED", err.Error(), http.StatusPreconditionFailed)
+	case errtypes.ChecksumMismatch:
+		// the upload has been discarded, clients have to start a new one
+		return tusd.NewError("ERR_CHECKSUM_MISMATCH", err.Error(), statusChecksumMismatch)
+	case errtypes.BadRequest:
+		return tusd.NewError("ERR_BAD_REQUEST", err.Error(), http.StatusBadRequest)
 	default:
 		return err
 	}
