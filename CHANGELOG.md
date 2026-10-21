@@ -1,20 +1,14 @@
 # Changelog
 
-## [2.52.0](https://github.com/opencloud-eu/reva/releases/tag/v2.52.0) - 2026-10-20
+## [2.52.0](https://github.com/opencloud-eu/reva/releases/tag/v2.52.0) - 2026-10-21
 
 ### ❤️ Thanks to all contributors! ❤️
 
 @AlexAndBear, @NickWalters, @VicDeo, @aduffeck, @butonic, @dragonchaser, @fschade, @maki5, @micbar, @v-scharf
 
-### ✅ Tests
-
-- fix: retry removing the tombstone of a purged space [[#889](https://github.com/opencloud-eu/reva/pull/889)]
-- try to remove the share migration lock on SIGTERM [[#869](https://github.com/opencloud-eu/reva/pull/869)]
-- fix: separate cronjobs for different tasks [[#868](https://github.com/opencloud-eu/reva/pull/868)]
-- fix: wait for inotify to react [[#863](https://github.com/opencloud-eu/reva/pull/863)]
-
 ### 🐛 Bug Fixes
 
+- fix move return [[#892](https://github.com/opencloud-eu/reva/pull/892)]
 - fix(ocm): use a public-only client for WAYF provider discovery [[#814](https://github.com/opencloud-eu/reva/pull/814)]
 - rename the space root before purging it [[#876](https://github.com/opencloud-eu/reva/pull/876)]
 - fix(posix): retry a failed file once its ctime changes [[#809](https://github.com/opencloud-eu/reva/pull/809)]
@@ -27,6 +21,13 @@
 - fix(posix): keep a handle on the blob for the copy target [[#807](https://github.com/opencloud-eu/reva/pull/807)]
 - test: wait for the DeleteRevision handler before redelivering [[#861](https://github.com/opencloud-eu/reva/pull/861)]
 - fix filedescriptor leaks [[#847](https://github.com/opencloud-eu/reva/pull/847)]
+
+### ✅ Tests
+
+- fix: retry removing the tombstone of a purged space [[#889](https://github.com/opencloud-eu/reva/pull/889)]
+- try to remove the share migration lock on SIGTERM [[#869](https://github.com/opencloud-eu/reva/pull/869)]
+- fix: separate cronjobs for different tasks [[#868](https://github.com/opencloud-eu/reva/pull/868)]
+- fix: wait for inotify to react [[#863](https://github.com/opencloud-eu/reva/pull/863)]
 
 ### 📈 Enhancement
 
