@@ -52,6 +52,10 @@
 //     (assimilation). Those revisions are created by a plain rename and never go
 //     through CreateRevision or the upload code, hence the separate trigger.
 //
+// Besides, the revisions of whole spaces, folders or single files can be cleaned up on demand,
+// e.g. by a command line tool, through the OnDemand interface implemented by the storage drivers
+// (see Request and Run). That cleanup also reaches files that never get a new revision anymore.
+//
 // It deliberately does not run inside Tree.CreateRevision, because revisions are
 // not settled at that point while uploads are in flight:
 //
@@ -352,24 +356,27 @@ func (c *Cleaner) run(ctx context.Context, lu node.PathLookup, rs RevisionStore,
 		defer func() { _ = unlock() }()
 	}
 
-	// Read the status from the backend and not via n.IsProcessing(): n caches its
-	// attributes, and after an upload the processing flag is removed through a
-	// different *node.Node instance (Decomposedfs.MarkProcessing), so the cache of n
-	// would still say "processing" and the cleanup would never run.
-	status, err := lu.MetadataBackend().Get(ctx, n, prefixes.StatusPrefix)
-	switch {
-	case err != nil && !metadata.IsAttrUnset(err):
+	// Read the status and the blob id from storage, under the lock (but in a dry run),
+	// and neither via n.IsProcessing() nor from the cache of the backend:
+	//   - n caches its attributes, and after an upload the processing flag is removed
+	//     through a different *node.Node instance (Decomposedfs.MarkProcessing), so the
+	//     cache of n would still say "processing" and the cleanup would never run;
+	//   - the cache of the backend may be local to the process, and an on-demand cleanup
+	//     runs in a process of its own next to the server: when it cached the node
+	//     earlier, e.g. while listing the folder, it would miss an upload the server
+	//     started since then, and delete the revision the upload has to roll back to.
+	attribs, err := lu.MetadataBackend().Reload(ctx, n)
+	if err != nil {
 		log.Error().Err(err).Msg("revision cleanup: could not read node status")
 		result.Err = fmt.Errorf("could not read node status: %w", err)
 		return result
-	case strings.HasPrefix(string(status), node.ProcessingStatus):
+	}
+	if strings.HasPrefix(string(attribs[prefixes.StatusPrefix]), node.ProcessingStatus) {
 		log.Debug().Msg("revision cleanup: node is processing, skipping")
 		result.Skipped = "an upload to the file is still being processed"
 		return result
 	}
-
-	// read from the backend as well, for the same reason
-	if blobID, err := lu.MetadataBackend().Get(ctx, n, prefixes.BlobIDAttr); err == nil {
+	if blobID, ok := attribs[prefixes.BlobIDAttr]; ok {
 		currentBlobID = string(blobID)
 	}
 
