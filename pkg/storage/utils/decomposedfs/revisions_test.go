@@ -1,8 +1,8 @@
 // Copyright 2018-2021 CERN
-// Copyright 2025 OpenCloud GmbH <mail@opencloud.eu>
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
-// you may obtain a copy of this license at
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
 //
 //     http://www.apache.org/licenses/LICENSE-2.0
 //
@@ -22,6 +22,7 @@ import (
 	"strings"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/decomposedfs/metadata/prefixes"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/decomposedfs/node"
 	helpers "github.com/opencloud-eu/reva/v2/pkg/storage/utils/decomposedfs/testhelpers"
@@ -31,23 +32,18 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-var _ = Describe("DeleteRevision", func() {
+var _ = Describe("Revisions", func() {
 	var (
 		env     *helpers.TestEnv
 		file    *node.Node
 		fileRef *provider.Reference
 	)
 
-	// the 2024-01-01 revision captures "orig-blobid", the 2024-06-01 revision
-	// captures "second-blobid" and the node is left with "bad-blobid",
-	// simulating a stuck upload
 	const (
 		rev1 = "2024-01-01T00:00:00Z"
 		rev2 = "2024-06-01T00:00:00Z"
 	)
 
-	// createRevisionAt captures the node's current blob metadata in a new
-	// revision, like the upload store does
 	createRevisionAt := func(version string) error {
 		revPath := env.Lookup.InternalPath(file.SpaceID, file.ID+node.RevisionIDDelimiter+version)
 		f, err := os.OpenFile(revPath, os.O_CREATE|os.O_EXCL, 0600)
@@ -120,19 +116,15 @@ var _ = Describe("DeleteRevision", func() {
 		err := env.Fs.DeleteRevision(env.Ctx, fileRef, file.ID+node.RevisionIDDelimiter+rev1)
 		Expect(err).ToNot(HaveOccurred())
 
-		// the deleted revision file is gone, the later revision survives
 		_, statErr := os.Stat(env.Lookup.InternalPath(file.SpaceID, file.ID+node.RevisionIDDelimiter+rev1))
 		Expect(os.IsNotExist(statErr)).To(BeTrue())
 		_, statErr = os.Stat(env.Lookup.InternalPath(file.SpaceID, file.ID+node.RevisionIDDelimiter+rev2))
 		Expect(statErr).ToNot(HaveOccurred())
 
-		// the node's current content is untouched
 		restored, err := env.Lookup.NodeFromResource(env.Ctx, fileRef)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(restored.BlobID).To(Equal("bad-blobid"))
 		Expect(restored.Blobsize).To(Equal(int64(42)))
-
-		// only the revision's own blob was deleted
 		Expect(deleted).To(Equal([]string{"orig-blobid"}))
 	})
 
@@ -149,5 +141,22 @@ var _ = Describe("DeleteRevision", func() {
 		Expect(statErr).ToNot(HaveOccurred())
 		_, statErr = os.Stat(env.Lookup.InternalPath(file.SpaceID, file.ID+node.RevisionIDDelimiter+rev2))
 		Expect(statErr).ToNot(HaveOccurred())
+	})
+
+	Context("RestoreRevision on a node marked as processing", func() {
+		It("rejects with ResourceProcessing", func() {
+			env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything).Return(&provider.ResourcePermissions{
+				Stat:               true,
+				RestoreFileVersion: true,
+			}, nil)
+			Expect(env.Fs.MarkProcessing(env.Ctx, fileRef, true, "revision-test")).To(Succeed())
+
+			revisionKey := file.ID + node.RevisionIDDelimiter + rev1
+			err := env.Fs.RestoreRevision(env.Ctx, fileRef, revisionKey)
+
+			Expect(err).To(HaveOccurred())
+			_, ok := err.(errtypes.IsResourceProcessing)
+			Expect(ok).To(BeTrue(), "expected ResourceProcessing, got %T: %v", err, err)
+		})
 	})
 })

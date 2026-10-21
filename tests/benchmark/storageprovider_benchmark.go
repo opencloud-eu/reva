@@ -194,7 +194,8 @@ var _ = Describe("FS Benchmark", func() {
 		}
 		experiment.SampleDuration("runtime: posix fs", func(idx int) {
 			targetRef.Path = fmt.Sprintf("%d/file.txt", idx)
-			Expect(posixEnv.Fs.Move(posixEnv.Ctx, ref, targetRef)).To(Succeed())
+			_, err := posixEnv.Fs.Move(posixEnv.Ctx, ref, targetRef)
+			Expect(err).ToNot(HaveOccurred())
 			ref.Path = targetRef.Path
 		}, gmeasure.SamplingConfig{N: N})
 
@@ -211,7 +212,8 @@ var _ = Describe("FS Benchmark", func() {
 		}
 		experiment.SampleDuration("runtime: decomposed fs", func(idx int) {
 			targetRef.Path = fmt.Sprintf("%d/file.txt", idx)
-			Expect(decomposedEnv.Fs.Move(decomposedEnv.Ctx, ref, targetRef)).To(Succeed())
+			_, err := decomposedEnv.Fs.Move(decomposedEnv.Ctx, ref, targetRef)
+			Expect(err).ToNot(HaveOccurred())
 			ref.Path = targetRef.Path
 		}, gmeasure.SamplingConfig{N: N})
 	})
