@@ -134,10 +134,14 @@ type Service struct {
 	// it takes
 	queueFullTimeout time.Duration
 
+	// the numbers this Service added to the Workers and QueueCapacity gauges
+	workers   int
+	queueSize int
+
 	mu     sync.Mutex
-	queued map[string]*request // the requests waiting in the queue, by node
+	queued map[string]*request // the requests waiting in the queue, by node; QueueLength counts them
 	// the nodes being cleaned up by a worker, with the request to queue once more when it
-	// is done, nil if there is none
+	// is done, nil if there is none; QueueLength counts those requests as well
 	running map[string]*request
 	closed  bool
 }
@@ -199,6 +203,7 @@ func NewService(cleaner *Cleaner, lu node.PathLookup, rs RevisionStore, opts Asy
 		return &Service{cleaner: cleaner, log: log}, nil
 	}
 	s := &Service{cleaner: cleaner, lu: lu, rs: rs, log: log}
+	Enabled.Set(1)
 	if opts.Enabled {
 		s.queueFullTimeout = opts.QueueFullTimeout
 		s.startWorkers(workers, queueSize, policy, s.cleanupNode)
@@ -225,6 +230,10 @@ func (s *Service) startWorkers(workers, queueSize int, policy QueueFullPolicy, p
 	s.done = make(chan struct{})
 	s.queued = make(map[string]*request)
 	s.running = make(map[string]*request)
+	s.workers = workers
+	s.queueSize = queueSize
+	Workers.Add(float64(workers))
+	QueueCapacity.Add(float64(queueSize))
 	for range workers {
 		s.wg.Add(1)
 		go s.work()
@@ -322,6 +331,7 @@ func (s *Service) enqueue(r *request) {
 		// being cleaned up right now: it is queued once more when that is done
 		if again == nil {
 			s.running[key] = r
+			QueueLength.Inc()
 		} else {
 			again.merge(r)
 		}
@@ -329,6 +339,7 @@ func (s *Service) enqueue(r *request) {
 		return
 	}
 	s.queued[key] = r
+	QueueLength.Inc()
 	s.mu.Unlock()
 	s.send(r)
 }
@@ -337,16 +348,20 @@ func (s *Service) enqueue(r *request) {
 // s.mu is not held while sending, so that a blocked sender does not block the workers.
 func (s *Service) send(r *request) {
 	log := appctx.GetLogger(r.ctx).With().Str("spaceid", r.spaceID).Str("nodeid", r.nodeID).Logger()
+	select {
+	case s.queue <- r:
+		return
+	default:
+	}
 	if s.policy == QueueFullDrop {
-		select {
-		case s.queue <- r:
-		default:
-			s.forget(r)
-			log.Warn().Str("path", s.internalPath(r.spaceID, r.nodeID)).
-				Msg("revision cleanup: queue is full, skipping the cleanup of this node until its next revision")
-		}
+		QueueFull.WithLabelValues(queueFullDropped).Inc()
+		s.forget(r)
+		log.Warn().Str("path", s.internalPath(r.spaceID, r.nodeID)).
+			Msg("revision cleanup: queue is full, skipping the cleanup of this node until its next revision")
 		return
 	}
+	QueueFull.WithLabelValues(queueFullBlocked).Inc()
+	log.Debug().Msg("revision cleanup: queue is full, waiting for room")
 	// with a timeout, a caller doesn't wait for longer than that: under sustained load, it
 	// would otherwise slow down every write, e.g. the consumer of the postprocessing events
 	var timeout <-chan time.Time
@@ -360,6 +375,7 @@ func (s *Service) send(r *request) {
 	case <-s.done:
 		s.forget(r)
 	case <-timeout:
+		QueueFull.WithLabelValues(queueFullDropped).Inc()
 		s.forget(r)
 		log.Warn().Str("path", s.internalPath(r.spaceID, r.nodeID)).Dur("timeout", s.queueFullTimeout).
 			Msg("revision cleanup: queue is still full after the timeout, skipping the cleanup of this node until its next revision")
@@ -380,6 +396,7 @@ func (s *Service) forget(r *request) {
 	s.mu.Lock()
 	if s.queued[r.key()] == r {
 		delete(s.queued, r.key())
+		QueueLength.Dec()
 	}
 	s.mu.Unlock()
 }
@@ -401,34 +418,42 @@ func (s *Service) work() {
 		case r := <-s.queue:
 			select {
 			case <-s.done:
-				// shut down while waiting for this request: abandon it, it stays
-				// in s.queued and is counted as abandoned
+				// shut down while waiting for this request: abandon it, Shutdown
+				// counts it as abandoned
 				return
 			default:
 			}
 			// from here on, new requests for the node are collected to queue it once more
 			// when this cleanup is done, instead of being merged into this one
 			s.mu.Lock()
+			if s.closed {
+				// shut down in the meantime: Shutdown already counted this request as abandoned
+				s.mu.Unlock()
+				return
+			}
 			if s.queued[r.key()] == r {
 				delete(s.queued, r.key())
+				QueueLength.Dec()
 			}
 			s.running[r.key()] = nil
 			keep := slices.Clone(r.keep)
 			s.mu.Unlock()
+			Running.Inc()
 			ctx, span := startSpan(r)
 			s.process(ctx, r.spaceID, r.nodeID, keep)
 			span.End()
+			Running.Dec()
 			s.mu.Lock()
 			again := s.running[r.key()]
 			delete(s.running, r.key())
 			if again == nil || s.closed {
-				// done, or shut down, which abandons a request to queue again
+				// done, or shut down, which abandoned a request to queue again
 				s.mu.Unlock()
 				continue
 			}
 			// queue the node once more, at the end of the queue, so that the other nodes get
 			// their turn; sending in a goroutine of its own, as a worker must never wait for
-			// room in the queue it empties
+			// room in the queue it empties. QueueLength already counts the request.
 			s.queued[again.key()] = again
 			s.mu.Unlock()
 			go s.send(again)
@@ -471,14 +496,20 @@ func (s *Service) Shutdown(ctx context.Context) error {
 	}
 	s.closed = true
 	close(s.done)
-	// the nodes to clean up once more are abandoned like the ones waiting in the queue
-	again := 0
+	// abandon the requests still waiting, in the queue or to be queued once more: they won't
+	// be processed anymore, and their nodes are cleaned up again when they get their next
+	// revision
+	abandoned := len(s.queued)
+	clear(s.queued)
 	for key, r := range s.running {
 		if r != nil {
-			again++
+			abandoned++
 			s.running[key] = nil
 		}
 	}
+	QueueLength.Sub(float64(abandoned))
+	Workers.Sub(float64(s.workers))
+	QueueCapacity.Sub(float64(s.queueSize))
 	s.mu.Unlock()
 
 	stopped := make(chan struct{})
@@ -492,9 +523,6 @@ func (s *Service) Shutdown(ctx context.Context) error {
 		return ctx.Err()
 	}
 
-	s.mu.Lock()
-	abandoned := len(s.queued) + again
-	s.mu.Unlock()
 	if abandoned > 0 {
 		s.log.Info().Int("abandoned", abandoned).Msg("revision cleanup: stopped, abandoned the cleanups still waiting in the queue")
 	}

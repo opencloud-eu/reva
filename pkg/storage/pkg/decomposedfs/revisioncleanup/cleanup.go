@@ -73,6 +73,14 @@
 // configurable (AsyncOptions). With revisions_cleanup_async disabled, HandleRevisionCreated runs the
 // cleanup right away, in the caller's goroutine.
 //
+// # Metrics
+//
+// The cleanup exports Prometheus metrics (see metrics.go), all named
+// reva_revision_cleanup_*: counters of deleted revisions, deleted bytes, failed deletions
+// and requests that found the queue full, and gauges of the queue length and capacity, the
+// workers, the running cleanups and whether the cleanup is enabled. The queue and worker
+// gauges are summed over all Services of the process.
+//
 // Overlapping uploads: the processing status only tracks the latest upload of a node, so a
 // cleanup triggered by a newer upload doesn't see an older one that is still in
 // postprocessing. That is safe: if the cleanup deletes the revision the older upload writes
@@ -263,13 +271,19 @@ func (c *Cleaner) Cleanup(ctx context.Context, lu node.PathLookup, rs RevisionSt
 	type pendingBlob struct {
 		key    string // of the revision the blob belonged to
 		blobID string
+		size   uint64 // of the revision
 	}
 	var blobs []pendingBlob
 	defer func() {
 		for _, b := range blobs {
 			if err := deleteBlob(rs, n.SpaceID, b.blobID); err != nil {
+				// the revision is gone, but not its blob: that's a failure, not a deletion
+				PurgeFailures.Inc()
 				log.Error().Err(err).Str("revision", b.key).Str("blobid", b.blobID).Msg("revision cleanup: could not delete the blob of a purged revision")
+				continue
 			}
+			RevisionsDeleted.Inc()
+			BytesDeleted.Add(float64(b.size))
 		}
 	}()
 
@@ -326,9 +340,10 @@ func (c *Cleaner) Cleanup(ctx context.Context, lu node.PathLookup, rs RevisionSt
 		}
 		blobID, err := removeRevisionUnchecked(ctx, n, rev.Key())
 		if err != nil {
+			PurgeFailures.Inc()
 			return fmt.Errorf("could not purge revision %q: %w", rev.Key(), err)
 		}
-		blobs = append(blobs, pendingBlob{key: rev.Key(), blobID: blobID})
+		blobs = append(blobs, pendingBlob{key: rev.Key(), blobID: blobID, size: rev.Size()})
 		purged++
 		purgedBytes += rev.Size()
 		log.Debug().Str("revision", rev.Key()).Uint64("size", rev.Size()).Msg("revision cleanup: purged revision")

@@ -73,6 +73,49 @@ The cleanup skips a file while an upload to it is still being processed, as that
 Only the latest upload of a file is tracked, though: if an older upload is still being processed after a newer one finished, the cleanup runs anyway.
 That is safe: if it deletes the revision the older upload writes its content into, the older upload creates it again when it finishes, and the revision the older upload would roll back to after a failed postprocessing must not be restored anyway once a newer upload finished, as that would discard the newer upload's content.
 
+## Metrics
+
+The cleanup exports Prometheus metrics, all named `reva_revision_cleanup_*`.
+
+| Metric | Type | Meaning |
+|---|---|---|
+| `reva_revision_cleanup_enabled` | gauge | 1 if a strategy is configured, 0 otherwise |
+| `reva_revision_cleanup_revisions_deleted_total` | counter | Deleted revisions |
+| `reva_revision_cleanup_bytes_deleted_total` | counter | Total size of the deleted revisions |
+| `reva_revision_cleanup_purge_failures_total` | counter | Revisions that could not be deleted, which are retried with the file's next revision, and revisions whose blob could not be deleted afterwards, which is left behind (logged with its blob id) |
+| `reva_revision_cleanup_queue_full_total{outcome}` | counter | Requests that found the queue full, by `outcome`: `blocked` (the writer waited) or `dropped` (cleanup skipped); a writer that waited until the timeout of `block` counts as both |
+| `reva_revision_cleanup_queue_length` | gauge | Files waiting for a background cleanup, including writers waiting for room in a full queue |
+| `reva_revision_cleanup_queue_capacity` | gauge | Size of the queue |
+| `reva_revision_cleanup_workers` | gauge | Background workers |
+| `reva_revision_cleanup_running` | gauge | Files being cleaned up by workers right now |
+
+Things to keep in mind:
+
+- **The queue holds files, not revisions.** A file waits at most once, however many revisions it got in the meantime, and how many of its revisions get deleted is only decided when a worker processes it.
+- **One process can have several queues.** The storageprovider and the dataprovider each create their own storage driver, and with it their own cleanup. The queue and worker gauges are the sum over all of them.
+  Because a sum can hide one queue being full while another one is empty, `queue_full_total` counts every request that found its queue full.
+  It is the most direct sign that there are too few workers or the queue is too small.
+
+Example queries:
+
+```promql
+# revisions deleted per second, and storage freed per second
+rate(reva_revision_cleanup_revisions_deleted_total[5m])
+rate(reva_revision_cleanup_bytes_deleted_total[5m])
+
+# how full the queues are (0..1, can exceed 1 while writers wait for room)
+reva_revision_cleanup_queue_length / reva_revision_cleanup_queue_capacity
+
+# requests hitting a full queue, worth an alert if it doesn't stay at 0
+sum by (outcome) (rate(reva_revision_cleanup_queue_full_total[5m]))
+
+# how busy the workers are (0..1)
+reva_revision_cleanup_running / reva_revision_cleanup_workers
+
+# failed deletions, worth an alert
+increase(reva_revision_cleanup_purge_failures_total[1h]) > 0
+```
+
 ## Logging
 
 - At startup with background workers: one info line `revision cleanup: running in the background` with the strategy, workers, queue size, queue full policy and timeout.
