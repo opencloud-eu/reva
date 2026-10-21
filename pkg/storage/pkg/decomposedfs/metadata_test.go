@@ -200,22 +200,6 @@ var _ = Describe("SetArbitraryMetadata", func() {
 			Expect(slot.Result.ChangedKeys).To(ConsistOf("mtime", "etag"))
 		})
 
-		It("reports only the keys that were actually removed", func() {
-			err := env.Fs.SetArbitraryMetadata(env.Ctx, ref, &provider.ArbitraryMetadata{
-				Metadata: map[string]string{"foo": "bar"},
-			})
-			Expect(err).ToNot(HaveOccurred())
-
-			err = env.Fs.UnsetArbitraryMetadata(env.Ctx, ref, []string{"foo", "never-set"})
-			Expect(err).ToNot(HaveOccurred())
-			Expect(slot.Result).ToNot(BeNil())
-			Expect(slot.Result.RemovedKeys).To(ConsistOf("foo"))
-			Expect(slot.Result.ChangedKeys).To(BeEmpty())
-
-			err = env.Fs.UnsetArbitraryMetadata(env.Ctx, ref, []string{"foo"})
-			Expect(err).ToNot(HaveOccurred())
-			Expect(slot.Result.RemovedKeys).To(BeEmpty())
-		})
 	})
 
 	Context("with insufficient permissions", func() {
@@ -271,5 +255,65 @@ var _ = Describe("SetArbitraryMetadata", func() {
 			})
 			Expect(err).To(HaveOccurred())
 		})
+	})
+})
+
+var _ = Describe("UnsetArbitraryMetadata", func() {
+	var (
+		env  *helpers.DecomposedTestEnv
+		ref  *provider.Reference
+		slot *storagespace.MetadataResultSlot
+	)
+
+	JustBeforeEach(func() {
+		var err error
+		env, err = helpers.NewTestEnv(nil)
+		Expect(err).ToNot(HaveOccurred())
+
+		ref = &provider.Reference{
+			ResourceId: env.SpaceRootRes,
+			Path:       "/dir1/file1",
+		}
+		slot = &storagespace.MetadataResultSlot{}
+		env.Ctx = storagespace.ContextRegisterMetadataResultSlot(env.Ctx, slot)
+
+		err = env.Fs.SetArbitraryMetadata(env.Ctx, ref, &provider.ArbitraryMetadata{
+			Metadata: map[string]string{"foo": "bar"},
+		})
+		Expect(err).ToNot(HaveOccurred())
+	})
+
+	AfterEach(func() {
+		if env != nil {
+			env.Cleanup()
+		}
+	})
+
+	It("removes the attribute", func() {
+		err := env.Fs.UnsetArbitraryMetadata(env.Ctx, ref, []string{"foo"})
+		Expect(err).ToNot(HaveOccurred())
+
+		n, err := env.Lookup.NodeFromResource(env.Ctx, ref)
+		Expect(err).ToNot(HaveOccurred())
+		_, err = n.XattrString(env.Ctx, prefixes.MetadataPrefix+"foo")
+		Expect(err).To(HaveOccurred())
+	})
+
+	It("reports only the keys that were actually removed", func() {
+		err := env.Fs.UnsetArbitraryMetadata(env.Ctx, ref, []string{"foo", "never-set"})
+		Expect(err).ToNot(HaveOccurred())
+		Expect(slot.Result).ToNot(BeNil())
+		Expect(slot.Result.RemovedKeys).To(ConsistOf("foo"))
+		Expect(slot.Result.ChangedKeys).To(BeEmpty())
+	})
+
+	It("reports nothing when the key is already gone", func() {
+		err := env.Fs.UnsetArbitraryMetadata(env.Ctx, ref, []string{"foo"})
+		Expect(err).ToNot(HaveOccurred())
+
+		err = env.Fs.UnsetArbitraryMetadata(env.Ctx, ref, []string{"foo"})
+		Expect(err).ToNot(HaveOccurred())
+		Expect(slot.Result).ToNot(BeNil())
+		Expect(slot.Result.RemovedKeys).To(BeEmpty())
 	})
 })

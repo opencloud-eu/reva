@@ -67,12 +67,10 @@ func (fs *Decomposedfs) SetArbitraryMetadata(ctx context.Context, ref *provider.
 
 	errs := []error{}
 	// TODO should we really continue updating when an error occurs?
-	changed := false
 	result := &storage.MetadataResult{}
 	defer storagespace.ContextSetMetadataResult(ctx, result)
 	if md.Metadata != nil {
 		if val, ok := md.Metadata["mtime"]; ok {
-			changed = true
 			result.ChangedKeys = append(result.ChangedKeys, "mtime")
 			delete(md.Metadata, "mtime")
 			if err := n.SetMtimeString(ctx, val); err != nil {
@@ -85,7 +83,6 @@ func (fs *Decomposedfs) SetArbitraryMetadata(ctx context.Context, ref *provider.
 		// TODO unset when file is updated
 		// TODO unset when folder is updated or add timestamp to etag?
 		if val, ok := md.Metadata["etag"]; ok {
-			changed = true
 			result.ChangedKeys = append(result.ChangedKeys, "etag")
 			delete(md.Metadata, "etag")
 			if err := n.SetEtag(ctx, val); err != nil {
@@ -102,7 +99,6 @@ func (fs *Decomposedfs) SetArbitraryMetadata(ctx context.Context, ref *provider.
 		if existingVal, ok := existingAttribs[prefixes.MetadataPrefix+k]; ok && string(existingVal) == v {
 			continue // no change needed
 		}
-		changed = true
 		result.ChangedKeys = append(result.ChangedKeys, k)
 		attribs[prefixes.MetadataPrefix+k] = []byte(v)
 	}
@@ -112,7 +108,7 @@ func (fs *Decomposedfs) SetArbitraryMetadata(ctx context.Context, ref *provider.
 		}
 	}
 
-	if changed {
+	if len(result.ChangedKeys) > 0 {
 		if err = fs.tp.Propagate(ctx, n, 0); err != nil {
 			errs = append(errs, errors.Wrap(err, "Decomposedfs: could not propagate metadata changes"))
 		}
