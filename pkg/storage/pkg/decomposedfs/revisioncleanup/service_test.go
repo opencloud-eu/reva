@@ -157,6 +157,22 @@ func (ts *testService) waitWaiting(nodeID string) {
 	}, 5*time.Second, time.Millisecond, "node %s is not waiting", nodeID)
 }
 
+// waitStartedAll waits until workers started processing all the given nodes, in any
+// order, as with several workers the order is not deterministic.
+func (ts *testService) waitStartedAll(nodeIDs ...string) {
+	ts.t.Helper()
+	got := make([]string, 0, len(nodeIDs))
+	for range nodeIDs {
+		select {
+		case id := <-ts.started:
+			got = append(got, id)
+		case <-time.After(5 * time.Second):
+			ts.t.Fatalf("only %v of %v were processed", got, nodeIDs)
+		}
+	}
+	require.ElementsMatch(ts.t, nodeIDs, got)
+}
+
 // releaseOne lets one blocked worker finish its node.
 func (ts *testService) releaseOne() {
 	ts.release <- struct{}{}
