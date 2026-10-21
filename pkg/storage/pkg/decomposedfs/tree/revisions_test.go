@@ -5,10 +5,12 @@ package tree_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/mock"
 
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata/prefixes"
@@ -139,11 +141,37 @@ var _ = Describe("Revisions", func() {
 
 		It("purges the revisions the strategy wants to delete", func() {
 			expectBlobDeletion(blobOfRevision(2))
+			revs, err := env.Tree.ListRevisionsUnchecked(env.Ctx, n)
+			Expect(err).ToNot(HaveOccurred())
+			var size uint64
+			for _, r := range revs {
+				if r.Key == keys[2] {
+					size = r.Size
+				}
+			}
+			Expect(size).ToNot(BeZero())
+			deleted, bytes, failures := counterValue(revisionsDeleted), counterValue(bytesDeleted), counterValue(purgeFailures)
 
 			cleaner.Cleanup(env.Ctx, env.Lookup, env.Tree, n)
 
 			Expect(listKeys()).To(ConsistOf(keys[0], keys[1]))
 			env.Blobstore.AssertExpectations(GinkgoT())
+			Expect(counterValue(revisionsDeleted)).To(Equal(deleted + 1))
+			Expect(counterValue(bytesDeleted)).To(Equal(bytes + float64(size)))
+			Expect(counterValue(purgeFailures)).To(Equal(failures))
+		})
+
+		It("counts revisions whose blob it failed to delete as failures", func() {
+			env.Blobstore.On("Delete", mock.Anything).Return(errors.New("blobstore unavailable")).Once()
+			deleted, bytes, failures := counterValue(revisionsDeleted), counterValue(bytesDeleted), counterValue(purgeFailures)
+
+			cleaner.Cleanup(env.Ctx, env.Lookup, env.Tree, n)
+
+			// the revision is gone, only its blob is left behind
+			Expect(listKeys()).To(ConsistOf(keys[0], keys[1]))
+			Expect(counterValue(purgeFailures)).To(Equal(failures + 1))
+			Expect(counterValue(revisionsDeleted)).To(Equal(deleted))
+			Expect(counterValue(bytesDeleted)).To(Equal(bytes))
 		})
 
 		It("never purges revisions it was asked to keep", func() {
@@ -296,3 +324,23 @@ type noopT struct{}
 func (noopT) Errorf(string, ...any) {}
 func (noopT) Logf(string, ...any)   {}
 func (noopT) FailNow()              {}
+
+// names of the revision cleanup counters, see revisioncleanup/metrics.go
+const (
+	revisionsDeleted = "reva_revision_cleanup_revisions_deleted_total"
+	bytesDeleted     = "reva_revision_cleanup_bytes_deleted_total"
+	purgeFailures    = "reva_revision_cleanup_purge_failures_total"
+)
+
+// counterValue reads a counter through the default gatherer, like a scrape would.
+// The counters are global to the process, so tests compare against the value from before.
+func counterValue(name string) float64 {
+	families, err := prometheus.DefaultGatherer.Gather()
+	Expect(err).ToNot(HaveOccurred())
+	for _, family := range families {
+		if family.GetName() == name && len(family.GetMetric()) > 0 {
+			return family.GetMetric()[0].GetCounter().GetValue()
+		}
+	}
+	return 0
+}
