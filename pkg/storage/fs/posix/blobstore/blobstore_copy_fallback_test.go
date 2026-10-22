@@ -4,6 +4,7 @@
 package blobstore_test
 
 import (
+	"bytes"
 	"crypto/rand"
 	"os"
 	"path/filepath"
@@ -60,6 +61,25 @@ var _ = Describe("Blobstore with copy fallback", func() {
 		Entry("small file", 1024),
 		Entry("large file bigger than the 16MiB fsync window", 17<<20),
 	)
+
+	It("stores a reader upload staged in the tmp dir", func() {
+		n, err := env.CreateTestFile("blob.bin", "", env.SpaceRootRes.OpaqueId, env.SpaceRootRes.SpaceId, 1024)
+		Expect(err).ToNot(HaveOccurred())
+
+		data := make([]byte, 1024)
+		_, err = rand.Read(data)
+		Expect(err).ToNot(HaveOccurred())
+
+		Expect(bs.UploadFromReader(n, bytes.NewReader(data), int64(len(data)))).To(Succeed())
+
+		written, err := os.ReadFile(n.InternalPath())
+		Expect(err).ToNot(HaveOccurred())
+		Expect(written).To(Equal(data))
+
+		// nothing is staged where the watcher would pick it up, and nothing is left behind
+		Expect(filepath.Glob(filepath.Join(n.SpaceRoot.InternalPath(), ".upload-*"))).To(BeEmpty())
+		Expect(filepath.Glob(filepath.Join(n.SpaceRoot.InternalPath(), posixblobstore.TMPDir, "*"))).To(BeEmpty())
+	})
 
 	Describe("failing copy", func() {
 		It("closes the temp file when the copy fails", func() {

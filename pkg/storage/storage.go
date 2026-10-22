@@ -107,7 +107,8 @@ type FS interface {
 	// MarkProcessing toggles a processing flag on the resource.
 	MarkProcessing(ctx context.Context, ref *provider.Reference, processing bool, sessionID string) error
 	// CommitUpload writes the staged bytes from source to the resource at ref.
-	// Caller owns source.Body and must close it after CommitUpload returns.
+	// source carries a Body, a Path or both. Caller owns source.Body and must close it
+	// after CommitUpload returns.
 	CommitUpload(ctx context.Context, ref *provider.Reference, sessionID string, source UploadSource) error
 	// PrepareUpload is called after all bytes are received and before postprocessing begins.
 	// Implementations may lock the target node, snapshot the previous version, write new metadata,
@@ -201,6 +202,9 @@ type SpaceDisabledListableFS interface {
 type UploadSource struct {
 	Body   io.ReadCloser
 	Length int64
+	// Path is the staged file, if the caller has one. Drivers may move it into
+	// place instead of copying Body; the file is gone after a successful commit.
+	Path string
 }
 
 // UnscopeFunc is a function that unscopes a user
