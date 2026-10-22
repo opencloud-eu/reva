@@ -38,10 +38,12 @@ type Coordinator interface {
 	Upload(ctx context.Context, req storage.UploadRequest, uff storage.UploadFinishedFunc) (*provider.ResourceInfo, error)
 	// StartPostprocessing subscribes to postprocessing results and enables async
 	// uploads. Call once, before serving requests.
-	StartPostprocessing(stream events.Consumer, group, mountID string, numConsumers int) error
+	StartPostprocessing(stream events.Consumer, ac AsyncConf) error
 	// ResolveUpload stats the resource a finished upload produced, as the upload's executant.
 	storage.UploadSessionResolver
 }
+
+const maxCommitRetryBackoff = 2 * time.Minute
 
 // coordinator is the concrete implementation of Coordinator.
 type coordinator struct {
@@ -53,7 +55,9 @@ type coordinator struct {
 	async bool
 	// mountID is the storage this coordinator serves, used to drop postprocessing
 	// events belonging to another one.
-	mountID string
+	mountID            string
+	commitMaxRetries   int
+	commitRetryBackoff time.Duration
 }
 
 // NewCoordinator constructs a coordinator backed by the given driver and store.
@@ -543,12 +547,35 @@ func (c *coordinator) finishSync(ctx context.Context, session Session) (*provide
 	return ri, nil
 }
 
-// finishAsync commits the staged bytes for an upload postprocessing has cleared.
-// A failure here keeps the node marked and the session on disk, so an admin can
-// retry with RestartPostprocessing or discard it with CleanUpload. Nobody is
-// waiting on the response any more, so there is no retry but theirs.
+// finishAsync commits the staged bytes for an upload postprocessing has cleared,
+// retrying transient failures with capped exponential backoff. On exhaustion
+// the caller is responsible for rolling back the node and publishing the failure.
 func (c *coordinator) finishAsync(ctx context.Context, session Session) error {
-	_, err := c.commit(ctx, session)
+	maxAttempts := c.commitMaxRetries + 1
+	backoff := c.commitRetryBackoff
+	var err error
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		if _, err = c.commit(ctx, session); err == nil {
+			return nil
+		}
+		if attempt == maxAttempts {
+			break
+		}
+		backoff = min(backoff, maxCommitRetryBackoff)
+		appctx.GetLogger(ctx).Warn().Err(err).
+			Int("attempt", attempt).Int("maxAttempts", maxAttempts).
+			Dur("backoff", backoff).
+			Str("uploadid", session.ID()).
+			Msg("blob commit failed, retrying after backoff")
+		t := time.NewTimer(backoff)
+		select {
+		case <-ctx.Done():
+			t.Stop()
+			return ctx.Err()
+		case <-t.C:
+		}
+		backoff *= 2
+	}
 	return err
 }
 
