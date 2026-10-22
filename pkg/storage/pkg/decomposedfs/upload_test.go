@@ -342,7 +342,7 @@ var _ = Describe("File uploads", func() {
 			})
 		})
 
-		It("commits staged bytes and their metadata", func() {
+		It("writes staged bytes to the session's blob slot", func() {
 			pmock.On("AssemblePermissions", mock.Anything, mock.Anything).Return(&provider.ResourcePermissions{
 				Stat:               true,
 				InitiateFileUpload: true,
@@ -352,26 +352,29 @@ var _ = Describe("File uploads", func() {
 			body := []byte("staged upload")
 			bs.On("UploadFromReader", mock.AnythingOfType("*node.Node"), mock.Anything, int64(len(body))).
 				Run(func(args mock.Arguments) {
+					Expect(args.Get(0).(*node.Node).BlobID).To(Equal("session-1"))
 					data, err := io.ReadAll(args.Get(1).(io.Reader))
 					Expect(err).ToNot(HaveOccurred())
 					Expect(data).To(Equal(body))
 				}).Return(nil).Once()
 
-			ri, err := fs.CommitUpload(ctx, ref, storage.UploadSource{
-				Body:     io.NopCloser(bytes.NewReader(body)),
-				Length:   int64(len(body)),
-				Metadata: map[string]string{"providerID": "test-provider"},
-				Checksums: storage.UploadChecksums{
-					SHA1:    []byte("sha1"),
-					MD5:     []byte("md5"),
-					Adler32: []byte("adler32"),
-				},
+			err := fs.CommitUpload(ctx, ref, "session-1", storage.UploadSource{
+				Body:   io.NopCloser(bytes.NewReader(body)),
+				Length: int64(len(body)),
 			})
 
 			Expect(err).ToNot(HaveOccurred())
-			Expect(ri.Id.OpaqueId).ToNot(BeEmpty())
-			Expect(ri.Id.StorageId).To(Equal("test-provider"))
-			Expect(ri.Etag).ToNot(BeEmpty())
+		})
+
+		It("rejects an empty sessionID", func() {
+			err := fs.CommitUpload(ctx, ref, "", storage.UploadSource{
+				Body:   io.NopCloser(bytes.NewReader([]byte("x"))),
+				Length: 1,
+			})
+
+			Expect(err).To(HaveOccurred())
+			_, ok := err.(errtypes.IsBadRequest)
+			Expect(ok).To(BeTrue(), "expected errtypes.BadRequest, got %T: %v", err, err)
 		})
 
 		It("only clears a processing marker for its owning session", func() {
