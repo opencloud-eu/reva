@@ -388,8 +388,8 @@ func (fs *Decomposedfs) MarkProcessing(ctx context.Context, ref *provider.Refere
 // sessionID is used to identify the correct blob slot prepared before postprocessing.
 // Caller owns source.Body and must close it after CommitUpload returns.
 func (fs *Decomposedfs) CommitUpload(ctx context.Context, ref *provider.Reference, sessionID string, source storage.UploadSource) error {
-	if source.Body == nil {
-		return errtypes.BadRequest("Decomposedfs: source body is nil")
+	if source.Body == nil && source.Path == "" {
+		return errtypes.BadRequest("Decomposedfs: source has neither body nor path")
 	}
 	if sessionID == "" {
 		return errtypes.BadRequest("Decomposedfs: sessionID is empty")
@@ -407,7 +407,12 @@ func (fs *Decomposedfs) CommitUpload(ctx context.Context, ref *provider.Referenc
 	blobNode := node.New(n.SpaceID, n.ID, "", "", source.Length, sessionID,
 		provider.ResourceType_RESOURCE_TYPE_FILE, nil, fs.lu)
 
-	if err := fs.tp.WriteBlobFromReader(blobNode, source.Body, source.Length); err != nil {
+	if source.Path != "" {
+		err = fs.tp.WriteBlob(blobNode, source.Path)
+	} else {
+		err = fs.tp.WriteBlobFromReader(blobNode, source.Body, source.Length)
+	}
+	if err != nil {
 		if derr := fs.tp.DeleteBlob(blobNode); derr != nil {
 			appctx.GetLogger(ctx).Error().Err(derr).Str("nodeid", n.ID).Str("blobid", sessionID).Msg("could not clean up orphaned blob after failed write")
 		}
