@@ -19,7 +19,6 @@
 package eventsmiddleware
 
 import (
-	"maps"
 	"slices"
 	"strings"
 	"time"
@@ -501,25 +500,8 @@ func SpaceDeleted(r *provider.DeleteStorageSpaceResponse, req *provider.DeleteSt
 	}
 }
 
-// ArbitraryMetadataSet converts a successful SetArbitraryMetadata call to an event.
-// A storage that reports its result wins over the request keys; it returns false when nothing changed.
-func ArbitraryMetadataSet(req *provider.SetArbitraryMetadataRequest, result *storage.MetadataResult, spaceOwner *user.UserId, executant *user.User) (events.ArbitraryMetadataChanged, bool) {
-	if result == nil {
-		result = &storage.MetadataResult{ChangedKeys: slices.Collect(maps.Keys(req.GetArbitraryMetadata().GetMetadata()))}
-	}
-	return arbitraryMetadataChanged(req.GetRef(), result, spaceOwner, executant)
-}
-
-// ArbitraryMetadataUnset converts a successful UnsetArbitraryMetadata call to an event.
-// A storage that reports its result wins over the request keys; it returns false when nothing changed.
-func ArbitraryMetadataUnset(req *provider.UnsetArbitraryMetadataRequest, result *storage.MetadataResult, spaceOwner *user.UserId, executant *user.User) (events.ArbitraryMetadataChanged, bool) {
-	if result == nil {
-		result = &storage.MetadataResult{RemovedKeys: req.GetArbitraryMetadataKeys()}
-	}
-	return arbitraryMetadataChanged(req.GetRef(), result, spaceOwner, executant)
-}
-
-func arbitraryMetadataChanged(ref *provider.Reference, result *storage.MetadataResult, spaceOwner *user.UserId, executant *user.User) (events.ArbitraryMetadataChanged, bool) {
+// ArbitraryMetadataChanged converts a reported metadata result to an event, or returns false when nothing changed.
+func ArbitraryMetadataChanged(ref *provider.Reference, result *storage.MetadataResult, spaceOwner *user.UserId, executant *user.User) (events.ArbitraryMetadataChanged, bool) {
 	if len(result.ChangedKeys) == 0 && len(result.RemovedKeys) == 0 {
 		return events.ArbitraryMetadataChanged{}, false
 	}

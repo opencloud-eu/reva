@@ -39,61 +39,24 @@ func TestItemMoved(t *testing.T) {
 	require.NotNil(t, ev.Timestamp)
 }
 
-func TestArbitraryMetadataSet(t *testing.T) {
+func TestArbitraryMetadataChanged(t *testing.T) {
 	spaceOwner := &user.UserId{OpaqueId: "owner-1"}
 	executant := &user.User{Id: &user.UserId{OpaqueId: "user-1"}}
 	ref := &provider.Reference{ResourceId: &provider.ResourceId{StorageId: "storage-1", SpaceId: "space-1", OpaqueId: "node-1"}}
-	req := &provider.SetArbitraryMetadataRequest{
-		Ref:               ref,
-		ArbitraryMetadata: &provider.ArbitraryMetadata{Metadata: map[string]string{"foo/b": "1", "foo/a": "2"}},
-	}
 
-	t.Run("falls back to the sorted request keys without a storage result", func(t *testing.T) {
-		ev, ok := ArbitraryMetadataSet(req, nil, spaceOwner, executant)
+	t.Run("emits the reported keys sorted", func(t *testing.T) {
+		ev, ok := ArbitraryMetadataChanged(ref, &storage.MetadataResult{ChangedKeys: []string{"foo/b", "foo/a"}, RemovedKeys: []string{"bar/b", "bar/a"}}, spaceOwner, executant)
 		require.True(t, ok)
 		require.Equal(t, spaceOwner, ev.SpaceOwner)
 		require.Equal(t, executant.GetId(), ev.Executant)
 		require.Equal(t, ref, ev.Ref)
 		require.Equal(t, []string{"foo/a", "foo/b"}, ev.ChangedKeys)
-		require.Empty(t, ev.RemovedKeys)
+		require.Equal(t, []string{"bar/a", "bar/b"}, ev.RemovedKeys)
 		require.NotNil(t, ev.Timestamp)
 	})
 
-	t.Run("prefers the keys the storage reports", func(t *testing.T) {
-		ev, ok := ArbitraryMetadataSet(req, &storage.MetadataResult{ChangedKeys: []string{"foo/b"}}, spaceOwner, executant)
-		require.True(t, ok)
-		require.Equal(t, []string{"foo/b"}, ev.ChangedKeys)
-	})
-
-	t.Run("emits nothing when the storage reports no change", func(t *testing.T) {
-		_, ok := ArbitraryMetadataSet(req, &storage.MetadataResult{}, spaceOwner, executant)
-		require.False(t, ok)
-	})
-}
-
-func TestArbitraryMetadataUnset(t *testing.T) {
-	spaceOwner := &user.UserId{OpaqueId: "owner-1"}
-	executant := &user.User{Id: &user.UserId{OpaqueId: "user-1"}}
-	req := &provider.UnsetArbitraryMetadataRequest{
-		Ref:                   &provider.Reference{ResourceId: &provider.ResourceId{StorageId: "storage-1", SpaceId: "space-1", OpaqueId: "node-1"}},
-		ArbitraryMetadataKeys: []string{"foo/b", "foo/a"},
-	}
-
-	t.Run("falls back to the sorted request keys without a storage result", func(t *testing.T) {
-		ev, ok := ArbitraryMetadataUnset(req, nil, spaceOwner, executant)
-		require.True(t, ok)
-		require.Equal(t, []string{"foo/a", "foo/b"}, ev.RemovedKeys)
-		require.Empty(t, ev.ChangedKeys)
-	})
-
-	t.Run("prefers the keys the storage reports", func(t *testing.T) {
-		ev, ok := ArbitraryMetadataUnset(req, &storage.MetadataResult{RemovedKeys: []string{"foo/a"}}, spaceOwner, executant)
-		require.True(t, ok)
-		require.Equal(t, []string{"foo/a"}, ev.RemovedKeys)
-	})
-
-	t.Run("emits nothing when the storage reports no change", func(t *testing.T) {
-		_, ok := ArbitraryMetadataUnset(req, &storage.MetadataResult{}, spaceOwner, executant)
+	t.Run("emits nothing when no key changed", func(t *testing.T) {
+		_, ok := ArbitraryMetadataChanged(ref, &storage.MetadataResult{}, spaceOwner, executant)
 		require.False(t, ok)
 	})
 }
