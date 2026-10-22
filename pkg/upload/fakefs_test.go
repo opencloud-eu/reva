@@ -31,21 +31,23 @@ type fakeFS struct {
 	mdErr error
 	tree  map[string]*provider.ResourceInfo
 	// mdErrs fails one path in the tree, for the errors that are not not-found.
-	mdErrs       map[string]error
-	quota        uint64
-	quotaErr     error
-	lock         *provider.Lock
-	lockErr      error
-	pathByID     string
-	pathByIDErr  error
-	touched      *provider.ResourceId
-	touchedOwner *userpb.UserId
-	touchErr     error
-	markErr      error
-	prepared     *storage.PrepareUploadResult
-	prepareErr   error
-	commitErr    error
-	rollbackErr  error
+	mdErrs         map[string]error
+	quota          uint64
+	quotaErr       error
+	lock           *provider.Lock
+	lockErr        error
+	pathByID       string
+	pathByIDErr    error
+	touched        *provider.ResourceId
+	touchedOwner   *userpb.UserId
+	touchErr       error
+	markErr        error
+	prepared       *storage.PrepareUploadResult
+	prepareErr     error
+	commitErr      error
+	commitErrCount int // return commitErr for the first N calls, then succeed
+	commitCalls    int
+	rollbackErr    error
 
 	// what the driver was handed, for the arguments the call list does not carry.
 	committed   storage.UploadSource
@@ -141,6 +143,13 @@ func (f *fakeFS) PrepareUpload(_ context.Context, _ *provider.Reference, _ strin
 func (f *fakeFS) CommitUpload(_ context.Context, _ *provider.Reference, _ string, source storage.UploadSource) error {
 	f.record("CommitUpload(length=%d)", source.Length)
 	f.committed = source
+	f.commitCalls++
+	if f.commitErrCount > 0 {
+		if f.commitCalls <= f.commitErrCount {
+			return f.commitErr
+		}
+		return nil
+	}
 	return f.commitErr
 }
 
