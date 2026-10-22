@@ -36,6 +36,12 @@ type MoveResult struct {
 	NewReference *provider.Reference
 }
 
+// MetadataResult carries the keys a successful SetArbitraryMetadata or UnsetArbitraryMetadata actually changed.
+type MetadataResult struct {
+	ChangedKeys []string
+	RemovedKeys []string
+}
+
 // FS is the interface to implement access to the storage.
 type FS interface {
 	// Minimal set for a readonly storage driver

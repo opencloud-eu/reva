@@ -25,6 +25,7 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/opencloud-eu/reva/v2/pkg/appctx"
 	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
+	"github.com/opencloud-eu/reva/v2/pkg/storage"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata/prefixes"
 	"github.com/opencloud-eu/reva/v2/pkg/storagespace"
@@ -66,13 +67,15 @@ func (fs *Decomposedfs) SetArbitraryMetadata(ctx context.Context, ref *provider.
 
 	errs := []error{}
 	// TODO should we really continue updating when an error occurs?
-	changed := false
+	result := &storage.MetadataResult{}
+	defer storagespace.ContextSetMetadataResult(ctx, result)
 	if md.Metadata != nil {
 		if val, ok := md.Metadata["mtime"]; ok {
-			changed = true
 			delete(md.Metadata, "mtime")
 			if err := n.SetMtimeString(ctx, val); err != nil {
 				errs = append(errs, errors.Wrap(err, "could not set mtime"))
+			} else {
+				result.ChangedKeys = append(result.ChangedKeys, "mtime")
 			}
 		}
 		// TODO(jfd) special handling for atime?
@@ -81,10 +84,11 @@ func (fs *Decomposedfs) SetArbitraryMetadata(ctx context.Context, ref *provider.
 		// TODO unset when file is updated
 		// TODO unset when folder is updated or add timestamp to etag?
 		if val, ok := md.Metadata["etag"]; ok {
-			changed = true
 			delete(md.Metadata, "etag")
 			if err := n.SetEtag(ctx, val); err != nil {
 				errs = append(errs, errors.Wrap(err, "could not set etag"))
+			} else {
+				result.ChangedKeys = append(result.ChangedKeys, "etag")
 			}
 		}
 	}
@@ -97,7 +101,7 @@ func (fs *Decomposedfs) SetArbitraryMetadata(ctx context.Context, ref *provider.
 		if existingVal, ok := existingAttribs[prefixes.MetadataPrefix+k]; ok && string(existingVal) == v {
 			continue // no change needed
 		}
-		changed = true
+		result.ChangedKeys = append(result.ChangedKeys, k)
 		attribs[prefixes.MetadataPrefix+k] = []byte(v)
 	}
 	if len(attribs) > 0 {
@@ -106,7 +110,7 @@ func (fs *Decomposedfs) SetArbitraryMetadata(ctx context.Context, ref *provider.
 		}
 	}
 
-	if changed {
+	if len(result.ChangedKeys) > 0 {
 		if err = fs.tp.Propagate(ctx, n, 0); err != nil {
 			errs = append(errs, errors.Wrap(err, "Decomposedfs: could not propagate metadata changes"))
 		}
@@ -161,7 +165,16 @@ func (fs *Decomposedfs) UnsetArbitraryMetadata(ctx context.Context, ref *provide
 	}
 
 	errs := []error{}
+	result := &storage.MetadataResult{}
+	defer storagespace.ContextSetMetadataResult(ctx, result)
+	existingAttribs, err := n.Xattrs(ctx)
+	if err != nil {
+		return errors.Wrap(err, "Decomposedfs: could not read metadata attributes")
+	}
 	for _, k := range keys {
+		if _, ok := existingAttribs[prefixes.MetadataPrefix+k]; !ok {
+			continue // already gone, ignore
+		}
 		if err = n.RemoveXattr(ctx, prefixes.MetadataPrefix+k); err != nil {
 			if metadata.IsAttrUnset(err) {
 				continue // already gone, ignore
@@ -170,7 +183,9 @@ func (fs *Decomposedfs) UnsetArbitraryMetadata(ctx context.Context, ref *provide
 				Str("key", k).
 				Msg("could not unset metadata")
 			errs = append(errs, errors.Wrap(err, "could not unset metadata"))
+			continue
 		}
+		result.RemovedKeys = append(result.RemovedKeys, k)
 	}
 	switch len(errs) {
 	case 0:
