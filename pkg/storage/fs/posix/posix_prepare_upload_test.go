@@ -19,13 +19,17 @@
 package posix_test
 
 import (
+	"bytes"
+	"io"
 	"os"
 	"path/filepath"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/opencloud-eu/reva/v2/pkg/storage"
+	posixblobstore "github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/blobstore"
 	posixhelpers "github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/testhelpers"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata/prefixes"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/node"
 	"github.com/stretchr/testify/mock"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -87,6 +91,93 @@ var _ = Describe("PrepareUpload on posix", func() {
 		Expect(n.BlobID).To(Equal("session-1"))
 		Expect(n.Blobsize).To(Equal(int64(20)))
 		Expect(os.ReadFile(n.InternalPath())).To(Equal(oldContent))
+	})
+
+	Describe("CommitUpload", func() {
+		newContent := []byte("new content, 20 byte")
+
+		prepare := func(sessionID string) {
+			_, err := env.Fs.PrepareUpload(env.Ctx, ref, sessionID, storage.UploadInfo{
+				NodeExisted: true,
+				Size:        int64(len(newContent)),
+			})
+			Expect(err).ToNot(HaveOccurred())
+		}
+
+		commit := func(sessionID string, source storage.UploadSource) {
+			Expect(env.Fs.CommitUpload(env.Ctx, ref, sessionID, source)).To(Succeed())
+		}
+
+		bodySource := func() storage.UploadSource {
+			return storage.UploadSource{
+				Body:   io.NopCloser(bytes.NewReader(newContent)),
+				Length: int64(len(newContent)),
+			}
+		}
+
+		// the test env mocks the blobstore; let it write through the real posix blobstore
+		BeforeEach(func() {
+			bs, err := posixblobstore.New(env.Root)
+			Expect(err).ToNot(HaveOccurred())
+			env.Blobstore.EXPECT().Upload(mock.Anything, mock.Anything, mock.Anything).RunAndReturn(bs.Upload).Maybe()
+			env.Blobstore.On("UploadFromReader", mock.Anything, mock.Anything, mock.Anything).Return(bs.UploadFromReader).Maybe()
+		})
+
+		revisionContents := func(n *node.Node) [][]byte {
+			revisions, err := filepath.Glob(env.Lookup.VersionPath(n.SpaceID, n.ID, "*"))
+			Expect(err).ToNot(HaveOccurred())
+			var contents [][]byte
+			for _, r := range revisions {
+				c, err := os.ReadFile(r)
+				Expect(err).ToNot(HaveOccurred())
+				contents = append(contents, c)
+			}
+			return contents
+		}
+
+		It("replaces the content of the file and keeps the upload's metadata", func() {
+			prepare("session-1")
+			commit("session-1", bodySource())
+
+			n, err := env.Lookup.NodeFromResource(env.Ctx, ref)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(os.ReadFile(n.InternalPath())).To(Equal(newContent))
+			Expect(n.BlobID).To(Equal("session-1"))
+			Expect(n.Blobsize).To(Equal(int64(len(newContent))))
+			Expect(revisionContents(n)).To(Equal([][]byte{oldContent}))
+
+			// nothing staged in the space root, where the watcher would pick it up
+			Expect(filepath.Glob(filepath.Join(n.SpaceRoot.InternalPath(), ".upload-*"))).To(BeEmpty())
+		})
+
+		It("moves a staged file into place", func() {
+			staged := filepath.Join(env.Root, "staged-session-1")
+			Expect(os.WriteFile(staged, newContent, 0600)).To(Succeed())
+
+			prepare("session-1")
+			commit("session-1", storage.UploadSource{Path: staged, Length: int64(len(newContent))})
+
+			n, err := env.Lookup.NodeFromResource(env.Ctx, ref)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(os.ReadFile(n.InternalPath())).To(Equal(newContent))
+			Expect(n.BlobID).To(Equal("session-1"))
+			_, err = os.Stat(staged)
+			Expect(os.IsNotExist(err)).To(BeTrue(), "the staged file should have been moved")
+		})
+
+		It("writes into the revision when a newer upload took over the file", func() {
+			prepare("session-a")
+			prepare("session-b")
+			commit("session-a", bodySource())
+
+			n, err := env.Lookup.NodeFromResource(env.Ctx, ref)
+			Expect(err).ToNot(HaveOccurred())
+			// the file belongs to session-b now and still holds the old bytes until session-b commits
+			Expect(n.BlobID).To(Equal("session-b"))
+			Expect(os.ReadFile(n.InternalPath())).To(Equal(oldContent))
+			// session-a's bytes went to the revision session-b created for it
+			Expect(revisionContents(n)).To(ConsistOf(oldContent, newContent))
+		})
 	})
 
 	It("leaves no revision behind when a precondition fails", func() {
