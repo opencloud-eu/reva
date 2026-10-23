@@ -388,8 +388,8 @@ func (fs *Decomposedfs) MarkProcessing(ctx context.Context, ref *provider.Refere
 // sessionID is used to identify the correct blob slot prepared before postprocessing.
 // Caller owns source.Body and must close it after CommitUpload returns.
 func (fs *Decomposedfs) CommitUpload(ctx context.Context, ref *provider.Reference, sessionID string, source storage.UploadSource) error {
-	if source.Body == nil && source.Path == "" {
-		return errtypes.BadRequest("Decomposedfs: source has neither body nor path")
+	if source.Body == nil {
+		return errtypes.BadRequest("Decomposedfs: source body is nil")
 	}
 	if sessionID == "" {
 		return errtypes.BadRequest("Decomposedfs: sessionID is empty")
@@ -407,12 +407,7 @@ func (fs *Decomposedfs) CommitUpload(ctx context.Context, ref *provider.Referenc
 	blobNode := node.New(n.SpaceID, n.ID, "", "", source.Length, sessionID,
 		provider.ResourceType_RESOURCE_TYPE_FILE, nil, fs.lu)
 
-	if source.Path != "" {
-		err = fs.tp.WriteBlob(blobNode, source.Path)
-	} else {
-		err = fs.tp.WriteBlobFromReader(blobNode, source.Body, source.Length)
-	}
-	if err != nil {
+	if err := fs.tp.WriteBlobFromReader(blobNode, source.Body, source.Length); err != nil {
 		if derr := fs.tp.DeleteBlob(blobNode); derr != nil {
 			appctx.GetLogger(ctx).Error().Err(derr).Str("nodeid", n.ID).Str("blobid", sessionID).Msg("could not clean up orphaned blob after failed write")
 		}
@@ -652,9 +647,8 @@ func (fs *Decomposedfs) PrepareUpload(ctx context.Context, ref *provider.Referen
 }
 
 // RollbackUpload reverts the node state written by PrepareUpload after a failed or aborted
-// postprocessing run. It restores the previous revision and reverts the optimistic size
-// propagation. Unlike upstream it never purges an existing node: without a revision (versioning
-// disabled) the previous metadata cannot be restored, so it returns an error instead.
+// postprocessing run. It restores the previous revision (or purges the node if versioning is
+// disabled and no prior version exists) and reverts the optimistic size propagation.
 func (fs *Decomposedfs) RollbackUpload(ctx context.Context, ref *provider.Reference, sessionID string, nodeExisted bool, sizeDiff int64) error {
 	n, err := fs.lu.NodeFromResource(ctx, ref)
 	if err != nil {
@@ -677,12 +671,8 @@ func (fs *Decomposedfs) RollbackUpload(ctx context.Context, ref *provider.Refere
 	}
 
 	if nodeExisted {
-		reverted, err := n.RevertLatestRevision(ctx)
-		if err != nil {
+		if err := n.RevertCurrentRevision(ctx, false); err != nil {
 			return err
-		}
-		if !reverted {
-			return errtypes.PreconditionFailed("RollbackUpload: no revision to restore for node " + n.ID)
 		}
 	} else {
 		// the upload created this node, so undo it. Purge, not trash: the file never

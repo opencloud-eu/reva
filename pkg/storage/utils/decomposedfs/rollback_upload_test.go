@@ -7,7 +7,6 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
 	"github.com/opencloud-eu/reva/v2/pkg/storage"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/decomposedfs/metadata/prefixes"
 	helpers "github.com/opencloud-eu/reva/v2/pkg/storage/utils/decomposedfs/testhelpers"
@@ -16,18 +15,13 @@ import (
 
 var _ = Describe("RollbackUpload", func() {
 	var (
-		env  *helpers.TestEnv
-		ref  *provider.Reference
-		opts map[string]interface{}
+		env *helpers.TestEnv
+		ref *provider.Reference
 	)
-
-	BeforeEach(func() {
-		opts = nil
-	})
 
 	JustBeforeEach(func() {
 		var err error
-		env, err = helpers.NewTestEnv(opts)
+		env, err = helpers.NewTestEnv(nil)
 		Expect(err).ToNot(HaveOccurred())
 
 		env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).
@@ -92,41 +86,6 @@ var _ = Describe("RollbackUpload", func() {
 			parentInfoAfter, err := env.Fs.GetMD(env.Ctx, &provider.Reference{ResourceId: env.SpaceRootRes, Path: "/dir1"}, []string{}, []string{})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(parentInfoAfter.Size).To(Equal(sizeBefore))
-		})
-	})
-
-	Context("versioning disabled, existing node, session owns node", func() {
-		BeforeEach(func() {
-			opts = map[string]interface{}{"disable_versioning": true}
-		})
-
-		It("keeps the node and reports that there is no revision to restore", func() {
-			err := env.Fs.TouchFile(env.Ctx, ref, false, "")
-			Expect(err).ToNot(HaveOccurred())
-
-			_, err = env.Fs.PrepareUpload(env.Ctx, ref, "session-init", storage.UploadInfo{
-				NodeExisted: false,
-				Size:        10,
-			})
-			Expect(err).ToNot(HaveOccurred())
-
-			result, err := env.Fs.PrepareUpload(env.Ctx, ref, "session-overwrite", storage.UploadInfo{
-				NodeExisted: true,
-				Size:        30,
-			})
-			Expect(err).ToNot(HaveOccurred())
-			Expect(result.VersionCreated).To(BeFalse())
-
-			Expect(env.Fs.MarkProcessing(env.Ctx, ref, true, "session-overwrite")).To(Succeed())
-			err = env.Fs.RollbackUpload(env.Ctx, ref, "session-overwrite", true, result.SizeDiff)
-			Expect(err).To(HaveOccurred())
-			_, ok := err.(errtypes.IsPreconditionFailed)
-			Expect(ok).To(BeTrue(), "expected errtypes.PreconditionFailed, got %T: %v", err, err)
-
-			// upstream purges the node here
-			n, err := env.Lookup.NodeFromResource(env.Ctx, ref)
-			Expect(err).ToNot(HaveOccurred())
-			Expect(n.Exists).To(BeTrue())
 		})
 	})
 

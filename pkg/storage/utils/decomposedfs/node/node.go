@@ -1460,12 +1460,12 @@ func (n *Node) DeleteRevision(ctx context.Context, versionID string) (string, er
 		return n.deleteRevision(ctx, versionID)
 	}
 
-	reverted, err := n.RevertLatestRevision(ctx)
+	revisionPath, err := n.getLatestRevision(ctx)
 	if err != nil {
 		return "", err
 	}
 
-	if !reverted {
+	if revisionPath == "" {
 		// there is no revision - delete the node
 		lock, err := lockedfile.OpenFile(n.lu.MetadataBackend().LockfilePath(n.InternalPath()), os.O_CREATE|os.O_WRONLY, 0600)
 		if err != nil {
@@ -1477,6 +1477,11 @@ func (n *Node) DeleteRevision(ctx context.Context, versionID string) (string, er
 			return "", err
 		}
 		return "", nil
+	}
+
+	latestID := strings.TrimPrefix(revisionPath, n.InternalPath()+RevisionIDDelimiter)
+	if err := n.RevertUpload(ctx, latestID); err != nil {
+		return "", err
 	}
 
 	// we just deleted the current revision - remove processing flag if set
@@ -1527,20 +1532,35 @@ func (n *Node) deleteRevision(ctx context.Context, versionID string) (string, er
 	return blobID, nil
 }
 
-// RevertLatestRevision reverts the upload that created the node's latest
-// revision: the revision is restored onto the node and removed. Unlike
-// DeleteRevision it neither purges the node when there is no revision nor
-// touches the processing flag. It returns false if there is no revision to
-// restore.
-func (n *Node) RevertLatestRevision(ctx context.Context) (bool, error) {
+// RevertCurrentRevision reverts an upload by either deleting the node or restoring the latest version
+func (n *Node) RevertCurrentRevision(ctx context.Context, unmarkProcessing bool) error {
 	revisionPath, err := n.getLatestRevision(ctx)
 	if err != nil {
-		return false, err
+		return err
 	}
+
 	if revisionPath == "" {
-		return false, nil
+		// there is no revision - delete the node
+		if err := n.Purge(ctx); err != nil {
+			appctx.GetLogger(ctx).Info().Str("nodepath", n.InternalPath()).Err(err).Msg("error purging node")
+			return err
+		}
+		return nil
 	}
-	return true, n.RevertUpload(ctx, strings.TrimPrefix(revisionPath, n.InternalPath()+RevisionIDDelimiter))
+
+	if err := n.RevertUpload(ctx, strings.TrimPrefix(revisionPath, n.InternalPath()+RevisionIDDelimiter)); err != nil {
+		return err
+	}
+
+	if unmarkProcessing {
+		if uploadid, err := n.ProcessingID(ctx); err == nil {
+			if err := n.UnmarkProcessing(ctx, uploadid); err != nil {
+				appctx.GetLogger(ctx).Info().Str("path", n.InternalPath()).Err(err).Msg("unmarking processing failed")
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 func (n *Node) getLatestRevision(ctx context.Context) (string, error) {
