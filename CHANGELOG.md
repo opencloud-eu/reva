@@ -8,6 +8,7 @@
 
 ### 🐛 Bug Fixes
 
+- fix(wopi): register the zmd extension the way the mime table spells it [[#907](https://github.com/opencloud-eu/reva/pull/907)]
 - fix: do not delete the destination of a move across spaces [[#891](https://github.com/opencloud-eu/reva/pull/891)]
 - fix move return [[#892](https://github.com/opencloud-eu/reva/pull/892)]
 - fix(ocm): use a public-only client for WAYF provider discovery [[#814](https://github.com/opencloud-eu/reva/pull/814)]
