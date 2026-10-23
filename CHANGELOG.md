@@ -1,5 +1,46 @@
 # Changelog
 
+## [2.52.0](https://github.com/opencloud-eu/reva/releases/tag/v2.52.0) - 2026-10-23
+
+### ❤️ Thanks to all contributors! ❤️
+
+@AlexAndBear, @NickWalters, @VicDeo, @aduffeck, @butonic, @dragonchaser, @dschmidt, @fschade, @junkerderprovinz, @kulmann, @maki5, @micbar, @v-scharf
+
+### 🐛 Bug Fixes
+
+- fix(ocdav): send basic auth challenge for password protected links [[#904](https://github.com/opencloud-eu/reva/pull/904)]
+- fix(mime): map the rw2 extension [[#905](https://github.com/opencloud-eu/reva/pull/905)]
+- fix(wopi): register the zmd extension the way the mime table spells it [[#907](https://github.com/opencloud-eu/reva/pull/907)]
+- fix: do not delete the destination of a move across spaces [[#891](https://github.com/opencloud-eu/reva/pull/891)]
+- fix move return [[#892](https://github.com/opencloud-eu/reva/pull/892)]
+- fix(ocm): use a public-only client for WAYF provider discovery [[#814](https://github.com/opencloud-eu/reva/pull/814)]
+- rename the space root before purging it [[#876](https://github.com/opencloud-eu/reva/pull/876)]
+- fix(posix): retry a failed file once its ctime changes [[#809](https://github.com/opencloud-eu/reva/pull/809)]
+- fix(posix): re-assimilate moved and changed files during a scan [[#808](https://github.com/opencloud-eu/reva/pull/808)]
+- fix: add config to skip share manager migrations [[#877](https://github.com/opencloud-eu/reva/pull/877)]
+- fix: status code during share removal [[#878](https://github.com/opencloud-eu/reva/pull/878)]
+- fix: return not found when deleting unknown shares or spaces without … [[#874](https://github.com/opencloud-eu/reva/pull/874)]
+- fix(posix): keep files findable by id after their folder is renamed on disk [[#850](https://github.com/opencloud-eu/reva/pull/850)]
+- fix(posix): stop on-disk deletes and moves from resetting tree sizes to 0 [[#849](https://github.com/opencloud-eu/reva/pull/849)]
+- fix(posix): keep a handle on the blob for the copy target [[#807](https://github.com/opencloud-eu/reva/pull/807)]
+- test: wait for the DeleteRevision handler before redelivering [[#861](https://github.com/opencloud-eu/reva/pull/861)]
+- fix filedescriptor leaks [[#847](https://github.com/opencloud-eu/reva/pull/847)]
+
+### ✅ Tests
+
+- fix: retry removing the tombstone of a purged space [[#889](https://github.com/opencloud-eu/reva/pull/889)]
+- try to remove the share migration lock on SIGTERM [[#869](https://github.com/opencloud-eu/reva/pull/869)]
+- fix: separate cronjobs for different tasks [[#868](https://github.com/opencloud-eu/reva/pull/868)]
+- fix: wait for inotify to react [[#863](https://github.com/opencloud-eu/reva/pull/863)]
+
+### 📈 Enhancement
+
+- feat: add default_quota to the spaces capability [[#880](https://github.com/opencloud-eu/reva/pull/880)]
+- fix(appprovider): pick a deterministic app when open with web names none [[#875](https://github.com/opencloud-eu/reva/pull/875)]
+- feat: make space2share migration repeatable [[#864](https://github.com/opencloud-eu/reva/pull/864)]
+- Harden unshare [[#856](https://github.com/opencloud-eu/reva/pull/856)]
+- feat: run decomposedfs on foreign metadata via metadata_prefix [[#859](https://github.com/opencloud-eu/reva/pull/859)]
+
 ## [2.51.0](https://github.com/opencloud-eu/reva/releases/tag/v2.51.0) - 2026-10-05
 
 ### ❤️ Thanks to all contributors! ❤️
