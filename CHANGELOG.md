@@ -4,10 +4,11 @@
 
 ### ❤️ Thanks to all contributors! ❤️
 
-@AlexAndBear, @NickWalters, @VicDeo, @aduffeck, @butonic, @dragonchaser, @dschmidt, @fschade, @junkerderprovinz, @maki5, @micbar, @v-scharf
+@AlexAndBear, @NickWalters, @VicDeo, @aduffeck, @butonic, @dragonchaser, @dschmidt, @fschade, @junkerderprovinz, @kulmann, @maki5, @micbar, @v-scharf
 
 ### 🐛 Bug Fixes
 
+- fix(ocdav): send basic auth challenge for password protected links [[#904](https://github.com/opencloud-eu/reva/pull/904)]
 - fix(mime): map the rw2 extension [[#905](https://github.com/opencloud-eu/reva/pull/905)]
 - fix(wopi): register the zmd extension the way the mime table spells it [[#907](https://github.com/opencloud-eu/reva/pull/907)]
 - fix: do not delete the destination of a move across spaces [[#891](https://github.com/opencloud-eu/reva/pull/891)]
