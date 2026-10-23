@@ -1157,10 +1157,11 @@ func init() {
 }
 
 // RegisterMime is a package level function that registers
-// a mime type with the given extension.
+// a mime type with the given extension. The extension is stored the way Detect
+// looks it up, so a leading dot and upper case letters are accepted.
 // TODO(labkode): check that we do not override mime type mappings?
 func RegisterMime(ext, mime string) {
-	mimes.Store(ext, mime)
+	mimes.Store(strings.ToLower(strings.TrimPrefix(ext, ".")), mime)
 }
 
 // Detect returns the mimetype associated with the given filename.
