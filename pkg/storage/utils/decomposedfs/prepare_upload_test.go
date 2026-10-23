@@ -1,3 +1,6 @@
+// Copyright 2026 OpenCloud GmbH <mail@opencloud.eu>
+// SPDX-License-Identifier: Apache-2.0
+
 package decomposedfs_test
 
 import (
@@ -45,7 +48,7 @@ var _ = Describe("PrepareUpload", func() {
 				Stat:               true,
 				ListFileVersions:   true,
 			}, nil)
-		_, err := env.Fs.TouchFile(env.Ctx, ref, false, "")
+		err := env.Fs.TouchFile(env.Ctx, ref, false, "")
 		Expect(err).ToNot(HaveOccurred())
 	}
 
@@ -138,7 +141,7 @@ var _ = Describe("PrepareUpload", func() {
 					Stat:               true,
 					ListFileVersions:   true,
 				}, nil)
-			_, err = env.Fs.TouchFile(env.Ctx, ref, false, "")
+			err = env.Fs.TouchFile(env.Ctx, ref, false, "")
 			Expect(err).ToNot(HaveOccurred())
 		})
 
