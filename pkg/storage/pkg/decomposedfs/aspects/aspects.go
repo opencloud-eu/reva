@@ -28,11 +28,13 @@ import (
 
 // Aspects holds dependencies for handling aspects of the decomposedfs
 type Aspects struct {
-	Lookup            node.PathLookup
-	Tree              node.Tree
-	Trashbin          trashbin.Trashbin
-	Permissions       permissions.Permissions
-	EventStream       events.Stream
+	Lookup      node.PathLookup
+	Tree        node.Tree
+	Trashbin    trashbin.Trashbin
+	Permissions permissions.Permissions
+	EventStream events.Stream
+	// TODO: redundant with options.DisableVersioning, which every driver passes in here. Only the
+	// legacy upload session store reads it; delete it when the upload coordinator replaces that store.
 	DisableVersioning bool
 	UserMapper        usermapper.Mapper
 }
