@@ -793,6 +793,7 @@ var mimeTypes = map[string]string{
 	"rtf":                      "text/rtf",
 	"rtx":                      "text/richtext",
 	"run":                      "application/x-makeself",
+	"rw2":                      "image/x-panasonic-rw2",
 	"s":                        "text/x-asm",
 	"s3m":                      "audio/s3m",
 	"saf":                      "application/vnd.yamaha.smaf-audio",
