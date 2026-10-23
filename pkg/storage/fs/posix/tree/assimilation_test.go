@@ -60,7 +60,7 @@ func TestTree_findSpaceId(t *testing.T) {
 			err:  ErrRootReached,
 			tree: &Tree{
 				options: &options.Options{
-					Options: decomposedoptions.Options{Root: "/", PersonalSpacePathTemplate: "/foo/bar/baz"},
+					Options: decomposedoptions.Options{Root: "/", PersonalSpacePathTemplate: "/foo/bar/baz/{{.User.Id.OpaqueId}}"},
 				},
 			},
 		},
@@ -70,7 +70,7 @@ func TestTree_findSpaceId(t *testing.T) {
 			err:  ErrRootReached,
 			tree: &Tree{
 				options: &options.Options{
-					Options: decomposedoptions.Options{Root: "/", GeneralSpacePathTemplate: "/foo/bar/baz"},
+					Options: decomposedoptions.Options{Root: "/", GeneralSpacePathTemplate: "/foo/bar/baz/{{.SpaceId}}"},
 				},
 			},
 		},
