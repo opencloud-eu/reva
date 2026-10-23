@@ -20,6 +20,8 @@ package propagator
 
 import (
 	"context"
+	"errors"
+	"os"
 	"strconv"
 	"time"
 
@@ -97,7 +99,12 @@ func (p SyncPropagator) propagateItem(ctx context.Context, n *node.Node, sTime t
 	if err != nil {
 		return nil, true, err
 	}
-	defer func() { _ = unlock() }()
+	defer func() {
+		// ignore already closed error
+		if cerr := unlock(); cerr != nil && !errors.Is(cerr, os.ErrClosed) {
+			log.Error().Err(cerr).Msg("Failed to unlock node")
+		}
+	}()
 
 	if !n.HasPropagation(ctx) {
 		log.Debug().Str("attr", prefixes.PropagationAttr).Msg("propagation attribute not set or unreadable, not propagating")
