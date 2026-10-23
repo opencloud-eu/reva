@@ -318,6 +318,9 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 			case res.Status.Code == rpc.Code_CODE_PERMISSION_DENIED:
 				fallthrough
 			case res.Status.Code == rpc.Code_CODE_UNAUTHENTICATED:
+				if r.Header.Get("X-Requested-With") != "XMLHttpRequest" {
+					w.Header().Add(WwwAuthenticate, fmt.Sprintf("Basic realm=\"%s\", charset=\"UTF-8\"", r.Host))
+				}
 				w.WriteHeader(http.StatusUnauthorized)
 				if hasValidBasicAuthHeader {
 					b, err := errors.Marshal(http.StatusUnauthorized, "Username or password was incorrect", "", ErrInvalidCredentials)
