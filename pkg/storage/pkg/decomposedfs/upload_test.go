@@ -23,6 +23,7 @@ import (
 	"context"
 	"io"
 	"os"
+	"time"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	cs3permissions "github.com/cs3org/go-cs3apis/cs3/permissions/v1beta1"
@@ -342,28 +343,128 @@ var _ = Describe("File uploads", func() {
 			})
 		})
 
-		It("writes staged bytes to the session's blob slot", func() {
-			pmock.On("AssemblePermissions", mock.Anything, mock.Anything).Return(&provider.ResourcePermissions{
-				Stat:               true,
-				InitiateFileUpload: true,
-			}, nil).Once()
-			Expect(fs.TouchFile(ctx, ref, false, "")).To(Succeed())
-
+		Describe("CommitUpload", func() {
 			body := []byte("staged upload")
-			bs.On("UploadFromReader", mock.AnythingOfType("*node.Node"), mock.Anything, int64(len(body))).
-				Run(func(args mock.Arguments) {
-					Expect(args.Get(0).(*node.Node).BlobID).To(Equal("session-1"))
-					data, err := io.ReadAll(args.Get(1).(io.Reader))
-					Expect(err).ToNot(HaveOccurred())
-					Expect(data).To(Equal(body))
-				}).Return(nil).Once()
 
-			err := fs.CommitUpload(ctx, ref, "session-1", storage.UploadSource{
-				Body:   io.NopCloser(bytes.NewReader(body)),
-				Length: int64(len(body)),
+			prepare := func(sessionID string, nodeExisted bool) {
+				_, err := fs.PrepareUpload(ctx, ref, sessionID, storage.UploadInfo{
+					NodeExisted: nodeExisted,
+					Size:        int64(len(body)),
+				})
+				Expect(err).ToNot(HaveOccurred())
+			}
+
+			BeforeEach(func() {
+				Expect(fs.TouchFile(ctx, ref, false, "")).To(Succeed())
 			})
 
-			Expect(err).ToNot(HaveOccurred())
+			It("writes the staged bytes to the node prepared for the session", func() {
+				prepare("session-1", false)
+
+				bs.On("UploadFromReader", mock.AnythingOfType("*node.Node"), mock.Anything, int64(len(body))).
+					Run(func(args mock.Arguments) {
+						n := args.Get(0).(*node.Node)
+						Expect(n.BlobID).To(Equal("session-1"))
+						Expect(n.SpaceRoot).ToNot(BeNil())
+						data, err := io.ReadAll(args.Get(1).(io.Reader))
+						Expect(err).ToNot(HaveOccurred())
+						Expect(data).To(Equal(body))
+					}).Return(nil).Once()
+
+				Expect(fs.CommitUpload(ctx, ref, "session-1", storage.UploadSource{
+					Body:   io.NopCloser(bytes.NewReader(body)),
+					Length: int64(len(body)),
+				})).To(Succeed())
+				bs.AssertExpectations(GinkgoT())
+			})
+
+			It("moves a staged file into place", func() {
+				prepare("session-1", false)
+
+				bs.On("Upload", mock.AnythingOfType("*node.Node"), "/staged/session-1", mock.Anything).
+					Run(func(args mock.Arguments) {
+						Expect(args.Get(0).(*node.Node).BlobID).To(Equal("session-1"))
+					}).Return(nil).Once()
+
+				Expect(fs.CommitUpload(ctx, ref, "session-1", storage.UploadSource{
+					Path:   "/staged/session-1",
+					Length: int64(len(body)),
+				})).To(Succeed())
+				bs.AssertExpectations(GinkgoT())
+			})
+
+			It("writes into the revision when a newer upload took over the node", func() {
+				prepare("session-a", false)
+				prepare("session-b", true)
+
+				bs.On("UploadFromReader", mock.AnythingOfType("*node.Node"), mock.Anything, int64(len(body))).
+					Run(func(args mock.Arguments) {
+						n := args.Get(0).(*node.Node)
+						Expect(n.BlobID).To(Equal("session-a"))
+						Expect(n.ID).To(ContainSubstring(node.RevisionIDDelimiter))
+					}).Return(nil).Once()
+
+				Expect(fs.CommitUpload(ctx, ref, "session-a", storage.UploadSource{
+					Body:   io.NopCloser(bytes.NewReader(body)),
+					Length: int64(len(body)),
+				})).To(Succeed())
+				bs.AssertExpectations(GinkgoT())
+			})
+
+			It("records the scan result on the node", func() {
+				prepare("session-1", false)
+				bs.On("UploadFromReader", mock.AnythingOfType("*node.Node"), mock.Anything, int64(len(body))).Return(nil).Once()
+
+				scanDate := time.Now().UTC().Truncate(time.Second)
+				Expect(fs.CommitUpload(ctx, ref, "session-1", storage.UploadSource{
+					Body:       io.NopCloser(bytes.NewReader(body)),
+					Length:     int64(len(body)),
+					ScanResult: "infected",
+					ScanDate:   scanDate,
+				})).To(Succeed())
+
+				n, err := lu.NodeFromResource(ctx, ref)
+				Expect(err).ToNot(HaveOccurred())
+				scanned, virus, date := n.ScanData(ctx)
+				Expect(scanned).To(BeTrue())
+				Expect(virus).To(Equal("infected"))
+				Expect(date).To(BeTemporally("==", scanDate))
+			})
+
+			It("records the scan result on the revision when a newer upload took over the node", func() {
+				prepare("session-a", false)
+				prepare("session-b", true)
+
+				var revision *node.Node
+				bs.On("UploadFromReader", mock.AnythingOfType("*node.Node"), mock.Anything, int64(len(body))).
+					Run(func(args mock.Arguments) {
+						revision = args.Get(0).(*node.Node)
+					}).Return(nil).Once()
+
+				Expect(fs.CommitUpload(ctx, ref, "session-a", storage.UploadSource{
+					Body:       io.NopCloser(bytes.NewReader(body)),
+					Length:     int64(len(body)),
+					ScanResult: "infected",
+					ScanDate:   time.Now(),
+				})).To(Succeed())
+
+				Expect(revision).ToNot(BeNil())
+				_, virus, _ := revision.ScanData(ctx)
+				Expect(virus).To(Equal("infected"))
+
+				n, err := lu.NodeFromResource(ctx, ref)
+				Expect(err).ToNot(HaveOccurred())
+				scanned, _, _ := n.ScanData(ctx)
+				Expect(scanned).To(BeFalse(), "the scan result of the older upload must not land on the node")
+			})
+
+			It("rejects a source with neither body nor path", func() {
+				err := fs.CommitUpload(ctx, ref, "session-1", storage.UploadSource{Length: 1})
+
+				Expect(err).To(HaveOccurred())
+				_, ok := err.(errtypes.IsBadRequest)
+				Expect(ok).To(BeTrue(), "expected errtypes.BadRequest, got %T: %v", err, err)
+			})
 		})
 
 		It("rejects an empty sessionID", func() {
