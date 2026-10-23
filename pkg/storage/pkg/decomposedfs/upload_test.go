@@ -23,6 +23,7 @@ import (
 	"context"
 	"io"
 	"os"
+	"time"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	cs3permissions "github.com/cs3org/go-cs3apis/cs3/permissions/v1beta1"
@@ -408,6 +409,53 @@ var _ = Describe("File uploads", func() {
 					Length: int64(len(body)),
 				})).To(Succeed())
 				bs.AssertExpectations(GinkgoT())
+			})
+
+			It("records the scan result on the node", func() {
+				prepare("session-1", false)
+				bs.On("UploadFromReader", mock.AnythingOfType("*node.Node"), mock.Anything, int64(len(body))).Return(nil).Once()
+
+				scanDate := time.Now().UTC().Truncate(time.Second)
+				Expect(fs.CommitUpload(ctx, ref, "session-1", storage.UploadSource{
+					Body:       io.NopCloser(bytes.NewReader(body)),
+					Length:     int64(len(body)),
+					ScanResult: "infected",
+					ScanDate:   scanDate,
+				})).To(Succeed())
+
+				n, err := lu.NodeFromResource(ctx, ref)
+				Expect(err).ToNot(HaveOccurred())
+				scanned, virus, date := n.ScanData(ctx)
+				Expect(scanned).To(BeTrue())
+				Expect(virus).To(Equal("infected"))
+				Expect(date).To(BeTemporally("==", scanDate))
+			})
+
+			It("records the scan result on the revision when a newer upload took over the node", func() {
+				prepare("session-a", false)
+				prepare("session-b", true)
+
+				var revision *node.Node
+				bs.On("UploadFromReader", mock.AnythingOfType("*node.Node"), mock.Anything, int64(len(body))).
+					Run(func(args mock.Arguments) {
+						revision = args.Get(0).(*node.Node)
+					}).Return(nil).Once()
+
+				Expect(fs.CommitUpload(ctx, ref, "session-a", storage.UploadSource{
+					Body:       io.NopCloser(bytes.NewReader(body)),
+					Length:     int64(len(body)),
+					ScanResult: "infected",
+					ScanDate:   time.Now(),
+				})).To(Succeed())
+
+				Expect(revision).ToNot(BeNil())
+				_, virus, _ := revision.ScanData(ctx)
+				Expect(virus).To(Equal("infected"))
+
+				n, err := lu.NodeFromResource(ctx, ref)
+				Expect(err).ToNot(HaveOccurred())
+				scanned, _, _ := n.ScanData(ctx)
+				Expect(scanned).To(BeFalse(), "the scan result of the older upload must not land on the node")
 			})
 
 			It("rejects a source with neither body nor path", func() {

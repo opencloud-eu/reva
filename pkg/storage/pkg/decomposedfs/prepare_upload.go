@@ -96,15 +96,27 @@ func (fs *Decomposedfs) PrepareUpload(ctx context.Context, ref *provider.Referen
 		}
 	}()
 
+	var (
+		old         *node.Node
+		overwrite   bool
+		oldBlobsize int64
+	)
 	if info.NodeExisted {
-		old, err := node.ReadNode(ctx, fs.lu, n.SpaceID, n.ID, "", false, nil, false)
+		old, err = node.ReadNode(ctx, fs.lu, n.SpaceID, n.ID, "", false, nil, false)
 		if err != nil {
 			return nil, errors.Wrap(err, "PrepareUpload: failed to read existing node")
 		}
-		if _, err := node.CheckQuota(ctx, n.SpaceRoot, old.BlobID != "", uint64(old.Blobsize), uint64(info.Size)); err != nil {
-			return nil, err
-		}
+		overwrite = old.BlobID != ""
+		oldBlobsize = old.Blobsize
+	}
 
+	// also for new files: the coordinator's check fails open without GetQuota
+	// permission, and CheckQuota guards disk space too
+	if _, err := node.CheckQuota(ctx, n.SpaceRoot, overwrite, uint64(oldBlobsize), uint64(info.Size)); err != nil {
+		return nil, err
+	}
+
+	if info.NodeExisted {
 		oldMtime, err = old.GetMTime(ctx)
 		if err != nil {
 			return nil, err
@@ -218,7 +230,7 @@ func (fs *Decomposedfs) RollbackUpload(ctx context.Context, ref *provider.Refere
 		return fmt.Errorf("RollbackUpload: node lookup failed: %w", err)
 	}
 	if !n.Exists {
-		return nil // new node; coordinator calls Delete separately
+		return nil // nothing was written yet
 	}
 	n.SpaceRoot, err = node.ReadNode(ctx, fs.lu, n.SpaceID, n.SpaceID, "", false, nil, false)
 	if err != nil {
@@ -241,12 +253,18 @@ func (fs *Decomposedfs) RollbackUpload(ctx context.Context, ref *provider.Refere
 		if !reverted {
 			return errtypes.PreconditionFailed("RollbackUpload: no revision to restore for node " + n.ID)
 		}
-		if sizeDiff != 0 {
-			if err := fs.tp.Propagate(ctx, n, -sizeDiff); err != nil {
-				appctx.GetLogger(ctx).Error().Err(err).Msg("RollbackUpload: could not revert propagate")
-			}
+	} else {
+		// the upload created this node, so undo it. Purge, not trash: the file never
+		// became visible, and Purge needs no Delete permission
+		if err := n.Purge(ctx); err != nil {
+			return fmt.Errorf("RollbackUpload: could not purge node: %w", err)
 		}
 	}
 
+	if sizeDiff != 0 {
+		if err := fs.tp.Propagate(ctx, n, -sizeDiff); err != nil {
+			appctx.GetLogger(ctx).Error().Err(err).Msg("RollbackUpload: could not revert propagate")
+		}
+	}
 	return nil
 }
