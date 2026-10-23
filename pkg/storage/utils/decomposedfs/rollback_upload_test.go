@@ -1,24 +1,33 @@
+// Copyright 2026 OpenCloud GmbH <mail@opencloud.eu>
+// SPDX-License-Identifier: Apache-2.0
+
 package decomposedfs_test
 
 import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"github.com/owncloud/reva/v2/pkg/storage"
-	"github.com/owncloud/reva/v2/pkg/storage/utils/decomposedfs/metadata/prefixes"
-	helpers "github.com/owncloud/reva/v2/pkg/storage/utils/decomposedfs/testhelpers"
+	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
+	"github.com/opencloud-eu/reva/v2/pkg/storage"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/decomposedfs/metadata/prefixes"
+	helpers "github.com/opencloud-eu/reva/v2/pkg/storage/utils/decomposedfs/testhelpers"
 	"github.com/stretchr/testify/mock"
 )
 
 var _ = Describe("RollbackUpload", func() {
 	var (
-		env *helpers.TestEnv
-		ref *provider.Reference
+		env  *helpers.TestEnv
+		ref  *provider.Reference
+		opts map[string]interface{}
 	)
+
+	BeforeEach(func() {
+		opts = nil
+	})
 
 	JustBeforeEach(func() {
 		var err error
-		env, err = helpers.NewTestEnv(nil)
+		env, err = helpers.NewTestEnv(opts)
 		Expect(err).ToNot(HaveOccurred())
 
 		env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).
@@ -42,7 +51,7 @@ var _ = Describe("RollbackUpload", func() {
 
 	Context("versioning enabled, existing node, session owns node", func() {
 		It("restores previous version, removes version file, reverts size propagation", func() {
-			_, err := env.Fs.TouchFile(env.Ctx, ref, false, "")
+			err := env.Fs.TouchFile(env.Ctx, ref, false, "")
 			Expect(err).ToNot(HaveOccurred())
 
 			_, err = env.Fs.PrepareUpload(env.Ctx, ref, "session-init", storage.UploadInfo{
@@ -86,9 +95,44 @@ var _ = Describe("RollbackUpload", func() {
 		})
 	})
 
+	Context("versioning disabled, existing node, session owns node", func() {
+		BeforeEach(func() {
+			opts = map[string]interface{}{"disable_versioning": true}
+		})
+
+		It("keeps the node and reports that there is no revision to restore", func() {
+			err := env.Fs.TouchFile(env.Ctx, ref, false, "")
+			Expect(err).ToNot(HaveOccurred())
+
+			_, err = env.Fs.PrepareUpload(env.Ctx, ref, "session-init", storage.UploadInfo{
+				NodeExisted: false,
+				Size:        10,
+			})
+			Expect(err).ToNot(HaveOccurred())
+
+			result, err := env.Fs.PrepareUpload(env.Ctx, ref, "session-overwrite", storage.UploadInfo{
+				NodeExisted: true,
+				Size:        30,
+			})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(result.VersionCreated).To(BeFalse())
+
+			Expect(env.Fs.MarkProcessing(env.Ctx, ref, true, "session-overwrite")).To(Succeed())
+			err = env.Fs.RollbackUpload(env.Ctx, ref, "session-overwrite", true, result.SizeDiff)
+			Expect(err).To(HaveOccurred())
+			_, ok := err.(errtypes.IsPreconditionFailed)
+			Expect(ok).To(BeTrue(), "expected errtypes.PreconditionFailed, got %T: %v", err, err)
+
+			// upstream purges the node here
+			n, err := env.Lookup.NodeFromResource(env.Ctx, ref)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(n.Exists).To(BeTrue())
+		})
+	})
+
 	Context("session guard: another session owns the node", func() {
 		It("is a no-op and does not touch the node", func() {
-			_, err := env.Fs.TouchFile(env.Ctx, ref, false, "")
+			err := env.Fs.TouchFile(env.Ctx, ref, false, "")
 			Expect(err).ToNot(HaveOccurred())
 
 			_, err = env.Fs.PrepareUpload(env.Ctx, ref, "session-a", storage.UploadInfo{

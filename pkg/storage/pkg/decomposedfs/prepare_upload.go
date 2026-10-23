@@ -188,7 +188,7 @@ func (fs *Decomposedfs) PrepareUpload(ctx context.Context, ref *provider.Referen
 	}
 	committed = true
 
-	return &storage.PrepareUploadResult{VersionCreated: versionCreated}, nil
+	return &storage.PrepareUploadResult{VersionCreated: versionCreated, SizeDiff: sizeDiff}, nil
 }
 
 // removeRevision deletes a revision PrepareUpload created, with its metadata, while the
@@ -205,4 +205,48 @@ func removeRevision(ctx context.Context, lu node.PathLookup, revisionNode *node.
 	if err := os.Remove(lu.MetadataBackend().LockfilePath(revisionNode)); err != nil && !errors.Is(err, os.ErrNotExist) {
 		log.Error().Err(err).Msg("could not remove revision lockfile during rollback")
 	}
+}
+
+// RollbackUpload reverts the node state written by PrepareUpload after a failed or aborted
+// postprocessing run. It restores the previous revision and reverts the optimistic size
+// propagation. Unlike upstream it never purges an existing node: without a revision (versioning
+// disabled) the previous metadata cannot be restored, so it returns an error instead. On posix
+// this also keeps the file itself, which still holds the previous content until CommitUpload.
+func (fs *Decomposedfs) RollbackUpload(ctx context.Context, ref *provider.Reference, sessionID string, nodeExisted bool, sizeDiff int64) error {
+	n, err := fs.lu.NodeFromResource(ctx, ref)
+	if err != nil {
+		return fmt.Errorf("RollbackUpload: node lookup failed: %w", err)
+	}
+	if !n.Exists {
+		return nil // new node; coordinator calls Delete separately
+	}
+	n.SpaceRoot, err = node.ReadNode(ctx, fs.lu, n.SpaceID, n.SpaceID, "", false, nil, false)
+	if err != nil {
+		return err
+	}
+
+	curProcessingID, err := n.ProcessingID(ctx)
+	if err != nil {
+		return fmt.Errorf("RollbackUpload: could not read processing ID: %w", err)
+	}
+	if curProcessingID != sessionID {
+		return nil
+	}
+
+	if nodeExisted {
+		reverted, err := n.RevertLatestRevision(ctx)
+		if err != nil {
+			return err
+		}
+		if !reverted {
+			return errtypes.PreconditionFailed("RollbackUpload: no revision to restore for node " + n.ID)
+		}
+		if sizeDiff != 0 {
+			if err := fs.tp.Propagate(ctx, n, -sizeDiff); err != nil {
+				appctx.GetLogger(ctx).Error().Err(err).Msg("RollbackUpload: could not revert propagate")
+			}
+		}
+	}
+
+	return nil
 }

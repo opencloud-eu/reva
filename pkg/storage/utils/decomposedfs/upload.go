@@ -631,8 +631,9 @@ func (fs *Decomposedfs) PrepareUpload(ctx context.Context, ref *provider.Referen
 }
 
 // RollbackUpload reverts the node state written by PrepareUpload after a failed or aborted
-// postprocessing run. It restores the previous revision (or purges the node if versioning is
-// disabled and no prior version exists) and reverts the optimistic size propagation.
+// postprocessing run. It restores the previous revision and reverts the optimistic size
+// propagation. Unlike upstream it never purges an existing node: without a revision (versioning
+// disabled) the previous metadata cannot be restored, so it returns an error instead.
 func (fs *Decomposedfs) RollbackUpload(ctx context.Context, ref *provider.Reference, sessionID string, nodeExisted bool, sizeDiff int64) error {
 	n, err := fs.lu.NodeFromResource(ctx, ref)
 	if err != nil {
@@ -655,8 +656,12 @@ func (fs *Decomposedfs) RollbackUpload(ctx context.Context, ref *provider.Refere
 	}
 
 	if nodeExisted {
-		if err := n.RevertCurrentRevision(ctx, false); err != nil {
+		reverted, err := n.RevertLatestRevision(ctx)
+		if err != nil {
 			return err
+		}
+		if !reverted {
+			return errtypes.PreconditionFailed("RollbackUpload: no revision to restore for node " + n.ID)
 		}
 		if sizeDiff != 0 {
 			if err := fs.tp.Propagate(ctx, n, -sizeDiff); err != nil {
