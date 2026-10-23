@@ -200,6 +200,7 @@ type Aspects struct {
 	EventStream       events.Stream             // NATS events, e.g. for async postprocessing
 	DisableVersioning bool
 	UserMapper        usermapper.Mapper         // maps users to unix ids (posix with space groups)
+	RevisionsCleanup  *revisioncleanup.Cleaner  // deletes old revisions, disabled without a strategy
 }
 ```
 
@@ -225,6 +226,7 @@ decomposed.New(config)                      decomposeds3.New(config)
                  options.New(config)
                  lookup.New(metadata backend: messagepack (default) or xattrs)
                  permissions.NewPermissions(...)
+                 revisioncleanup.New(revisions_cleanup_strategy)
                  tree.New(lookup, blobstore, options, permissions, id cache)
                  Aspects{Lookup, Tree, Permissions, Trashbin: &DecomposedfsTrashbin{}, ...}
                  decomposedfs.New(options, aspects)
@@ -339,7 +341,7 @@ posix allows changes to the files on disk, and picks them up through the watcher
 It can also scan the whole tree at startup (`scan_fs`).
 Detected changes are queued (`ScanDebouncer`) and *assimilated* (`tree/assimilation.go`): new files get an id and metadata, moved files keep their id via the id cache, and sizes are propagated.
 With `enable_fs_revisions` a revision is created from the previous `.CURRENT` copy.
-This path bypasses `Decomposedfs` and the upload code completely, so any feature that hooks into uploads (e.g. postprocessing) needs a separate trigger in assimilation if it should also apply to changes on disk.
+This path bypasses `Decomposedfs` and the upload code completely, so any feature that hooks into uploads (e.g. revision cleanup, postprocessing) needs a separate trigger in assimilation if it should also apply to changes on disk.
 
 The inotify watcher starts `inotifywait` with `KillOthers`, which runs `pkill inotifywait`.
 Only one watching posix instance per host is therefore possible, which matters for tests (see `fs/posix/tree/export_test.go`).

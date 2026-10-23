@@ -8,6 +8,16 @@ It works for the `decomposed`, `decomposeds3` and `posix` storage drivers.
 With posix it also covers the revisions created from changes made directly on disk (`enable_fs_revisions`).
 For how those drivers are structured, see [`../README.md`](../README.md); for implementation details, see the package documentation in `cleanup.go`.
 
+## Configuration
+
+The option is part of the decomposedfs options and therefore applies to all three drivers.
+
+| Option | Default | Meaning |
+|---|---|---|
+| `revisions_cleanup_strategy` | `""` (disabled) | Which revisions to delete, see below. Empty or `disabled` keeps all revisions. |
+
+An invalid value makes the storage driver fail at startup.
+
 ## Strategies
 
 A strategy is a comma separated list of up to three parts.
@@ -44,4 +54,25 @@ Rules worth knowing:
 - **In `auto, N`, the number `N` applies first, then `auto` thins out what is left.** So `auto, 10` keeps *at most* 10 revisions, usually fewer, and sometimes fewer than `auto` alone: if the 10 newest revisions were all saved within the same minute yesterday, `auto, 10` keeps a single revision, while `auto` keeps one of those plus one per day before. It does *not* mean "thin out first, then keep the 10 newest of what is left". The same goes for a number in `X1, auto, N`.
 - **Two values of the same kind are rejected** in `X1, X2`, because one of them would have no effect: `5, 10` is the same as `10`, and `7d, 30d` is the same as `30d`. The error message names the equivalent single value.
 - **In `X1, auto, X2` with two values of the same kind, `X1` must be smaller than `X2`**, otherwise `auto` would never apply.
-- **`0` deletes all revisions.** Unlike `disable_versioning`, which only stops creating new revisions, this also removes the ones that have accumulated, over time.
+- **`0` deletes all revisions.** Unlike `disable_versioning`, which only stops creating new revisions, this also removes the ones that have accumulated, over time (see the limitations below).
+
+## When the cleanup runs
+
+The cleanup of a file runs after the file got a new revision:
+
+- after an upload replaced an existing file, once the upload is complete (with async postprocessing: once postprocessing finished successfully),
+- after a revision was restored; the revision holding the content from before the restore is always kept,
+- with posix and `enable_fs_revisions`, after a change on disk created a revision.
+
+The cleanup skips a file while an upload to it is still being processed, as that upload may still need its revisions.
+Only the latest upload of a file is tracked, though: if an older upload is still being processed after a newer one finished, the cleanup runs anyway.
+That is safe: if it deletes the revision the older upload writes its content into, the older upload creates it again when it finishes, and the revision the older upload would roll back to after a failed postprocessing must not be restored anyway once a newer upload finished, as that would discard the newer upload's content.
+
+## Logging
+
+- Per cleaned file: one info line `revision cleanup: purged old revisions` with the strategy (`config`), the number and size of the deleted revisions, and how many revisions the file had. Nothing is logged for files where nothing was deleted.
+- Every deleted revision is logged at debug level.
+
+## Limitations
+
+- **Only files that get a new revision are cleaned up.** Revisions of files that are never changed again stay until an on-demand cleanup command is available.

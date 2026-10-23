@@ -191,6 +191,8 @@ func New(o *options.Options, stream events.Stream, cache, historyCache *idcache.
 		UserMapper:        um,
 		DisableVersioning: o.DisableVersioning,
 		Trashbin:          trashbin,
+		// the tree already parsed the strategy for its own use in assimilation
+		RevisionsCleanup: tp.RevisionsCleanup(),
 	}
 
 	dfs, err := decomposedfs.New(&o.Options, aspects, log)

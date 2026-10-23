@@ -105,10 +105,17 @@ func (fs *Decomposedfs) RestoreRevision(ctx context.Context, ref *provider.Refer
 	if err != nil {
 		return err
 	}
-	defer func() {
+	// released before the revision cleanup at the end, or on any return before that
+	unlocked := false
+	unlockNode := func() {
+		if unlocked {
+			return
+		}
+		unlocked = true
 		_ = unlock()
 		_ = os.Remove(fs.lu.MetadataBackend().LockfilePath(n))
-	}()
+	}
+	defer unlockNode()
 
 	// move current version to new revision
 	mtime, err := n.GetMTime(ctx)
@@ -118,7 +125,9 @@ func (fs *Decomposedfs) RestoreRevision(ctx context.Context, ref *provider.Refer
 	}
 
 	// create a revision of the current node
-	if _, err := fs.tp.CreateRevision(ctx, n, mtime.UTC().Format(time.RFC3339Nano)); err != nil {
+	// (the version is kept around to protect this revision from the cleanup below)
+	newRevision := mtime.UTC().Format(time.RFC3339Nano)
+	if _, err := fs.tp.CreateRevision(ctx, n, newRevision); err != nil {
 		return err
 	}
 
@@ -151,7 +160,25 @@ func (fs *Decomposedfs) RestoreRevision(ctx context.Context, ref *provider.Refer
 		log.Warn().Err(err).Interface("ref", ref).Str("originalnode", kp[0]).Str("revisionKey", revisionKey).Msg("could not purge old revision from cache, continuing")
 	}
 
-	return fs.tp.Propagate(ctx, n, sizeDiff)
+	if err := fs.tp.Propagate(ctx, n, sizeDiff); err != nil {
+		return err
+	}
+
+	// The restore created a new revision from the previous content, so apply the
+	// revision cleanup strategy (see package revisioncleanup). It runs last, once the
+	// restore is complete, and never fails the restore.
+	// The revision holding the state from before the restore is always kept: a restore
+	// is a deliberate user action, and the strategy could otherwise drop the very
+	// content the user just replaced, e.g. the 'auto' strategy thins out revisions
+	// that are close in time.
+	// The node lock is released first: Cleanup takes it itself, and when the cleanup runs
+	// in the background, waiting for it while holding the lock could deadlock with a
+	// worker waiting for the lock. Releasing it also removes the lock file, which must not
+	// happen while the cleanup holds a lock on it, as the next writer would then lock a new
+	// lock file and run concurrently with the cleanup.
+	unlockNode()
+	fs.revisionsCleanup.Cleanup(ctx, fs.lu, fs.tp, n, n.ID+node.RevisionIDDelimiter+newRevision)
+	return nil
 }
 
 // DeleteRevision deletes the specified revision of the resource

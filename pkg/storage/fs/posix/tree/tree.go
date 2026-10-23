@@ -27,6 +27,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/google/uuid"
@@ -55,6 +56,7 @@ import (
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata/prefixes"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/node"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/permissions"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/revisioncleanup"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/tree/propagator"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/usermapper"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/templates"
@@ -116,6 +118,9 @@ type Tree struct {
 	// files that failed to assimilate, keyed by path, see updateFile()
 	assimilationFailures *assimilation.Failures
 
+	// deletes old revisions after a change on disk created a new one, nil if disabled
+	revisionsCleanup *revisioncleanup.Cleaner
+
 	es  events.Stream
 	log *zerolog.Logger
 }
@@ -148,6 +153,16 @@ func New(lu node.PathLookup, bs node.Blobstore, um usermapper.Mapper, trashbin *
 	}
 	t.idResolver = t.lookup
 	t.assimilateFunc = t.assimilate
+	// The tree creates the revisions cleaner itself, as assimilation needs it for
+	// revisions created from changes on disk, and the watcher started below may
+	// assimilate right away. posix.New passes the same instance on to Decomposedfs
+	// through the aspects (see RevisionsCleanup). An invalid strategy fails startup
+	// rather than silently keeping or deleting revisions the admin did not expect.
+	revisionsCleanup, err := revisioncleanup.New(o.RevisionsCleanupStrategy)
+	if err != nil {
+		return nil, errors.Wrap(err, "tree: invalid revisions cleanup strategy")
+	}
+	t.revisionsCleanup = revisionsCleanup
 	if err := t.checkStorage(); err != nil {
 		return nil, errors.Wrap(err, "tree: unfit storage '"+o.Root+"'")
 	}
@@ -768,6 +783,36 @@ func (t *Tree) DeleteBlob(node *node.Node) error {
 		return fmt.Errorf("could not delete blob, nil node was given")
 	}
 	return t.blobstore.Delete(node)
+}
+
+// RevisionsCleanup returns the cleaner deleting old revisions, a disabled one without a
+// strategy.
+// It is used to hand the same instance to Decomposedfs via aspects.Aspects, so that
+// uploads, restores and changes on disk are all cleaned up by the same strategy.
+func (t *Tree) RevisionsCleanup() *revisioncleanup.Cleaner {
+	return t.revisionsCleanup
+}
+
+var _ revisioncleanup.SpaceScoper = (*Tree)(nil)
+
+// ScopeToSpace switches the current goroutine to the group of the space with use_space_groups,
+// as the space group hooks of the storage driver's middleware do for user requests, see
+// revisioncleanup.SpaceScoper. The returned context carries the group, for the goroutines that
+// listFolder starts. Without use_space_groups, it does nothing.
+func (t *Tree) ScopeToSpace(ctx context.Context, spaceID string) (context.Context, func() error, error) {
+	if !t.options.UseSpaceGroups {
+		return ctx, func() error { return nil }, nil
+	}
+	fi, err := os.Stat(t.lookup.InternalPath(spaceID, spaceID))
+	if err != nil {
+		return ctx, nil, errors.Wrapf(err, "could not stat the root of space %q", spaceID)
+	}
+	gid := fi.Sys().(*syscall.Stat_t).Gid
+	unscope, err := t.userMapper.ScopeUserByIds(-1, int(gid))
+	if err != nil {
+		return ctx, nil, errors.Wrap(err, "failed to scope user")
+	}
+	return context.WithValue(ctx, decomposedfs.CtxKeySpaceGID, gid), unscope, nil
 }
 
 // BuildSpaceIDIndexEntry returns the entry for the space id index
