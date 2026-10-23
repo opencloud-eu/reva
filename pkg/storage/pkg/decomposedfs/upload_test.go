@@ -21,7 +21,9 @@ package decomposedfs_test
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io"
+	"net/http"
 	"os"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -49,6 +51,7 @@ import (
 	"github.com/opencloud-eu/reva/v2/tests/helpers"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/mock"
+	tusd "github.com/tus/tusd/v2/pkg/handler"
 	"google.golang.org/grpc"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -317,6 +320,40 @@ var _ = Describe("File uploads", func() {
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(resources)).To(Equal(1))
 				Expect(resources[0].Path).To(Equal(ref.Path))
+			})
+		})
+
+		When("the quota is exceeded when the upload is finished", func() {
+			It("fails with insufficient storage instead of an internal server error", func() {
+				var (
+					fileContent = []byte("0123456789")
+				)
+
+				uploadIds, err := fs.InitiateUpload(ctx, ref, 10, map[string]string{})
+				Expect(err).ToNot(HaveOccurred())
+
+				session, err := fs.(tusd.DataStore).GetUpload(ctx, uploadIds["tus"])
+				Expect(err).ToNot(HaveOccurred())
+
+				_, err = session.WriteChunk(ctx, 0, bytes.NewReader(fileContent))
+				Expect(err).ToNot(HaveOccurred())
+
+				// the quota is only exceeded once the upload is finished, e.g. because
+				// another upload into the same space filled it up in the meantime
+				originalFunc := node.CheckQuota
+				node.CheckQuota = func(ctx context.Context, spaceRoot *node.Node, overwrite bool, oldSize, newSize uint64) (bool, error) {
+					return false, errtypes.InsufficientStorage("quota exceeded")
+				}
+				defer func() { node.CheckQuota = originalFunc }()
+
+				err = session.FinishUpload(ctx)
+
+				// tusd only maps its own errors to a status code, everything else
+				// becomes an internal server error
+				var tusErr tusd.Error
+				Expect(errors.As(err, &tusErr)).To(BeTrue())
+				Expect(tusErr.ErrorCode).To(Equal("ERR_INSUFFICIENT_STORAGE"))
+				Expect(tusErr.HTTPResponse.StatusCode).To(Equal(http.StatusInsufficientStorage))
 			})
 		})
 
