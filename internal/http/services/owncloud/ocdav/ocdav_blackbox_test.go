@@ -1260,6 +1260,40 @@ var _ = Describe("ocdav", func() {
 			basePath = "/dav/public-files"
 		})
 
+		Context("with a password protected link", func() {
+			BeforeEach(func() {
+				client.On("Authenticate", mock.Anything, mock.MatchedBy(func(req *cs3gateway.AuthenticateRequest) bool {
+					return req.Type == "publicshares" && req.ClientId == "protectedtoken"
+				})).Return(&cs3gateway.AuthenticateResponse{
+					Status: status.NewUnauthenticated(ctx, nil, "password required"),
+				}, nil)
+			})
+
+			DescribeTable("challenges for basic auth",
+				func(setBasicAuth bool, xRequestedWith string, expectedChallenge string, expectedErrorCode string) {
+					rr := httptest.NewRecorder()
+					req, err := http.NewRequest("PROPFIND", basePath+"/protectedtoken/", strings.NewReader(""))
+					Expect(err).ToNot(HaveOccurred())
+					req = req.WithContext(context.Background())
+					req.Host = "cloud.example.com"
+					if setBasicAuth {
+						req.SetBasicAuth("public", "wrong")
+					}
+					if xRequestedWith != "" {
+						req.Header.Set("X-Requested-With", xRequestedWith)
+					}
+
+					handler.Handler().ServeHTTP(rr, req)
+					Expect(rr).To(HaveHTTPStatus(http.StatusUnauthorized))
+					Expect(rr.Header().Get(ocdav.WwwAuthenticate)).To(Equal(expectedChallenge))
+					Expect(rr.Body.String()).To(ContainSubstring(expectedErrorCode))
+				},
+				Entry("without credentials", false, "", `Basic realm="cloud.example.com", charset="UTF-8"`, ocdav.ErrMissingBasicAuth),
+				Entry("with wrong credentials", true, "", `Basic realm="cloud.example.com", charset="UTF-8"`, ocdav.ErrInvalidCredentials),
+				Entry("without credentials from an XHR client", false, "XMLHttpRequest", "", ocdav.ErrMissingBasicAuth),
+				Entry("with wrong credentials from an XHR client", true, "XMLHttpRequest", "", ocdav.ErrInvalidCredentials),
+			)
+		})
 	})
 
 	// TODO restructure the tests and split them up by endpoint?
