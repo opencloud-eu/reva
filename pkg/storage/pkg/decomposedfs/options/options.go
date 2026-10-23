@@ -96,6 +96,39 @@ type Options struct {
 
 	DisableVersioning bool `mapstructure:"disable_versioning"`
 
+	// RevisionsCleanupStrategy defines which old revisions of a file are deleted after a new
+	// revision has been created, e.g. "auto", "14d, auto", "auto, 90d" or "7d, auto, 90d".
+	// Leaving it empty or setting it to "disabled" keeps all revisions.
+	//
+	// The supported forms, where X is a duration with a unit suffix (w, d, h, m, s) or
+	// a plain number of revisions, which always refers to the newest revisions:
+	//   - "auto": thin out revisions the older they get, keeping e.g. one per 10
+	//     seconds in the last minute, one per minute in the last hour, one per hour in
+	//     the last day, one per day in the last 30 days and one per week beyond
+	//   - "X": delete everything beyond X, e.g. "10" or "30d"; "0" deletes all revisions,
+	//     which, unlike disable_versioning, also removes the ones accumulated so far
+	//   - "X, auto": keep everything within X, apply "auto" to the older revisions
+	//   - "auto, X": delete everything beyond X, apply "auto" to the rest
+	//   - "X1, X2": keep everything within X1, delete everything beyond X2; one must be
+	//     a number and the other a duration, e.g. "5, 30d" or "7d, 10"
+	//   - "X1, auto, X2": keep everything within X1, delete everything beyond X2 and
+	//     apply "auto" in between, e.g. "7d, auto, 90d"
+	//   - "disabled": never delete any revisions
+	//
+	// A number of revisions to keep counts the ones within X1 too: "7d, 10" keeps at
+	// most 10 revisions, unless more than 10 are younger than 7 days.
+	//
+	// A duration in days or weeks with an uppercase unit (D, W) is aligned to midnight in the
+	// server's local time zone: "1d" means the last 24 hours, "1D" since yesterday 00:00,
+	// "0D" since today 00:00, e.g. "1D, auto, 30d".
+	//
+	// See revisions.NewRevisionCleanupStrategy in pkg/storage/revisions for the exact
+	// grammar and pkg/storage/pkg/decomposedfs/revisioncleanup for when it is applied.
+	// It is shared by all decomposedfs based drivers, including posix, and also applies
+	// to revisions posix creates from changes on disk (enable_fs_revisions).
+	// An invalid value makes the driver fail at startup.
+	RevisionsCleanupStrategy string `mapstructure:"revisions_cleanup_strategy"`
+
 	MountID string `mapstructure:"mount_id"`
 
 	MultiTenantEnabled bool `mapstructure:"multi_tenant_enabled"`

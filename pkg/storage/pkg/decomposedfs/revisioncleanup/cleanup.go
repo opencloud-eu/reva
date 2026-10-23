@@ -36,8 +36,16 @@
 //
 // # When the cleanup runs
 //
-// Cleaner.Cleanup is meant to be called after a new revision has been created and has
-// settled.
+// Cleaner.Cleanup is called after a new revision has been created and has settled:
+//
+//   - after a successful synchronous upload (upload.DecomposedFsSession.FinishUploadDecomposed),
+//   - after successful async postprocessing (Decomposedfs.Postprocessing),
+//   - in the upload pipeline: when Decomposedfs.MarkProcessing clears the processing mark
+//     of an upload,
+//   - after Decomposedfs.RestoreRevision,
+//   - in posix, when a change on disk turned the '.CURRENT' copy into a revision
+//     (assimilation). Those revisions are created by a plain rename and never go
+//     through CreateRevision or the upload code, hence the separate trigger.
 //
 // It deliberately does not run inside Tree.CreateRevision, because revisions are
 // not settled at that point while uploads are in flight:
@@ -173,6 +181,8 @@ func deleteBlob(bd BlobDeleter, spaceID, blobID string) error {
 // Enabled. A nil *Cleaner behaves the same, as a safeguard, but New never returns one.
 //
 // It is stateless apart from the parsed strategy and safe for concurrent use.
+// Each driver creates one from the 'revisions_cleanup_strategy' option and passes
+// it on through aspects.Aspects.RevisionsCleanup.
 type Cleaner struct {
 	// nil if the cleanup is disabled
 	strategy revisions.RevisionCleanupStrategy

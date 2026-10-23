@@ -60,6 +60,7 @@ import (
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/node"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/options"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/permissions"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/revisioncleanup"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/spaceidindex"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/timemanager"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/trashbin"
@@ -133,6 +134,10 @@ type Decomposedfs struct {
 	stream       events.Stream
 	sessionStore SessionStore
 
+	// deletes old revisions after uploads and restores created new ones, nil if
+	// disabled. Shared with the upload session store, see aspects.Aspects.
+	revisionsCleanup *revisioncleanup.Cleaner
+
 	UserCache       *ttlcache.Cache
 	userSpaceIndex  *spaceidindex.Index
 	groupSpaceIndex *spaceidindex.Index
@@ -173,6 +178,13 @@ func NewDefault(m map[string]interface{}, bs node.Blobstore, es events.Stream, l
 	}
 	p := permissions.NewPermissions(node.NewPermissions(lu), permissionsSelector)
 
+	// fail at startup on an invalid strategy rather than silently keeping or deleting
+	// revisions the admin did not expect. The posix driver does the same in tree.New.
+	revisionsCleanup, err := revisioncleanup.New(o.RevisionsCleanupStrategy)
+	if err != nil {
+		return nil, errors.Wrap(err, "invalid revisions cleanup strategy")
+	}
+
 	tp := tree.New(lu, bs, o, p, store.Create(
 		store.Store(o.IDCache.Store),
 		store.TTL(o.IDCache.TTL),
@@ -194,6 +206,7 @@ func NewDefault(m map[string]interface{}, bs node.Blobstore, es events.Stream, l
 		EventStream:       es,
 		DisableVersioning: o.DisableVersioning,
 		Trashbin:          &DecomposedfsTrashbin{},
+		RevisionsCleanup:  revisionsCleanup,
 	}
 
 	return New(o, aspects, log)
@@ -249,20 +262,21 @@ func New(o *options.Options, aspects aspects.Aspects, log *zerolog.Logger) (stor
 	}
 
 	fs := &Decomposedfs{
-		tp:              aspects.Tree,
-		lu:              aspects.Lookup,
-		trashbin:        aspects.Trashbin,
-		o:               o,
-		p:               aspects.Permissions,
-		um:              aspects.UserMapper,
-		chunkHandler:    chunking.NewChunkHandler(filepath.Join(o.Root, "uploads")),
-		stream:          aspects.EventStream,
-		UserCache:       ttlcache.NewCache(),
-		userSpaceIndex:  userSpaceIndex,
-		groupSpaceIndex: groupSpaceIndex,
-		mailSpaceIndex:  mailSpaceIndex,
-		spaceTypeIndex:  spaceTypeIndex,
-		log:             log,
+		tp:               aspects.Tree,
+		lu:               aspects.Lookup,
+		trashbin:         aspects.Trashbin,
+		o:                o,
+		p:                aspects.Permissions,
+		um:               aspects.UserMapper,
+		chunkHandler:     chunking.NewChunkHandler(filepath.Join(o.Root, "uploads")),
+		stream:           aspects.EventStream,
+		UserCache:        ttlcache.NewCache(),
+		revisionsCleanup: aspects.RevisionsCleanup,
+		userSpaceIndex:   userSpaceIndex,
+		groupSpaceIndex:  groupSpaceIndex,
+		mailSpaceIndex:   mailSpaceIndex,
+		spaceTypeIndex:   spaceTypeIndex,
+		log:              log,
 	}
 	fs.sessionStore = upload.NewSessionStore(fs, aspects, o.Root, o.AsyncFileUploads, o.Tokens, log)
 	if err = fs.trashbin.Setup(fs); err != nil {
@@ -407,6 +421,18 @@ func (fs *Decomposedfs) handlePostprocessingEvent(ctx context.Context, event eve
 			if err == nil && info.MetaData["versionID"] != "" {
 				isVersion = true
 			}
+		}
+
+		// Apply the revision cleanup strategy (see package revisioncleanup) for async
+		// uploads that replaced an existing file and thus created a revision. It only
+		// runs now that postprocessing finished: until then the upload may still roll
+		// back to the revision recorded in versionID, or write its blob into a revision
+		// node created by a newer upload. Failed uploads are skipped, as they just
+		// restored their previous revision instead of creating a new one.
+		// Cleanup itself skips the node if another upload is still processing it.
+		// Pass sublog on, so that the cleanup logs with the event's context.
+		if !failed && isVersion {
+			fs.revisionsCleanup.Cleanup(appctx.WithLogger(ctx, &sublog), fs.lu, fs.tp, n)
 		}
 
 		if err := events.Publish(
