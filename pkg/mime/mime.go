@@ -367,6 +367,7 @@ var mimeTypes = map[string]string{
 	"heif":                     "image/heif",
 	"heifs":                    "image/heif-sequence",
 	"hh":                       "text/x-c",
+	"hif":                      "image/heif",
 	"hjson":                    "application/hjson",
 	"hlp":                      "application/winhlp",
 	"hpgl":                     "application/vnd.hp-hpgl",
