@@ -117,6 +117,22 @@ func (fs *Decomposedfs) RestoreRevision(ctx context.Context, ref *provider.Refer
 	}
 	defer unlockNode()
 
+	// The revision must still exist on disk. Its metadata may come from a stale cache
+	// entry: another process, e.g. `opencloud storage-users revisions cleanup` with the
+	// default in-memory metadata cache, may have deleted it. Restoring it anyway would
+	// point the node to the revision's deleted blob, and it would leave a revision of the
+	// current content behind. Checked under the node's lock, which deleting a revision
+	// takes too (Node.DeleteRevisionUnchecked).
+	revisionNode := node.NewBaseNode(spaceID, revisionKey, fs.lu)
+	if _, err := os.Stat(revisionNode.InternalPath()); err != nil {
+		if !os.IsNotExist(err) {
+			return err
+		}
+		// drop the stale cache entry, if there is one
+		_ = fs.lu.MetadataBackend().Purge(ctx, revisionNode)
+		return errtypes.NotFound(revisionKey)
+	}
+
 	// move current version to new revision
 	mtime, err := n.GetMTime(ctx)
 	if err != nil {
@@ -136,7 +152,6 @@ func (fs *Decomposedfs) RestoreRevision(ctx context.Context, ref *provider.Refer
 
 	// revision 5, current 10 (restore a smaller blob) -> 5-10 = -5
 	// revision 10, current 5 (restore a bigger blob) -> 10-5 = +5
-	revisionNode := node.NewBaseNode(spaceID, revisionKey, fs.lu)
 	revisionSize, err := fs.lu.MetadataBackend().GetInt64(ctx, revisionNode, prefixes.BlobsizeAttr)
 	if err != nil {
 		return errtypes.InternalError("failed to read blob size xattr from old revision")
