@@ -3,6 +3,8 @@
 
 package tree
 
+import "github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/permissions"
+
 // AssimilateForTest assimilates the given path like the watcher would after a change, for tests only.
 //
 // Tests that need changes on disk to be picked up have two options, and neither works
@@ -18,4 +20,12 @@ package tree
 // available to the external tree_test package without being part of the API.
 func (t *Tree) AssimilateForTest(path string) error {
 	return t.assimilate(scanItem{Path: path})
+}
+
+// SetPermissionsForTest makes the tree check permissions with p, for tests only: the tree of the
+// test env checks none. It returns a function that restores the previous checks.
+func (t *Tree) SetPermissionsForTest(p permissions.Permissions) func() {
+	previous := t.permissions
+	t.permissions = p
+	return func() { t.permissions = previous }
 }

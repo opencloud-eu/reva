@@ -14,11 +14,14 @@ import (
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/google/uuid"
+	"github.com/stretchr/testify/mock"
 
+	"github.com/opencloud-eu/reva/v3/pkg/errtypes"
 	helpers "github.com/opencloud-eu/reva/v3/pkg/storage/fs/posix/testhelpers"
 	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs"
 	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/metadata/prefixes"
 	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/node"
+	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/permissions"
 	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/revisioncleanup"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -115,6 +118,51 @@ var _ = Describe("Revisions", func() {
 			cleaner.Cleanup(non_watching_env.Ctx, non_watching_env.Lookup, non_watching_env.Tree, n)
 
 			Expect(listKeys()).To(ConsistOf(keys[0], keys[1]))
+		})
+	})
+
+	Describe("a revision deleted by another process", func() {
+		var ref *provider.Reference
+
+		BeforeEach(func() {
+			env := non_watching_env
+			ref = &provider.Reference{ResourceId: &provider.ResourceId{SpaceId: n.SpaceID, OpaqueId: n.ID}}
+			call := env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(&provider.ResourcePermissions{
+				Stat:                 true,
+				ListFileVersions:     true,
+				InitiateFileDownload: true,
+				RestoreFileVersion:   true,
+			}, nil)
+			DeferCleanup(call.Unset)
+
+			// Delete the oldest revision the way another process does, e.g. the revision cleanup
+			// on demand: its file is gone, but this process's metadata cache still has its
+			// entry, from reading it before (as listing the versions does).
+			rn := revisionNode(keys[2])
+			_, err := env.Lookup.MetadataBackend().All(env.Ctx, rn)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(os.Remove(rn.InternalPath())).To(Succeed())
+		})
+
+		It("is not restored, and the file keeps its content", func() {
+			env := non_watching_env
+			_, err := env.Fs.RestoreRevision(env.Ctx, ref, keys[2])
+			_, notFound := err.(errtypes.IsNotFound)
+			Expect(notFound).To(BeTrue(), "expected a not found error, got %v", err)
+
+			fi, err := os.Stat(n.InternalPath())
+			Expect(err).ToNot(HaveOccurred())
+			Expect(fi.Size()).To(Equal(int64(16)))
+			// and the failed restore left no revision of the current content behind
+			Expect(listKeys()).To(ConsistOf(keys[0], keys[1]))
+		})
+
+		It("is not downloaded", func() {
+			env := non_watching_env
+			DeferCleanup(env.Tree.SetPermissionsForTest(permissions.NewPermissions(env.Permissions, nil)))
+			_, _, err := env.Tree.DownloadRevision(env.Ctx, ref, keys[2], func(*provider.ResourceInfo) bool { return true })
+			_, notFound := err.(errtypes.IsNotFound)
+			Expect(notFound).To(BeTrue(), "expected a not found error, got %v", err)
 		})
 	})
 })
