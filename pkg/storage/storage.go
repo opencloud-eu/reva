@@ -37,6 +37,7 @@ type MoveResult struct {
 }
 
 // MetadataResult carries the keys a successful SetArbitraryMetadata or UnsetArbitraryMetadata actually changed.
+// Drivers that do not track the keys return nil, the caller then treats every requested key as changed.
 type MetadataResult struct {
 	ChangedKeys []string
 	RemovedKeys []string
@@ -132,9 +133,9 @@ type FS interface {
 	// Arbitrary Metadata
 
 	// SetArbitraryMetadata sets arbitraty metadata on a resource
-	SetArbitraryMetadata(ctx context.Context, ref *provider.Reference, md *provider.ArbitraryMetadata) error
+	SetArbitraryMetadata(ctx context.Context, ref *provider.Reference, md *provider.ArbitraryMetadata) (*MetadataResult, error)
 	// UnsetArbitraryMetadata removes arbitraty metadata from a resource
-	UnsetArbitraryMetadata(ctx context.Context, ref *provider.Reference, keys []string) error
+	UnsetArbitraryMetadata(ctx context.Context, ref *provider.Reference, keys []string) (*MetadataResult, error)
 
 	// AddLabel adds a label to a resource
 	AddLabel(ctx context.Context, ref *provider.Reference, userID *user.UserId, label string) error
