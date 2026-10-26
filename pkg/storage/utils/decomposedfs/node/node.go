@@ -1223,7 +1223,9 @@ func (n *Node) getGranteeTypes(ctx context.Context) ([]provider.GranteeType, boo
 				hasUserShares = true
 			case !hasGroupShares && strings.HasPrefix(g[i], prefixes.GrantGroupAcePrefix):
 				hasGroupShares = true
-			case hasUserShares && hasGroupShares && hasGuestShares:
+			}
+
+			if hasUserShares && hasGroupShares && hasGuestShares {
 				break
 			}
 		}
