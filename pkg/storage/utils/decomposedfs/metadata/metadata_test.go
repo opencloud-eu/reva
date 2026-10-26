@@ -22,11 +22,13 @@ import (
 	"context"
 	"os"
 	"path"
+	"syscall"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/cache"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/decomposedfs/metadata"
+	"github.com/pkg/xattr"
 )
 
 var _ = Describe("Backend", func() {
@@ -235,6 +237,39 @@ var _ = Describe("Backend", func() {
 			It("returns false", func() {
 				Expect(backend.IsMetaFile("foo.txt")).To(BeFalse())
 			})
+		})
+	})
+})
+
+var _ = Describe("Error helpers", func() {
+	Describe("IsErrRange", func() {
+		It("reports ERANGE as a range error", func() {
+			Expect(metadata.IsErrRange(&xattr.Error{Op: "xattr.list", Err: syscall.ERANGE})).To(BeTrue())
+		})
+
+		// E2BIG means the name list exceeds the maximum size the kernel returns
+		// (64KiB VFS limit, e.g. on XFS). It is persistent, not a race, and must
+		// not be retried.
+		It("does not report E2BIG as a range error", func() {
+			Expect(metadata.IsErrRange(&xattr.Error{Op: "xattr.list", Err: syscall.E2BIG})).To(BeFalse())
+		})
+
+		It("does not report ENOENT as a range error", func() {
+			Expect(metadata.IsErrRange(&xattr.Error{Op: "xattr.list", Err: syscall.ENOENT})).To(BeFalse())
+		})
+	})
+
+	Describe("IsErrTooBig", func() {
+		It("reports E2BIG as a too big error", func() {
+			Expect(metadata.IsErrTooBig(&xattr.Error{Op: "xattr.list", Err: syscall.E2BIG})).To(BeTrue())
+		})
+
+		It("does not report ERANGE as a too big error", func() {
+			Expect(metadata.IsErrTooBig(&xattr.Error{Op: "xattr.list", Err: syscall.ERANGE})).To(BeFalse())
+		})
+
+		It("does not report a nil error as a too big error", func() {
+			Expect(metadata.IsErrTooBig(nil)).To(BeFalse())
 		})
 	})
 })
