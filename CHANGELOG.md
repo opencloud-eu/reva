@@ -6,6 +6,16 @@
 
 @AlexAndBear, @NickWalters, @VicDeo, @aduffeck, @butonic, @dragonchaser, @dschmidt, @fschade, @junkerderprovinz, @kulmann, @maki5, @micbar, @pbleser-oc, @v-scharf
 
+### 📈 Enhancement
+
+- fix(mime): add the OOXML Visio types [[#900](https://github.com/opencloud-eu/reva/pull/900)]
+- Map .hif files to image/heif [[#911](https://github.com/opencloud-eu/reva/pull/911)]
+- feat: add default_quota to the spaces capability [[#880](https://github.com/opencloud-eu/reva/pull/880)]
+- fix(appprovider): pick a deterministic app when open with web names none [[#875](https://github.com/opencloud-eu/reva/pull/875)]
+- feat: make space2share migration repeatable [[#864](https://github.com/opencloud-eu/reva/pull/864)]
+- Harden unshare [[#856](https://github.com/opencloud-eu/reva/pull/856)]
+- feat: run decomposedfs on foreign metadata via metadata_prefix [[#859](https://github.com/opencloud-eu/reva/pull/859)]
+
 ### 🐛 Bug Fixes
 
 - fix: unlock the OS thread when ScopeUserByIds fails [[#899](https://github.com/opencloud-eu/reva/pull/899)]
@@ -28,15 +38,6 @@
 - fix(posix): keep a handle on the blob for the copy target [[#807](https://github.com/opencloud-eu/reva/pull/807)]
 - test: wait for the DeleteRevision handler before redelivering [[#861](https://github.com/opencloud-eu/reva/pull/861)]
 - fix filedescriptor leaks [[#847](https://github.com/opencloud-eu/reva/pull/847)]
-
-### 📈 Enhancement
-
-- Map .hif files to image/heif [[#911](https://github.com/opencloud-eu/reva/pull/911)]
-- feat: add default_quota to the spaces capability [[#880](https://github.com/opencloud-eu/reva/pull/880)]
-- fix(appprovider): pick a deterministic app when open with web names none [[#875](https://github.com/opencloud-eu/reva/pull/875)]
-- feat: make space2share migration repeatable [[#864](https://github.com/opencloud-eu/reva/pull/864)]
-- Harden unshare [[#856](https://github.com/opencloud-eu/reva/pull/856)]
-- feat: run decomposedfs on foreign metadata via metadata_prefix [[#859](https://github.com/opencloud-eu/reva/pull/859)]
 
 ### ✅ Tests
 
