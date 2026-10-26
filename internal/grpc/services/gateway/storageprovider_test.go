@@ -33,6 +33,8 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/stretchr/testify/mock"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	gstatus "google.golang.org/grpc/status"
 
 	ctxpkg "github.com/opencloud-eu/reva/v2/pkg/ctx"
 	"github.com/opencloud-eu/reva/v2/pkg/rgrpc/status"
@@ -290,6 +292,274 @@ var _ = Describe("CreateStorageSpace", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(resp.GetStatus().GetCode()).To(Equal(rpcv1beta1.Code_CODE_INTERNAL))
 			collaborationMock.AssertNotCalled(GinkgoT(), "CreateShare")
+		})
+	})
+})
+
+// stubStorageProvider records whether Delete reached the storage provider.
+type stubStorageProvider struct {
+	provider.ProviderAPIClient
+	deleted bool
+}
+
+func (s *stubStorageProvider) Delete(
+	ctx context.Context,
+	_ *provider.DeleteRequest,
+	_ ...grpc.CallOption,
+) (*provider.DeleteResponse, error) {
+	s.deleted = true
+	return &provider.DeleteResponse{Status: status.NewOK(ctx)}, nil
+}
+
+// registerStubStorageProvider injects the given stub as the storage provider
+// client so that requests passing the gateway reach it.
+func registerStubStorageProvider(stub *stubStorageProvider) {
+	pool.RemoveSelector("StorageProviderSelector" + providerAddr)
+	pool.GetSelector[provider.ProviderAPIClient](
+		"StorageProviderSelector",
+		providerAddr,
+		func(_ grpc.ClientConnInterface) provider.ProviderAPIClient { return stub },
+	)
+}
+
+func receivedShares(shares ...*collaborationv1beta1.ReceivedShare) *collaborationv1beta1.ListReceivedSharesResponse {
+	return &collaborationv1beta1.ListReceivedSharesResponse{
+		Status: status.NewOK(context.Background()),
+		Shares: shares,
+	}
+}
+
+func receivedShareOf(id *provider.ResourceId) *collaborationv1beta1.ReceivedShare {
+	return &collaborationv1beta1.ReceivedShare{
+		Share: &collaborationv1beta1.Share{ResourceId: id},
+	}
+}
+
+// receivedShareFiltersOfType returns the filters of the given type carried by a
+// ListReceivedShares request.
+func receivedShareFiltersOfType(
+	req *collaborationv1beta1.ListReceivedSharesRequest,
+	filterType collaborationv1beta1.Filter_Type,
+) []*collaborationv1beta1.Filter {
+	filters := []*collaborationv1beta1.Filter{}
+	for _, f := range req.GetFilters() {
+		if f.GetType() == filterType {
+			filters = append(filters, f)
+		}
+	}
+	return filters
+}
+
+var _ = Describe("Delete", func() {
+	var (
+		ctx               context.Context
+		registryMock      *cs3mocks.StorageRegistryAPIClient
+		collaborationMock *cs3mocks.CollaborationAPIClient
+		stub              *stubStorageProvider
+		s                 *svc
+
+		sharee = &userpb.User{
+			Id: &userpb.UserId{OpaqueId: "brian", Idp: "idp"},
+		}
+
+		sharedID = &provider.ResourceId{StorageId: "storageid", SpaceId: "spaceid", OpaqueId: "nodeid"}
+
+		deleteRequest = func(id *provider.ResourceId, path string) *provider.DeleteRequest {
+			return &provider.DeleteRequest{
+				Ref: &provider.Reference{ResourceId: id, Path: path},
+			}
+		}
+	)
+
+	BeforeEach(func() {
+		registryMock = cs3mocks.NewStorageRegistryAPIClient(GinkgoT())
+		collaborationMock = cs3mocks.NewCollaborationAPIClient(GinkgoT())
+		stub = &stubStorageProvider{}
+		s = newTestSvc(registryMock, &cs3mocks.SpacesAPIClient{}, collaborationMock)
+		registerStubStorageProvider(stub)
+		ctx = ctxpkg.ContextSetUser(context.Background(), sharee)
+
+		registryMock.EXPECT().
+			ListStorageProviders(mock.Anything, mock.Anything, mock.Anything).
+			Return(&registryv1beta1.ListStorageProvidersResponse{
+				Status:    status.NewOK(ctx),
+				Providers: []*registryv1beta1.ProviderInfo{providerInfoWithAddress()},
+			}, nil).Maybe()
+	})
+
+	Context("the reference points at the root of a received share", func() {
+		It("queries the received shares by the resource id", func() {
+			collaborationMock.EXPECT().
+				ListReceivedShares(
+					mock.Anything,
+					mock.MatchedBy(func(req *collaborationv1beta1.ListReceivedSharesRequest) bool {
+						resourceIDs := receivedShareFiltersOfType(req, collaborationv1beta1.Filter_TYPE_RESOURCE_ID)
+						if len(resourceIDs) != 2 {
+							return false
+						}
+
+						spaceRoots := receivedShareFiltersOfType(req, collaborationv1beta1.Filter_TYPE_SPACE_ROOT)
+						if len(spaceRoots) != 1 || spaceRoots[0].GetSpaceRoot() {
+							return false
+						}
+
+						var hasSplitID, hasLegacyID bool
+						for _, f := range resourceIDs {
+							rid := f.GetResourceId()
+							switch {
+							case rid.GetStorageId() == "storageid" &&
+								rid.GetSpaceId() == "spaceid" &&
+								rid.GetOpaqueId() == "nodeid":
+								hasSplitID = true
+							case rid.GetStorageId() == "storageid$spaceid" &&
+								rid.GetSpaceId() == "" &&
+								rid.GetOpaqueId() == "nodeid":
+								hasLegacyID = true
+							}
+						}
+
+						return hasSplitID && hasLegacyID
+					}),
+				).
+				Return(receivedShares(receivedShareOf(sharedID)), nil).Once()
+
+			resp, err := s.Delete(ctx, deleteRequest(sharedID, ""))
+
+			Expect(err).ToNot(HaveOccurred())
+			Expect(resp.GetStatus().GetCode()).To(Equal(rpcv1beta1.Code_CODE_PERMISSION_DENIED))
+			Expect(stub.deleted).To(BeFalse())
+		})
+
+		It("denies the delete for an empty path", func() {
+			collaborationMock.EXPECT().
+				ListReceivedShares(mock.Anything, mock.Anything).
+				Return(receivedShares(receivedShareOf(sharedID)), nil).Once()
+
+			resp, err := s.Delete(ctx, deleteRequest(sharedID, ""))
+
+			Expect(err).ToNot(HaveOccurred())
+			Expect(resp.GetStatus().GetCode()).To(Equal(rpcv1beta1.Code_CODE_PERMISSION_DENIED))
+			Expect(stub.deleted).To(BeFalse())
+		})
+
+		It("denies the delete for a dot path", func() {
+			collaborationMock.EXPECT().
+				ListReceivedShares(mock.Anything, mock.Anything).
+				Return(receivedShares(receivedShareOf(sharedID)), nil).Once()
+
+			resp, err := s.Delete(ctx, deleteRequest(sharedID, "."))
+
+			Expect(err).ToNot(HaveOccurred())
+			Expect(resp.GetStatus().GetCode()).To(Equal(rpcv1beta1.Code_CODE_PERMISSION_DENIED))
+			Expect(stub.deleted).To(BeFalse())
+		})
+
+		It("denies the delete for a share with a backwards compatible id", func() {
+			legacyID := &provider.ResourceId{StorageId: "storageid$spaceid", OpaqueId: "nodeid"}
+			collaborationMock.EXPECT().
+				ListReceivedShares(mock.Anything, mock.Anything).
+				Return(receivedShares(receivedShareOf(legacyID)), nil).Once()
+
+			resp, err := s.Delete(ctx, deleteRequest(sharedID, ""))
+
+			Expect(err).ToNot(HaveOccurred())
+			Expect(resp.GetStatus().GetCode()).To(Equal(rpcv1beta1.Code_CODE_PERMISSION_DENIED))
+			Expect(stub.deleted).To(BeFalse())
+		})
+	})
+
+	Context("the reference points at a resource which is not a received share root", func() {
+		It("deletes a resource the user did not receive", func() {
+			// the share provider filters by the queried id and returns nothing
+			collaborationMock.EXPECT().
+				ListReceivedShares(mock.Anything, mock.Anything).
+				Return(receivedShares(), nil).Once()
+
+			otherID := &provider.ResourceId{StorageId: "storageid", SpaceId: "spaceid", OpaqueId: "othernode"}
+			resp, err := s.Delete(ctx, deleteRequest(otherID, ""))
+
+			Expect(err).ToNot(HaveOccurred())
+			Expect(resp.GetStatus().GetCode()).To(Equal(rpcv1beta1.Code_CODE_OK))
+			Expect(stub.deleted).To(BeTrue())
+		})
+
+		It("deletes a resource when the user received no shares", func() {
+			collaborationMock.EXPECT().
+				ListReceivedShares(mock.Anything, mock.Anything).
+				Return(receivedShares(), nil).Once()
+
+			resp, err := s.Delete(ctx, deleteRequest(sharedID, ""))
+
+			Expect(err).ToNot(HaveOccurred())
+			Expect(resp.GetStatus().GetCode()).To(Equal(rpcv1beta1.Code_CODE_OK))
+			Expect(stub.deleted).To(BeTrue())
+		})
+
+		It("deletes the root of a space the user is a member of", func() {
+			spaceRootID := &provider.ResourceId{StorageId: "storageid", SpaceId: "spaceid", OpaqueId: "spaceid"}
+			// the space root filter excludes space membership from the result
+			collaborationMock.EXPECT().
+				ListReceivedShares(mock.Anything, mock.Anything).
+				Return(receivedShares(), nil).Once()
+
+			resp, err := s.Delete(ctx, deleteRequest(spaceRootID, ""))
+
+			Expect(err).ToNot(HaveOccurred())
+			Expect(resp.GetStatus().GetCode()).To(Equal(rpcv1beta1.Code_CODE_OK))
+			Expect(stub.deleted).To(BeTrue())
+		})
+
+		It("deletes a resource below the root of a received share", func() {
+			resp, err := s.Delete(ctx, deleteRequest(sharedID, "child.txt"))
+
+			Expect(err).ToNot(HaveOccurred())
+			Expect(resp.GetStatus().GetCode()).To(Equal(rpcv1beta1.Code_CODE_OK))
+			Expect(stub.deleted).To(BeTrue())
+			collaborationMock.AssertNotCalled(GinkgoT(), "ListReceivedShares", mock.Anything, mock.Anything)
+		})
+	})
+
+	Context("the received shares cannot be listed", func() {
+		It("fails the delete when the share provider returns a non-OK status", func() {
+			collaborationMock.EXPECT().
+				ListReceivedShares(mock.Anything, mock.Anything).
+				Return(&collaborationv1beta1.ListReceivedSharesResponse{
+					Status: status.NewInternal(ctx, "share store unavailable"),
+				}, nil).Once()
+
+			resp, err := s.Delete(ctx, deleteRequest(sharedID, ""))
+
+			Expect(err).ToNot(HaveOccurred())
+			Expect(resp.GetStatus().GetCode()).To(Equal(rpcv1beta1.Code_CODE_INTERNAL))
+			Expect(resp.GetStatus().GetMessage()).To(Equal("could not verify share permissions for delete"))
+			Expect(stub.deleted).To(BeFalse())
+		})
+
+		It("fails the delete when the share provider call fails", func() {
+			collaborationMock.EXPECT().
+				ListReceivedShares(mock.Anything, mock.Anything).
+				Return(nil, errors.New("share service unavailable")).Once()
+
+			resp, err := s.Delete(ctx, deleteRequest(sharedID, ""))
+
+			Expect(err).ToNot(HaveOccurred())
+			Expect(resp.GetStatus().GetCode()).To(Equal(rpcv1beta1.Code_CODE_INTERNAL))
+			Expect(resp.GetStatus().GetMessage()).To(Equal("could not verify share permissions for delete"))
+			Expect(stub.deleted).To(BeFalse())
+		})
+
+		It("allows the delete when the caller is not permitted to list received shares", func() {
+			// public link and app provider tokens are rejected here by the auth interceptor
+			collaborationMock.EXPECT().
+				ListReceivedShares(mock.Anything, mock.Anything).
+				Return(nil, gstatus.Error(codes.PermissionDenied, "auth: core access token is invalid")).Once()
+
+			resp, err := s.Delete(ctx, deleteRequest(sharedID, ""))
+
+			Expect(err).ToNot(HaveOccurred())
+			Expect(resp.GetStatus().GetCode()).To(Equal(rpcv1beta1.Code_CODE_OK))
+			Expect(stub.deleted).To(BeTrue())
+			collaborationMock.AssertNumberOfCalls(GinkgoT(), "ListReceivedShares", 1)
 		})
 	})
 })

@@ -4,6 +4,7 @@
 package metadata
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -21,8 +22,11 @@ var _ = Describe("listXattr", func() {
 			Expect(isRangeError(&xattr.Error{Op: "xattr.list", Err: syscall.ERANGE})).To(BeTrue())
 		})
 
-		It("reports E2BIG as a range error", func() {
-			Expect(isRangeError(&xattr.Error{Op: "xattr.list", Err: syscall.E2BIG})).To(BeTrue())
+		// E2BIG means the name list exceeds the maximum size the kernel returns
+		// (64KiB VFS limit, e.g. on XFS). It is persistent, not a race, and must
+		// not be retried.
+		It("does not report E2BIG as a range error", func() {
+			Expect(isRangeError(&xattr.Error{Op: "xattr.list", Err: syscall.E2BIG})).To(BeFalse())
 		})
 
 		It("does not report ENOENT as a range error", func() {
@@ -31,6 +35,20 @@ var _ = Describe("listXattr", func() {
 
 		It("does not report a nil error as a range error", func() {
 			Expect(isRangeError(nil)).To(BeFalse())
+		})
+	})
+
+	Describe("isTooBigError", func() {
+		It("reports E2BIG as a too big error", func() {
+			Expect(isTooBigError(&xattr.Error{Op: "xattr.list", Err: syscall.E2BIG})).To(BeTrue())
+		})
+
+		It("does not report ERANGE as a too big error", func() {
+			Expect(isTooBigError(&xattr.Error{Op: "xattr.list", Err: syscall.ERANGE})).To(BeFalse())
+		})
+
+		It("does not report a nil error as a too big error", func() {
+			Expect(isTooBigError(nil)).To(BeFalse())
 		})
 	})
 
@@ -72,7 +90,7 @@ var _ = Describe("listXattr", func() {
 		}()
 
 		for i := 0; i < 20000; i++ {
-			_, err := listXattr(path)
+			_, err := listXattr(context.Background(), path)
 			Expect(err).ToNot(HaveOccurred(), "listXattr must retry transient ERANGE from concurrent writes")
 		}
 	})
