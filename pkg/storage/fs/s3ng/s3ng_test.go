@@ -64,6 +64,13 @@ var _ = Describe("S3ng", func() {
 			Expect(err).To(MatchError("S3 configuration incomplete"))
 		})
 
+		It("rejects invalid SSE-C configuration before creating storage", func() {
+			options["s3.endpoint"] = "https://localhost:9000"
+			options["s3.sse_c_key"] = "invalid-secret!"
+			_, err := s3ng.New(options, nil, &zerolog.Logger{})
+			Expect(err).To(MatchError("SSE-C key must be base64-encoded"))
+		})
+
 		It("works with complete configuration", func() {
 			_, err := s3ng.New(options, nil, &zerolog.Logger{})
 			Expect(err).ToNot(HaveOccurred())
