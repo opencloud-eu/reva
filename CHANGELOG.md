@@ -1,10 +1,19 @@
 # Changelog
 
-## [2.52.0](https://github.com/opencloud-eu/reva/releases/tag/v2.52.0) - 2026-10-23
+## [2.52.0](https://github.com/opencloud-eu/reva/releases/tag/v2.52.0) - 2026-10-26
 
 ### ❤️ Thanks to all contributors! ❤️
 
 @AlexAndBear, @NickWalters, @VicDeo, @aduffeck, @butonic, @dragonchaser, @dschmidt, @fschade, @junkerderprovinz, @kulmann, @maki5, @micbar, @v-scharf
+
+### 📈 Enhancement
+
+- Map .hif files to image/heif [[#911](https://github.com/opencloud-eu/reva/pull/911)]
+- feat: add default_quota to the spaces capability [[#880](https://github.com/opencloud-eu/reva/pull/880)]
+- fix(appprovider): pick a deterministic app when open with web names none [[#875](https://github.com/opencloud-eu/reva/pull/875)]
+- feat: make space2share migration repeatable [[#864](https://github.com/opencloud-eu/reva/pull/864)]
+- Harden unshare [[#856](https://github.com/opencloud-eu/reva/pull/856)]
+- feat: run decomposedfs on foreign metadata via metadata_prefix [[#859](https://github.com/opencloud-eu/reva/pull/859)]
 
 ### 🐛 Bug Fixes
 
@@ -32,14 +41,6 @@
 - try to remove the share migration lock on SIGTERM [[#869](https://github.com/opencloud-eu/reva/pull/869)]
 - fix: separate cronjobs for different tasks [[#868](https://github.com/opencloud-eu/reva/pull/868)]
 - fix: wait for inotify to react [[#863](https://github.com/opencloud-eu/reva/pull/863)]
-
-### 📈 Enhancement
-
-- feat: add default_quota to the spaces capability [[#880](https://github.com/opencloud-eu/reva/pull/880)]
-- fix(appprovider): pick a deterministic app when open with web names none [[#875](https://github.com/opencloud-eu/reva/pull/875)]
-- feat: make space2share migration repeatable [[#864](https://github.com/opencloud-eu/reva/pull/864)]
-- Harden unshare [[#856](https://github.com/opencloud-eu/reva/pull/856)]
-- feat: run decomposedfs on foreign metadata via metadata_prefix [[#859](https://github.com/opencloud-eu/reva/pull/859)]
 
 ## [2.51.0](https://github.com/opencloud-eu/reva/releases/tag/v2.51.0) - 2026-10-05
 
