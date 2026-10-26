@@ -8,6 +8,7 @@
 
 ### 🐛 Bug Fixes
 
+- fix(ocdav): send basic auth challenge for password protected links followup [[#915](https://github.com/opencloud-eu/reva/pull/915)]
 - fix(mime): normalise the extension RegisterMime is handed [[#908](https://github.com/opencloud-eu/reva/pull/908)]
 - fix(ocdav): send basic auth challenge for password protected links [[#904](https://github.com/opencloud-eu/reva/pull/904)]
 - fix(mime): map the rw2 extension [[#905](https://github.com/opencloud-eu/reva/pull/905)]
