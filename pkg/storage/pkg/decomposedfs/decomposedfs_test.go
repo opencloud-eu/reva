@@ -25,6 +25,7 @@ import (
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/node"
 	nodemocks "github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/node/mocks"
 	helpers "github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/testhelpers"
 
@@ -165,6 +166,26 @@ var _ = Describe("Decomposed", func() {
 			result, err := env.Fs.Move(env.Ctx, source, ref)
 			Expect(err).To(HaveOccurred())
 			Expect(result).To(BeNil())
+		})
+	})
+
+	Describe("TouchFile", func() {
+		It("assembles the permissions on the parent when the file does not exist yet", func() {
+			fileRef := &provider.Reference{
+				ResourceId: env.SpaceRootRes,
+				Path:       "/dir1/newfile",
+			}
+			env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything).Unset()
+			// a call with the not-yet-existing node has no matching expectation and fails the test
+			env.Permissions.On("AssemblePermissions", mock.Anything, mock.MatchedBy(func(n *node.Node) bool {
+				return n.Exists
+			})).Return(&provider.ResourcePermissions{InitiateFileUpload: true, Stat: true}, nil)
+
+			Expect(env.Fs.TouchFile(env.Ctx, fileRef, false, "")).To(Succeed())
+
+			env.Permissions.AssertCalled(GinkgoT(), "AssemblePermissions", mock.Anything, mock.MatchedBy(func(n *node.Node) bool {
+				return n.Name == "dir1"
+			}))
 		})
 	})
 
