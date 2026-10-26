@@ -472,8 +472,13 @@ func (session *DecomposedFsSession) revertNode(ctx context.Context) error {
 		}
 		return nil
 	}
+	if !errors.Is(err, node.ErrMissingParentID) {
+		// the node might only be temporarily unreadable, e.g. because a cache
+		// is unavailable. Do not treat it as orphaned.
+		return err
+	}
 
-	// The node is unreadable. Fall back to the session metadata, which still
+	// The node is orphaned. Fall back to the session metadata, which still
 	// carries the node and parent ids needed to release the quota.
 	log := session.store.log
 	log.Info().Err(err).Str("sessionid", session.ID()).Msg("node unreadable, cleaning up orphaned upload")
@@ -484,10 +489,14 @@ func (session *DecomposedFsSession) revertNode(ctx context.Context) error {
 	}
 
 	if sizeDiff := session.SizeDiff(); sizeDiff != 0 {
-		if perr := session.store.tp.Propagate(ctx, sn, -sizeDiff); perr != nil {
-			// Without the propagation the quota would stay consumed. Stop here
-			// so the session can be retried instead of losing the upload.
+		// Clear the size diff before reverting it, so a repeated cleanup, e.g.
+		// after removing the info file failed, does not release the quota twice.
+		delete(session.info.MetaData, "sizeDiff")
+		if perr := session.Persist(ctx); perr != nil {
 			return perr
+		}
+		if perr := session.store.tp.Propagate(ctx, sn, -sizeDiff); perr != nil {
+			log.Error().Err(perr).Str("sessionid", session.ID()).Int64("sizeDiff", sizeDiff).Msg("reverting the size diff of the orphaned upload failed")
 		}
 	}
 
@@ -510,22 +519,27 @@ func (session *DecomposedFsSession) Cleanup(revertNodeMetadata, cleanBin, cleanI
 	sublog := session.store.log.With().Str("cleanup sessionid", session.ID()).Bool("revertNodeMetadata", revertNodeMetadata).Bool("cleanBin", cleanBin).
 		Bool("cleanInfo", cleanInfo).Bool("unmarkPostprocessing", unmarkPostprocessing).Logger()
 
+	revertFailed := false
 	if revertNodeMetadata {
-		// Revert before removing the bin and info files. Both are needed to
-		// recover from a failure here: the bin file holds the only copy of the
-		// uploaded data as long as the blob has not been written, and the info
-		// file is the only remaining source of the node's parent id once the
-		// node metadata is gone.
+		// Revert before removing the info file: once the node metadata is gone
+		// it is the only remaining source of the node's parent id, which is
+		// needed to retry the revert.
 		if err := session.revertNode(ctx); err != nil {
-			sublog.Error().Err(err).Msg("reverting node failed, keeping upload")
-			return
+			sublog.Error().Err(err).Msg("reverting node failed, keeping upload info")
+			revertFailed = true
 		}
 	}
 
+	// The bin is not needed to retry the revert. Remove it even if the revert
+	// failed, so that e.g. infected files do not stay on disk.
 	if cleanBin {
 		if err := os.Remove(session.binPath()); err != nil && !errors.Is(err, fs.ErrNotExist) {
 			appctx.GetLogger(ctx).Error().Str("path", session.binPath()).Err(err).Msg("removing upload failed")
 		}
+	}
+
+	if revertFailed {
+		return
 	}
 
 	if cleanInfo {
