@@ -1405,8 +1405,21 @@ func isReferenceToResource(ref *provider.Reference) bool {
 // isReceivedShareRoot reports whether the given resource is the root of a share
 // the current user received. Space shares (space membership) are not considered.
 func (s *svc) isReceivedShareRoot(ctx context.Context, id *provider.ResourceId) (bool, error) {
+	filters := []*collaborationv1beta1.Filter{
+		share.ResourceIDFilter(id),
+		share.SpaceRootFilter(false),
+	}
+	// shares created before the storage id was split into a storage and a space
+	// id still carry the combined id in their storage id, so query that too.
+	if id.GetStorageId() != "" && id.GetSpaceId() != "" {
+		filters = append(filters, share.ResourceIDFilter(&provider.ResourceId{
+			StorageId: storagespace.FormatStorageID(id.GetStorageId(), id.GetSpaceId()),
+			OpaqueId:  id.GetOpaqueId(),
+		}))
+	}
+
 	res, err := s.ListReceivedShares(ctx, &collaborationv1beta1.ListReceivedSharesRequest{
-		Filters: []*collaborationv1beta1.Filter{share.SpaceRootFilter(false)},
+		Filters: filters,
 	})
 	if err != nil {
 		return false, err
@@ -1415,18 +1428,5 @@ func (s *svc) isReceivedShareRoot(ctx context.Context, id *provider.ResourceId) 
 		return false, errtypes.NewErrtypeFromStatus(res.GetStatus())
 	}
 
-	for _, receivedShare := range res.GetShares() {
-		sharedID := receivedShare.GetShare().GetResourceId()
-		if sharedID.GetSpaceId() != "" && sharedID.GetSpaceId() == sharedID.GetOpaqueId() {
-			continue // space membership, not a share root
-		}
-		// converts shares with backwards compatible ids
-		if sharedID.GetSpaceId() == "" {
-			sharedID.StorageId, sharedID.SpaceId = storagespace.SplitStorageID(sharedID.GetStorageId())
-		}
-		if utils.ResourceIDEqual(sharedID, id) {
-			return true, nil
-		}
-	}
-	return false, nil
+	return len(res.GetShares()) > 0, nil
 }

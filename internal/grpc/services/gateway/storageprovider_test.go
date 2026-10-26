@@ -335,6 +335,21 @@ func receivedShareOf(id *provider.ResourceId) *collaborationv1beta1.ReceivedShar
 	}
 }
 
+// receivedShareFiltersOfType returns the filters of the given type carried by a
+// ListReceivedShares request.
+func receivedShareFiltersOfType(
+	req *collaborationv1beta1.ListReceivedSharesRequest,
+	filterType collaborationv1beta1.Filter_Type,
+) []*collaborationv1beta1.Filter {
+	filters := []*collaborationv1beta1.Filter{}
+	for _, f := range req.GetFilters() {
+		if f.GetType() == filterType {
+			filters = append(filters, f)
+		}
+	}
+	return filters
+}
+
 var _ = Describe("Delete", func() {
 	var (
 		ctx               context.Context
@@ -373,6 +388,48 @@ var _ = Describe("Delete", func() {
 	})
 
 	Context("the reference points at the root of a received share", func() {
+		It("queries the received shares by the resource id", func() {
+			collaborationMock.EXPECT().
+				ListReceivedShares(
+					mock.Anything,
+					mock.MatchedBy(func(req *collaborationv1beta1.ListReceivedSharesRequest) bool {
+						resourceIDs := receivedShareFiltersOfType(req, collaborationv1beta1.Filter_TYPE_RESOURCE_ID)
+						if len(resourceIDs) != 2 {
+							return false
+						}
+
+						spaceRoots := receivedShareFiltersOfType(req, collaborationv1beta1.Filter_TYPE_SPACE_ROOT)
+						if len(spaceRoots) != 1 || spaceRoots[0].GetSpaceRoot() {
+							return false
+						}
+
+						var hasSplitID, hasLegacyID bool
+						for _, f := range resourceIDs {
+							rid := f.GetResourceId()
+							switch {
+							case rid.GetStorageId() == "storageid" &&
+								rid.GetSpaceId() == "spaceid" &&
+								rid.GetOpaqueId() == "nodeid":
+								hasSplitID = true
+							case rid.GetStorageId() == "storageid$spaceid" &&
+								rid.GetSpaceId() == "" &&
+								rid.GetOpaqueId() == "nodeid":
+								hasLegacyID = true
+							}
+						}
+
+						return hasSplitID && hasLegacyID
+					}),
+				).
+				Return(receivedShares(receivedShareOf(sharedID)), nil).Once()
+
+			resp, err := s.Delete(ctx, deleteRequest(sharedID, ""))
+
+			Expect(err).ToNot(HaveOccurred())
+			Expect(resp.GetStatus().GetCode()).To(Equal(rpcv1beta1.Code_CODE_PERMISSION_DENIED))
+			Expect(stub.deleted).To(BeFalse())
+		})
+
 		It("denies the delete for an empty path", func() {
 			collaborationMock.EXPECT().
 				ListReceivedShares(mock.Anything, mock.Anything).
@@ -413,9 +470,10 @@ var _ = Describe("Delete", func() {
 
 	Context("the reference points at a resource which is not a received share root", func() {
 		It("deletes a resource the user did not receive", func() {
+			// the share provider filters by the queried id and returns nothing
 			collaborationMock.EXPECT().
 				ListReceivedShares(mock.Anything, mock.Anything).
-				Return(receivedShares(receivedShareOf(sharedID)), nil).Once()
+				Return(receivedShares(), nil).Once()
 
 			otherID := &provider.ResourceId{StorageId: "storageid", SpaceId: "spaceid", OpaqueId: "othernode"}
 			resp, err := s.Delete(ctx, deleteRequest(otherID, ""))
@@ -439,9 +497,10 @@ var _ = Describe("Delete", func() {
 
 		It("deletes the root of a space the user is a member of", func() {
 			spaceRootID := &provider.ResourceId{StorageId: "storageid", SpaceId: "spaceid", OpaqueId: "spaceid"}
+			// the space root filter excludes space membership from the result
 			collaborationMock.EXPECT().
 				ListReceivedShares(mock.Anything, mock.Anything).
-				Return(receivedShares(receivedShareOf(spaceRootID)), nil).Once()
+				Return(receivedShares(), nil).Once()
 
 			resp, err := s.Delete(ctx, deleteRequest(spaceRootID, ""))
 
