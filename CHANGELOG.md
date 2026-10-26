@@ -8,6 +8,7 @@
 
 ### 🐛 Bug Fixes
 
+- Require parent permissions to delete or move a resource [[#916](https://github.com/opencloud-eu/reva/pull/916)]
 - fix(storageprovider): restrict possibility for sharee to remove the owner resource [[#897](https://github.com/opencloud-eu/reva/pull/897)]
 - fix: unlock the OS thread when ScopeUserByIds fails [[#899](https://github.com/opencloud-eu/reva/pull/899)]
 - fix(ocdav): send basic auth challenge for password protected links followup [[#915](https://github.com/opencloud-eu/reva/pull/915)]
