@@ -1261,18 +1261,18 @@ var _ = Describe("ocdav", func() {
 		})
 
 		Context("with a password protected link", func() {
-			BeforeEach(func() {
-				client.On("Authenticate", mock.Anything, mock.MatchedBy(func(req *cs3gateway.AuthenticateRequest) bool {
-					return req.Type == "publicshares" && req.ClientId == "protectedtoken"
-				})).Return(&cs3gateway.AuthenticateResponse{
-					Status: status.NewUnauthenticated(ctx, nil, "password required"),
-				}, nil)
-			})
+			const challenge = `Basic realm="cloud.example.com", charset="UTF-8"`
 
 			DescribeTable("challenges for basic auth",
-				func(setBasicAuth bool, xRequestedWith string, expectedChallenge string, expectedErrorCode string) {
+				func(method string, authCode cs3rpc.Code, setBasicAuth bool, xRequestedWith string, query string, expectedChallenge string, expectedErrorCode string) {
+					client.On("Authenticate", mock.Anything, mock.MatchedBy(func(req *cs3gateway.AuthenticateRequest) bool {
+						return req.Type == "publicshares" && req.ClientId == "protectedtoken"
+					})).Return(&cs3gateway.AuthenticateResponse{
+						Status: &cs3rpc.Status{Code: authCode},
+					}, nil)
+
 					rr := httptest.NewRecorder()
-					req, err := http.NewRequest("PROPFIND", basePath+"/protectedtoken/", strings.NewReader(""))
+					req, err := http.NewRequest(method, basePath+"/protectedtoken/"+query, strings.NewReader(""))
 					Expect(err).ToNot(HaveOccurred())
 					req = req.WithContext(context.Background())
 					req.Host = "cloud.example.com"
@@ -1280,7 +1280,7 @@ var _ = Describe("ocdav", func() {
 						req.SetBasicAuth("public", "wrong")
 					}
 					if xRequestedWith != "" {
-						req.Header.Set("X-Requested-With", xRequestedWith)
+						req.Header.Set(ocdav.HeaderXRequestedWith, xRequestedWith)
 					}
 
 					handler.Handler().ServeHTTP(rr, req)
@@ -1288,10 +1288,13 @@ var _ = Describe("ocdav", func() {
 					Expect(rr.Header().Get(ocdav.WwwAuthenticate)).To(Equal(expectedChallenge))
 					Expect(rr.Body.String()).To(ContainSubstring(expectedErrorCode))
 				},
-				Entry("without credentials", false, "", `Basic realm="cloud.example.com", charset="UTF-8"`, ocdav.ErrMissingBasicAuth),
-				Entry("with wrong credentials", true, "", `Basic realm="cloud.example.com", charset="UTF-8"`, ocdav.ErrInvalidCredentials),
-				Entry("without credentials from an XHR client", false, "XMLHttpRequest", "", ocdav.ErrMissingBasicAuth),
-				Entry("with wrong credentials from an XHR client", true, "XMLHttpRequest", "", ocdav.ErrInvalidCredentials),
+				Entry("OPTIONS without credentials", "OPTIONS", cs3rpc.Code_CODE_PERMISSION_DENIED, false, "", "", challenge, ocdav.ErrMissingBasicAuth),
+				Entry("PROPFIND without credentials", "PROPFIND", cs3rpc.Code_CODE_PERMISSION_DENIED, false, "", "", challenge, ocdav.ErrMissingBasicAuth),
+				Entry("PROPFIND with wrong credentials", "PROPFIND", cs3rpc.Code_CODE_PERMISSION_DENIED, true, "", "", challenge, ocdav.ErrInvalidCredentials),
+				Entry("PROPFIND without credentials, unauthenticated", "PROPFIND", cs3rpc.Code_CODE_UNAUTHENTICATED, false, "", "", challenge, ocdav.ErrMissingBasicAuth),
+				Entry("PROPFIND without credentials from an XHR client", "PROPFIND", cs3rpc.Code_CODE_PERMISSION_DENIED, false, ocdav.XMLHttpRequest, "", "", ocdav.ErrMissingBasicAuth),
+				Entry("PROPFIND with wrong credentials from an XHR client", "PROPFIND", cs3rpc.Code_CODE_PERMISSION_DENIED, true, ocdav.XMLHttpRequest, "", "", ocdav.ErrInvalidCredentials),
+				Entry("GET with an invalid signature", "GET", cs3rpc.Code_CODE_PERMISSION_DENIED, false, "", "?signature=invalid&expiration=2000-01-01T00:00:00Z", "", ocdav.ErrMissingBasicAuth),
 			)
 		})
 	})
