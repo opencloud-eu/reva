@@ -691,6 +691,24 @@ var _ = Describe("Sharesstorageprovider", func() {
 				sharingCollaborationClient.AssertCalled(GinkgoT(), "UpdateReceivedShare", mock.Anything, mock.Anything)
 			})
 
+			It("rejects the share when deleting a share by its mount point", func() {
+				sharingCollaborationClient.On("UpdateReceivedShare", mock.Anything, mock.Anything).Return(
+					&collaboration.UpdateReceivedShareResponse{Status: status.NewOK(ctx)}, nil)
+				req := &sprovider.DeleteRequest{
+					Ref: &sprovider.Reference{
+						ResourceId: ShareJail,
+						Path:       "./share1-shareddir",
+					},
+				}
+				res, err := s.Delete(ctx, req)
+				gatewayClient.AssertNotCalled(GinkgoT(), "Delete", mock.Anything, mock.Anything)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(res).ToNot(BeNil())
+				Expect(res.Status.Code).To(Equal(rpc.Code_CODE_OK))
+
+				sharingCollaborationClient.AssertCalled(GinkgoT(), "UpdateReceivedShare", mock.Anything, mock.Anything)
+			})
+
 			It("deletes a file", func() {
 				req := &sprovider.DeleteRequest{
 					Ref: &sprovider.Reference{
