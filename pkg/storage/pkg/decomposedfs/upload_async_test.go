@@ -3,6 +3,7 @@ package decomposedfs
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"io"
 	"os"
 	"path/filepath"
@@ -298,36 +299,51 @@ var _ = Describe("Async file uploads", Ordered, func() {
 			Expect(err).ToNot(BeNil())
 		})
 
-		It("releases the quota and removes the node when the node metadata is unreadable", func() {
+		// orphanNode simulates an orphaned node: the node file is still there but
+		// its metadata is gone, e.g. because an ancestor was trashed while the
+		// upload was in flight. Reading the node then fails. It purges instead of
+		// removing the metadata file directly, so the cached attributes go as well.
+		orphanNode := func() string {
 			// node is created and the optimistic size has been propagated
 			resources, err := fs.ListFolder(ctx, rootRef, []string{}, []string{})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(len(resources)).To(Equal(1))
 			Expect(parentSize()).To(Equal(len(firstContent)))
 
-			// simulate an orphaned node: the node file is still there but its
-			// metadata is gone, e.g. because an ancestor was trashed while the
-			// upload was in flight. Reading the node now fails. Purge instead of
-			// removing the metadata file directly, so the cached attributes go as
-			// well.
-			nodePath := lu.InternalPath(ref.GetResourceId().GetSpaceId(), resources[0].GetId().GetOpaqueId())
-			n, err := node.ReadNode(ctx, lu, ref.GetResourceId().GetSpaceId(), resources[0].GetId().GetOpaqueId(), "", false, nil, true)
+			spaceID, nodeID := ref.GetResourceId().GetSpaceId(), resources[0].GetId().GetOpaqueId()
+			nodePath := lu.InternalPath(spaceID, nodeID)
+			n, err := node.ReadNode(ctx, lu, spaceID, nodeID, "", false, nil, true)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(lu.MetadataBackend().Purge(ctx, n)).To(Succeed())
-			_, err = node.ReadNode(ctx, lu, ref.GetResourceId().GetSpaceId(), resources[0].GetId().GetOpaqueId(), "", false, nil, true)
-			Expect(err).To(HaveOccurred(), "node should be unreadable after purging its metadata")
+			_, err = node.ReadNode(ctx, lu, spaceID, nodeID, "", false, nil, true)
+			Expect(err).To(MatchError(node.ErrMissingParentID), "node should be orphaned after purging its metadata")
+			return nodePath
+		}
+		sessionSizeDiff := func() (string, bool) {
+			data, err := os.ReadFile(filepath.Join(o.Root, "uploads", uploadID+".info"))
+			Expect(err).ToNot(HaveOccurred())
+			info := struct{ MetaData map[string]string }{}
+			Expect(json.Unmarshal(data, &info)).To(Succeed())
+			sizeDiff, ok := info.MetaData["sizeDiff"]
+			return sizeDiff, ok
+		}
+
+		It("releases the quota and removes the node and bytes of an orphaned upload when instructed", func() {
+			nodePath := orphanNode()
 
 			// No UploadReady event is published for an orphaned session: there is
 			// no node left to report on. Wait for the bytes to be cleaned up
 			// instead of for an event that will never arrive.
 			con <- events.PostprocessingFinished{
 				UploadID: uploadID,
-				Outcome:  events.PPOutcomeContinue,
+				Outcome:  events.PPOutcomeDelete,
 			}
 			Eventually(func() bool {
 				_, err := os.Stat(filepath.Join(o.Root, "uploads", uploadID))
 				return err != nil
 			}).Should(BeTrue(), "the upload bytes should be cleaned up")
+			_, err := os.Stat(filepath.Join(o.Root, "uploads", uploadID+".info"))
+			Expect(err).To(HaveOccurred(), "the upload info should be cleaned up")
 
 			// the blob was never written
 			bs.AssertNumberOfCalls(GinkgoT(), "Upload", 0)
@@ -338,6 +354,33 @@ var _ = Describe("Async file uploads", Ordered, func() {
 
 			// ... and most importantly the quota has been released
 			Eventually(parentSize).Should(Equal(0))
+		})
+
+		It("releases the quota of an orphaned upload once and keeps its bytes", func() {
+			nodePath := orphanNode()
+			sizeDiff, ok := sessionSizeDiff()
+			Expect(ok).To(BeTrue())
+			Expect(sizeDiff).To(Equal("10"))
+
+			con <- events.PostprocessingFinished{
+				UploadID: uploadID,
+				Outcome:  events.PPOutcomeContinue,
+			}
+			Eventually(func() bool {
+				_, err := os.Stat(nodePath)
+				return err != nil
+			}).Should(BeTrue(), "the orphaned node should be removed")
+			Eventually(parentSize).Should(Equal(0))
+
+			// the size diff has been cleared, so a repeated cleanup does not
+			// release the quota a second time
+			_, ok = sessionSizeDiff()
+			Expect(ok).To(BeFalse())
+
+			// the bytes and the info are kept
+			_, err := os.Stat(filepath.Join(o.Root, "uploads", uploadID))
+			Expect(err).ToNot(HaveOccurred())
+			bs.AssertNumberOfCalls(GinkgoT(), "Upload", 0)
 		})
 
 		It("deletes node and keeps the bytes when instructed", func() {

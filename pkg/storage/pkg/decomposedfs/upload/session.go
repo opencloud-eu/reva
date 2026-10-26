@@ -21,6 +21,7 @@ package upload
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -177,10 +178,11 @@ func (session *DecomposedFsSession) Node(ctx context.Context) (*node.Node, error
 // resolved. This happens when the node file still exists but its metadata is
 // gone, e.g. because an ancestor was moved to the trash while the upload was in
 // flight. Such a session can never finish postprocessing: reading the node
-// fails before the destination can be determined.
+// fails before the destination can be determined. Other errors, e.g. a temporarily
+// unavailable cache, do not make a session orphaned.
 func (session *DecomposedFsSession) IsOrphaned(ctx context.Context) bool {
 	_, err := session.Node(ctx)
-	return err != nil
+	return errors.Is(err, node.ErrMissingParentID)
 }
 
 // syntheticNode builds a node from the session metadata alone, without reading
