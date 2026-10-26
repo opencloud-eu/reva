@@ -4,10 +4,11 @@
 
 ### ❤️ Thanks to all contributors! ❤️
 
-@AlexAndBear, @NickWalters, @VicDeo, @aduffeck, @butonic, @dragonchaser, @dschmidt, @fschade, @junkerderprovinz, @kulmann, @maki5, @micbar, @v-scharf
+@AlexAndBear, @NickWalters, @VicDeo, @aduffeck, @butonic, @dragonchaser, @dschmidt, @fschade, @junkerderprovinz, @kulmann, @maki5, @micbar, @pbleser-oc, @v-scharf
 
 ### 🐛 Bug Fixes
 
+- fix: unlock the OS thread when ScopeUserByIds fails [[#899](https://github.com/opencloud-eu/reva/pull/899)]
 - fix(ocdav): send basic auth challenge for password protected links followup [[#915](https://github.com/opencloud-eu/reva/pull/915)]
 - fix(mime): normalise the extension RegisterMime is handed [[#908](https://github.com/opencloud-eu/reva/pull/908)]
 - fix(ocdav): send basic auth challenge for password protected links [[#904](https://github.com/opencloud-eu/reva/pull/904)]
