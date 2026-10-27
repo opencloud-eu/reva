@@ -187,6 +187,9 @@ func (fs *Decomposedfs) uploadRevision(ctx context.Context, n *node.Node, sessio
 		if err != nil {
 			return nil, nil, err
 		}
+		// ReadNode caches the attributes of the node, not of the revision. The posix
+		// blobstore copies them onto the file it writes, so read the revision's own.
+		revision.ResetXattrsCache()
 		return revision, unlock, nil
 	}
 	return nil, nil, nil
