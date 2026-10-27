@@ -261,6 +261,11 @@ func (fs *posixFS) ResolveUpload(ctx context.Context, info tusd.FileInfo) (*prov
 	return r.ResolveUpload(ctx, info)
 }
 
+// IsOrphaned reports whether the referenced resource exists but its metadata is unreadable.
+func (fs *posixFS) IsOrphaned(ctx context.Context, ref *provider.Reference) bool {
+	return fs.FS.(storage.OrphanChecker).IsOrphaned(ctx, ref)
+}
+
 // UseIn tells the tus upload middleware which extensions it supports.
 func (fs *posixFS) UseIn(composer *tusd.StoreComposer) {
 	fs.FS.(storage.ComposableFS).UseIn(composer)
