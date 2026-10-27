@@ -380,6 +380,7 @@ func (c *coordinator) prepare(ctx context.Context, session Session) error {
 	// only learn these by reading them back.
 	session.SetSizeDiff(prepared.SizeDiff)
 	session.SetVersionCreated(prepared.VersionCreated)
+	session.SetStatus(SessionStatusProcessing, "")
 	if err := session.Persist(ctx); err != nil {
 		c.rollbackPrepared(ctx, session, prepared.SizeDiff)
 		return err
