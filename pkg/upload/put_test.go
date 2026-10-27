@@ -159,6 +159,22 @@ var _ = Describe("Upload", func() {
 		Expect(err).To(MatchError("blobstore unavailable"))
 	})
 
+	It("keeps the bytes of an upload whose commit failed", func() {
+		session := initiated("")
+		fs.commitErr = errors.New("blobstore unavailable")
+
+		_, err := put(session, body)
+		Expect(err).To(HaveOccurred())
+
+		kept, err := store.Get(ctx, session.ID())
+		Expect(err).ToNot(HaveOccurred())
+		staged, err := os.ReadFile(kept.BinPath())
+		Expect(err).ToNot(HaveOccurred())
+		Expect(string(staged)).To(Equal(body))
+		Expect(kept.Status()).To(Equal(SessionStatusFailed))
+		Expect(kept.SizeDiff()).To(BeZero(), "the rollback gave the size back")
+	})
+
 	// The events middleware announces the upload from this callback.
 	Describe("the finished callback", func() {
 		It("names the file that was written", func() {

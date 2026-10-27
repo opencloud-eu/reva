@@ -52,6 +52,10 @@ func (u *tusAdapter) WriteChunk(ctx context.Context, offset int64, src io.Reader
 // FinishUpload runs the coordinator's finish path once all bytes have arrived.
 func (u *tusAdapter) FinishUpload(ctx context.Context) error {
 	_, err := u.coord.finishUpload(u.session.Context(ctx), u.session)
+	if err != nil {
+		// tusd only answers the client, so log the cause here
+		appctx.GetLogger(ctx).Error().Err(err).Str("uploadid", u.session.ID()).Msg("failed to finish upload")
+	}
 
 	// tusd answers an error type it does not recognise with a bare 500.
 	switch err.(type) {
