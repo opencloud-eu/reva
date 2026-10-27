@@ -379,6 +379,24 @@ var _ = Describe("the postprocessing consumer", func() {
 				Expect(sErr).ToNot(HaveOccurred())
 			})
 
+			It("records the failure and does not give the size back twice", func() {
+				session := preparedSession(true)
+
+				c.processEvent(ctx, events.Event{Event: events.PostprocessingFinished{
+					UploadID: session.ID(),
+					Outcome:  events.PPOutcomeAbort,
+				}})
+
+				kept, err := store.Get(ctx, session.ID())
+				Expect(err).ToNot(HaveOccurred())
+				Expect(kept.Status()).To(Equal(SessionStatusFailed))
+				Expect(kept.StatusMessage()).To(Equal("postprocessing aborted"))
+				Expect(kept.SizeDiff()).To(BeZero())
+
+				c.processEvent(ctx, events.Event{Event: events.CleanUpload{UploadID: session.ID()}})
+				Expect(fs.calls).To(ContainElement("RollbackUpload(nodeExisted=true,sizeDiff=0)"))
+			})
+
 			It("tells the client the upload failed", func() {
 				session := preparedSession(false)
 

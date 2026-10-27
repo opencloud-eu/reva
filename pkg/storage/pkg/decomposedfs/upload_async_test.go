@@ -208,7 +208,7 @@ var _ = Describe("Async file uploads", Ordered, func() {
 		}, &zerolog.Logger{})
 		Expect(sessionStore.Setup()).To(Succeed())
 		coordinator = uploadcoordinator.NewCoordinator(fs, sessionStore, "", stream.Chan{pub, con})
-		Expect(coordinator.StartPostprocessing(stream.Chan{pub, con}, "dcfs", "", 1)).To(Succeed())
+		Expect(coordinator.StartPostprocessing(stream.Chan{pub, con}, uploadcoordinator.AsyncConf{ConsumerGroup: "dcfs", NumConsumers: 1})).To(Succeed())
 
 		bs.On("Delete", mock.Anything).Return(nil).Maybe()
 		bs.On("Upload", mock.AnythingOfType("*node.Node"), mock.AnythingOfType("string"), mock.Anything).
@@ -361,25 +361,30 @@ var _ = Describe("Async file uploads", Ordered, func() {
 			Expect(parentSize()).To(Equal(0))
 		})
 
-		It("keeps the bytes of an orphaned upload that cannot be committed", func() {
-			orphanNode()
+		It("releases the quota of an orphaned upload that cannot be committed once and keeps its bytes", func() {
+			nodePath := orphanNode()
 			sizeDiff, ok := sessionSizeDiff()
 			Expect(ok).To(BeTrue())
 			Expect(sizeDiff).To(Equal("10"))
 
-			// the commit cannot resolve the node
+			// the commit cannot resolve the node, so the upload is rolled back
 			failPostprocessing(uploadID, events.PPOutcomeContinue)
 
-			// the bytes and the info are kept for a retry or a cleanup
-			_, err := os.Stat(filepath.Join(o.Root, "uploads", uploadID))
+			_, err := os.Stat(nodePath)
+			Expect(err).To(HaveOccurred(), "the orphaned node should be removed")
+			Expect(parentSize()).To(Equal(0))
+
+			// the size diff has been cleared, so a repeated cleanup does not
+			// release the quota a second time
+			sizeDiff, _ = sessionSizeDiff()
+			Expect(sizeDiff).To(Equal("0"))
+
+			// the bytes and the info are kept for a restart
+			_, err = os.Stat(filepath.Join(o.Root, "uploads", uploadID))
 			Expect(err).ToNot(HaveOccurred())
 			_, err = os.Stat(filepath.Join(o.Root, "uploads", uploadID+".info"))
 			Expect(err).ToNot(HaveOccurred())
 			bs.AssertNumberOfCalls(GinkgoT(), "Upload", 0)
-
-			// cleaning it up releases the quota
-			con <- events.CleanUpload{UploadID: uploadID}
-			Eventually(parentSize).Should(Equal(0))
 		})
 
 		It("deletes node and keeps the bytes when instructed", func() {
