@@ -230,7 +230,7 @@ var _ = Describe("Async file uploads", Ordered, func() {
 
 		uploadRef := &provider.Reference{Path: "/" + uploadIds["simple"]}
 
-		_, err = coordinator.Upload(ctx, storage.UploadRequest{
+		_, err = coordinator.Upload(ctx, uploadcoordinator.Request{
 			Ref:    uploadRef,
 			Body:   io.NopCloser(bytes.NewReader(firstContent)),
 			Length: int64(len(firstContent)),
@@ -451,7 +451,7 @@ var _ = Describe("Async file uploads", Ordered, func() {
 
 			uploadRef := &provider.Reference{Path: "/" + uploadIds["simple"]}
 
-			_, err = coordinator.Upload(ctx, storage.UploadRequest{
+			_, err = coordinator.Upload(ctx, uploadcoordinator.Request{
 				Ref:    uploadRef,
 				Body:   io.NopCloser(bytes.NewReader(firstContent)),
 				Length: int64(len(firstContent)),
@@ -547,7 +547,7 @@ var _ = Describe("Async file uploads", Ordered, func() {
 
 			uploadRef := &provider.Reference{Path: "/" + uploadIds["simple"]}
 
-			_, err = coordinator.Upload(ctx, storage.UploadRequest{
+			_, err = coordinator.Upload(ctx, uploadcoordinator.Request{
 				Ref:    uploadRef,
 				Body:   io.NopCloser(bytes.NewReader(secondContent)),
 				Length: int64(len(secondContent)),

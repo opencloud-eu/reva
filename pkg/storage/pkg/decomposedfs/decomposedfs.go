@@ -36,7 +36,6 @@ import (
 	"github.com/jellydator/ttlcache/v2"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
-	tusd "github.com/tus/tusd/v2/pkg/handler"
 	microstore "go-micro.dev/v4/store"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
@@ -60,9 +59,7 @@ import (
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/timemanager"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/trashbin"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/tree"
-	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/upload"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/usermapper"
-	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/chunking"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/filelocks"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/templates"
 	"github.com/opencloud-eu/reva/v2/pkg/storagespace"
@@ -88,41 +85,19 @@ func init() {
 	tracer = otel.Tracer("github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs")
 }
 
-// Session is the interface that DecomposedfsSession implements. By combining tus.Upload,
-// storage.UploadSession and custom functions we can reuse the same struct throughout
-// the whole upload lifecycle.
-//
-// Some functions that are only used by decomposedfs are not yet part of this interface.
-// They might be added after more refactoring.
-type Session interface {
-	tusd.Upload
-	storage.UploadSession
-	upload.Session
-	LockID() string
-}
-
 type IDCachingTree interface {
 	WarmupIDCache(root string, assimilate, onlyDirty bool) error
 }
 
-type SessionStore interface {
-	New(ctx context.Context) *upload.DecomposedFsSession
-	SessionFromInfo(info tusd.FileInfo) *upload.DecomposedFsSession
-	List(ctx context.Context) ([]*upload.DecomposedFsSession, error)
-	Get(ctx context.Context, id string) (*upload.DecomposedFsSession, error)
-}
-
 // Decomposedfs provides the base for decomposed filesystem implementations
 type Decomposedfs struct {
-	lu           node.PathLookup
-	tp           node.Tree
-	trashbin     trashbin.Trashbin
-	o            *options.Options
-	p            permissions.Permissions
-	um           usermapper.Mapper
-	chunkHandler *chunking.ChunkHandler
-	stream       events.Stream
-	sessionStore SessionStore
+	lu       node.PathLookup
+	tp       node.Tree
+	trashbin trashbin.Trashbin
+	o        *options.Options
+	p        permissions.Permissions
+	um       usermapper.Mapper
+	stream   events.Stream
 
 	UserCache       *ttlcache.Cache
 	userSpaceIndex  *spaceidindex.Index
@@ -179,12 +154,11 @@ func NewDefault(m map[string]interface{}, bs node.Blobstore, es events.Stream, l
 	), log)
 
 	aspects := aspects.Aspects{
-		Lookup:            lu,
-		Tree:              tp,
-		Permissions:       p,
-		EventStream:       es,
-		DisableVersioning: o.DisableVersioning,
-		Trashbin:          &DecomposedfsTrashbin{},
+		Lookup:      lu,
+		Tree:        tp,
+		Permissions: p,
+		EventStream: es,
+		Trashbin:    &DecomposedfsTrashbin{},
 	}
 
 	return New(o, aspects, log)
@@ -246,7 +220,6 @@ func New(o *options.Options, aspects aspects.Aspects, log *zerolog.Logger) (stor
 		o:               o,
 		p:               aspects.Permissions,
 		um:              aspects.UserMapper,
-		chunkHandler:    chunking.NewChunkHandler(filepath.Join(o.Root, "uploads")),
 		stream:          aspects.EventStream,
 		UserCache:       ttlcache.NewCache(),
 		userSpaceIndex:  userSpaceIndex,
@@ -255,7 +228,6 @@ func New(o *options.Options, aspects aspects.Aspects, log *zerolog.Logger) (stor
 		spaceTypeIndex:  spaceTypeIndex,
 		log:             log,
 	}
-	fs.sessionStore = upload.NewSessionStore(fs, aspects, o.Root, o.AsyncFileUploads, o.Tokens, log)
 	if err = fs.trashbin.Setup(fs); err != nil {
 		return nil, err
 	}
