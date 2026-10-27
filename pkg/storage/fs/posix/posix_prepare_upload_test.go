@@ -8,6 +8,8 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
+	"time"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/opencloud-eu/reva/v2/pkg/storage"
@@ -153,7 +155,9 @@ var _ = Describe("PrepareUpload on posix", func() {
 		It("writes into the revision when a newer upload took over the file", func() {
 			prepare("session-a")
 			prepare("session-b")
-			commit("session-a", bodySource())
+			source := bodySource()
+			source.ScanResult, source.ScanDate = "clean", time.Now()
+			commit("session-a", source)
 
 			n, err := env.Lookup.NodeFromResource(env.Ctx, ref)
 			Expect(err).ToNot(HaveOccurred())
@@ -162,6 +166,19 @@ var _ = Describe("PrepareUpload on posix", func() {
 			Expect(os.ReadFile(n.InternalPath())).To(Equal(oldContent))
 			// session-a's bytes went to the revision session-b created for it
 			Expect(revisionContents(n)).To(ConsistOf(oldContent, newContent))
+
+			// and the revision still describes session-a's upload, not the file
+			revisions, err := filepath.Glob(env.Lookup.VersionPath(n.SpaceID, n.ID, "*"))
+			Expect(err).ToNot(HaveOccurred())
+			var blobIDs []string
+			for _, r := range revisions {
+				rev := node.NewBaseNode(n.SpaceID, n.ID+node.RevisionIDDelimiter+strings.TrimPrefix(r, env.Lookup.VersionPath(n.SpaceID, n.ID, "")), env.Lookup)
+				blobID, err := env.Lookup.MetadataBackend().Get(env.Ctx, rev, prefixes.BlobIDAttr)
+				Expect(err).ToNot(HaveOccurred())
+				blobIDs = append(blobIDs, string(blobID))
+			}
+			Expect(blobIDs).To(ContainElement("session-a"))
+			Expect(blobIDs).ToNot(ContainElement("session-b"))
 		})
 	})
 
