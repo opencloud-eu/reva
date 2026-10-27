@@ -153,6 +153,17 @@ func (fs *Decomposedfs) CommitUpload(ctx context.Context, ref *provider.Referenc
 		}
 	}
 
+	if target != n {
+		// the revision kept this upload's processing mark for a rollback of the newer
+		// upload; this upload is done, so restoring it must not mark the node again
+		if err := target.RemoveXattr(ctx, prefixes.StatusPrefix); err != nil && !metadata.IsAttrUnset(err) {
+			appctx.GetLogger(ctx).Error().Err(err).Str("nodeid", target.ID).Msg("could not remove the processing mark from the revision")
+		}
+	} else if fs.o.DisableVersioning {
+		// revisions of superseded uploads only served a rollback of this one
+		fs.removeRevisions(ctx, n)
+	}
+
 	now := time.Now()
 	if p, err := n.Parent(ctx); err != nil {
 		appctx.GetLogger(ctx).Error().Err(err).Str("nodeid", n.ID).Msg("could not read parent for etag propagation")
@@ -164,6 +175,31 @@ func (fs *Decomposedfs) CommitUpload(ctx context.Context, ref *provider.Referenc
 	}
 
 	return nil
+}
+
+// removeRevisions deletes all revisions of n, with their blobs, while the caller holds the
+// node lock.
+func (fs *Decomposedfs) removeRevisions(ctx context.Context, n *node.Node) {
+	revPrefix := fs.lu.VersionPath(n.SpaceID, n.ID, "")
+	revisions, err := filepath.Glob(fs.lu.VersionPath(n.SpaceID, n.ID, "*"))
+	if err != nil {
+		appctx.GetLogger(ctx).Error().Err(err).Str("nodeid", n.ID).Msg("could not list revisions")
+		return
+	}
+	for _, rev := range revisions {
+		if strings.HasSuffix(rev, ".mpk") || strings.HasSuffix(rev, ".mlock") {
+			continue
+		}
+		revisionNode := node.NewBaseNode(n.SpaceID, n.ID+node.RevisionIDDelimiter+strings.TrimPrefix(rev, revPrefix), fs.lu)
+		blobID, err := fs.lu.MetadataBackend().Get(ctx, revisionNode, prefixes.BlobIDAttr)
+		if err == nil && len(blobID) > 0 && string(blobID) != n.BlobID {
+			blobNode := node.New(n.SpaceID, revisionNode.ID, "", "", 0, string(blobID), provider.ResourceType_RESOURCE_TYPE_FILE, nil, fs.lu)
+			if err := fs.tp.DeleteBlob(blobNode); err != nil {
+				appctx.GetLogger(ctx).Error().Err(err).Str("revisionid", revisionNode.ID).Msg("could not delete the blob of a superseded revision")
+			}
+		}
+		removeRevision(ctx, fs.lu, revisionNode)
+	}
 }
 
 // uploadRevision returns the locked revision of n that holds the upload sessionID,

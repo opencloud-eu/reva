@@ -4,6 +4,8 @@
 package decomposedfs_test
 
 import (
+	"bytes"
+	"io"
 	"os"
 	"path/filepath"
 
@@ -13,6 +15,7 @@ import (
 	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
 	"github.com/opencloud-eu/reva/v2/pkg/storage"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata/prefixes"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/node"
 	helpers "github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/testhelpers"
 	"github.com/stretchr/testify/mock"
 )
@@ -123,6 +126,8 @@ var _ = Describe("RollbackUpload", func() {
 				Size:        10,
 			})
 			Expect(err).ToNot(HaveOccurred())
+			// the first upload has finished
+			Expect(env.Fs.MarkProcessing(env.Ctx, ref, false, "session-init")).To(Succeed())
 
 			result, err := env.Fs.PrepareUpload(env.Ctx, ref, "session-overwrite", storage.UploadInfo{
 				NodeExisted: true,
@@ -205,6 +210,95 @@ var _ = Describe("RollbackUpload", func() {
 				Path:       "/dir1/does-not-exist.txt",
 			}
 			Expect(env.Fs.RollbackUpload(env.Ctx, missingRef, "any-session-id", storage.RollbackInfo{NodeExisted: false, SizeDiff: 0})).To(Succeed())
+		})
+	})
+
+	// Two uploads to the same file overlap: B prepares while A is still processing.
+	// Whatever happens to B, A must be able to finish.
+	Context("a newer upload supersedes one still processing, versioning disabled", func() {
+		BeforeEach(func() {
+			opts = map[string]interface{}{"disable_versioning": true}
+		})
+
+		JustBeforeEach(func() {
+			env.Blobstore.On("UploadFromReader", mock.Anything, mock.Anything, mock.Anything).Return(nil)
+			env.Blobstore.On("Delete", mock.Anything).Return(nil)
+
+			Expect(env.Fs.TouchFile(env.Ctx, ref, false, "")).To(Succeed())
+			_, err := env.Fs.PrepareUpload(env.Ctx, ref, "session-init", storage.UploadInfo{Size: 10})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(env.Fs.MarkProcessing(env.Ctx, ref, false, "session-init")).To(Succeed())
+
+			_, err = env.Fs.PrepareUpload(env.Ctx, ref, "session-a", storage.UploadInfo{NodeExisted: true, Size: 20})
+			Expect(err).ToNot(HaveOccurred())
+			_, err = env.Fs.PrepareUpload(env.Ctx, ref, "session-b", storage.UploadInfo{NodeExisted: true, Size: 30})
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		commit := func(sessionID string, size int64) {
+			Expect(env.Fs.CommitUpload(env.Ctx, ref, sessionID, storage.UploadSource{
+				Body:   io.NopCloser(bytes.NewReader(make([]byte, size))),
+				Length: size,
+			})).To(Succeed())
+			Expect(env.Fs.MarkProcessing(env.Ctx, ref, false, sessionID)).To(Succeed())
+		}
+
+		rollback := func(sessionID string) {
+			Expect(env.Fs.RollbackUpload(env.Ctx, ref, sessionID, storage.RollbackInfo{NodeExisted: true})).To(Succeed())
+			Expect(env.Fs.MarkProcessing(env.Ctx, ref, false, sessionID)).To(Succeed())
+		}
+
+		current := func() *node.Node {
+			n, err := env.Lookup.NodeFromResource(env.Ctx, ref)
+			Expect(err).ToNot(HaveOccurred())
+			return n
+		}
+
+		It("hands the node back to A when B is rolled back, and A can still finish", func() {
+			rollback("session-b")
+
+			n := current()
+			Expect(n.BlobID).To(Equal("session-a"))
+			Expect(n.Blobsize).To(Equal(int64(20)))
+			id, err := n.ProcessingID(env.Ctx)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(id).To(Equal("session-a"), "A's processing mark should be restored")
+			Expect(revisionsOf()).To(BeEmpty())
+
+			commit("session-a", 20)
+			n = current()
+			Expect(n.BlobID).To(Equal("session-a"))
+			Expect(n.IsProcessing(env.Ctx)).To(BeFalse())
+		})
+
+		It("keeps A when A finished before B is rolled back", func() {
+			commit("session-a", 20)
+			Expect(current().BlobID).To(Equal("session-b"), "A wrote into the revision B kept")
+
+			rollback("session-b")
+
+			n := current()
+			Expect(n.BlobID).To(Equal("session-a"))
+			Expect(n.IsProcessing(env.Ctx)).To(BeFalse(), "A is done, its mark must not come back")
+			Expect(revisionsOf()).To(BeEmpty())
+		})
+
+		It("keeps only B when both finish", func() {
+			commit("session-a", 20)
+			commit("session-b", 30)
+
+			n := current()
+			Expect(n.BlobID).To(Equal("session-b"))
+			Expect(n.IsProcessing(env.Ctx)).To(BeFalse())
+			Expect(revisionsOf()).To(BeEmpty(), "versioning is disabled")
+		})
+
+		It("drops A's revision when A is rolled back while B is processing", func() {
+			rollback("session-a")
+			Expect(revisionsOf()).To(BeEmpty())
+
+			commit("session-b", 30)
+			Expect(current().BlobID).To(Equal("session-b"))
 		})
 	})
 
