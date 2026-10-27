@@ -600,12 +600,17 @@ func (c *coordinator) publishUploadReady(ctx context.Context, session Session, r
 		return
 	}
 	if err := events.Publish(ctx, c.pub, events.UploadReady{
-		UploadID:          session.ID(),
-		Filename:          session.Filename(),
-		SpaceOwner:        session.SpaceOwner(),
-		ExecutingUser:     session.ExecutantUser(),
-		FileRef:           c.uploadRef(session),
-		ResourceID:        ri.GetId(),
+		UploadID:      session.ID(),
+		Filename:      session.Filename(),
+		SpaceOwner:    session.SpaceOwner(),
+		ExecutingUser: session.ExecutantUser(),
+		FileRef:       c.uploadRef(session),
+		ResourceID:    ri.GetId(),
+		ParentID: &provider.ResourceId{
+			StorageId: session.ProviderID(),
+			SpaceId:   session.SpaceID(),
+			OpaqueId:  session.NodeParentID(),
+		},
 		Timestamp:         utils.TSNow(),
 		IsVersion:         session.VersionCreated(),
 		ImpersonatingUser: impersonatingUser(ctx),

@@ -246,6 +246,8 @@ var _ = Describe("the postprocessing consumer", func() {
 				Expect(ready.Failed).To(BeFalse())
 				Expect(ready.UploadID).To(Equal(session.ID()))
 				Expect(ready.Filename).To(Equal("report.docx"))
+				Expect(ready.ParentID.GetOpaqueId()).To(Equal(session.NodeParentID()))
+				Expect(ready.ParentID.GetSpaceId()).To(Equal(session.SpaceID()))
 			})
 
 			// The verdict rides along with the bytes.
@@ -594,6 +596,27 @@ var _ = Describe("the postprocessing consumer", func() {
 		})
 	})
 
+	Describe("StartPostprocessingStep", func() {
+		It("records the step in the session status", func() {
+			session := preparedSession(false)
+
+			c.processEvent(ctx, events.Event{Event: events.StartPostprocessingStep{
+				UploadID:    session.ID(),
+				StepToStart: events.PPStepAntivirus,
+			}})
+
+			reloaded, err := store.Get(ctx, session.ID())
+			Expect(err).ToNot(HaveOccurred())
+			Expect(reloaded.Status()).To(Equal(SessionStatusProcessing))
+			Expect(reloaded.StatusMessage()).To(Equal("started postprocessing step: virusscan"))
+		})
+
+		It("ignores a step without an upload", func() {
+			c.processEvent(ctx, events.Event{Event: events.StartPostprocessingStep{StepToStart: events.PPStepAntivirus}})
+			Expect(fs.calls).To(BeEmpty())
+		})
+	})
+
 	// Only the antivirus result is recorded on the session, for the commit to carry.
 	Describe("PostprocessingStepFinished", func() {
 		scanned := func(session Session) (string, time.Time) {
@@ -601,6 +624,27 @@ var _ = Describe("the postprocessing consumer", func() {
 			Expect(err).ToNot(HaveOccurred())
 			return reloaded.ScanData()
 		}
+
+		DescribeTable("records the step in the session status",
+			func(outcome events.PostprocessingOutcome, status string) {
+				session := preparedSession(false)
+
+				c.processEvent(ctx, events.Event{Event: events.PostprocessingStepFinished{
+					UploadID:     session.ID(),
+					FinishedStep: events.PPStepAntivirus,
+					Outcome:      outcome,
+					Result:       events.VirusscanResult{Description: "clean"},
+				}})
+
+				reloaded, err := store.Get(ctx, session.ID())
+				Expect(err).ToNot(HaveOccurred())
+				Expect(reloaded.Status()).To(Equal(status))
+				Expect(reloaded.StatusMessage()).To(Equal("finished postprocessing step: virusscan"))
+			},
+			Entry("continue", events.PPOutcomeContinue, SessionStatusProcessing),
+			Entry("abort", events.PPOutcomeAbort, SessionStatusFailed),
+			Entry("delete", events.PPOutcomeDelete, SessionStatusFailed),
+		)
 
 		It("records the scan verdict on the session", func() {
 			session := preparedSession(false)
