@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"time"
 
 	tusd "github.com/tus/tusd/v2/pkg/handler"
 
@@ -30,6 +31,18 @@ func (u *tusAdapter) GetInfo(ctx context.Context) (tusd.FileInfo, error) {
 
 func (u *tusAdapter) GetReader(ctx context.Context) (io.ReadCloser, error) {
 	return u.session.GetReader(ctx)
+}
+
+// ServeContent serves the staged bytes, honouring a Range header: postprocessing reads
+// only the first bytes of a file larger than it scans.
+func (u *tusAdapter) ServeContent(_ context.Context, w http.ResponseWriter, r *http.Request) error {
+	f, err := os.Open(u.session.BinPath())
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	http.ServeContent(w, r, "", time.Time{}, f)
+	return nil
 }
 
 func (u *tusAdapter) WriteChunk(ctx context.Context, offset int64, src io.Reader) (int64, error) {
@@ -125,6 +138,7 @@ func (c *coordinator) UseIn(composer *tusd.StoreComposer) {
 	composer.UseTerminater(c)
 	composer.UseConcater(c)
 	composer.UseLengthDeferrer(c)
+	composer.UseContentServer(c)
 }
 
 // NewUpload is unsupported: uploads always start through the CS3 InitiateUpload call.
@@ -152,5 +166,9 @@ func (c *coordinator) AsLengthDeclarableUpload(up tusd.Upload) tusd.LengthDeclar
 }
 
 func (c *coordinator) AsConcatableUpload(up tusd.Upload) tusd.ConcatableUpload {
+	return up.(*tusAdapter)
+}
+
+func (c *coordinator) AsServableUpload(up tusd.Upload) tusd.ServableUpload {
 	return up.(*tusAdapter)
 }
