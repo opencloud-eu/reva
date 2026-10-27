@@ -198,8 +198,6 @@ func NewTestEnv(config map[string]interface{}) (*DecomposedTestEnv, error) {
 	}
 	var lu *lookup.Lookup
 	switch o.MetadataBackend {
-	case "xattrs":
-		lu = lookup.New(metadata.NewXattrsBackend(o.FileMetadataCache), o, &timemanager.Manager{})
 	case "messagepack":
 		lu = lookup.New(metadata.NewMessagePackBackend(o.FileMetadataCache), o, &timemanager.Manager{})
 	default:
