@@ -36,6 +36,13 @@ import (
 
 const defaultFilePerm = os.FileMode(0664)
 
+// Session status values, stored in the session's "status" metadata
+const (
+	SessionStatusUploading  = "uploading"
+	SessionStatusProcessing = "processing"
+	SessionStatusFailed     = "failed"
+)
+
 // FileSession is the Session implementation for disk-backed uploads. While an
 // upload is in progress, incoming bytes are staged in a .bin file and upload
 // metadata (size, owner, checksums, etc.) is persisted in a .info file. Both
@@ -71,6 +78,7 @@ type Session interface {
 	Dir() string
 	URL(ctx context.Context) (string, error)
 	SetScanData(result string, date time.Time)
+	SetStatus(status, msg string)
 	Checksums() storage.UploadChecksums
 	SetChecksums(sha1, md5, adler32 []byte)
 	SizeDiff() int64
@@ -195,9 +203,25 @@ func (s *FileSession) Dir() string {
 	return s.info.Storage["Dir"]
 }
 
-// IsProcessing returns true if all bytes are received but postprocessing has not finished.
+// IsProcessing returns true if the upload is in the processing state, meaning that the upload has finished and postprocessing is still running.
 func (s *FileSession) IsProcessing() bool {
-	return s.info.Size == s.info.Offset && s.info.MetaData["scanResult"] == ""
+	return s.info.MetaData["status"] == SessionStatusProcessing
+}
+
+// SetStatus sets the status of the upload session
+func (s *FileSession) SetStatus(status, msg string) {
+	s.info.MetaData["status"] = status
+	s.info.MetaData["statusMessage"] = msg
+}
+
+// Status returns the status of the upload session
+func (s *FileSession) Status() string {
+	return s.info.MetaData["status"]
+}
+
+// StatusMessage returns the status message of the upload session
+func (s *FileSession) StatusMessage() string {
+	return s.info.MetaData["statusMessage"]
 }
 
 // SpaceOwner returns the space owner user ID.
