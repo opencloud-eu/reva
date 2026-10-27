@@ -178,8 +178,11 @@ func Upload(ctx context.Context, fs storage.FS, ref *provider.Reference, content
 
 // UploadGateway uploads in one step a the content in a file.
 func UploadGateway(ctx context.Context, gw gatewayv1beta1.GatewayAPIClient, ref *provider.Reference, content []byte) error {
+	// announce the length like ocdav does: without it the upload counts as empty and
+	// finishes right away
 	res, err := gw.InitiateFileUpload(ctx, &provider.InitiateFileUploadRequest{
-		Ref: ref,
+		Ref:    ref,
+		Opaque: utils.AppendPlainToOpaque(nil, net.HeaderUploadLength, strconv.Itoa(len(content))),
 	})
 	if err != nil {
 		return errors.Wrap(err, "error initiating file upload")
