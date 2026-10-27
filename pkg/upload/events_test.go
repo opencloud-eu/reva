@@ -185,6 +185,18 @@ var _ = Describe("coordinator events", func() {
 			Expect(gErr).ToNot(HaveOccurred())
 		})
 
+		It("records the processing status on the persisted session", func() {
+			session := stagedSession(ctx, store, false)
+
+			_, err := c.finishUpload(ctx, session)
+			Expect(err).ToNot(HaveOccurred())
+
+			stored, err := store.Get(ctx, session.ID())
+			Expect(err).ToNot(HaveOccurred())
+			Expect(stored.Status()).To(Equal(SessionStatusProcessing))
+			Expect(stored.IsProcessing()).To(BeTrue())
+		})
+
 		// Nobody will pick the upload up, so leaving it flagged strands the file.
 		It("rolls the prepared upload back when the event cannot be published", func() {
 			session := stagedSession(ctx, store, true)
@@ -311,18 +323,19 @@ var _ = Describe("coordinator events", func() {
 			Expect(err).To(MatchError("upload directory unreadable"))
 		})
 
-		It("filters on whether all the bytes have arrived", func() {
-			complete := stagedSession(ctx, store, false)
-			partial := stagedSession(ctx, store, false)
-			partial.SetSize(bodyLen * 2)
-			Expect(partial.Persist(ctx)).To(Succeed())
+		It("filters on the processing status", func() {
+			prepared := stagedSession(ctx, store, false)
+			prepared.SetStatus(SessionStatusProcessing, "")
+			Expect(prepared.Persist(ctx)).To(Succeed())
+			// all bytes arrived, but the session was not prepared yet
+			_ = stagedSession(ctx, store, false)
 			processing := true
 
 			sessions, err := c.ListUploadSessions(ctx, storage.UploadSessionFilter{Processing: &processing})
 
 			Expect(err).ToNot(HaveOccurred())
 			Expect(sessions).To(HaveLen(1))
-			Expect(sessions[0].ID()).To(Equal(complete.ID()))
+			Expect(sessions[0].ID()).To(Equal(prepared.ID()))
 		})
 
 		It("filters on expiry", func() {
