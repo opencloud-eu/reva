@@ -224,10 +224,19 @@ func removeRevision(ctx context.Context, lu node.PathLookup, revisionNode *node.
 // propagation. Unlike upstream it never purges an existing node: without a revision (versioning
 // disabled) the previous metadata cannot be restored, so it returns an error instead. On posix
 // this also keeps the file itself, which still holds the previous content until CommitUpload.
-func (fs *Decomposedfs) RollbackUpload(ctx context.Context, ref *provider.Reference, sessionID string, nodeExisted bool, sizeDiff int64) error {
+// When the node metadata has become unreadable the ids recorded in info are used to release
+// its quota, and to remove the node if the upload created it.
+func (fs *Decomposedfs) RollbackUpload(ctx context.Context, ref *provider.Reference, sessionID string, info storage.RollbackInfo) error {
 	n, err := fs.lu.NodeFromResource(ctx, ref)
 	if err != nil {
-		return fmt.Errorf("RollbackUpload: node lookup failed: %w", err)
+		if !errors.Is(err, node.ErrMissingParentID) {
+			// the node might only be temporarily unreadable, e.g. because a cache
+			// is unavailable. Do not treat it as orphaned.
+			return err
+		}
+		// The node metadata is unreadable, so the upload can never finish and its
+		// quota would stay consumed forever.
+		return fs.rollbackOrphaned(ctx, ref, sessionID, info, err)
 	}
 	if !n.Exists {
 		return nil // nothing was written yet
@@ -245,7 +254,7 @@ func (fs *Decomposedfs) RollbackUpload(ctx context.Context, ref *provider.Refere
 		return nil
 	}
 
-	if nodeExisted {
+	if info.NodeExisted {
 		reverted, err := n.RevertLatestRevision(ctx)
 		if err != nil {
 			return err
@@ -261,10 +270,60 @@ func (fs *Decomposedfs) RollbackUpload(ctx context.Context, ref *provider.Refere
 		}
 	}
 
-	if sizeDiff != 0 {
-		if err := fs.tp.Propagate(ctx, n, -sizeDiff); err != nil {
+	if info.SizeDiff != 0 {
+		if err := fs.tp.Propagate(ctx, n, -info.SizeDiff); err != nil {
 			appctx.GetLogger(ctx).Error().Err(err).Msg("RollbackUpload: could not revert propagate")
 		}
+	}
+	return nil
+}
+
+// rollbackOrphaned releases the quota of an upload whose node metadata is unreadable, using
+// the node and parent ids the upload session recorded. It removes the node only if the upload
+// created it and it is still empty.
+func (fs *Decomposedfs) rollbackOrphaned(ctx context.Context, ref *provider.Reference, sessionID string, info storage.RollbackInfo, lookupErr error) error {
+	spaceID := ref.GetResourceId().GetSpaceId()
+	if info.NodeID == "" || info.ParentID == "" || spaceID == "" {
+		return fmt.Errorf("RollbackUpload: node lookup failed: %w", lookupErr)
+	}
+	log := appctx.GetLogger(ctx).With().Str("sessionid", sessionID).Str("nodeid", info.NodeID).Logger()
+	log.Info().Err(lookupErr).Msg("node unreadable, rolling back orphaned upload")
+
+	n := node.New(spaceID, info.NodeID, info.ParentID, info.Filename, info.Size, sessionID,
+		provider.ResourceType_RESOURCE_TYPE_FILE, nil, fs.lu)
+	spaceRoot, err := node.ReadNode(ctx, fs.lu, spaceID, spaceID, "", false, nil, false)
+	if err != nil {
+		return fmt.Errorf("RollbackUpload: space root lookup failed: %w", err)
+	}
+	n.SpaceRoot = spaceRoot
+
+	if info.SizeDiff != 0 {
+		// an error keeps the session, so the rollback can be retried
+		if err := fs.tp.Propagate(ctx, n, -info.SizeDiff); err != nil {
+			return fmt.Errorf("RollbackUpload: could not revert propagate: %w", err)
+		}
+	}
+
+	// Only a node this upload created may be removed. An existing node holds the
+	// previous version, on posix the user's file itself, so it is left alone.
+	if info.NodeExisted {
+		return nil
+	}
+	// The node file stays empty until the upload is committed. If it has content,
+	// something outside of us wrote it, e.g. an editor saving atomically on posix,
+	// so keep it.
+	if fi, err := os.Stat(n.InternalPath()); err == nil && fi.Size() > 0 {
+		log.Info().Str("nodepath", n.InternalPath()).Msg("orphaned node has content, keeping it")
+		return nil
+	}
+
+	// the orphaned node cannot be resolved by any other means, remove it together
+	// with its metadata. A missing node is fine: it may never have been created.
+	if err := fs.lu.PurgeNode(n); err != nil && !errors.Is(err, os.ErrNotExist) {
+		log.Error().Err(err).Str("nodepath", n.InternalPath()).Msg("RollbackUpload: removing orphaned node failed")
+	}
+	if err := fs.lu.MetadataBackend().Purge(ctx, n); err != nil && !errors.Is(err, os.ErrNotExist) {
+		log.Error().Err(err).Str("nodepath", n.InternalPath()).Msg("RollbackUpload: purging orphaned node metadata failed")
 	}
 	return nil
 }
