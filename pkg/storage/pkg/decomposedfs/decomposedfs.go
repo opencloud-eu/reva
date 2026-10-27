@@ -155,12 +155,10 @@ func NewDefault(m map[string]interface{}, bs node.Blobstore, es events.Stream, l
 
 	var lu *lookup.Lookup
 	switch o.MetadataBackend {
-	case "xattrs":
-		lu = lookup.New(metadata.NewXattrsBackend(o.FileMetadataCache), o, &timemanager.Manager{})
 	case "messagepack":
 		lu = lookup.New(metadata.NewMessagePackBackend(o.FileMetadataCache), o, &timemanager.Manager{})
 	default:
-		return nil, fmt.Errorf("unknown metadata backend %s, only 'messagepack' or 'xattrs' (default) supported", o.MetadataBackend)
+		return nil, fmt.Errorf("unknown metadata backend %s, only 'messagepack' (default) supported", o.MetadataBackend)
 	}
 
 	permissionsSelector, err := pool.PermissionsSelector(o.PermissionsSVC, pool.WithTLSMode(o.PermTLSMode))
