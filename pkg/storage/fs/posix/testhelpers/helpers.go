@@ -270,8 +270,6 @@ func NewTestEnv(config map[string]interface{}) (*TestEnv, error) {
 
 	var lu *lookup.Lookup
 	switch o.MetadataBackend {
-	case "xattrs":
-		lu, _ = lookup.New(metadata.NewXattrsBackend(o.FileMetadataCache), um, o, &timemanager.Manager{}, c, historyCache, &logger)
 	case "hybrid":
 		lu, _ = lookup.New(metadata.NewHybridBackend(1024,
 			func(n metadata.MetadataNode) string {
