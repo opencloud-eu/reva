@@ -438,6 +438,17 @@ var _ = Describe("FileSession", func() {
 			Expect(url).To(HavePrefix("http://gateway.example.com"), "URL should start with DataGatewayEndpoint")
 		})
 
+		It("returns the download endpoint itself without a data gateway", func() {
+			store := newTestStore(TokenOptions{
+				DownloadEndpoint: "http://download.example.com/data",
+			})
+			s := store.New(ctx).(*FileSession)
+
+			url, err := s.URL(ctx)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(url).To(Equal("http://download.example.com/data/tus/" + s.ID()))
+		})
+
 		It("can be called repeatedly", func() {
 			store := newTestStore(TokenOptions{
 				DataGatewayEndpoint:  "http://gw.example.com",
