@@ -3,8 +3,10 @@ package upload
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -47,6 +49,38 @@ var _ = Describe("tusAdapter", func() {
 			},
 		}
 		c = NewCoordinator(fs, store, "", nil)
+	})
+
+	Describe("serving the staged bytes", func() {
+		serve := func(rangeHeader string) *httptest.ResponseRecorder {
+			session := stagedSession(ctx, store, false)
+			req := httptest.NewRequest(http.MethodGet, "/", nil)
+			if rangeHeader != "" {
+				req.Header.Set("Range", rangeHeader)
+			}
+			rr := httptest.NewRecorder()
+			Expect(adapterFor(session).ServeContent(ctx, rr, req)).To(Succeed())
+			return rr
+		}
+
+		It("serves the whole file without a range", func() {
+			rr := serve("")
+			Expect(rr.Code).To(Equal(http.StatusOK))
+			Expect(rr.Body.String()).To(Equal(body))
+		})
+
+		It("serves only the requested range", func() {
+			rr := serve("bytes=0-4")
+			Expect(rr.Code).To(Equal(http.StatusPartialContent))
+			Expect(rr.Header().Get("Content-Range")).To(Equal(fmt.Sprintf("bytes 0-4/%d", bodyLen)))
+			Expect(rr.Body.String()).To(Equal(body[:5]))
+		})
+
+		It("serves the whole file for a range past its end", func() {
+			rr := serve("bytes=0-1000")
+			Expect(rr.Code).To(Equal(http.StatusPartialContent))
+			Expect(rr.Body.String()).To(Equal(body))
+		})
 	})
 
 	Describe("the data path", func() {
