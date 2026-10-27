@@ -34,6 +34,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/opencloud-eu/reva/v2/pkg/appctx"
 	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
+	"github.com/opencloud-eu/reva/v2/pkg/storage"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/lookup"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata/prefixes"
@@ -177,6 +178,9 @@ func (t *Tree) TouchFile(ctx context.Context, n *node.Node, markprocessing bool,
 		}
 	}
 
+	if storage.SkipTouchPropagation(ctx) {
+		return nil
+	}
 	return t.Propagate(ctx, n, 0)
 }
 
