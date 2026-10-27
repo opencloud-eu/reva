@@ -1112,7 +1112,15 @@ func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, p
 	span.SetAttributes(attribute.KeyValue{Key: "ns", Value: attribute.StringValue(ns)})
 	defer span.End()
 
-	sublog := appctx.GetLogger(ctx).With().Interface("md", md).Str("ns", ns).Logger()
+	// Not .Interface("md", md): context fields are encoded eagerly, whether or
+	// not anything is logged. When the Stat carried no space, the fake space
+	// built in HandleSpacesPropfind has RootInfo pointing back at the root md
+	// and is attached to every entry, so encoding/json walked that cycle ~1000
+	// levels deep per entry until its cycle check gave up.
+	sublog := appctx.GetLogger(ctx).With().
+		Str("md_path", md.GetPath()).
+		Str("md_id", md.GetId().GetOpaqueId()).
+		Str("ns", ns).Logger()
 	id := md.Id
 	p := strings.TrimPrefix(md.Path, ns)
 
