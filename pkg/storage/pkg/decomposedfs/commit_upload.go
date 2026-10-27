@@ -65,9 +65,7 @@ func (fs *Decomposedfs) MarkProcessing(ctx context.Context, ref *provider.Refere
 		return n.RemoveXattr(ctx, prefixes.StatusPrefix)
 	}
 
-	if n.IsProcessing(ctx) {
-		return errtypes.ResourceProcessing(ref.String())
-	}
+	// a newer upload takes over the mark, the last writer wins
 	return n.SetXattrsWithContext(ctx, node.Attributes{
 		prefixes.StatusPrefix: []byte(node.ProcessingStatus + sessionID),
 	})
