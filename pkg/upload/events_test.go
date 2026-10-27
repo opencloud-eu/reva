@@ -268,6 +268,24 @@ var _ = Describe("coordinator events", func() {
 		})
 	})
 
+	// the tus data path carries no user, so the coordinator stats as the executant
+	Describe("ResolveUpload", func() {
+		It("stats the uploaded resource as the upload's executant", func() {
+			session := stagedSession(ctx, store, true)
+			info, err := session.GetInfo(ctx)
+			Expect(err).ToNot(HaveOccurred())
+			session.Cleanup(ctx, true, true)
+			fs.md = &provider.ResourceInfo{Etag: "etag-1"}
+
+			ri, resolvedCtx, err := c.ResolveUpload(context.Background(), info)
+
+			Expect(err).ToNot(HaveOccurred())
+			Expect(ri.GetEtag()).To(Equal("etag-1"))
+			Expect(ctxpkg.ContextMustGetUser(resolvedCtx).GetId().GetOpaqueId()).To(Equal("alice"))
+			Expect(fs.calls).To(ContainElement("GetMD()"))
+		})
+	})
+
 	Describe("ListUploadSessions", func() {
 		// Only the driver can resolve a session's node, so a driver that does not
 		// implement storage.OrphanChecker cannot answer the question at all.

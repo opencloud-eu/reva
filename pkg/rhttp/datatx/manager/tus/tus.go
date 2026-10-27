@@ -35,7 +35,6 @@ import (
 
 	"github.com/opencloud-eu/reva/v2/internal/http/services/owncloud/ocdav/net"
 	"github.com/opencloud-eu/reva/v2/pkg/appctx"
-	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
 	"github.com/opencloud-eu/reva/v2/pkg/events"
 	"github.com/opencloud-eu/reva/v2/pkg/rhttp/datatx"
 	"github.com/opencloud-eu/reva/v2/pkg/rhttp/datatx/manager/registry"
@@ -90,7 +89,7 @@ func New(m map[string]interface{}, publisher events.Publisher, log *zerolog.Logg
 	}, nil
 }
 
-func (m *manager) Handler(coord upload.Coordinator, fs storage.FS) (http.Handler, error) {
+func (m *manager) Handler(coord upload.Coordinator, _ storage.FS) (http.Handler, error) {
 	// A storage backend for tusd may consist of multiple different parts which
 	// handle upload creation, locking, termination and so on. The composer is a
 	// place where all those separated pieces are joined together.
@@ -105,7 +104,7 @@ func (m *manager) Handler(coord upload.Coordinator, fs storage.FS) (http.Handler
 		Logger:                slog.New(tusdLogger{log: m.log}),
 		// Add the finalized resource's etag and permissions to the last chunk's response
 		// (see preFinishResponseCallback). https://github.com/opencloud-eu/opencloud/issues/2409
-		PreFinishResponseCallback: m.preFinishResponseCallback(fs),
+		PreFinishResponseCallback: m.preFinishResponseCallback(coord),
 	}
 
 	if m.conf.CorsEnabled {
@@ -205,16 +204,16 @@ func (m *manager) Handler(coord upload.Coordinator, fs storage.FS) (http.Handler
 // the final response is written, it looks up the finalized resource and attaches its etag and
 // WebDAV permissions to the response headers, so clients do not need a follow-up PROPFIND after
 // the last chunk. It mirrors the etag and permissions the ocdav gateway already produces for the
-// creation-with-upload path. The storage driver resolves the resource as the upload's executant
-// (the data path's transfer token carries no user identity), so this layer does not reconstruct
-// the user. It is best effort: it logs any lookup failure and still completes the upload (the
+// creation-with-upload path. The upload coordinator resolves the resource as the upload's
+// executant (the data path's transfer token carries no user identity), so this layer does not
+// reconstruct the user. It is best effort: it logs any lookup failure and still completes the upload (the
 // client falls back to a PROPFIND). https://github.com/opencloud-eu/opencloud/issues/2409
-func (m *manager) preFinishResponseCallback(fs storage.FS) func(tusd.HookEvent) (tusd.HTTPResponse, error) {
-	resolver, ok := fs.(storage.UploadSessionResolver)
+func (m *manager) preFinishResponseCallback(r any) func(tusd.HookEvent) (tusd.HTTPResponse, error) {
+	resolver, ok := r.(storage.UploadSessionResolver)
 	return func(hook tusd.HookEvent) (tusd.HTTPResponse, error) {
 		resp := tusd.HTTPResponse{Header: tusd.HTTPHeader{}}
 		if !ok {
-			// the storage driver cannot resolve the upload; the client falls back to a PROPFIND
+			// nothing resolves the upload; the client falls back to a PROPFIND
 			return resp, nil
 		}
 
