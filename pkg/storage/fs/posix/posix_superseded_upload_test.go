@@ -33,7 +33,10 @@ var _ = Describe("a newer upload supersedes one still processing on posix", func
 	contentA := []byte("content of upload A")
 	contentB := []byte("content of upload B, longer")
 
-	setup := func(config map[string]interface{}) {
+	// an older version of the file, from before versioning was disabled
+	olderVersion := []byte("older version")
+
+	setup := func(config map[string]interface{}, withOlderVersion bool) {
 		var err error
 		env, err = posixhelpers.NewTestEnv(config)
 		Expect(err).ToNot(HaveOccurred())
@@ -51,6 +54,11 @@ var _ = Describe("a newer upload supersedes one still processing on posix", func
 		Expect(env.Fs.TouchFile(env.Ctx, ref, false, "")).To(Succeed())
 		n, err := env.Lookup.NodeFromResource(env.Ctx, ref)
 		Expect(err).ToNot(HaveOccurred())
+		if withOlderVersion {
+			Expect(os.WriteFile(n.InternalPath(), olderVersion, 0600)).To(Succeed())
+			_, err := env.Tree.CreateRevision(env.Ctx, n, "2020-01-01T00:00:00Z")
+			Expect(err).ToNot(HaveOccurred())
+		}
 		Expect(os.WriteFile(n.InternalPath(), oldContent, 0600)).To(Succeed())
 		Expect(n.SetXattrsWithContext(env.Ctx, map[string][]byte{
 			prefixes.BlobsizeAttr: []byte("11"),
@@ -114,7 +122,7 @@ var _ = Describe("a newer upload supersedes one still processing on posix", func
 
 	Context("with versioning disabled", func() {
 		BeforeEach(func() {
-			setup(map[string]interface{}{"disable_versioning": true})
+			setup(map[string]interface{}{"disable_versioning": true}, false)
 		})
 
 		It("hands the file back to A when B is rolled back, and A can still finish", func() {
@@ -158,9 +166,31 @@ var _ = Describe("a newer upload supersedes one still processing on posix", func
 		})
 	})
 
+	Context("with versioning disabled and a version from before", func() {
+		BeforeEach(func() {
+			setup(map[string]interface{}{"disable_versioning": true}, true)
+		})
+
+		It("keeps that version when both finish", func() {
+			commit("session-a", contentA)
+			commit("session-b", contentB)
+
+			Expect(os.ReadFile(current().InternalPath())).To(Equal(contentB))
+			Expect(revisionContents()).To(Equal([][]byte{olderVersion}))
+		})
+
+		It("keeps that version when B is rolled back and A finishes", func() {
+			rollback("session-b")
+			commit("session-a", contentA)
+
+			Expect(os.ReadFile(current().InternalPath())).To(Equal(contentA))
+			Expect(revisionContents()).To(Equal([][]byte{olderVersion}))
+		})
+	})
+
 	Context("with versioning enabled", func() {
 		BeforeEach(func() {
-			setup(nil)
+			setup(nil, false)
 		})
 
 		It("keeps the old content and A as revisions when both finish", func() {
