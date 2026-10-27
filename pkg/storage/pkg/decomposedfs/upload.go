@@ -393,6 +393,12 @@ func (fs *Decomposedfs) ResolveUpload(ctx context.Context, info tusd.FileInfo) (
 	return ri, ctx, err
 }
 
+// IsOrphaned reports whether the referenced resource exists but its metadata is unreadable.
+func (fs *Decomposedfs) IsOrphaned(ctx context.Context, ref *provider.Reference) bool {
+	_, err := fs.lu.NodeFromResource(ctx, ref)
+	return err != nil
+}
+
 // ListUploadSessions returns the upload sessions for the given filter
 func (fs *Decomposedfs) ListUploadSessions(ctx context.Context, filter storage.UploadSessionFilter) ([]storage.UploadSession, error) {
 	var sessions []*upload.DecomposedFsSession
