@@ -15,17 +15,29 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/opencloud-eu/reva/v2/pkg/appctx"
+	ctxpkg "github.com/opencloud-eu/reva/v2/pkg/ctx"
 	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
 	"github.com/opencloud-eu/reva/v2/pkg/storage"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata/prefixes"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/node"
+	"github.com/opencloud-eu/reva/v2/pkg/storagespace"
 )
 
-// PrepareUpload finalizes node metadata after bytes are received, before postprocessing.
-// CommitUpload is called after postprocessing completes.
+// PrepareCreatesNode reports that PrepareUpload creates a new file's node.
+func (fs *Decomposedfs) PrepareCreatesNode() bool {
+	return true
+}
+
+// PrepareUpload finalizes node metadata after bytes are received, before postprocessing,
+// and marks the node as processing for sessionID. A new file's node is created here, under
+// the id the ref carries. CommitUpload is called after postprocessing completes.
 //
 // The previous version is snapshotted through the tree's CreateRevision, like the legacy
-// upload path does: posix copies the current content, decomposedfs only the metadata.
+// upload path does: posix copies the current content, decomposedfs only the metadata. When
+// another upload is still processing the node, it is snapshotted even with versioning
+// disabled, together with that upload's processing mark: if this upload is rolled back, the
+// other one is restored and can still finish.
 func (fs *Decomposedfs) PrepareUpload(ctx context.Context, ref *provider.Reference, sessionID string, info storage.UploadInfo) (*storage.PrepareUploadResult, error) {
 	ctx, span := tracer.Start(ctx, "PrepareUpload")
 	defer span.End()
@@ -35,15 +47,47 @@ func (fs *Decomposedfs) PrepareUpload(ctx context.Context, ref *provider.Referen
 		appctx.GetLogger(ctx).Error().Err(err).Msg("PrepareUpload: unexpected NodeFromResource failure")
 		return nil, errtypes.InternalError("PrepareUpload: node lookup failed unexpectedly")
 	}
-	if !n.Exists {
+	// a new file nobody has created yet: PrepareUpload creates it
+	create := !n.Exists && !info.NodeExisted && info.ParentID != "" && info.Name != ""
+	if !n.Exists && !create {
 		return nil, errtypes.NotFound(ref.String())
 	}
+	if create {
+		if err := fs.checkNewFileParent(ctx, n.SpaceID, info); err != nil {
+			return nil, err
+		}
+		n.ParentID = info.ParentID
+		n.Name = info.Name
+	}
+
+	var (
+		committed bool
+		// only a node this upload created is purged, one it is creating only once
+		// the name is its own: Purge removes the name
+		purge = !info.NodeExisted && !create
+	)
+	// registered before the lock is taken, so it runs once the lock is released.
+	// Purge, not trash: the file never had content, and Purge needs no Delete permission
+	defer func() {
+		if committed || !purge {
+			return
+		}
+		if err := n.Purge(ctx); err != nil {
+			appctx.GetLogger(ctx).Error().Err(err).Str("nodeid", n.ID).Msg("could not purge new node after failed prepare")
+		}
+	}()
+
 	n.SpaceRoot, err = node.ReadNode(ctx, fs.lu, n.SpaceID, n.SpaceID, "", false, nil, false)
 	if err != nil {
 		return nil, err
 	}
 
-	if err := n.CheckLock(ctx); err != nil {
+	if create {
+		// a node still to be created holds no lock, so any lock id is a mismatch
+		if lockID, _ := ctxpkg.ContextGetLockID(ctx); lockID != "" {
+			return nil, errtypes.Aborted("not locked")
+		}
+	} else if err := n.CheckLock(ctx); err != nil {
 		return nil, err
 	}
 
@@ -58,9 +102,20 @@ func (fs *Decomposedfs) PrepareUpload(ctx context.Context, ref *provider.Referen
 		}
 	}
 
-	unlock, err := fs.lu.MetadataBackend().Lock(n)
-	if err != nil {
-		return nil, err
+	var unlock metadata.UnlockFunc
+	if create {
+		// InitNewNode refuses a name already taken, checks the quota, and on failure
+		// removes what it made and releases its lock. It returns the node lock.
+		unlock, err = fs.tp.InitNewNode(ctx, n, uint64(info.Size))
+		if err != nil {
+			return nil, err
+		}
+		purge = true
+	} else {
+		unlock, err = fs.lu.MetadataBackend().Lock(n)
+		if err != nil {
+			return nil, err
+		}
 	}
 	defer func() {
 		if err := unlock(); err != nil {
@@ -74,7 +129,6 @@ func (fs *Decomposedfs) PrepareUpload(ctx context.Context, ref *provider.Referen
 		versionNode    *node.BaseNode
 		oldAttrs       node.Attributes
 		oldMtime       time.Time
-		committed      bool
 	)
 
 	defer func() {
@@ -92,6 +146,12 @@ func (fs *Decomposedfs) PrepareUpload(ctx context.Context, ref *provider.Referen
 			}
 			if err := n.SetXattrsWithContext(ctx, oldAttrs); err != nil {
 				appctx.GetLogger(ctx).Error().Err(err).Str("nodeid", n.ID).Msg("could not restore node xattrs during rollback")
+			}
+			// restoring only rewrites the old keys, so the mark this upload added would stay
+			if _, ok := oldAttrs[prefixes.StatusPrefix]; !ok {
+				if err := n.RemoveXattr(ctx, prefixes.StatusPrefix); err != nil && !metadata.IsAttrUnset(err) {
+					appctx.GetLogger(ctx).Error().Err(err).Str("nodeid", n.ID).Msg("could not remove processing mark during rollback")
+				}
 			}
 		}
 	}()
@@ -111,9 +171,12 @@ func (fs *Decomposedfs) PrepareUpload(ctx context.Context, ref *provider.Referen
 	}
 
 	// also for new files: the coordinator's check fails open without GetQuota
-	// permission, and CheckQuota guards disk space too
-	if _, err := node.CheckQuota(ctx, n.SpaceRoot, overwrite, uint64(oldBlobsize), uint64(info.Size)); err != nil {
-		return nil, err
+	// permission, and CheckQuota guards disk space too. InitNewNode has checked a
+	// node it created.
+	if !create {
+		if _, err := node.CheckQuota(ctx, n.SpaceRoot, overwrite, uint64(oldBlobsize), uint64(info.Size)); err != nil {
+			return nil, err
+		}
 	}
 
 	if info.NodeExisted {
@@ -149,7 +212,10 @@ func (fs *Decomposedfs) PrepareUpload(ctx context.Context, ref *provider.Referen
 			return nil, err
 		}
 
-		if !fs.o.DisableVersioning {
+		// another upload is still processing the node: keep its state, so a rollback
+		// of this upload can hand the node back to it
+		supersededMark, superseding := oldAttrs[prefixes.StatusPrefix]
+		if !fs.o.DisableVersioning || superseding {
 			timestamp := oldMtime.UTC().Format(time.RFC3339Nano)
 			versionPath, err := fs.tp.CreateRevision(ctx, n, timestamp)
 			if err != nil {
@@ -160,11 +226,19 @@ func (fs *Decomposedfs) PrepareUpload(ctx context.Context, ref *provider.Referen
 			if err := os.Chtimes(versionPath, oldMtime, oldMtime); err != nil {
 				return nil, errtypes.InternalError(fmt.Sprintf("failed to set mtime on version node: %s", err))
 			}
+			if superseding {
+				if err := fs.lu.MetadataBackend().SetMultiple(ctx, versionNode, map[string][]byte{
+					prefixes.StatusPrefix: supersededMark,
+				}); err != nil {
+					return nil, err
+				}
+			}
 		}
 
 		sizeDiff = info.Size - old.Blobsize
 	} else {
-		if c, ok := fs.lu.(node.IDCacher); ok {
+		// InitNewNode has cached a node it created
+		if c, ok := fs.lu.(node.IDCacher); ok && !create {
 			if err := c.CacheID(ctx, n.SpaceID, n.ID, filepath.Join(n.ParentPath(), n.Name)); err != nil {
 				appctx.GetLogger(ctx).Error().Err(err).Msg("failed to cache id")
 			}
@@ -182,6 +256,8 @@ func (fs *Decomposedfs) PrepareUpload(ctx context.Context, ref *provider.Referen
 	attrs[prefixes.ChecksumPrefix+"sha1"] = info.Checksums.SHA1
 	attrs[prefixes.ChecksumPrefix+"md5"] = info.Checksums.MD5
 	attrs[prefixes.ChecksumPrefix+"adler32"] = info.Checksums.Adler32
+	// in the same batch, so marking the node costs no write of its own
+	attrs.SetString(prefixes.StatusPrefix, node.ProcessingStatus+sessionID)
 
 	mtime := time.Now()
 	if !info.MTime.IsZero() {
@@ -200,7 +276,40 @@ func (fs *Decomposedfs) PrepareUpload(ctx context.Context, ref *provider.Referen
 	}
 	committed = true
 
-	return &storage.PrepareUploadResult{VersionCreated: versionCreated, SizeDiff: sizeDiff}, nil
+	result := &storage.PrepareUploadResult{VersionCreated: versionCreated, SizeDiff: sizeDiff}
+	if !info.NodeExisted {
+		// read off the disk, not through ListGrants: an uploader who cannot see the
+		// space root still needs the manager of a project space reported
+		result.SpaceOwner = n.SpaceOwnerOrManager(ctx)
+	}
+	return result, nil
+}
+
+// checkNewFileParent re-checks, for a file PrepareUpload is about to create, what
+// TouchFile would have checked: the parent still exists, and the user may still upload
+// into it. Either may have changed while the bytes were in flight.
+func (fs *Decomposedfs) checkNewFileParent(ctx context.Context, spaceID string, info storage.UploadInfo) error {
+	parentID := &provider.ResourceId{SpaceId: spaceID, OpaqueId: info.ParentID}
+	parent, err := fs.lu.NodeFromID(ctx, parentID)
+	if err != nil {
+		return errtypes.InternalError(err.Error())
+	}
+	f, _ := storagespace.FormatReference(&provider.Reference{ResourceId: parentID, Path: info.Name})
+	if !parent.Exists {
+		return errtypes.NotFound(f)
+	}
+
+	rp, err := fs.p.AssemblePermissions(ctx, parent)
+	switch {
+	case err != nil:
+		return err
+	case !rp.InitiateFileUpload:
+		if rp.Stat {
+			return errtypes.PermissionDenied(f)
+		}
+		return errtypes.NotFound(f)
+	}
+	return nil
 }
 
 // removeRevision deletes a revision PrepareUpload created, with its metadata, while the
@@ -251,15 +360,18 @@ func (fs *Decomposedfs) RollbackUpload(ctx context.Context, ref *provider.Refere
 		return fmt.Errorf("RollbackUpload: could not read processing ID: %w", err)
 	}
 	if curProcessingID != sessionID {
+		// a newer upload took over the node. The revision it kept of this upload would
+		// hand the node back to an upload that is gone, so drop it.
+		fs.removeUploadRevision(ctx, n, sessionID)
 		return nil
 	}
 
 	if info.NodeExisted {
-		reverted, err := n.RevertLatestRevision(ctx)
+		restored, err := fs.restoreLatestRevision(ctx, n)
 		if err != nil {
 			return err
 		}
-		if !reverted {
+		if !restored {
 			return errtypes.PreconditionFailed("RollbackUpload: no revision to restore for node " + n.ID)
 		}
 	} else {
@@ -276,6 +388,75 @@ func (fs *Decomposedfs) RollbackUpload(ctx context.Context, ref *provider.Refere
 		}
 	}
 	return nil
+}
+
+// restoreLatestRevision restores the node from the revision PrepareUpload created, its
+// content included on posix, and removes the revision. If the revision kept the processing
+// mark of an upload this one superseded, the mark is restored too, so that upload can still
+// finish. It reports false if the node has no revision.
+func (fs *Decomposedfs) restoreLatestRevision(ctx context.Context, n *node.Node) (bool, error) {
+	unlock, err := fs.lu.MetadataBackend().Lock(n)
+	if err != nil {
+		return false, err
+	}
+	defer func() {
+		if err := unlock(); err != nil {
+			appctx.GetLogger(ctx).Error().Err(err).Str("nodeid", n.ID).Msg("could not close lock")
+		}
+	}()
+
+	key, err := n.LatestRevisionKey(ctx)
+	if err != nil || key == "" {
+		return false, err
+	}
+	revisionNode := node.NewBaseNode(n.SpaceID, n.ID+node.RevisionIDDelimiter+key, fs.lu)
+	revisionAttrs, err := fs.lu.MetadataBackend().All(ctx, revisionNode)
+	if err != nil {
+		return false, err
+	}
+
+	var mtime time.Time
+	if v, ok := revisionAttrs[prefixes.MTimeAttr]; ok {
+		if mtime, err = time.Parse(time.RFC3339Nano, string(v)); err != nil {
+			return false, err
+		}
+	}
+	if err := fs.tp.RestoreRevision(ctx, revisionNode, n, mtime); err != nil {
+		return false, err
+	}
+	if mark, ok := revisionAttrs[prefixes.StatusPrefix]; ok {
+		if err := n.SetXattrsWithContext(ctx, node.Attributes{prefixes.StatusPrefix: mark}); err != nil {
+			return false, err
+		}
+	}
+
+	removeRevision(ctx, fs.lu, revisionNode)
+	return true, nil
+}
+
+// removeUploadRevision deletes the revision a newer upload kept of the upload sessionID.
+func (fs *Decomposedfs) removeUploadRevision(ctx context.Context, n *node.Node, sessionID string) {
+	unlock, err := fs.lu.MetadataBackend().Lock(n)
+	if err != nil {
+		appctx.GetLogger(ctx).Error().Err(err).Str("nodeid", n.ID).Msg("could not lock node")
+		return
+	}
+	defer func() {
+		if err := unlock(); err != nil {
+			appctx.GetLogger(ctx).Error().Err(err).Str("nodeid", n.ID).Msg("could not close lock")
+		}
+	}()
+
+	revision, revisionUnlock, err := fs.uploadRevision(ctx, n, sessionID)
+	if err != nil {
+		appctx.GetLogger(ctx).Error().Err(err).Str("nodeid", n.ID).Str("sessionid", sessionID).Msg("could not look up the upload's revision")
+		return
+	}
+	if revision == nil {
+		return
+	}
+	_ = revisionUnlock()
+	removeRevision(ctx, fs.lu, &revision.BaseNode)
 }
 
 // rollbackOrphaned releases the quota of an upload whose node metadata is unreadable, using
