@@ -159,9 +159,10 @@ func (fs *Decomposedfs) CommitUpload(ctx context.Context, ref *provider.Referenc
 		if err := target.RemoveXattr(ctx, prefixes.StatusPrefix); err != nil && !metadata.IsAttrUnset(err) {
 			appctx.GetLogger(ctx).Error().Err(err).Str("nodeid", target.ID).Msg("could not remove the processing mark from the revision")
 		}
-	} else if fs.o.DisableVersioning {
-		// revisions of superseded uploads only served a rollback of this one
-		fs.removeRevisions(ctx, n)
+	} else {
+		// revisions of superseded uploads only served a rollback of this one; with
+		// versioning enabled the ones of finished uploads stay as versions
+		fs.removeRevisions(ctx, n, fs.o.DisableVersioning)
 	}
 
 	now := time.Now()
@@ -177,9 +178,9 @@ func (fs *Decomposedfs) CommitUpload(ctx context.Context, ref *provider.Referenc
 	return nil
 }
 
-// removeRevisions deletes all revisions of n, with their blobs, while the caller holds the
-// node lock.
-func (fs *Decomposedfs) removeRevisions(ctx context.Context, n *node.Node) {
+// removeRevisions deletes the revisions of n, with their blobs, while the caller holds the
+// node lock: all of them, or only the ones of uploads that were rolled back.
+func (fs *Decomposedfs) removeRevisions(ctx context.Context, n *node.Node, all bool) {
 	revPrefix := fs.lu.VersionPath(n.SpaceID, n.ID, "")
 	revisions, err := filepath.Glob(fs.lu.VersionPath(n.SpaceID, n.ID, "*"))
 	if err != nil {
@@ -191,6 +192,11 @@ func (fs *Decomposedfs) removeRevisions(ctx context.Context, n *node.Node) {
 			continue
 		}
 		revisionNode := node.NewBaseNode(n.SpaceID, n.ID+node.RevisionIDDelimiter+strings.TrimPrefix(rev, revPrefix), fs.lu)
+		if !all {
+			if _, err := fs.lu.MetadataBackend().Get(ctx, revisionNode, purgeOnRestoreAttr); err != nil {
+				continue
+			}
+		}
 		blobID, err := fs.lu.MetadataBackend().Get(ctx, revisionNode, prefixes.BlobIDAttr)
 		if err == nil && len(blobID) > 0 && string(blobID) != n.BlobID {
 			blobNode := node.New(n.SpaceID, revisionNode.ID, "", "", 0, string(blobID), provider.ResourceType_RESOURCE_TYPE_FILE, nil, fs.lu)

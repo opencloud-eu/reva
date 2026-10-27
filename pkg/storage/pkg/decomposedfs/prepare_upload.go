@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -356,18 +357,27 @@ func (fs *Decomposedfs) RollbackUpload(ctx context.Context, ref *provider.Refere
 	}
 	if curProcessingID != sessionID {
 		// a newer upload took over the node. The revision it kept of this upload would
-		// hand the node back to an upload that is gone, so drop it.
-		fs.removeUploadRevision(ctx, n, sessionID)
+		// hand the node back to an upload that is gone.
+		fs.retireUploadRevision(ctx, n, sessionID, info.NodeExisted)
 		return nil
 	}
 
+	sizeDiff := info.SizeDiff
 	if info.NodeExisted {
-		restored, err := fs.restoreLatestRevision(ctx, n)
+		restored, purge, err := fs.restoreLatestRevision(ctx, n)
 		if err != nil {
 			return err
 		}
 		if !restored {
 			return errtypes.PreconditionFailed("RollbackUpload: no revision to restore for node " + n.ID)
+		}
+		if purge {
+			// the file was created by an upload that was rolled back while this one
+			// was processing, so nothing is left to keep
+			if err := n.Purge(ctx); err != nil {
+				return fmt.Errorf("RollbackUpload: could not purge node: %w", err)
+			}
+			sizeDiff += n.Blobsize
 		}
 	} else {
 		// the upload created this node, so undo it. Purge, not trash: the file never
@@ -377,8 +387,8 @@ func (fs *Decomposedfs) RollbackUpload(ctx context.Context, ref *provider.Refere
 		}
 	}
 
-	if info.SizeDiff != 0 {
-		if err := fs.tp.Propagate(ctx, n, -info.SizeDiff); err != nil {
+	if sizeDiff != 0 {
+		if err := fs.tp.Propagate(ctx, n, -sizeDiff); err != nil {
 			appctx.GetLogger(ctx).Error().Err(err).Msg("RollbackUpload: could not revert propagate")
 		}
 	}
@@ -388,11 +398,13 @@ func (fs *Decomposedfs) RollbackUpload(ctx context.Context, ref *provider.Refere
 // restoreLatestRevision restores the node from the revision PrepareUpload created, its
 // content included on posix, and removes the revision. If the revision kept the processing
 // mark of an upload this one superseded, the mark is restored too, so that upload can still
-// finish. It reports false if the node has no revision.
-func (fs *Decomposedfs) restoreLatestRevision(ctx context.Context, n *node.Node) (bool, error) {
+// finish. It reports false if the node has no revision, and purge if the revision says the
+// file should not exist anymore (see retireUploadRevision); n then describes the restored
+// state, with the size the file accounts for.
+func (fs *Decomposedfs) restoreLatestRevision(ctx context.Context, n *node.Node) (restored, purge bool, err error) {
 	unlock, err := fs.lu.MetadataBackend().Lock(n)
 	if err != nil {
-		return false, err
+		return false, false, err
 	}
 	defer func() {
 		if err := unlock(); err != nil {
@@ -402,56 +414,79 @@ func (fs *Decomposedfs) restoreLatestRevision(ctx context.Context, n *node.Node)
 
 	key, err := n.LatestRevisionKey(ctx)
 	if err != nil || key == "" {
-		return false, err
+		return false, false, err
 	}
 	revisionNode := node.NewBaseNode(n.SpaceID, n.ID+node.RevisionIDDelimiter+key, fs.lu)
 	revisionAttrs, err := fs.lu.MetadataBackend().All(ctx, revisionNode)
 	if err != nil {
-		return false, err
+		return false, false, err
 	}
 
 	var mtime time.Time
 	if v, ok := revisionAttrs[prefixes.MTimeAttr]; ok {
 		if mtime, err = time.Parse(time.RFC3339Nano, string(v)); err != nil {
-			return false, err
+			return false, false, err
 		}
 	}
 	if err := fs.tp.RestoreRevision(ctx, revisionNode, n, mtime); err != nil {
-		return false, err
+		return false, false, err
 	}
 	if mark, ok := revisionAttrs[prefixes.StatusPrefix]; ok {
 		if err := n.SetXattrsWithContext(ctx, node.Attributes{prefixes.StatusPrefix: mark}); err != nil {
-			return false, err
+			return false, false, err
 		}
 	}
+	if v, ok := revisionAttrs[prefixes.BlobsizeAttr]; ok {
+		n.Blobsize, _ = strconv.ParseInt(string(v), 10, 64)
+	}
+	_, purge = revisionAttrs[purgeOnRestoreAttr]
 
 	removeRevision(ctx, fs.lu, revisionNode)
-	return true, nil
+	return true, purge, nil
 }
 
-// removeUploadRevision deletes the revision a newer upload kept of the upload sessionID.
-func (fs *Decomposedfs) removeUploadRevision(ctx context.Context, n *node.Node, sessionID string) {
+// purgeOnRestoreAttr marks a revision kept for an upload that created the file and was
+// rolled back while a newer upload was processing: restoring it removes the file.
+var purgeOnRestoreAttr = prefixes.OcPrefix + "purgeonrestore"
+
+// retireUploadRevision handles the revision a newer upload kept of the upload sessionID,
+// which is being rolled back. If that upload overwrote the file, the revision is dropped:
+// the one it kept itself describes the file before it. If it created the file, there is
+// nothing before it, so the revision is marked to remove the file should the newer upload
+// be rolled back too.
+func (fs *Decomposedfs) retireUploadRevision(ctx context.Context, n *node.Node, sessionID string, nodeExisted bool) {
+	log := appctx.GetLogger(ctx).With().Str("nodeid", n.ID).Str("sessionid", sessionID).Logger()
 	unlock, err := fs.lu.MetadataBackend().Lock(n)
 	if err != nil {
-		appctx.GetLogger(ctx).Error().Err(err).Str("nodeid", n.ID).Msg("could not lock node")
+		log.Error().Err(err).Msg("could not lock node")
 		return
 	}
 	defer func() {
 		if err := unlock(); err != nil {
-			appctx.GetLogger(ctx).Error().Err(err).Str("nodeid", n.ID).Msg("could not close lock")
+			log.Error().Err(err).Msg("could not close lock")
 		}
 	}()
 
 	revision, revisionUnlock, err := fs.uploadRevision(ctx, n, sessionID)
 	if err != nil {
-		appctx.GetLogger(ctx).Error().Err(err).Str("nodeid", n.ID).Str("sessionid", sessionID).Msg("could not look up the upload's revision")
+		log.Error().Err(err).Msg("could not look up the upload's revision")
 		return
 	}
 	if revision == nil {
 		return
 	}
-	_ = revisionUnlock()
-	removeRevision(ctx, fs.lu, &revision.BaseNode)
+	defer func() { _ = revisionUnlock() }()
+
+	if nodeExisted {
+		removeRevision(ctx, fs.lu, &revision.BaseNode)
+		return
+	}
+	if err := revision.SetXattrsWithContext(ctx, node.Attributes{purgeOnRestoreAttr: []byte("1")}); err != nil {
+		log.Error().Err(err).Msg("could not mark the upload's revision")
+	}
+	if err := revision.RemoveXattr(ctx, prefixes.StatusPrefix); err != nil && !metadata.IsAttrUnset(err) {
+		log.Error().Err(err).Msg("could not remove the processing mark from the upload's revision")
+	}
 }
 
 // rollbackOrphaned releases the quota of an upload whose node metadata is unreadable, using

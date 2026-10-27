@@ -42,6 +42,8 @@ type Coordinator interface {
 	// StartPostprocessing subscribes to postprocessing results and enables async
 	// uploads. Call once, before serving requests.
 	StartPostprocessing(stream events.Consumer, group, mountID string, numConsumers int) error
+	// ResolveUpload stats the resource a finished upload produced, as the upload's executant.
+	storage.UploadSessionResolver
 }
 
 // coordinator is the concrete implementation of Coordinator.
@@ -64,6 +66,19 @@ func NewCoordinator(fs storage.FS, store SessionStore, chunkFolder string, pub e
 		c.chunkHandler = chunking.NewChunkHandler(chunkFolder)
 	}
 	return c
+}
+
+// ResolveUpload stats the resource produced by a finished upload, reading it as the upload's
+// executant. The session is reconstructed from the given tus FileInfo rather than the session
+// store, so it still resolves after a synchronous upload has cleaned up its session. It returns
+// the resource info and the executant context, so the caller can derive identity dependent
+// values such as the WebDAV permissions. https://github.com/opencloud-eu/opencloud/issues/2409
+func (c *coordinator) ResolveUpload(ctx context.Context, info tusd.FileInfo) (*provider.ResourceInfo, context.Context, error) {
+	session := c.store.FromInfo(info)
+	ctx = session.Context(ctx)
+	ref := session.Reference()
+	ri, err := c.fs.GetMD(ctx, &ref, nil, nil)
+	return ri, ctx, err
 }
 
 // NewCoordinatorFromConfig sets up a coordinator and its file store. Pass
@@ -554,9 +569,11 @@ func (c *coordinator) commit(ctx context.Context, session Session) (*provider.Re
 	// the one it was cleared under. Empty on the inline path, which never scans.
 	scanResult, scanDate := session.ScanData()
 
-	// CommitUpload does not own the body; we opened it, so we close it.
+	// CommitUpload does not own the body; we opened it, so we close it. The path
+	// lets a driver that can move the staged file into place skip the copy.
 	err = c.fs.CommitUpload(ctx, &ref, session.ID(), storage.UploadSource{
 		Body:       f,
+		Path:       session.BinPath(),
 		Length:     session.Size(),
 		ScanResult: scanResult,
 		ScanDate:   scanDate,

@@ -4,7 +4,7 @@
 package upload
 
 import (
-	"github.com/mitchellh/mapstructure"
+	"github.com/go-viper/mapstructure/v2"
 )
 
 // AsyncConf is how a service asks for async uploads: whether they are enabled,
