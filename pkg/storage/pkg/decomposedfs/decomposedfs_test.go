@@ -19,12 +19,15 @@
 package decomposedfs_test
 
 import (
+	"context"
+
 	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
 	"github.com/stretchr/testify/mock"
 	"google.golang.org/protobuf/proto"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/node"
 	nodemocks "github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/node/mocks"
 	helpers "github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/testhelpers"
 
@@ -55,6 +58,24 @@ var _ = Describe("Decomposed", func() {
 			env.Cleanup()
 		}
 	})
+
+	// mockPermissionsByName replaces the permissions mock. An existing node gets
+	// the permissions listed for its name, or only Stat. A node that does not
+	// exist yet gets the permissions listed for "".
+	mockPermissionsByName := func(perms map[string]*provider.ResourcePermissions) {
+		env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything).Unset()
+		env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything).Return(
+			func(_ context.Context, n *node.Node) (*provider.ResourcePermissions, error) {
+				name := n.Name
+				if !n.Exists {
+					name = ""
+				}
+				if p, ok := perms[name]; ok {
+					return p, nil
+				}
+				return &provider.ResourcePermissions{Stat: true}, nil
+			}, nil)
+	}
 
 	Describe("NewDefault", func() {
 		It("works", func() {
@@ -166,6 +187,58 @@ var _ = Describe("Decomposed", func() {
 			Expect(err).To(HaveOccurred())
 			Expect(result).To(BeNil())
 		})
+
+		It("does not move the root of a share", func() {
+			// the grant is on subdir1, its parent dir1 grants nothing
+			mockPermissionsByName(map[string]*provider.ResourcePermissions{
+				"subdir1": {Stat: true, Move: true},
+				"":        {Stat: true, CreateContainer: true},
+			})
+			shareRoot := &provider.Reference{ResourceId: env.SpaceRootRes, Path: "/dir1/subdir1"}
+			destination := &provider.Reference{ResourceId: env.SpaceRootRes, Path: "/dir2"}
+
+			result, err := env.Fs.Move(env.Ctx, shareRoot, destination)
+
+			Expect(err).To(MatchError(ContainSubstring("permission denied")))
+			Expect(result).To(BeNil())
+			_, err = env.Fs.GetMD(env.Ctx, shareRoot, nil, nil)
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		It("moves a resource below the root of a share", func() {
+			// the grant is on dir1, the space root grants nothing
+			mockPermissionsByName(map[string]*provider.ResourcePermissions{
+				"dir1":  {Stat: true, Move: true},
+				"file1": {Stat: true, Move: true},
+				"":      {Stat: true, InitiateFileUpload: true},
+			})
+			source := &provider.Reference{ResourceId: env.SpaceRootRes, Path: "/dir1/file1"}
+			destination := &provider.Reference{ResourceId: env.SpaceRootRes, Path: "/dir1/subdir1/file1"}
+
+			_, err := env.Fs.Move(env.Ctx, source, destination)
+
+			Expect(err).ToNot(HaveOccurred())
+		})
+	})
+
+	Describe("TouchFile", func() {
+		It("assembles the permissions on the parent when the file does not exist yet", func() {
+			fileRef := &provider.Reference{
+				ResourceId: env.SpaceRootRes,
+				Path:       "/dir1/newfile",
+			}
+			env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything).Unset()
+			// a call with the not-yet-existing node has no matching expectation and fails the test
+			env.Permissions.On("AssemblePermissions", mock.Anything, mock.MatchedBy(func(n *node.Node) bool {
+				return n.Exists
+			})).Return(&provider.ResourcePermissions{InitiateFileUpload: true, Stat: true}, nil)
+
+			Expect(env.Fs.TouchFile(env.Ctx, fileRef, false, "")).To(Succeed())
+
+			env.Permissions.AssertCalled(GinkgoT(), "AssemblePermissions", mock.Anything, mock.MatchedBy(func(n *node.Node) bool {
+				return n.Name == "dir1"
+			}))
+		})
 	})
 
 	Describe("Delete", func() {
@@ -191,6 +264,36 @@ var _ = Describe("Decomposed", func() {
 				err := env.Fs.Delete(env.Ctx, ref)
 
 				Expect(err).To(MatchError(ContainSubstring("permission denied")))
+			})
+		})
+
+		Context("on the root of a share", func() {
+			It("returns an error", func() {
+				// the grant is on subdir1, its parent dir1 grants nothing
+				mockPermissionsByName(map[string]*provider.ResourcePermissions{
+					"subdir1": {Stat: true, Delete: true},
+				})
+				shareRoot := &provider.Reference{ResourceId: env.SpaceRootRes, Path: "/dir1/subdir1"}
+
+				err := env.Fs.Delete(env.Ctx, shareRoot)
+
+				Expect(err).To(MatchError(ContainSubstring("permission denied")))
+				_, err = env.Fs.GetMD(env.Ctx, shareRoot, nil, nil)
+				Expect(err).ToNot(HaveOccurred())
+			})
+		})
+
+		Context("below the root of a share", func() {
+			It("deletes the resource", func() {
+				// the grant is on dir1, the space root grants nothing
+				mockPermissionsByName(map[string]*provider.ResourcePermissions{
+					"dir1":  {Stat: true, Delete: true},
+					"file1": {Stat: true, Delete: true},
+				})
+
+				err := env.Fs.Delete(env.Ctx, &provider.Reference{ResourceId: env.SpaceRootRes, Path: "/dir1/file1"})
+
+				Expect(err).ToNot(HaveOccurred())
 			})
 		})
 
