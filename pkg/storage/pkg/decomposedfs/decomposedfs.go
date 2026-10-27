@@ -315,7 +315,17 @@ func (fs *Decomposedfs) handlePostprocessingEvent(ctx context.Context, event eve
 		}
 
 		n, err := session.Node(ctx)
-		if err != nil {
+		switch {
+		case errors.Is(err, node.ErrMissingParentID):
+			// The node metadata is gone, so this upload can never finish: the
+			// destination cannot be resolved. Revert the node so the quota is
+			// released. Cleanup falls back to the session metadata for that.
+			// Only drop the upload if postprocessing asked to delete it.
+			sublog.Error().Err(err).Msg("node is orphaned, cleaning up session")
+			deleteUpload := ev.Outcome == events.PPOutcomeDelete
+			session.Cleanup(true, deleteUpload, deleteUpload, false)
+			return
+		case err != nil:
 			sublog.Error().Err(err).Msg("could not read node")
 			return
 		}

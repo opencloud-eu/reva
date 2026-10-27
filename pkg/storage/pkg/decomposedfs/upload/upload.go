@@ -440,45 +440,104 @@ func checkHash(expected string, h hash.Hash) error {
 	return nil
 }
 
+// revertNode undoes the node changes made when the upload was initiated. For a
+// readable node this restores the previous revision. When the node metadata can
+// no longer be read the node is orphaned and can never finish postprocessing; in
+// that case the node is removed and the optimistic size propagation is reverted
+// using the parent id recorded in the session, so the space quota is released.
+func (session *DecomposedFsSession) revertNode(ctx context.Context) error {
+	n, err := session.Node(ctx)
+	if err == nil {
+		versionID := strings.TrimPrefix(session.info.MetaData["versionID"], n.ID+node.RevisionIDDelimiter)
+		if session.NodeExists() && versionID != "" {
+			appctx.GetLogger(ctx).Debug().Str("nodepath", n.InternalPath()).Str("versionID", versionID).Msg("restoring revision")
+			if rerr := n.RevertUpload(ctx, versionID); rerr != nil {
+				return rerr
+			}
+		} else {
+			// if no other upload session is in progress (processing id != session id) or has finished (processing id == "")
+			latestSession, perr := n.ProcessingID(ctx)
+			if perr != nil {
+				session.store.log.Error().Err(perr).Str("spaceid", n.SpaceID).Str("nodeid", n.ID).Str("uploadid", session.ID()).Msg("reading processingid for session failed")
+			}
+			if latestSession == session.ID() {
+				// actually delete the node
+				if perr := n.Purge(ctx); perr != nil {
+					return perr
+				}
+			}
+			// FIXME else if the upload has become a revision, delete the revision, or if it is the last one, delete the node
+		}
+		return nil
+	}
+	if !errors.Is(err, node.ErrMissingParentID) {
+		// the node might only be temporarily unreadable, e.g. because a cache
+		// is unavailable. Do not treat it as orphaned.
+		return err
+	}
+
+	// The node is orphaned. Fall back to the session metadata, which still
+	// carries the node and parent ids needed to release the quota.
+	log := session.store.log
+	log.Info().Err(err).Str("sessionid", session.ID()).Msg("node unreadable, cleaning up orphaned upload")
+
+	sn, serr := session.syntheticNode(ctx)
+	if serr != nil {
+		return serr
+	}
+
+	if sizeDiff := session.SizeDiff(); sizeDiff != 0 {
+		// Clear the size diff before reverting it, so a repeated cleanup, e.g.
+		// after removing the info file failed, does not release the quota twice.
+		delete(session.info.MetaData, "sizeDiff")
+		if perr := session.Persist(ctx); perr != nil {
+			return perr
+		}
+		if perr := session.store.tp.Propagate(ctx, sn, -sizeDiff); perr != nil {
+			log.Error().Err(perr).Str("sessionid", session.ID()).Int64("sizeDiff", sizeDiff).Msg("reverting the size diff of the orphaned upload failed")
+		}
+	}
+
+	// The orphaned node file cannot be resolved by any other means, remove it
+	// together with its metadata files. A missing node is not an error here:
+	// the node may never have been created.
+	if rerr := session.store.lu.PurgeNode(sn); rerr != nil && !errors.Is(rerr, fs.ErrNotExist) {
+		log.Error().Err(rerr).Str("nodepath", sn.InternalPath()).Msg("removing orphaned node failed")
+	}
+	if perr := session.store.lu.MetadataBackend().Purge(ctx, sn); perr != nil && !errors.Is(perr, fs.ErrNotExist) {
+		log.Error().Err(perr).Str("nodepath", sn.InternalPath()).Msg("purging orphaned node metadata failed")
+	}
+
+	return nil
+}
+
 // cleanup cleans up after the upload is finished
 func (session *DecomposedFsSession) Cleanup(revertNodeMetadata, cleanBin, cleanInfo, unmarkPostprocessing bool) {
 	ctx := session.Context(context.Background())
 	sublog := session.store.log.With().Str("cleanup sessionid", session.ID()).Bool("revertNodeMetadata", revertNodeMetadata).Bool("cleanBin", cleanBin).
 		Bool("cleanInfo", cleanInfo).Bool("unmarkPostprocessing", unmarkPostprocessing).Logger()
 
+	revertFailed := false
 	if revertNodeMetadata {
-		n, err := session.Node(ctx)
-		if err != nil {
-			sublog.Error().Err(err).Msg("reading node for session failed")
-		} else {
-			versionID := strings.TrimPrefix(session.info.MetaData["versionID"], n.ID+node.RevisionIDDelimiter)
-			if session.NodeExists() && versionID != "" {
-				sublog.Debug().Str("nodepath", n.InternalPath()).Str("versionID", versionID).Msg("restoring revision")
-				if err := n.RevertUpload(ctx, versionID); err != nil {
-					sublog.Error().Err(err).Str("versionID", versionID).Msg("reverting node metadata failed")
-					return
-				}
-			} else {
-				// if no other upload session is in progress (processing id != session id) or has finished (processing id == "")
-				latestSession, err := n.ProcessingID(ctx)
-				if err != nil {
-					sublog.Error().Err(err).Str("spaceid", n.SpaceID).Str("nodeid", n.ID).Str("uploadid", session.ID()).Msg("reading processingid for session failed")
-				}
-				if latestSession == session.ID() {
-					// actually delete the node
-					if err := n.Purge(ctx); err != nil {
-						sublog.Error().Err(err).Str("nodepath", n.InternalPath()).Msg("purging node failed")
-					}
-				}
-				// FIXME else if the upload has become a revision, delete the revision, or if it is the last one, delete the node
-			}
+		// Revert before removing the info file: once the node metadata is gone
+		// it is the only remaining source of the node's parent id, which is
+		// needed to retry the revert.
+		if err := session.revertNode(ctx); err != nil {
+			sublog.Error().Err(err).Msg("reverting node failed, keeping upload info")
+			revertFailed = true
 		}
 	}
 
+	// The bin is not needed to retry the revert. Remove it even if the revert
+	// failed, so that e.g. infected files do not stay on disk.
 	if cleanBin {
 		if err := os.Remove(session.binPath()); err != nil && !errors.Is(err, fs.ErrNotExist) {
 			appctx.GetLogger(ctx).Error().Str("path", session.binPath()).Err(err).Msg("removing upload failed")
 		}
+	}
+
+	if revertFailed {
+		return
 	}
 
 	if cleanInfo {

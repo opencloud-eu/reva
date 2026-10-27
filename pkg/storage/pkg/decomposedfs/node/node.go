@@ -57,6 +57,10 @@ import (
 
 var tracer trace.Tracer
 
+// ErrMissingParentID is returned when a node exists on disk but has no parent id,
+// which means its metadata is gone and the node can no longer be resolved.
+var ErrMissingParentID = errtypes.InternalError("Missing parent ID on node")
+
 func init() {
 	tracer = otel.Tracer("github.com/opencloud-eu/reva/v2/pkg/storage/utils/decomposedfs/node")
 }
@@ -524,7 +528,7 @@ func readNode(ctx context.Context, lu PathLookup, spaceID, nodeID, internalPath 
 		if _, ok := lu.MetadataBackend().(metadata.MessagePackBackend); ok {
 			appctx.GetLogger(ctx).Error().Str("path", n.InternalPath()).Str("nodeid", n.ID).Interface("attrs", attrs).Bytes("messagepack", d).Msg("missing parent id")
 		}
-		return nil, errtypes.InternalError("Missing parent ID on node")
+		return nil, ErrMissingParentID
 	}
 
 	if n.Type(ctx) == provider.ResourceType_RESOURCE_TYPE_FILE {
