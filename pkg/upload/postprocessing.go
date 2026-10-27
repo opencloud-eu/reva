@@ -121,7 +121,7 @@ func (c *coordinator) processEvent(ctx context.Context, event events.Event) {
 		if !ev.KeepUpload {
 			c.rollbackPrepared(ctx, session, session.SizeDiff())
 		} else {
-			c.rollbackNode(ctx, session)
+			c.rollbackNode(ctx, session, "cleaned up, keeping the upload")
 			metrics.UploadProcessing.Dec()
 		}
 	case events.PostprocessingStepFinished:
@@ -179,7 +179,7 @@ func (c *coordinator) onPostprocessingFinished(ctx context.Context, ev events.Po
 			metrics.UploadSessionsCommitFailed.Inc()
 			// Keep the staged bytes: the blobstore outage may be transient, so an
 			// admin can retry with RestartPostprocessing rather than lose the upload.
-			c.rollbackNode(ctx, session)
+			c.rollbackNode(ctx, session, "commit failed: "+err.Error())
 			metrics.UploadProcessing.Dec()
 			c.publishUploadFailed(ctx, session, ev)
 		}
@@ -188,14 +188,14 @@ func (c *coordinator) onPostprocessingFinished(ctx context.Context, ev events.Po
 		metrics.UploadSessionsAborted.Inc()
 		// Keep the staged bytes: an abort is a transient failure and the upload can
 		// be restarted with RestartPostprocessing.
-		c.rollbackNode(ctx, session)
+		c.rollbackNode(ctx, session, "postprocessing aborted")
 	case events.PPOutcomeDelete:
 		metrics.UploadSessionsDeleted.Inc()
 		c.rollbackPrepared(ctx, session, session.SizeDiff())
 	default:
 		log.Error().Str("outcome", string(ev.Outcome)).Str("uploadid", ev.UploadID).Msg("unknown postprocessing outcome, aborting")
 		metrics.UploadSessionsAborted.Inc()
-		c.rollbackNode(ctx, session)
+		c.rollbackNode(ctx, session, "unknown postprocessing outcome: "+string(ev.Outcome))
 	}
 
 	c.publishUploadFailed(ctx, session, ev)
@@ -217,13 +217,21 @@ func (c *coordinator) onRestartPostprocessing(ctx context.Context, ev events.Res
 
 // rollbackNode reverts the node to its pre-upload state but keeps the staged
 // bytes and the session, so postprocessing can be restarted.
-func (c *coordinator) rollbackNode(ctx context.Context, session Session) {
+func (c *coordinator) rollbackNode(ctx context.Context, session Session, reason string) {
 	ref := session.Reference()
 	if err := c.fs.RollbackUpload(ctx, &ref, session.ID(), rollbackInfo(session, session.SizeDiff())); err != nil {
 		appctx.GetLogger(ctx).Error().Err(err).Str("uploadid", session.ID()).Msg("could not roll back upload, keeping session")
 		return
 	}
 	c.unmarkProcessing(ctx, session, &ref)
+
+	// the size was given back, so a later cleanup of the kept session must not
+	// release it again
+	session.SetSizeDiff(0)
+	session.SetStatus(SessionStatusFailed, reason)
+	if err := session.Persist(ctx); err != nil {
+		appctx.GetLogger(ctx).Error().Err(err).Str("uploadid", session.ID()).Msg("could not persist the rolled back session")
+	}
 }
 
 // publishUploadFailed tells consumers the upload will not become available.
