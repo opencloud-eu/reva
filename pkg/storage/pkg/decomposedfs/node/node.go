@@ -1750,6 +1750,16 @@ func (n *Node) RevertLatestRevision(ctx context.Context) (bool, error) {
 	return true, n.RevertUpload(ctx, strings.TrimPrefix(revisionPath, n.lu.VersionPath(n.SpaceID, n.ID, "")))
 }
 
+// LatestRevisionKey returns the version key of the node's latest revision, or "" if it has
+// none.
+func (n *Node) LatestRevisionKey(ctx context.Context) (string, error) {
+	revisionPath, err := n.getLatestRevision(ctx)
+	if err != nil || revisionPath == "" {
+		return "", err
+	}
+	return strings.TrimPrefix(revisionPath, n.lu.VersionPath(n.SpaceID, n.ID, "")), nil
+}
+
 func (n *Node) getLatestRevision(ctx context.Context) (string, error) {
 	revPrefix := n.lu.VersionPath(n.SpaceID, n.ID, "")
 	revisions, err := filepath.Glob(n.lu.VersionPath(n.SpaceID, n.ID, "*"))

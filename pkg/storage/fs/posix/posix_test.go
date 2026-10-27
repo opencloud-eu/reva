@@ -23,6 +23,7 @@ import (
 	"os"
 
 	"github.com/nats-io/nats.go/jetstream"
+	"github.com/opencloud-eu/reva/v2/pkg/storage"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/idcache"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/options"
@@ -88,6 +89,16 @@ var _ = Describe("Posix", func() {
 		It("returns a new instance", func() {
 			_, err := posix.New(o, nil, idCache, historyCache, &zerolog.Logger{})
 			Expect(err).ToNot(HaveOccurred())
+		})
+
+		// through both wrappers, so an upload skips the TouchFile
+		It("creates a new file's node in PrepareUpload", func() {
+			fs, err := posix.New(o, nil, idCache, historyCache, &zerolog.Logger{})
+			Expect(err).ToNot(HaveOccurred())
+
+			nc, ok := fs.(storage.NodeCreator)
+			Expect(ok).To(BeTrue())
+			Expect(nc.PrepareCreatesNode()).To(BeTrue())
 		})
 	})
 })
