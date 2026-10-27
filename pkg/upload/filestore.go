@@ -145,7 +145,9 @@ func (fs *FileStore) New(_ context.Context) Session {
 			Storage: map[string]string{
 				"Type": "OCISStore",
 			},
-			MetaData: tusd.MetaData{},
+			MetaData: tusd.MetaData{
+				"status": SessionStatusUploading,
+			},
 		},
 	}
 }

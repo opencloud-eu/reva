@@ -146,15 +146,34 @@ var _ = Describe("FileSession", func() {
 	})
 
 	Describe("IsProcessing", func() {
-		It("is true only once all bytes arrived and no scan result is in", func() {
+		It("follows the session status", func() {
 			sess.SetSize(100)
-			Expect(sess.IsProcessing()).To(BeFalse(), "size != offset should not be processing")
-
 			sess.info.Offset = 100
-			Expect(sess.IsProcessing()).To(BeTrue(), "size == offset with no scan result should be processing")
+			Expect(sess.IsProcessing()).To(BeFalse(), "all bytes received is not processing until the status says so")
 
-			sess.SetScanData("clean", time.Now())
-			Expect(sess.IsProcessing()).To(BeFalse(), "scan result set means processing finished")
+			sess.SetStatus(SessionStatusProcessing, "")
+			Expect(sess.IsProcessing()).To(BeTrue())
+
+			sess.SetStatus(SessionStatusFailed, "boom")
+			Expect(sess.IsProcessing()).To(BeFalse())
+		})
+	})
+
+	Describe("Status", func() {
+		It("starts in the uploading status", func() {
+			s := fs.New(ctx)
+			Expect(s.Status()).To(Equal(SessionStatusUploading))
+			Expect(s.StatusMessage()).To(BeEmpty())
+		})
+
+		It("stores the status and message", func() {
+			sess.SetStatus(SessionStatusFailed, "something went wrong")
+			Expect(sess.Status()).To(Equal(SessionStatusFailed))
+			Expect(sess.StatusMessage()).To(Equal("something went wrong"))
+
+			sess.SetStatus(SessionStatusProcessing, "")
+			Expect(sess.Status()).To(Equal(SessionStatusProcessing))
+			Expect(sess.StatusMessage()).To(BeEmpty())
 		})
 	})
 
