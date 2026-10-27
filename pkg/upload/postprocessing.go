@@ -16,6 +16,7 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/opencloud-eu/reva/v2/pkg/appctx"
+	ctxpkg "github.com/opencloud-eu/reva/v2/pkg/ctx"
 	"github.com/opencloud-eu/reva/v2/pkg/events"
 	"github.com/opencloud-eu/reva/v2/pkg/rhttp/datatx/metrics"
 	"github.com/opencloud-eu/reva/v2/pkg/utils"
@@ -26,6 +27,7 @@ var RegisteredEvents = []events.Unmarshaller{
 	events.PostprocessingFinished{},
 	events.PostprocessingStepFinished{},
 	events.RestartPostprocessing{},
+	events.StartPostprocessingStep{},
 	events.CleanUpload{},
 }
 
@@ -67,7 +69,11 @@ func (c *coordinator) StartPostprocessing(stream events.Consumer, group, mountID
 // its own goroutine, one per configured consumer.
 func (c *coordinator) Postprocessing(ch <-chan events.Event) {
 	for event := range ch {
-		c.processEvent(context.Background(), event)
+		// derive a per-event context from the event's W3C trace context so the
+		// postprocessing work is linked to the originating request
+		ctx := event.GetTraceContext(context.Background())
+		ctx = ctxpkg.ContextSetInitiator(ctx, event.InitiatorID)
+		c.processEvent(ctx, event)
 	}
 }
 
@@ -93,6 +99,20 @@ func (c *coordinator) processEvent(ctx context.Context, event events.Event) {
 		c.onPostprocessingFinished(ctx, ev, log)
 	case events.RestartPostprocessing:
 		c.onRestartPostprocessing(ctx, ev, log)
+	case events.StartPostprocessingStep:
+		if ev.UploadID == "" {
+			return
+		}
+		session, err := c.store.Get(ctx, ev.UploadID)
+		if err != nil {
+			// postprocessing broadcasts to every storage, the session may live elsewhere
+			log.Debug().Err(err).Str("uploadid", ev.UploadID).Msg("StartPostprocessingStep: could not load session")
+			return
+		}
+		session.SetStatus(SessionStatusProcessing, "started postprocessing step: "+string(ev.StepToStart))
+		if err := session.Persist(ctx); err != nil {
+			log.Error().Err(err).Str("uploadid", ev.UploadID).Msg("could not persist the session status")
+		}
 	case events.CleanUpload:
 		session, err := c.store.Get(ctx, ev.UploadID)
 		if err != nil {
@@ -127,6 +147,12 @@ func (c *coordinator) processEvent(ctx context.Context, event events.Event) {
 			return
 		}
 		session.SetScanData(res.Description, res.Scandate)
+		switch ev.Outcome {
+		case events.PPOutcomeAbort, events.PPOutcomeDelete:
+			session.SetStatus(SessionStatusFailed, "finished postprocessing step: "+string(ev.FinishedStep))
+		default:
+			session.SetStatus(SessionStatusProcessing, "finished postprocessing step: "+string(ev.FinishedStep))
+		}
 		metrics.UploadSessionsScanned.Inc()
 		if err := session.Persist(ctx); err != nil {
 			log.Error().Err(err).Str("uploadid", ev.UploadID).Msg("could not persist scan result")
