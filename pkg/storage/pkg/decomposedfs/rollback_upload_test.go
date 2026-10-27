@@ -254,6 +254,7 @@ var _ = Describe("RollbackUpload", func() {
 			Expect(env.Lookup.MetadataBackend().Purge(env.Ctx, n)).To(Succeed())
 			_, err = env.Lookup.NodeFromResource(env.Ctx, idRef)
 			Expect(err).To(HaveOccurred(), "the node should be unreadable")
+			Expect(env.Fs.IsOrphaned(env.Ctx, idRef)).To(BeTrue())
 
 			info = storage.RollbackInfo{
 				SizeDiff: result.SizeDiff,

@@ -325,9 +325,10 @@ var _ = Describe("coordinator events", func() {
 		// filter already excluded.
 		It("evaluates the orphaned filter only for sessions that passed the others", func() {
 			complete := stagedSession(ctx, store, true)
-			partial := stagedSession(ctx, store, true)
-			partial.SetSize(bodyLen * 2)
-			Expect(partial.Persist(ctx)).To(Succeed())
+			complete.SetStatus(SessionStatusProcessing, "")
+			Expect(complete.Persist(ctx)).To(Succeed())
+			// not prepared yet, so not processing
+			_ = stagedSession(ctx, store, true)
 			orphanFS := &fakeOrphanFS{fakeFS: fs}
 			c = NewCoordinator(orphanFS, store, "", nil)
 
