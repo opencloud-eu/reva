@@ -410,6 +410,14 @@ func (nc *StorageDriver) CommitUpload(_ context.Context, _ *provider.Reference, 
 	return errtypes.NotSupported("nextcloud: commit upload not supported")
 }
 
+func (nc *StorageDriver) PrepareUpload(_ context.Context, _ *provider.Reference, _ string, info storage.UploadInfo) (*storage.PrepareUploadResult, error) {
+	return &storage.PrepareUploadResult{VersionCreated: info.NodeExisted}, nil
+}
+
+func (nc *StorageDriver) RollbackUpload(_ context.Context, _ *provider.Reference, _ string, _ bool, _ int64) error {
+	return nil
+}
+
 // Upload as defined in the storage.FS interface
 func (nc *StorageDriver) Upload(ctx context.Context, req storage.UploadRequest, _ storage.UploadFinishedFunc) (*provider.ResourceInfo, error) {
 	err := nc.doUpload(ctx, req.Ref.Path, req.Body)

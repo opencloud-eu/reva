@@ -95,6 +95,14 @@ func (fs *hellofs) CommitUpload(_ context.Context, _ *provider.Reference, _ stri
 	return errtypes.NotSupported("hellofs: commit upload not supported")
 }
 
+func (fs *hellofs) PrepareUpload(_ context.Context, _ *provider.Reference, _ string, info storage.UploadInfo) (*storage.PrepareUploadResult, error) {
+	return &storage.PrepareUploadResult{VersionCreated: info.NodeExisted}, nil
+}
+
+func (fs *hellofs) RollbackUpload(_ context.Context, _ *provider.Reference, _ string, _ bool, _ int64) error {
+	return nil
+}
+
 // grants
 
 // DenyGrant marks a resource as denied for a recipient

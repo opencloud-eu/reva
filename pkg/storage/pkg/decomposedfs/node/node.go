@@ -1674,12 +1674,12 @@ func (n *Node) DeleteRevision(ctx context.Context, versionID string) (string, er
 		return n.deleteRevision(ctx, n.ID+RevisionIDDelimiter+versionID)
 	}
 
-	revisionPath, err := n.getLatestRevision(ctx)
+	reverted, err := n.RevertLatestRevision(ctx)
 	if err != nil {
 		return "", err
 	}
 
-	if revisionPath == "" {
+	if !reverted {
 		// there is no revision - delete the node
 		unlock, err := n.lu.MetadataBackend().Lock(n)
 		if err != nil {
@@ -1693,11 +1693,6 @@ func (n *Node) DeleteRevision(ctx context.Context, versionID string) (string, er
 			return "", err
 		}
 		return "", nil
-	}
-
-	latestID := strings.TrimPrefix(revisionPath, n.lu.VersionPath(n.SpaceID, n.ID, ""))
-	if err := n.RevertUpload(ctx, latestID); err != nil {
-		return "", err
 	}
 
 	// we just deleted the current revision - remove processing flag if set
@@ -1748,6 +1743,22 @@ func (n *Node) deleteRevision(ctx context.Context, revisionID string) (string, e
 	}
 
 	return blobID, nil
+}
+
+// RevertLatestRevision reverts the upload that created the node's latest
+// revision: the revision is restored onto the node and removed. Unlike
+// DeleteRevision it neither purges the node when there is no revision nor
+// touches the processing flag. It returns false if there is no revision to
+// restore.
+func (n *Node) RevertLatestRevision(ctx context.Context) (bool, error) {
+	revisionPath, err := n.getLatestRevision(ctx)
+	if err != nil {
+		return false, err
+	}
+	if revisionPath == "" {
+		return false, nil
+	}
+	return true, n.RevertUpload(ctx, strings.TrimPrefix(revisionPath, n.lu.VersionPath(n.SpaceID, n.ID, "")))
 }
 
 func (n *Node) getLatestRevision(ctx context.Context) (string, error) {
