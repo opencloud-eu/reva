@@ -262,6 +262,35 @@ var _ = Describe("Node", func() {
 			Expect(storedFavorites).To(Equal([]string{"user1", "user2"}))
 		})
 
+		Describe("the share-types field", func() {
+			userGrant := func(userID *userpb.UserId) *provider.Grant {
+				return &provider.Grant{
+					Grantee:     &provider.Grantee{Type: provider.GranteeType_GRANTEE_TYPE_USER, Id: &provider.Grantee_UserId{UserId: userID}},
+					Permissions: ocsconv.NewViewerRole().CS3ResourcePermissions(),
+				}
+			}
+			setGrant := func(g *provider.Grant) {
+				principal, value := ace.FromGrant(g).Marshal()
+				Expect(n.SetXattr(env.Ctx, prefixes.GrantPrefix+principal, value)).To(Succeed())
+			}
+			shareTypes := func() []string {
+				ri, err := n.AsResourceInfo(env.Ctx, node.OwnerPermissions(), []string{}, []string{"share-types"}, false)
+				Expect(err).ToNot(HaveOccurred())
+				return strings.Split(utils.ReadPlainFromOpaque(ri.GetOpaque(), "share-types"), ",")
+			}
+
+			It("reports a guest share as guest share type", func() {
+				setGrant(userGrant(&userpb.UserId{OpaqueId: "guest@example.com", Type: userpb.UserType_USER_TYPE_GUEST}))
+				Expect(shareTypes()).To(ConsistOf("4"))
+			})
+
+			It("reports regular user and guest shares", func() {
+				setGrant(userGrant(&userpb.UserId{OpaqueId: "user"}))
+				setGrant(userGrant(&userpb.UserId{OpaqueId: "guest@example.com", Type: userpb.UserType_USER_TYPE_GUEST}))
+				Expect(shareTypes()).To(ConsistOf("1", "4"))
+			})
+		})
+
 		Describe("the ancestor grants", func() {
 			var (
 				saCtx context.Context
