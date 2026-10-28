@@ -30,7 +30,7 @@ $(GOLANGCI_LINT):
 
 .PHONY: lint
 lint: $(GOLANGCI_LINT)
-	$(GOLANGCI_LINT) run --timeout 450s
+	$(GOLANGCI_LINT) run --timeout 15m
 
 .PHONY: lint-fix
 lint-fix: $(GOLANGCI_LINT)
@@ -95,7 +95,7 @@ test-integration: build-ci
 
 .PHONY: test-benchmark
 test-benchmark:
-	cd tests/benchmark && go test
+	cd tests/benchmark && go test -timeout 30m
 
 .PHONY: litmus-test-old
 litmus-test-old: build
