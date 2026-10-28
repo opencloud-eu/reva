@@ -4,9 +4,11 @@
 
 ### ❤️ Thanks to all contributors! ❤️
 
-@maki5
+@kulmann, @maki5
 
+### 🐛 Bug Fixes
 
+- fix: escape realm in WWW-Authenticate challenges [[#920](https://github.com/opencloud-eu/reva/pull/920)]
 
 ## [2.52.1](https://github.com/opencloud-eu/reva/releases/tag/v2.52.1) - 2026-10-27
 
