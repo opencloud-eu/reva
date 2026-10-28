@@ -40,7 +40,6 @@ var _ = Describe("Options", func() {
 			"s3.bucket":     "the-bucket",
 			"s3.access_key": "foo",
 			"s3.secret_key": "bar",
-			"s3.sse_c_key":  "customer-key",
 		}
 		o = &s3ng.Options{}
 		err := mapstructure.Decode(raw, o)
@@ -52,7 +51,6 @@ var _ = Describe("Options", func() {
 		Expect(o.S3Region).To(Equal("default"))
 		Expect(o.S3AccessKey).To(Equal("foo"))
 		Expect(o.S3SecretKey).To(Equal("bar"))
-		Expect(o.S3SSECKey).To(Equal("customer-key"))
 	})
 
 	Describe("S3ConfigComplete", func() {
