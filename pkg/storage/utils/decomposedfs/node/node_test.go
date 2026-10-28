@@ -22,14 +22,18 @@ import (
 	"encoding/json"
 	"time"
 
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	ocsconv "github.com/opencloud-eu/reva/v2/pkg/conversions"
 	ctxpkg "github.com/opencloud-eu/reva/v2/pkg/ctx"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/ace"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/decomposedfs/metadata/prefixes"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/decomposedfs/node"
 	helpers "github.com/opencloud-eu/reva/v2/pkg/storage/utils/decomposedfs/testhelpers"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/grants"
+	"github.com/opencloud-eu/reva/v2/pkg/utils"
 	"github.com/stretchr/testify/mock"
 	"google.golang.org/protobuf/testing/protocmp"
 )
@@ -227,6 +231,27 @@ var _ = Describe("Node", func() {
 				err = json.Unmarshal(ri.Opaque.Map["lock"].Value, storedLock)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(storedLock).To(BeComparableTo(lock, protocmp.Transform()))
+			})
+		})
+
+		Describe("the share-types field", func() {
+			It("reports a guest share as guest share type", func() {
+				g := &provider.Grant{
+					Grantee: &provider.Grantee{
+						Type: provider.GranteeType_GRANTEE_TYPE_USER,
+						Id: &provider.Grantee_UserId{UserId: &userpb.UserId{
+							OpaqueId: "guest@example.com",
+							Type:     userpb.UserType_USER_TYPE_GUEST,
+						}},
+					},
+					Permissions: ocsconv.NewViewerRole().CS3ResourcePermissions(),
+				}
+				principal, value := ace.FromGrant(g).Marshal()
+				Expect(n.SetXattr(env.Ctx, prefixes.GrantPrefix+principal, value)).To(Succeed())
+
+				ri, err := n.AsResourceInfo(env.Ctx, node.OwnerPermissions(), []string{}, []string{"share-types"}, false)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(utils.ReadPlainFromOpaque(ri.GetOpaque(), "share-types")).To(Equal("4"))
 			})
 		})
 	})
