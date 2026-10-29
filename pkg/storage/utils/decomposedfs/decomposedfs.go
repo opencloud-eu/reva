@@ -616,6 +616,12 @@ func (fs *Decomposedfs) Shutdown(ctx context.Context) error {
 	return nil
 }
 
+// Capabilities declares decomposedfs fully writeable, stated explicitly so it is
+// a decision here and not an inherited default.
+func (fs *Decomposedfs) Capabilities(_ context.Context) storage.Capabilities {
+	return storage.FullCapabilities()
+}
+
 // GetQuota returns the quota available
 // TODO Document in the cs3 should we return quota or free space?
 func (fs *Decomposedfs) GetQuota(ctx context.Context, ref *provider.Reference) (total uint64, inUse uint64, remaining uint64, err error) {
