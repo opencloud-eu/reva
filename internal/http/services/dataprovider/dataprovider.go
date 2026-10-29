@@ -19,6 +19,7 @@
 package dataprovider
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 
@@ -26,7 +27,9 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/opencloud-eu/reva/v3/pkg/appctx"
+	"github.com/opencloud-eu/reva/v3/pkg/audit"
 	"github.com/opencloud-eu/reva/v3/pkg/events"
+	"github.com/opencloud-eu/reva/v3/pkg/events/raw"
 	"github.com/opencloud-eu/reva/v3/pkg/events/stream"
 	datatxregistry "github.com/opencloud-eu/reva/v3/pkg/rhttp/datatx/manager/registry"
 	"github.com/opencloud-eu/reva/v3/pkg/rhttp/global"
@@ -53,6 +56,9 @@ type config struct {
 	NatsUsername       string                            `mapstructure:"nats_username"`
 	NatsPassword       string                            `mapstructure:"nats_password"`
 	UploadDirectory    string                            `mapstructure:"upload_directory" docs:";Local directory for staging upload sessions. Overrides the driver's root. Required for drivers that have no local filesystem root."`
+	AuditEnabled       bool                              `mapstructure:"audit_enabled"`
+	AuditMode          string                            `mapstructure:"audit_mode"`
+	AuditService       string                            `mapstructure:"audit_service"`
 }
 
 func (c *config) init() {
@@ -69,6 +75,7 @@ type svc struct {
 	handler http.Handler
 	storage storage.FS
 	dataTXs map[string]http.Handler
+	emitter audit.Emitter
 }
 
 // New returns a new datasvc
@@ -101,6 +108,27 @@ func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) 
 		evstream = s
 	}
 
+	var emitter audit.Emitter = audit.Discard{}
+	if conf.AuditEnabled && conf.NatsAddress != "" {
+		e, err := audit.NewNatsEmitter(context.Background(), "dataprovider-audit", raw.Config{
+			Endpoint:             conf.NatsAddress,
+			Cluster:              conf.NatsClusterID,
+			EnableTLS:            conf.NatsEnableTLS,
+			TLSInsecure:          conf.NatsTLSInsecure,
+			TLSRootCACertificate: conf.NatsRootCACertPath,
+			AuthUsername:         conf.NatsUsername,
+			AuthPassword:         conf.NatsPassword,
+		}, audit.Options{
+			Service: audit.Service{Name: conf.AuditService},
+			Mode:    audit.Mode(conf.AuditMode),
+			Logger:  log,
+		})
+		if err != nil {
+			return nil, err
+		}
+		emitter = e
+	}
+
 	fs, err := getFS(conf, evstream, log)
 	if err != nil {
 		return nil, err
@@ -129,6 +157,7 @@ func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) 
 		storage: fs,
 		conf:    conf,
 		dataTXs: dataTXs,
+		emitter: emitter,
 	}
 
 	err = s.setHandler()
@@ -196,6 +225,8 @@ func (s *svc) setHandler() error {
 		log.Debug().Msgf("dataprovider routing: path=%s", r.URL.Path)
 
 		head, tail := router.ShiftPath(r.URL.Path)
+		// the download handlers emit their audit events with it
+		r = r.WithContext(audit.ContextSetEmitter(r.Context(), s.emitter))
 
 		if handler, ok := s.dataTXs[head]; ok {
 			r.URL.Path = tail

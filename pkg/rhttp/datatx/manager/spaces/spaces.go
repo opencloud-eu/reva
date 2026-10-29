@@ -32,6 +32,7 @@ import (
 
 	"github.com/opencloud-eu/reva/v3/internal/http/services/owncloud/ocdav/net"
 	"github.com/opencloud-eu/reva/v3/pkg/appctx"
+	"github.com/opencloud-eu/reva/v3/pkg/audit"
 	"github.com/opencloud-eu/reva/v3/pkg/errtypes"
 	"github.com/opencloud-eu/reva/v3/pkg/events"
 	"github.com/opencloud-eu/reva/v3/pkg/rhttp/datatx"
@@ -126,6 +127,7 @@ func (m *manager) Handler(coord upload.Coordinator, driver storage.FS) (http.Han
 				if err := datatx.EmitFileUploadedEvent(spaceOwner, owner, ref, m.publisher); err != nil {
 					sublog.Error().Err(err).Msg("failed to publish FileUploaded event")
 				}
+				datatx.EmitUploadAudit(ctx, r.Header.Get(audit.Header), owner, ref, "")
 			})
 			switch v := err.(type) {
 			case nil:
