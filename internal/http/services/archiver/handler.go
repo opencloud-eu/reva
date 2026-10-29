@@ -37,6 +37,7 @@ import (
 	"github.com/go-viper/mapstructure/v2"
 	"github.com/opencloud-eu/reva/v2/internal/http/services/archiver/manager"
 	"github.com/opencloud-eu/reva/v2/internal/http/services/owncloud/ocdav/net"
+	"github.com/opencloud-eu/reva/v2/pkg/audit"
 	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
 	"github.com/opencloud-eu/reva/v2/pkg/rgrpc/todo/pool"
 	"github.com/opencloud-eu/reva/v2/pkg/rhttp"
@@ -56,18 +57,20 @@ type svc struct {
 	downloader      downloader.Downloader
 
 	allowedFolders []*regexp.Regexp
+	emitter        audit.Emitter
 }
 
 // Config holds the config options that need to be passed down to all ocdav handlers
 type Config struct {
-	Prefix         string   `mapstructure:"prefix"`
-	GatewaySvc     string   `mapstructure:"gatewaysvc"`
-	Timeout        int64    `mapstructure:"timeout"`
-	Insecure       bool     `mapstructure:"insecure"`
-	Name           string   `mapstructure:"name"`
-	MaxNumFiles    int64    `mapstructure:"max_num_files"`
-	MaxSize        int64    `mapstructure:"max_size"`
-	AllowedFolders []string `mapstructure:"allowed_folders"`
+	Prefix         string              `mapstructure:"prefix"`
+	GatewaySvc     string              `mapstructure:"gatewaysvc"`
+	Timeout        int64               `mapstructure:"timeout"`
+	Insecure       bool                `mapstructure:"insecure"`
+	Name           string              `mapstructure:"name"`
+	MaxNumFiles    int64               `mapstructure:"max_num_files"`
+	MaxSize        int64               `mapstructure:"max_size"`
+	AllowedFolders []string            `mapstructure:"allowed_folders"`
+	Audit          audit.EmitterConfig `mapstructure:"audit"`
 }
 
 func init() {
@@ -99,7 +102,13 @@ func New(conf map[string]interface{}, log *zerolog.Logger) (global.Service, erro
 		allowedFolderRegex = append(allowedFolderRegex, regex)
 	}
 
+	emitter, err := audit.EmitterFromConfig(context.Background(), "archiver-audit", c.Audit, audit.Options{Logger: log})
+	if err != nil {
+		return nil, err
+	}
+
 	return &svc{
+		emitter:         emitter,
 		config:          c,
 		gatewaySelector: gatewaySelector,
 		downloader:      downloader.NewDownloader(gatewaySelector, rhttp.Insecure(c.Insecure), rhttp.Timeout(time.Duration(c.Timeout*int64(time.Second)))),
@@ -339,9 +348,11 @@ func (s *svc) Handler() http.Handler {
 		defer closeArchive()
 
 		if err != nil {
+			s.auditArchive(ctx, resources, audit.OutcomeFailure, "incomplete")
 			s.writeHTTPError(rw, err)
 			return
 		}
+		s.auditArchive(ctx, resources, audit.OutcomeSuccess, "")
 
 	})
 }
@@ -356,4 +367,31 @@ func (s *svc) Close() error {
 
 func (s *svc) Unprotected() []string {
 	return nil
+}
+
+// auditArchive reports the download of every resource in the archive, when
+// the archive is written. The files read for it are internal reads and not
+// audited on their own.
+func (s *svc) auditArchive(ctx context.Context, resources []*provider.ResourceId, outcome audit.Outcome, reason string) {
+	gatewayClient, err := s.gatewaySelector.Next()
+	if err != nil {
+		s.log.Error().Err(err).Msg("archiver: could not select gateway for the audit event")
+		return
+	}
+	for _, id := range resources {
+		d := audit.FolderDownload
+		target := audit.Target{
+			ID:      storagespace.FormatResourceID(id),
+			SpaceID: storagespace.FormatStorageID(id.GetStorageId(), id.GetSpaceId()),
+		}
+		if res, err := gatewayClient.Stat(ctx, &provider.StatRequest{Ref: &provider.Reference{ResourceId: id}}); err == nil && res.GetStatus().GetCode() == rpc.Code_CODE_OK {
+			target.Name = res.GetInfo().GetName()
+			if res.GetInfo().GetType() != provider.ResourceType_RESOURCE_TYPE_CONTAINER {
+				d = audit.FileDownload
+			}
+		}
+		if err := s.emitter.Emit(ctx, audit.Event{Definition: d, Outcome: outcome, Reason: reason, Target: target}); err != nil {
+			s.log.Error().Err(err).Msg("archiver: audit event not emitted")
+		}
+	}
 }
