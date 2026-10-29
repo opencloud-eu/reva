@@ -36,6 +36,7 @@ import (
 	tokenregistry "github.com/opencloud-eu/reva/v2/internal/http/interceptors/auth/token/registry"
 	tokenwriterregistry "github.com/opencloud-eu/reva/v2/internal/http/interceptors/auth/tokenwriter/registry"
 	"github.com/opencloud-eu/reva/v2/pkg/appctx"
+	"github.com/opencloud-eu/reva/v2/pkg/audit"
 	"github.com/opencloud-eu/reva/v2/pkg/auth"
 	"github.com/opencloud-eu/reva/v2/pkg/auth/scope"
 	ctxpkg "github.com/opencloud-eu/reva/v2/pkg/ctx"
@@ -354,6 +355,9 @@ func ctxWithUserInfo(ctx context.Context, r *http.Request, user *userpb.User, to
 	ctx = metadata.AppendToOutgoingContext(ctx, ctxpkg.UserAgentHeader, r.UserAgent())
 	ctx = metadata.AppendToOutgoingContext(ctx, ctxpkg.InitiatorHeader, initiatorid)
 	ctx = ctxpkg.ContextSetScopes(ctx, tokenScope)
+	if v := r.Header.Get(audit.Header); v != "" {
+		ctx = audit.ContextSetRequest(ctx, audit.ParseRequestContext(v))
+	}
 	return ctx
 }
 
