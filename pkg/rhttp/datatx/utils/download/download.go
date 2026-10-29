@@ -35,7 +35,9 @@ import (
 	"github.com/opencloud-eu/reva/v2/internal/grpc/services/storageprovider"
 	"github.com/opencloud-eu/reva/v2/internal/http/services/owncloud/ocdav/net"
 	"github.com/opencloud-eu/reva/v2/pkg/appctx"
+	"github.com/opencloud-eu/reva/v2/pkg/audit"
 	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
+	"github.com/opencloud-eu/reva/v2/pkg/rhttp/datatx"
 	"github.com/opencloud-eu/reva/v2/pkg/storage"
 	"github.com/opencloud-eu/reva/v2/pkg/storagespace"
 	"github.com/opencloud-eu/reva/v2/pkg/utils"
@@ -63,6 +65,14 @@ func EtagFromContext(ctx context.Context) string {
 // GetOrHeadFile returns the requested file content
 func GetOrHeadFile(w http.ResponseWriter, r *http.Request, fs storage.FS, spaceID string) {
 	ctx := r.Context()
+	// Only downloads a client asked for are audited. The proxy marks them with
+	// the audit header; internal reads (copy, thumbnails, search, the
+	// archiver) build their own requests without it.
+	auditHeader := r.Header.Get(audit.Header)
+	audited := r.Method == http.MethodGet && auditHeader != ""
+	if audited {
+		ctx = audit.ContextSetRequest(ctx, audit.ParseRequestContext(auditHeader))
+	}
 	sublog := appctx.GetLogger(ctx).With().Str("svc", "datatx").Str("handler", "download").Logger()
 
 	var fn string
@@ -123,6 +133,10 @@ func GetOrHeadFile(w http.ResponseWriter, r *http.Request, fs storage.FS, spaceI
 		return true
 	})
 	if err != nil {
+		if _, denied := err.(errtypes.IsPermissionDenied); denied && audited {
+			id, _ := storagespace.FormatReference(ref)
+			emitDownload(ctx, audit.Target{ID: id, Path: ref.GetPath()}, audit.OutcomeDenied, "permission_denied")
+		}
 		handleError(w, &sublog, err, "download")
 		return
 	}
@@ -252,15 +266,51 @@ func GetOrHeadFile(w http.ResponseWriter, r *http.Request, fs storage.FS, spaceI
 	w.WriteHeader(code)
 
 	if r.Method != "HEAD" {
+		// a resumed download or a video that is seeked makes many range
+		// requests, only the one from the start counts
+		audited = audited && (len(ranges) == 0 || len(ranges) == 1 && ranges[0].Start == 0)
+		target := audit.Target{
+			ID:      storagespace.FormatResourceID(md.GetId()),
+			SpaceID: storagespace.FormatStorageID(md.GetId().GetStorageId(), md.GetId().GetSpaceId()),
+			Name:    path.Base(md.GetPath()),
+			Path:    md.GetPath(),
+		}
+
 		var c int64
 		c, err = io.CopyN(w, sendContent, sendSize)
 		if err != nil {
 			sublog.Error().Err(err).Interface("resourceid", md.Id).Msg("error copying data to response")
+			if audited {
+				emitDownload(ctx, target, audit.OutcomeFailure, "incomplete")
+			}
 			return
 		}
 		if c != sendSize {
 			sublog.Error().Int64("copied", c).Int64("size", sendSize).Msg("copied vs size mismatch")
 		}
+		if audited {
+			emitDownload(ctx, target, audit.OutcomeSuccess, "")
+		}
+	}
+}
+
+// emitDownload reports a download. It is emitted when the transfer is done,
+// not when it is initiated.
+func emitDownload(ctx context.Context, target audit.Target, outcome audit.Outcome, reason string) {
+	ev := audit.Event{
+		Definition: audit.FileDownload,
+		Outcome:    outcome,
+		Reason:     reason,
+		Target:     target,
+	}
+	// through a public link the user in the context is the owner of the link,
+	// the one who downloads is the link
+	if shareID := datatx.PublicShareID(ctx); shareID != "" {
+		ev.Actor = &audit.Actor{Type: audit.ActorPublicLink, ID: shareID}
+	}
+	err := audit.ContextGetEmitter(ctx).Emit(ctx, ev)
+	if err != nil {
+		appctx.GetLogger(ctx).Error().Err(err).Msg("audit event not emitted")
 	}
 }
 
