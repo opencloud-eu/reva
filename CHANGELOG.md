@@ -1,5 +1,19 @@
 # Changelog
 
+## [2.52.2](https://github.com/opencloud-eu/reva/releases/tag/v2.52.2) - 2026-10-29
+
+### ❤️ Thanks to all contributors! ❤️
+
+@aduffeck, @butonic, @kulmann, @maki5
+
+### 🐛 Bug Fixes
+
+- fix: escape realm in WWW-Authenticate challenges [[#920](https://github.com/opencloud-eu/reva/pull/920)]
+
+### 📦️ Dependencies
+
+- chore(deps): bump github.com/go-playground/locales from 0.14.1 to 0.14.2 [[#835](https://github.com/opencloud-eu/reva/pull/835)]
+
 ## [2.52.1](https://github.com/opencloud-eu/reva/releases/tag/v2.52.1) - 2026-10-27
 
 ### ❤️ Thanks to all contributors! ❤️
