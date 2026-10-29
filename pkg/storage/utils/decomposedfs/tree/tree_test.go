@@ -19,22 +19,34 @@
 package tree_test
 
 import (
+	"errors"
 	"os"
 	"path"
 	"path/filepath"
+	"strings"
+	"syscall"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/google/uuid"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/decomposedfs/lookup"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/decomposedfs/metadata"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/decomposedfs/metadata/prefixes"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/decomposedfs/node"
 	helpers "github.com/opencloud-eu/reva/v2/pkg/storage/utils/decomposedfs/testhelpers"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/decomposedfs/timemanager"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/decomposedfs/tree"
+	"github.com/opencloud-eu/reva/v2/pkg/store"
+	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/mock"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
+
+// renameFailBackend wraps a metadata.Backend and injects a failure on Rename (OCISDEV-817)
+type renameFailBackend struct{ metadata.Backend }
+
+func (b renameFailBackend) Rename(_, _ string) error { return errors.New("injected rename error") }
 
 var _ = Describe("Tree", func() {
 	var (
@@ -129,6 +141,84 @@ var _ = Describe("Tree", func() {
 
 				It("does not delete the blob from the blobstore", func() {
 					env.Blobstore.AssertNotCalled(GinkgoT(), "Delete", mock.AnythingOfType("*node.Node"))
+				})
+			})
+
+			// OCISDEV-817: trash symlink must be removed when MetadataBackend.Rename fails mid-delete.
+			// This is the exact path observed in the SE-1149 production incident.
+			Context("when MetadataBackend.Rename fails", func() {
+				It("rolls back the trash symlink", func() {
+					log := &zerolog.Logger{}
+					lu := lookup.New(renameFailBackend{env.Lookup.MetadataBackend()}, env.Options, &timemanager.Manager{})
+					failTree := tree.New(lu, env.Blobstore, env.Options, store.Create(), log)
+
+					file, err := lu.NodeFromResource(env.Ctx, &provider.Reference{
+						ResourceId: env.SpaceRootRes,
+						Path:       "dir1/file1",
+					})
+					Expect(err).ToNot(HaveOccurred())
+
+					Expect(failTree.Delete(env.Ctx, file)).To(HaveOccurred())
+
+					trashLink := path.Join(env.Root, "spaces", lookup.Pathify(file.SpaceRoot.ID, 1, 2), "trash", lookup.Pathify(file.ID, 4, 2))
+					_, statErr := os.Lstat(trashLink)
+					Expect(os.IsNotExist(statErr)).To(BeTrue())
+				})
+			})
+
+			Context("when os.Rename fails", func() {
+				It("rolls back the trash symlink", func() {
+					oldPath := n.InternalPath()
+					// The node fits within NAME_MAX, but appending the trash timestamp does not.
+					n.ID = strings.Repeat("a", 248)
+					Expect(os.MkdirAll(filepath.Dir(n.InternalPath()), 0o700)).To(Succeed())
+					Expect(os.Rename(oldPath, n.InternalPath())).To(Succeed())
+					Expect(env.Lookup.MetadataBackend().Rename(oldPath, n.InternalPath())).To(Succeed())
+					entryPath := filepath.Join(n.ParentPath(), n.Name)
+					Expect(os.Remove(entryPath)).To(Succeed())
+					Expect(os.Symlink(n.InternalPath(), entryPath)).To(Succeed())
+
+					err := t.Delete(env.Ctx, n)
+					var renameErr *os.LinkError
+					Expect(errors.As(err, &renameErr)).To(BeTrue())
+					Expect(renameErr.Op).To(Equal("rename"))
+					Expect(renameErr.Old).To(Equal(n.InternalPath()))
+					Expect(errors.Is(err, syscall.ENAMETOOLONG)).To(BeTrue())
+
+					trashLink := path.Join(env.Root, "spaces", lookup.Pathify(n.SpaceRoot.ID, 1, 2), "trash", lookup.Pathify(n.ID, 4, 2))
+					_, statErr := os.Lstat(trashLink)
+					Expect(os.IsNotExist(statErr)).To(BeTrue())
+
+					_, err = os.Stat(n.InternalPath())
+					Expect(err).ToNot(HaveOccurred())
+				})
+			})
+
+			Context("when os.Remove of parent entry fails", func() {
+				It("rolls back the trash symlink and node rename", func() {
+					entryPath := filepath.Join(n.ParentPath(), n.Name)
+					Expect(os.Remove(entryPath)).To(Succeed())
+					Expect(os.Mkdir(entryPath, 0o700)).To(Succeed())
+					blockerPath := filepath.Join(entryPath, "blocker")
+					Expect(os.WriteFile(blockerPath, nil, 0o600)).To(Succeed())
+
+					err := t.Delete(env.Ctx, n)
+					var removeErr *os.PathError
+					Expect(errors.As(err, &removeErr)).To(BeTrue())
+					Expect(removeErr.Op).To(Equal("remove"))
+					Expect(removeErr.Path).To(Equal(entryPath))
+
+					trashLink := path.Join(env.Root, "spaces", lookup.Pathify(n.SpaceRoot.ID, 1, 2), "trash", lookup.Pathify(n.ID, 4, 2))
+					_, statErr := os.Lstat(trashLink)
+					Expect(os.IsNotExist(statErr)).To(BeTrue())
+
+					_, err = os.Stat(n.InternalPath())
+					Expect(err).ToNot(HaveOccurred())
+
+					Expect(os.Remove(blockerPath)).To(Succeed())
+					Expect(os.Remove(entryPath)).To(Succeed())
+					Expect(os.Symlink(n.InternalPath(), entryPath)).To(Succeed())
+					Expect(t.Delete(env.Ctx, n)).To(Succeed())
 				})
 			})
 		})
