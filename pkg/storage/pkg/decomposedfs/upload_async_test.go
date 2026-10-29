@@ -383,6 +383,26 @@ var _ = Describe("Async file uploads", Ordered, func() {
 			bs.AssertNumberOfCalls(GinkgoT(), "Upload", 0)
 		})
 
+		It("releases the quota of an orphaned upload but keeps a node that has content", func() {
+			nodePath := orphanNode()
+			// something outside of us wrote the file, e.g. an editor saving atomically
+			Expect(os.WriteFile(nodePath, []byte("user data"), 0600)).To(Succeed())
+
+			con <- events.PostprocessingFinished{
+				UploadID: uploadID,
+				Outcome:  events.PPOutcomeDelete,
+			}
+			Eventually(func() bool {
+				_, err := os.Stat(filepath.Join(o.Root, "uploads", uploadID))
+				return err != nil
+			}).Should(BeTrue(), "the upload bytes should be cleaned up")
+			Eventually(parentSize).Should(Equal(0))
+
+			data, err := os.ReadFile(nodePath)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(string(data)).To(Equal("user data"))
+		})
+
 		It("deletes node and keeps the bytes when instructed", func() {
 			// node is created
 			resources, err := fs.ListFolder(ctx, rootRef, []string{}, []string{})
@@ -490,6 +510,31 @@ var _ = Describe("Async file uploads", Ordered, func() {
 
 			// blobstore still called only once for the original file
 			bs.AssertNumberOfCalls(GinkgoT(), "Upload", 1)
+		})
+
+		It("keeps the existing node when its metadata is gone", func() {
+			ri, err := fs.GetMD(ctx, ref, []string{}, []string{})
+			Expect(err).ToNot(HaveOccurred())
+			spaceID, nodeID := ref.GetResourceId().GetSpaceId(), ri.GetId().GetOpaqueId()
+			nodePath := lu.InternalPath(spaceID, nodeID)
+			n, err := node.ReadNode(ctx, lu, spaceID, nodeID, "", false, nil, true)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(lu.MetadataBackend().Purge(ctx, n)).To(Succeed())
+			_, err = node.ReadNode(ctx, lu, spaceID, nodeID, "", false, nil, true)
+			Expect(err).To(MatchError(node.ErrMissingParentID), "node should be orphaned after purging its metadata")
+
+			con <- events.PostprocessingFinished{
+				UploadID: uploadID,
+				Outcome:  events.PPOutcomeDelete,
+			}
+			Eventually(func() bool {
+				_, err := os.Stat(filepath.Join(o.Root, "uploads", uploadID))
+				return err != nil
+			}).Should(BeTrue(), "the upload bytes should be cleaned up")
+
+			// the node held the previous version, so it must not be removed
+			_, err = os.Stat(nodePath)
+			Expect(err).ToNot(HaveOccurred())
 		})
 
 	})
