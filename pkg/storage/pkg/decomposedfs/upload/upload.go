@@ -445,8 +445,9 @@ func checkHash(expected string, h hash.Hash) error {
 // revertNode undoes the node changes made when the upload was initiated. For a
 // readable node this restores the previous revision. When the node metadata can
 // no longer be read the node is orphaned and can never finish postprocessing; in
-// that case the node is removed and the optimistic size propagation is reverted
-// using the parent id recorded in the session, so the space quota is released.
+// that case the optimistic size propagation is reverted using the parent id
+// recorded in the session, so the space quota is released, and a node the
+// upload created is removed while it is still empty.
 func (session *DecomposedFsSession) revertNode(ctx context.Context) error {
 	n, err := session.Node(ctx)
 	if err == nil {
@@ -498,6 +499,19 @@ func (session *DecomposedFsSession) revertNode(ctx context.Context) error {
 		if perr := session.store.tp.Propagate(ctx, sn, -sizeDiff); perr != nil {
 			log.Error().Err(perr).Str("sessionid", session.ID()).Int64("sizeDiff", sizeDiff).Msg("reverting the size diff of the orphaned upload failed")
 		}
+	}
+
+	// Only a node this upload created may be removed. An existing node holds the
+	// previous version, on posix the user's file itself, so it is left alone.
+	if session.NodeExists() {
+		return nil
+	}
+	// The node file stays empty until the upload is finalized. If it has
+	// content, something outside of us wrote it, e.g. an editor saving
+	// atomically on posix, so keep it.
+	if fi, serr := os.Stat(sn.InternalPath()); serr == nil && fi.Size() > 0 {
+		log.Info().Str("sessionid", session.ID()).Str("nodepath", sn.InternalPath()).Msg("orphaned node has content, keeping it")
+		return nil
 	}
 
 	// The orphaned node file cannot be resolved by any other means, remove it
