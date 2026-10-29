@@ -55,6 +55,11 @@ func NewUnary(m map[string]interface{}) (grpc.UnaryServerInterceptor, int, error
 	if err != nil {
 		return nil, 0, err
 	}
+	emitter, err := emitterFromConfig(m)
+	if err != nil {
+		return nil, 0, err
+	}
+	linkAccesses := newOnceWithin(accessWindow)
 
 	interceptor := func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
 		// Register slots so the storage driver can pass data back up through
@@ -67,9 +72,19 @@ func NewUnary(m map[string]interface{}) (grpc.UnaryServerInterceptor, int, error
 		// Register a slot for typed DeleteStorageSpace results
 		ctx = storagespace.ContextRegisterDeleteStorageSpaceResultSlot(ctx)
 
+		itemSlot := &storagespace.ItemTypeSlot{}
+		ctx = storagespace.ContextRegisterItemTypeSlot(ctx, itemSlot)
+
 		res, err := handler(ctx, req)
 		if err != nil {
 			return res, err
+		}
+
+		if aev, ok := auditEvent(req, res, itemSlot.Type); ok && firstLinkAccess(ctx, linkAccesses, aev) {
+			if err := emitter.Emit(ctx, aev); err != nil {
+				// the call is done already, failing it now would hide that it happened
+				appctx.GetLogger(ctx).Error().Err(err).Str("event", aev.Definition.Name).Msg("audit event not emitted")
+			}
 		}
 
 		spaceOwnerID := storagespace.ContextGetSpaceOwner(ctx) // nil if not set by handler
