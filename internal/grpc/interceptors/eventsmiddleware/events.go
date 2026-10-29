@@ -56,6 +56,11 @@ func NewUnary(m map[string]interface{}) (grpc.UnaryServerInterceptor, int, error
 	if err != nil {
 		return nil, 0, err
 	}
+	emitter, err := emitterFromConfig(m)
+	if err != nil {
+		return nil, 0, err
+	}
+	linkAccesses := newOnceWithin(accessWindow)
 
 	interceptor := func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
 		// Register a channel in the context to receive the space owner id from the handler(s) further down the stack
@@ -66,9 +71,19 @@ func NewUnary(m map[string]interface{}) (grpc.UnaryServerInterceptor, int, error
 		moveSlot := &storagespace.MoveResultSlot{}
 		ctx = storagespace.ContextRegisterMoveResultSlot(ctx, moveSlot)
 
+		itemSlot := &storagespace.ItemTypeSlot{}
+		ctx = storagespace.ContextRegisterItemTypeSlot(ctx, itemSlot)
+
 		res, err := handler(ctx, req)
 		if err != nil {
 			return res, err
+		}
+
+		if aev, ok := auditEvent(req, res, itemSlot.Type); ok && firstLinkAccess(ctx, linkAccesses, aev) {
+			if err := emitter.Emit(ctx, aev); err != nil {
+				// the call is done already, failing it now would hide that it happened
+				appctx.GetLogger(ctx).Error().Err(err).Str("event", aev.Definition.Name).Msg("audit event not emitted")
+			}
 		}
 
 		// Read the space owner id from the channel

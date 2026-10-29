@@ -905,6 +905,8 @@ func (t *Tree) readRecycleItem(ctx context.Context, spaceID, key, path string) (
 
 	var attrBytes []byte
 	typeInt, err := attrs.Int64(prefixes.TypeAttr)
+	// the node is not at its usual path, so Type() can't read it later
+	recycleNode.SetType(provider.ResourceType(typeInt))
 	if provider.ResourceType(typeInt) == provider.ResourceType_RESOURCE_TYPE_FILE {
 		// lookup blobID in extended attributes
 		recycleNode.BlobID = attrs.String(prefixes.BlobIDAttr)

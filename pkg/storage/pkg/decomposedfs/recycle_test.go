@@ -29,6 +29,7 @@ import (
 	posixhelpers "github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/testhelpers"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/permissions/mocks"
 	helpers "github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/testhelpers"
+	"github.com/opencloud-eu/reva/v2/pkg/storagespace"
 	"github.com/stretchr/testify/mock"
 )
 
@@ -94,11 +95,13 @@ var _ = Describe("Recycle", func() {
 					Expect(err).ToNot(HaveOccurred())
 					Expect(len(items)).To(Equal(2))
 
-					err = env.GetFs().PurgeRecycleItem(env.GetCtx(), &provider.Reference{ResourceId: env.GetSpaceRootRes()}, items[0].Key, "")
-					Expect(err).ToNot(HaveOccurred())
-
-					err = env.GetFs().PurgeRecycleItem(env.GetCtx(), &provider.Reference{ResourceId: env.GetSpaceRootRes()}, items[1].Key, "")
-					Expect(err).ToNot(HaveOccurred())
+					// the audit log learns whether a file or a folder was purged
+					for _, item := range items {
+						slot := &storagespace.ItemTypeSlot{}
+						err = env.GetFs().PurgeRecycleItem(storagespace.ContextRegisterItemTypeSlot(env.GetCtx(), slot), &provider.Reference{ResourceId: env.GetSpaceRootRes()}, item.Key, "")
+						Expect(err).ToNot(HaveOccurred())
+						Expect(slot.Type).To(Equal(item.Type))
+					}
 
 					items, err = env.GetFs().ListRecycle(env.GetCtx(), &provider.Reference{ResourceId: env.GetSpaceRootRes()}, "", "")
 					Expect(err).ToNot(HaveOccurred())
@@ -112,8 +115,10 @@ var _ = Describe("Recycle", func() {
 					Expect(err).ToNot(HaveOccurred())
 					Expect(len(items)).To(Equal(2))
 
-					err = env.GetFs().RestoreRecycleItem(env.GetCtx(), &provider.Reference{ResourceId: env.GetSpaceRootRes()}, items[0].Key, "", nil)
+					slot := &storagespace.ItemTypeSlot{}
+					err = env.GetFs().RestoreRecycleItem(storagespace.ContextRegisterItemTypeSlot(env.GetCtx(), slot), &provider.Reference{ResourceId: env.GetSpaceRootRes()}, items[0].Key, "", nil)
 					Expect(err).ToNot(HaveOccurred())
+					Expect(slot.Type).To(Equal(items[0].Type))
 
 					items, err = env.GetFs().ListRecycle(env.GetCtx(), &provider.Reference{ResourceId: env.GetSpaceRootRes()}, "", "")
 					Expect(err).ToNot(HaveOccurred())
