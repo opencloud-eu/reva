@@ -23,6 +23,8 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"strings"
+	"syscall"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/google/uuid"
@@ -164,38 +166,59 @@ var _ = Describe("Tree", func() {
 				})
 			})
 
-			// OCISDEV-817: trash symlink must be removed when os.Rename fails mid-delete.
-			// chmod 0500 on the node's parent dir blocks rename but allows xattr writes (tested on macOS + Linux).
 			Context("when os.Rename fails", func() {
 				It("rolls back the trash symlink", func() {
-					nodeDir := filepath.Dir(n.InternalPath())
-					Expect(os.Chmod(nodeDir, 0o500)).To(Succeed())
-					defer os.Chmod(nodeDir, 0o700)
+					oldPath := n.InternalPath()
+					// The node fits within NAME_MAX, but appending the trash timestamp does not.
+					n.ID = strings.Repeat("a", 248)
+					Expect(os.MkdirAll(filepath.Dir(n.InternalPath()), 0o700)).To(Succeed())
+					Expect(os.Rename(oldPath, n.InternalPath())).To(Succeed())
+					Expect(env.Lookup.MetadataBackend().Rename(oldPath, n.InternalPath())).To(Succeed())
+					entryPath := filepath.Join(n.ParentPath(), n.Name)
+					Expect(os.Remove(entryPath)).To(Succeed())
+					Expect(os.Symlink(n.InternalPath(), entryPath)).To(Succeed())
 
-					Expect(t.Delete(env.Ctx, n)).To(HaveOccurred())
+					err := t.Delete(env.Ctx, n)
+					var renameErr *os.LinkError
+					Expect(errors.As(err, &renameErr)).To(BeTrue())
+					Expect(renameErr.Op).To(Equal("rename"))
+					Expect(renameErr.Old).To(Equal(n.InternalPath()))
+					Expect(errors.Is(err, syscall.ENAMETOOLONG)).To(BeTrue())
 
 					trashLink := path.Join(env.Root, "spaces", lookup.Pathify(n.SpaceRoot.ID, 1, 2), "trash", lookup.Pathify(n.ID, 4, 2))
 					_, statErr := os.Lstat(trashLink)
 					Expect(os.IsNotExist(statErr)).To(BeTrue())
+
+					_, err = os.Stat(n.InternalPath())
+					Expect(err).ToNot(HaveOccurred())
 				})
 			})
 
-			// OCISDEV-817: trash symlink and node rename must be rolled back when removing
-			// the parent-dir entry fails (path #3). chmod 0500 on n.ParentPath() blocks
-			// os.Remove(path) while all prior steps succeed.
 			Context("when os.Remove of parent entry fails", func() {
 				It("rolls back the trash symlink and node rename", func() {
-					Expect(os.Chmod(n.ParentPath(), 0o500)).To(Succeed())
-					defer os.Chmod(n.ParentPath(), 0o700)
+					entryPath := filepath.Join(n.ParentPath(), n.Name)
+					Expect(os.Remove(entryPath)).To(Succeed())
+					Expect(os.Mkdir(entryPath, 0o700)).To(Succeed())
+					blockerPath := filepath.Join(entryPath, "blocker")
+					Expect(os.WriteFile(blockerPath, nil, 0o600)).To(Succeed())
 
-					Expect(t.Delete(env.Ctx, n)).To(HaveOccurred())
+					err := t.Delete(env.Ctx, n)
+					var removeErr *os.PathError
+					Expect(errors.As(err, &removeErr)).To(BeTrue())
+					Expect(removeErr.Op).To(Equal("remove"))
+					Expect(removeErr.Path).To(Equal(entryPath))
 
 					trashLink := path.Join(env.Root, "spaces", lookup.Pathify(n.SpaceRoot.ID, 1, 2), "trash", lookup.Pathify(n.ID, 4, 2))
 					_, statErr := os.Lstat(trashLink)
 					Expect(os.IsNotExist(statErr)).To(BeTrue())
 
-					_, err := os.Stat(n.InternalPath())
+					_, err = os.Stat(n.InternalPath())
 					Expect(err).ToNot(HaveOccurred())
+
+					Expect(os.Remove(blockerPath)).To(Succeed())
+					Expect(os.Remove(entryPath)).To(Succeed())
+					Expect(os.Symlink(n.InternalPath(), entryPath)).To(Succeed())
+					Expect(t.Delete(env.Ctx, n)).To(Succeed())
 				})
 			})
 		})
