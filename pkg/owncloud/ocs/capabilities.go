@@ -260,9 +260,9 @@ type CapabilitiesFiles struct {
 	// Deprecated: use capabilities.providers[<id>].versioning.
 	Versioning ocsBool `json:"versioning" xml:"versioning"`
 	// Deprecated: use capabilities.providers[<id>].arbitrary_metadata.
-	Favorites      ocsBool `json:"favorites" xml:"favorites"`
-	FullTextSearch ocsBool `json:"full_text_search" xml:"full_text_search" mapstructure:"full_text_search"`
-	Tags           ocsBool `json:"tags" xml:"tags"`
+	Favorites        ocsBool                      `json:"favorites" xml:"favorites"`
+	FullTextSearch   ocsBool                      `json:"full_text_search" xml:"full_text_search" mapstructure:"full_text_search"`
+	Tags             ocsBool                      `json:"tags" xml:"tags"`
 	BlacklistedFiles []string                     `json:"blacklisted_files" xml:"blacklisted_files>element" mapstructure:"blacklisted_files"`
 	TusSupport       *CapabilitiesFilesTusSupport `json:"tus_support" xml:"tus_support" mapstructure:"tus_support"`
 	Archivers        []*CapabilitiesArchiver      `json:"archivers" xml:"archivers" mapstructure:"archivers"`

@@ -7,5 +7,3 @@ supports. Drivers declare their capabilities through the optional
 not implement it. The global storage-capability keys (`files.undelete`,
 `files.versioning`, `files.favorites` and `dav.trashbin`) are deprecated in
 favor of the per-provider section.
-
-https://github.com/owncloud/reva/pull/722
