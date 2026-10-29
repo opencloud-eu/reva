@@ -22,6 +22,8 @@ import (
 	"context"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+
 	"github.com/opencloud-eu/reva/v3/pkg/storage"
 )
 
@@ -32,6 +34,7 @@ const (
 	moveResultSlotKey
 	deleteResultSlotKey
 	deleteStorageSpaceResultSlotKey
+	itemTypeSlotKey
 )
 
 // --- space owner ---
@@ -169,4 +172,24 @@ func ContextGetDeleteStorageSpaceResult(ctx context.Context) *storage.DeleteStor
 		return slot.result
 	}
 	return nil
+}
+
+// --- item type ---
+
+// ItemTypeSlot receives the type of the item a storage call acts on, so the
+// audit events can tell files and folders apart.
+type ItemTypeSlot struct {
+	Type provider.ResourceType
+}
+
+// ContextRegisterItemTypeSlot stores an empty slot in ctx so the storage driver can fill it.
+func ContextRegisterItemTypeSlot(ctx context.Context, slot *ItemTypeSlot) context.Context {
+	return context.WithValue(ctx, itemTypeSlotKey, slot)
+}
+
+// ContextSetItemType fills the slot registered in ctx with the item type.
+func ContextSetItemType(ctx context.Context, t provider.ResourceType) {
+	if slot, ok := ctx.Value(itemTypeSlotKey).(*ItemTypeSlot); ok {
+		slot.Type = t
+	}
 }
