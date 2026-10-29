@@ -35,6 +35,7 @@ import (
 
 	"github.com/opencloud-eu/reva/v2/internal/http/services/owncloud/ocdav/net"
 	"github.com/opencloud-eu/reva/v2/pkg/appctx"
+	"github.com/opencloud-eu/reva/v2/pkg/audit"
 	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
 	"github.com/opencloud-eu/reva/v2/pkg/events"
 	"github.com/opencloud-eu/reva/v2/pkg/rhttp/datatx"
@@ -158,6 +159,8 @@ func (m *manager) Handler(fs storage.FS) (http.Handler, error) {
 							appctx.GetLogger(context.Background()).Error().Err(err).Msg("failed to publish FileUploaded event")
 						}
 					}
+					// the hook context keeps the values of the last request, the emitter among them
+					datatx.EmitUploadAudit(ev.Context, ev.HTTPRequest.Header.Get(audit.Header), &executant, &ref, ev.Upload.MetaData["filename"])
 				}
 			}
 		}()
