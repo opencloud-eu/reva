@@ -22,6 +22,7 @@ import (
 	"context"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 
 	"github.com/opencloud-eu/reva/v2/pkg/storage"
 )
@@ -31,6 +32,7 @@ type key int
 const (
 	sendOwnerChanKey key = iota
 	moveResultSlotKey
+	itemTypeSlotKey
 )
 
 // ContextSendSpaceOwnerID stores the space owner in the context.
@@ -63,5 +65,23 @@ func ContextRegisterMoveResultSlot(ctx context.Context, slot *MoveResultSlot) co
 func ContextSetMoveResult(ctx context.Context, r *storage.MoveResult) {
 	if slot, ok := ctx.Value(moveResultSlotKey).(*MoveResultSlot); ok {
 		slot.Result = r
+	}
+}
+
+// ItemTypeSlot receives the type of the item a storage call acts on, so the
+// audit events can tell files and folders apart.
+type ItemTypeSlot struct {
+	Type provider.ResourceType
+}
+
+// ContextRegisterItemTypeSlot stores an empty slot in ctx so the storage driver can fill it.
+func ContextRegisterItemTypeSlot(ctx context.Context, slot *ItemTypeSlot) context.Context {
+	return context.WithValue(ctx, itemTypeSlotKey, slot)
+}
+
+// ContextSetItemType fills the slot registered in ctx with the item type.
+func ContextSetItemType(ctx context.Context, t provider.ResourceType) {
+	if slot, ok := ctx.Value(itemTypeSlotKey).(*ItemTypeSlot); ok {
+		slot.Type = t
 	}
 }

@@ -43,6 +43,7 @@ import (
 	"github.com/opencloud-eu/reva/v2/pkg/storage/internal/goroutinelock"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata/prefixes"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/node"
+	"github.com/opencloud-eu/reva/v2/pkg/storagespace"
 	"github.com/opencloud-eu/reva/v2/pkg/utils"
 )
 
@@ -320,6 +321,7 @@ func (tb *Trashbin) RestoreRecycleItem(ctx context.Context, spaceID string, key,
 
 	trashRoot := filepath.Join(tb.lu.InternalPath(spaceID, spaceID), lookup.TrashDir)
 	trashPath := filepath.Clean(filepath.Join(trashRoot, "files", key+".trashitem", relativePath))
+	setItemType(ctx, trashPath)
 
 	restorePath := ""
 	// TODO why can we not use NodeFromResource here? It will use walk path. Do trashed items have a problem with that?
@@ -393,6 +395,7 @@ func (tb *Trashbin) PurgeRecycleItem(ctx context.Context, spaceID, key, relative
 
 	trashRoot := filepath.Join(tb.lu.InternalPath(spaceID, spaceID), lookup.TrashDir)
 	trashPath := filepath.Clean(filepath.Join(trashRoot, "files", key+".trashitem", relativePath))
+	setItemType(ctx, trashPath)
 
 	type item struct {
 		path  string
@@ -618,4 +621,17 @@ func (tb *Trashbin) IsEmpty(ctx context.Context, spaceID string) bool {
 	}
 	// if we cannot read the trash, we assume there are no trashed items
 	return true
+}
+
+// setItemType tells the events middleware whether a trashed item is a file or a folder.
+func setItemType(ctx context.Context, trashPath string) {
+	fi, err := os.Lstat(trashPath)
+	if err != nil {
+		return
+	}
+	if fi.IsDir() {
+		storagespace.ContextSetItemType(ctx, provider.ResourceType_RESOURCE_TYPE_CONTAINER)
+	} else {
+		storagespace.ContextSetItemType(ctx, provider.ResourceType_RESOURCE_TYPE_FILE)
+	}
 }
