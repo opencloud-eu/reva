@@ -21,6 +21,7 @@ driver = "static"
 
 [grpc.services.authregistry.drivers.static.rules]
 basic = "{{grpc_address}}"
+serviceaccounts = "{{cesnetserviceaccounts_address}}"
 
 [grpc.services.ocminvitemanager]
 driver = "json"
@@ -73,5 +74,10 @@ driver = "ocmreceived"
 mount_path = "/ocm"
 mount_id = "984e7351-2729-4417-99b4-ab5e6d41fa97"
 data_server_url = "http://{{cesnethttp_address}}/data"
+# the ocmreceived driver has no local root; the dataprovider stages into the same directory
+upload_directory = "{{cesnetgw_root}}/uploads"
 
 [grpc.services.storageprovider.drivers.ocmreceived]
+# commits and finishes uploads after the request that carried the user token is gone
+service_account_id = "ocm-sa"
+service_account_secret = "ocm-sa-secret"
