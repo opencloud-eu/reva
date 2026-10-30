@@ -21,6 +21,8 @@ package eventsmiddleware
 import (
 	"context"
 	"fmt"
+	"maps"
+	"slices"
 
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	ocmcore "github.com/cs3org/go-cs3apis/cs3/ocm/core/v1beta1"
@@ -34,6 +36,7 @@ import (
 	"github.com/opencloud-eu/reva/v2/pkg/events"
 	"github.com/opencloud-eu/reva/v2/pkg/events/stream"
 	"github.com/opencloud-eu/reva/v2/pkg/rgrpc"
+	"github.com/opencloud-eu/reva/v2/pkg/storage"
 	"github.com/opencloud-eu/reva/v2/pkg/storagespace"
 	"github.com/opencloud-eu/reva/v2/pkg/utils"
 	"google.golang.org/grpc"
@@ -65,6 +68,9 @@ func NewUnary(m map[string]interface{}) (grpc.UnaryServerInterceptor, int, error
 
 		moveSlot := &storagespace.MoveResultSlot{}
 		ctx = storagespace.ContextRegisterMoveResultSlot(ctx, moveSlot)
+
+		metadataSlot := &storagespace.MetadataResultSlot{}
+		ctx = storagespace.ContextRegisterMetadataResultSlot(ctx, metadataSlot)
 
 		res, err := handler(ctx, req)
 		if err != nil {
@@ -204,6 +210,28 @@ func NewUnary(m map[string]interface{}) (grpc.UnaryServerInterceptor, int, error
 		case *provider.UnlockResponse:
 			if isSuccess(v) {
 				ev = FileUnlocked(v, req.(*provider.UnlockRequest), ownerID, executant)
+			}
+		case *provider.SetArbitraryMetadataResponse:
+			if isSuccess(v) {
+				r := req.(*provider.SetArbitraryMetadataRequest)
+				result := metadataSlot.Result
+				if result == nil {
+					result = &storage.MetadataResult{ChangedKeys: slices.Collect(maps.Keys(r.GetArbitraryMetadata().GetMetadata()))}
+				}
+				if e, ok := ArbitraryMetadataChanged(r.GetRef(), result, ownerID, executant); ok {
+					ev = e
+				}
+			}
+		case *provider.UnsetArbitraryMetadataResponse:
+			if isSuccess(v) {
+				r := req.(*provider.UnsetArbitraryMetadataRequest)
+				result := metadataSlot.Result
+				if result == nil {
+					result = &storage.MetadataResult{RemovedKeys: r.GetArbitraryMetadataKeys()}
+				}
+				if e, ok := ArbitraryMetadataChanged(r.GetRef(), result, ownerID, executant); ok {
+					ev = e
+				}
 			}
 		}
 

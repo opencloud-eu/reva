@@ -56,7 +56,7 @@ var _ = Describe("SetArbitraryMetadata", func() {
 
 	Context("with sufficient permissions", func() {
 		It("sets arbitrary metadata attributes", func() {
-			err := env.Fs.SetArbitraryMetadata(env.Ctx, ref, &provider.ArbitraryMetadata{
+			_, err := env.Fs.SetArbitraryMetadata(env.Ctx, ref, &provider.ArbitraryMetadata{
 				Metadata: map[string]string{"foo": "bar", "baz": "qux"},
 			})
 			Expect(err).ToNot(HaveOccurred())
@@ -74,7 +74,7 @@ var _ = Describe("SetArbitraryMetadata", func() {
 		})
 
 		It("sets the mtime", func() {
-			err := env.Fs.SetArbitraryMetadata(env.Ctx, ref, &provider.ArbitraryMetadata{
+			_, err := env.Fs.SetArbitraryMetadata(env.Ctx, ref, &provider.ArbitraryMetadata{
 				Metadata: map[string]string{"mtime": "1600000000.0"},
 			})
 			Expect(err).ToNot(HaveOccurred())
@@ -92,7 +92,7 @@ var _ = Describe("SetArbitraryMetadata", func() {
 		})
 
 		It("sets the etag", func() {
-			err := env.Fs.SetArbitraryMetadata(env.Ctx, ref, &provider.ArbitraryMetadata{
+			_, err := env.Fs.SetArbitraryMetadata(env.Ctx, ref, &provider.ArbitraryMetadata{
 				Metadata: map[string]string{"etag": "abcdef"},
 			})
 			Expect(err).ToNot(HaveOccurred())
@@ -124,7 +124,7 @@ var _ = Describe("SetArbitraryMetadata", func() {
 			}
 
 			// initial write changes the metadata and therefore propagates
-			err := env.Fs.SetArbitraryMetadata(env.Ctx, ref, &provider.ArbitraryMetadata{
+			_, err := env.Fs.SetArbitraryMetadata(env.Ctx, ref, &provider.ArbitraryMetadata{
 				Metadata: map[string]string{"foo": "bar"},
 			})
 			Expect(err).ToNot(HaveOccurred())
@@ -132,7 +132,7 @@ var _ = Describe("SetArbitraryMetadata", func() {
 
 			// writing the same value must not propagate -> tmtime stays byte-identical,
 			// independent of the clock, because propagation is skipped entirely
-			err = env.Fs.SetArbitraryMetadata(env.Ctx, ref, &provider.ArbitraryMetadata{
+			_, err = env.Fs.SetArbitraryMetadata(env.Ctx, ref, &provider.ArbitraryMetadata{
 				Metadata: map[string]string{"foo": "bar"},
 			})
 			Expect(err).ToNot(HaveOccurred())
@@ -144,12 +144,52 @@ var _ = Describe("SetArbitraryMetadata", func() {
 			i := 0
 			Eventually(func() time.Time {
 				i++
-				err := env.Fs.SetArbitraryMetadata(env.Ctx, ref, &provider.ArbitraryMetadata{
+				_, err := env.Fs.SetArbitraryMetadata(env.Ctx, ref, &provider.ArbitraryMetadata{
 					Metadata: map[string]string{"foo": fmt.Sprintf("baz%d", i)},
 				})
 				Expect(err).ToNot(HaveOccurred())
 				return tmtimeOf()
 			}).Should(BeTemporally(">", afterChange))
+		})
+	})
+
+	Context("reporting the written keys", func() {
+		It("reports only the keys that were actually written", func() {
+			result, err := env.Fs.SetArbitraryMetadata(env.Ctx, ref, &provider.ArbitraryMetadata{
+				Metadata: map[string]string{"foo": "bar", "baz": "qux"},
+			})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(result).ToNot(BeNil())
+			Expect(result.ChangedKeys).To(ConsistOf("foo", "baz"))
+			Expect(result.RemovedKeys).To(BeEmpty())
+
+			result, err = env.Fs.SetArbitraryMetadata(env.Ctx, ref, &provider.ArbitraryMetadata{
+				Metadata: map[string]string{"foo": "bar", "baz": "changed"},
+			})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(result.ChangedKeys).To(ConsistOf("baz"))
+		})
+
+		It("reports nothing when the values did not change", func() {
+			_, err := env.Fs.SetArbitraryMetadata(env.Ctx, ref, &provider.ArbitraryMetadata{
+				Metadata: map[string]string{"foo": "bar"},
+			})
+			Expect(err).ToNot(HaveOccurred())
+
+			result, err := env.Fs.SetArbitraryMetadata(env.Ctx, ref, &provider.ArbitraryMetadata{
+				Metadata: map[string]string{"foo": "bar"},
+			})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(result).ToNot(BeNil())
+			Expect(result.ChangedKeys).To(BeEmpty())
+		})
+
+		It("counts mtime and etag as changed keys", func() {
+			result, err := env.Fs.SetArbitraryMetadata(env.Ctx, ref, &provider.ArbitraryMetadata{
+				Metadata: map[string]string{"mtime": "1700000000", "etag": "abc"},
+			})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(result.ChangedKeys).To(ConsistOf("mtime", "etag"))
 		})
 	})
 
@@ -160,7 +200,7 @@ var _ = Describe("SetArbitraryMetadata", func() {
 				Stat: true,
 			}, nil)
 
-			err := env.Fs.SetArbitraryMetadata(env.Ctx, ref, &provider.ArbitraryMetadata{
+			_, err := env.Fs.SetArbitraryMetadata(env.Ctx, ref, &provider.ArbitraryMetadata{
 				Metadata: map[string]string{"foo": "bar"},
 			})
 			Expect(err).To(MatchError(ContainSubstring("permission denied")))
@@ -170,7 +210,7 @@ var _ = Describe("SetArbitraryMetadata", func() {
 			env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything).Unset()
 			env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything).Return(&provider.ResourcePermissions{}, nil)
 
-			err := env.Fs.SetArbitraryMetadata(env.Ctx, ref, &provider.ArbitraryMetadata{
+			_, err := env.Fs.SetArbitraryMetadata(env.Ctx, ref, &provider.ArbitraryMetadata{
 				Metadata: map[string]string{"foo": "bar"},
 			})
 			Expect(err).To(MatchError(ContainSubstring("not found")))
@@ -179,7 +219,7 @@ var _ = Describe("SetArbitraryMetadata", func() {
 
 	Context("with a non existing resource", func() {
 		It("returns not found", func() {
-			err := env.Fs.SetArbitraryMetadata(env.Ctx, &provider.Reference{
+			_, err := env.Fs.SetArbitraryMetadata(env.Ctx, &provider.Reference{
 				ResourceId: env.SpaceRootRes,
 				Path:       "/does-not-exist",
 			}, &provider.ArbitraryMetadata{
@@ -201,10 +241,67 @@ var _ = Describe("SetArbitraryMetadata", func() {
 			})
 			Expect(err).ToNot(HaveOccurred())
 
-			err = env.Fs.SetArbitraryMetadata(env.Ctx, ref, &provider.ArbitraryMetadata{
+			_, err = env.Fs.SetArbitraryMetadata(env.Ctx, ref, &provider.ArbitraryMetadata{
 				Metadata: map[string]string{"foo": "bar"},
 			})
 			Expect(err).To(HaveOccurred())
 		})
+	})
+})
+
+var _ = Describe("UnsetArbitraryMetadata", func() {
+	var (
+		env *helpers.DecomposedTestEnv
+		ref *provider.Reference
+	)
+
+	JustBeforeEach(func() {
+		var err error
+		env, err = helpers.NewTestEnv(nil)
+		Expect(err).ToNot(HaveOccurred())
+
+		ref = &provider.Reference{
+			ResourceId: env.SpaceRootRes,
+			Path:       "/dir1/file1",
+		}
+
+		_, err = env.Fs.SetArbitraryMetadata(env.Ctx, ref, &provider.ArbitraryMetadata{
+			Metadata: map[string]string{"foo": "bar"},
+		})
+		Expect(err).ToNot(HaveOccurred())
+	})
+
+	AfterEach(func() {
+		if env != nil {
+			env.Cleanup()
+		}
+	})
+
+	It("removes the attribute", func() {
+		_, err := env.Fs.UnsetArbitraryMetadata(env.Ctx, ref, []string{"foo"})
+		Expect(err).ToNot(HaveOccurred())
+
+		n, err := env.Lookup.NodeFromResource(env.Ctx, ref)
+		Expect(err).ToNot(HaveOccurred())
+		_, err = n.XattrString(env.Ctx, prefixes.MetadataPrefix+"foo")
+		Expect(err).To(HaveOccurred())
+	})
+
+	It("reports only the keys that were actually removed", func() {
+		result, err := env.Fs.UnsetArbitraryMetadata(env.Ctx, ref, []string{"foo", "never-set"})
+		Expect(err).ToNot(HaveOccurred())
+		Expect(result).ToNot(BeNil())
+		Expect(result.RemovedKeys).To(ConsistOf("foo"))
+		Expect(result.ChangedKeys).To(BeEmpty())
+	})
+
+	It("reports nothing when the key is already gone", func() {
+		_, err := env.Fs.UnsetArbitraryMetadata(env.Ctx, ref, []string{"foo"})
+		Expect(err).ToNot(HaveOccurred())
+
+		result, err := env.Fs.UnsetArbitraryMetadata(env.Ctx, ref, []string{"foo"})
+		Expect(err).ToNot(HaveOccurred())
+		Expect(result).ToNot(BeNil())
+		Expect(result.RemovedKeys).To(BeEmpty())
 	})
 })
