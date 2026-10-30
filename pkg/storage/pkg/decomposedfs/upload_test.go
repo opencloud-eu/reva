@@ -534,5 +534,22 @@ var _ = Describe("File uploads", func() {
 			Expect(file.IsProcessing(ctx)).To(BeFalse())
 		})
 
+		It("lets a newer session take over the processing marker", func() {
+			pmock.On("AssemblePermissions", mock.Anything, mock.Anything).Return(&provider.ResourcePermissions{
+				Stat:               true,
+				InitiateFileUpload: true,
+			}, nil).Once()
+			Expect(fs.TouchFile(ctx, ref, false, "")).To(Succeed())
+
+			Expect(fs.MarkProcessing(ctx, ref, true, "session-1")).To(Succeed())
+			Expect(fs.MarkProcessing(ctx, ref, true, "session-2")).To(Succeed())
+
+			file, err := lu.NodeFromResource(ctx, ref)
+			Expect(err).ToNot(HaveOccurred())
+			id, err := file.ProcessingID(ctx)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(id).To(Equal("session-2"))
+		})
+
 	})
 })
