@@ -235,6 +235,7 @@ var _ = Describe("PrepareUpload on posix", func() {
 		}}
 		_, err = env.Lookup.NodeFromResource(env.Ctx, idRef)
 		Expect(err).To(HaveOccurred(), "the node should be unreadable")
+		Expect(env.Fs.IsOrphaned(env.Ctx, idRef)).To(BeTrue())
 
 		Expect(env.Fs.RollbackUpload(env.Ctx, idRef, "session-orphan", storage.RollbackInfo{
 			SizeDiff: result.SizeDiff,
