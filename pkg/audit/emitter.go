@@ -14,6 +14,7 @@ import (
 	ctxpkg "github.com/opencloud-eu/reva/v2/pkg/ctx"
 	"github.com/rs/zerolog"
 	"go.opentelemetry.io/otel/trace"
+	"google.golang.org/grpc/metadata"
 )
 
 // Mode decides what happens when an event can't be stored.
@@ -237,15 +238,30 @@ func (e *NatsEmitter) Record(ctx context.Context, ev Event) (*Record, error) {
 		rec.AuthMethod = rc.AuthMethod
 		rec.AuthClientID = rc.ClientID
 		rec.ActorImpersonatedBy = rc.ImpersonatedBy
+		rec.UserAgent = rc.UserAgent
 	}
-	if ua, ok := ctxpkg.ContextGetUserAgentString(ctx); ok {
-		rec.UserAgent = ua
+	if rec.UserAgent == "" {
+		rec.UserAgent = clientUserAgent(ctx)
 	}
 	if sc := trace.SpanContextFromContext(ctx); sc.IsValid() {
 		rec.TraceID = sc.TraceID().String()
 		rec.SpanID = sc.SpanID().String()
 	}
 	return rec, nil
+}
+
+// clientUserAgent reads the x-user-agent metadata the reva HTTP services set.
+// Unlike ctxpkg.ContextGetUserAgentString it never falls back to the gRPC
+// user-agent, that is the one of the calling service, e.g. grpc-go/1.84.0.
+func clientUserAgent(ctx context.Context) string {
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		return ""
+	}
+	if lst := md.Get(ctxpkg.UserAgentHeader); len(lst) > 0 {
+		return lst[0]
+	}
+	return ""
 }
 
 func setActor(ctx context.Context, rec *Record, override *Actor) {

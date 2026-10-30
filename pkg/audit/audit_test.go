@@ -92,6 +92,7 @@ func TestRequestContextRoundTrip(t *testing.T) {
 		AuthMethod:     "oidc",
 		ClientID:       "web",
 		ImpersonatedBy: "admin",
+		UserAgent:      "Mozilla/5.0 (Macintosh) Safari/605.1.15",
 	}
 	assert.Equal(t, rc, ParseRequestContext(rc.Encode()))
 	assert.Equal(t, RequestContext{}, ParseRequestContext("%zz"))
@@ -117,6 +118,26 @@ func TestRequestContextPropagation(t *testing.T) {
 	assert.Equal(t, rc, got)
 
 	assert.Equal(t, context.Background(), ContextSetRequest(context.Background(), RequestContext{}))
+}
+
+func TestRecordUserAgent(t *testing.T) {
+	e := NewEmitter(&fakePublisher{}, Options{Mode: ModeStrict})
+	ev := Event{Definition: ShareUpdate, Target: Target{ID: "share-1"}}
+	record := func(ctx context.Context) *Record {
+		rec, err := e.Record(ctx, ev)
+		require.NoError(t, err)
+		return rec
+	}
+
+	// a service called by graph only sees the gRPC user-agent of graph
+	grpcOnly := metadata.NewIncomingContext(userContext(), metadata.Pairs("user-agent", "grpc-go/1.84.0"))
+	assert.Empty(t, record(grpcOnly).UserAgent)
+
+	fromProxy := ContextSetRequest(grpcOnly, RequestContext{UserAgent: "Safari"})
+	assert.Equal(t, "Safari", record(fromProxy).UserAgent)
+
+	fromReva := metadata.NewIncomingContext(userContext(), metadata.Pairs(ctxpkg.UserAgentHeader, "Mozilla/5.0"))
+	assert.Equal(t, "Mozilla/5.0", record(fromReva).UserAgent)
 }
 
 func TestRecord(t *testing.T) {
