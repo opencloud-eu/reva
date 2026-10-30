@@ -33,8 +33,5 @@ type Aspects struct {
 	Trashbin    trashbin.Trashbin
 	Permissions permissions.Permissions
 	EventStream events.Stream
-	// TODO: redundant with options.DisableVersioning, which every driver passes in here. Only the
-	// legacy upload session store reads it; delete it when the upload coordinator replaces that store.
-	DisableVersioning bool
-	UserMapper        usermapper.Mapper
+	UserMapper  usermapper.Mapper
 }

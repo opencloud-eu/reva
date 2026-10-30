@@ -39,7 +39,6 @@ import (
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/aspects"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/lookup"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata"
-	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata/prefixes"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/node"
 	nodemocks "github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/node/mocks"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/options"
@@ -49,6 +48,7 @@ import (
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/tree"
 	"github.com/opencloud-eu/reva/v2/pkg/storagespace"
 	"github.com/opencloud-eu/reva/v2/pkg/store"
+	"github.com/opencloud-eu/reva/v2/pkg/upload"
 	"github.com/opencloud-eu/reva/v2/tests/helpers"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/mock"
@@ -64,6 +64,7 @@ var _ = Describe("File uploads", func() {
 		ref     *provider.Reference
 		rootRef *provider.Reference
 		fs      storage.FS
+		coord   upload.Coordinator
 		user    *userpb.User
 		ctx     context.Context
 
@@ -160,65 +161,18 @@ var _ = Describe("File uploads", func() {
 		resID, err := storagespace.ParseID(resp.StorageSpace.Id.OpaqueId)
 		Expect(err).ToNot(HaveOccurred())
 		ref.ResourceId = &resID
+
+		// The coordinator owns the upload flow; the driver only sees the slim contract.
+		// No publisher and no chunking: without a postprocessing consumer an upload
+		// finishes synchronously, so the specs below observe the driver's final state.
+		log := zerolog.Nop()
+		coord, err = upload.NewCoordinatorFromConfig(GinkgoT().TempDir(), nil, fs, nil, &log, false)
+		Expect(err).ToNot(HaveOccurred())
 	})
 
-	Context("the user's quota is exceeded", func() {
-		BeforeEach(func() {
-			pmock.On("AssemblePermissions", mock.Anything, mock.Anything).Return(&provider.ResourcePermissions{
-				Stat:     true,
-				GetQuota: true,
-			}, nil)
-		})
-		When("the user wants to initiate a file upload", func() {
-			It("fails", func() {
-				var originalFunc = node.CheckQuota
-				node.CheckQuota = func(ctx context.Context, spaceRoot *node.Node, overwrite bool, oldSize, newSize uint64) (quotaSufficient bool, err error) {
-					return false, errtypes.InsufficientStorage("quota exceeded")
-				}
-				_, err := fs.InitiateUpload(ctx, ref, 10, map[string]string{})
-				Expect(err).To(MatchError(errtypes.InsufficientStorage("quota exceeded")))
-				node.CheckQuota = originalFunc
-			})
-		})
-	})
-
-	Context("the user has insufficient permissions", func() {
-		BeforeEach(func() {
-			pmock.On("AssemblePermissions", mock.Anything, mock.Anything).Return(&provider.ResourcePermissions{
-				Stat: true,
-			}, nil)
-		})
-
-		When("the user wants to initiate a file upload", func() {
-			It("fails", func() {
-				msg := "error: permission denied: u-s-e-r-id!u-s-e-r-id/foo"
-				_, err := fs.InitiateUpload(ctx, ref, 10, map[string]string{})
-				Expect(err).To(MatchError(msg))
-			})
-		})
-	})
-
-	Context("with insufficient permissions, home node", func() {
-		JustBeforeEach(func() {
-			var err error
-			// the space name attribute is the stop condition in the lookup
-			h, err := lu.NodeFromResource(ctx, rootRef)
-			Expect(err).ToNot(HaveOccurred())
-			err = h.SetXattrString(ctx, prefixes.SpaceNameAttr, "username")
-			Expect(err).ToNot(HaveOccurred())
-			pmock.On("AssemblePermissions", mock.Anything, mock.Anything).Return(&provider.ResourcePermissions{
-				Stat: true,
-			}, nil)
-		})
-
-		When("the user wants to initiate a file upload", func() {
-			It("fails", func() {
-				msg := "error: permission denied: u-s-e-r-id!u-s-e-r-id/foo"
-				_, err := fs.InitiateUpload(ctx, ref, 10, map[string]string{})
-				Expect(err).To(MatchError(msg))
-			})
-		})
-	})
+	// The quota and permission checks at initiate now live in the coordinator, which
+	// resolves them through GetQuota/GetMD rather than node.CheckQuota. They are
+	// asserted against the coordinator directly in pkg/upload/initiate_test.go.
 
 	Context("with sufficient permissions", func() {
 		BeforeEach(func() {
@@ -233,7 +187,7 @@ var _ = Describe("File uploads", func() {
 
 		When("the user initiates a non zero byte file upload", func() {
 			It("succeeds", func() {
-				uploadIds, err := fs.InitiateUpload(ctx, ref, 10, map[string]string{})
+				uploadIds, err := coord.InitiateUpload(ctx, ref, 10, map[string]string{})
 
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(uploadIds)).To(Equal(2))
@@ -250,7 +204,7 @@ var _ = Describe("File uploads", func() {
 			It("succeeds", func() {
 				bs.On("Upload", mock.AnythingOfType("*node.Node"), mock.AnythingOfType("string"), mock.Anything).
 					Return(nil)
-				uploadIds, err := fs.InitiateUpload(ctx, ref, 0, map[string]string{})
+				uploadIds, err := coord.InitiateUpload(ctx, ref, 0, map[string]string{})
 
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(uploadIds)).To(Equal(2))
@@ -265,7 +219,7 @@ var _ = Describe("File uploads", func() {
 			It("fails when trying to upload empty data. 0-byte uploads are finished during initialization already", func() {
 				bs.On("Upload", mock.AnythingOfType("*node.Node"), mock.AnythingOfType("string"), mock.Anything).
 					Return(nil)
-				uploadIds, err := fs.InitiateUpload(ctx, ref, 0, map[string]string{})
+				uploadIds, err := coord.InitiateUpload(ctx, ref, 0, map[string]string{})
 
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(uploadIds)).To(Equal(2))
@@ -273,7 +227,7 @@ var _ = Describe("File uploads", func() {
 
 				uploadRef := &provider.Reference{Path: "/" + uploadIds["simple"]}
 
-				_, err = fs.Upload(ctx, storage.UploadRequest{
+				_, err = coord.Upload(ctx, upload.Request{
 					Ref:    uploadRef,
 					Body:   io.NopCloser(bytes.NewReader([]byte(""))),
 					Length: 0,
@@ -289,7 +243,7 @@ var _ = Describe("File uploads", func() {
 					fileContent = []byte("0123456789")
 				)
 
-				uploadIds, err := fs.InitiateUpload(ctx, ref, 10, map[string]string{})
+				uploadIds, err := coord.InitiateUpload(ctx, ref, 10, map[string]string{})
 
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(uploadIds)).To(Equal(2))
@@ -307,7 +261,7 @@ var _ = Describe("File uploads", func() {
 						Expect(data).To(Equal([]byte("0123456789")))
 					})
 
-				_, err = fs.Upload(ctx, storage.UploadRequest{
+				_, err = coord.Upload(ctx, upload.Request{
 					Ref:    uploadRef,
 					Body:   io.NopCloser(bytes.NewReader(fileContent)),
 					Length: int64(len(fileContent)),
@@ -330,10 +284,10 @@ var _ = Describe("File uploads", func() {
 					fileContent = []byte("0123456789")
 				)
 
-				uploadIds, err := fs.InitiateUpload(ctx, ref, 10, map[string]string{})
+				uploadIds, err := coord.InitiateUpload(ctx, ref, 10, map[string]string{})
 				Expect(err).ToNot(HaveOccurred())
 
-				session, err := fs.(tusd.DataStore).GetUpload(ctx, uploadIds["tus"])
+				session, err := coord.GetUpload(ctx, uploadIds["tus"])
 				Expect(err).ToNot(HaveOccurred())
 
 				_, err = session.WriteChunk(ctx, 0, bytes.NewReader(fileContent))
@@ -365,7 +319,7 @@ var _ = Describe("File uploads", func() {
 				)
 
 				uploadRef := &provider.Reference{Path: "/some-non-existent-upload-reference"}
-				_, err := fs.Upload(ctx, storage.UploadRequest{
+				_, err := coord.Upload(ctx, upload.Request{
 					Ref:    uploadRef,
 					Body:   io.NopCloser(bytes.NewReader(fileContent)),
 					Length: int64(len(fileContent)),
