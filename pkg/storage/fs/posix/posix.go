@@ -261,6 +261,13 @@ func (fs *posixFS) ResolveUpload(ctx context.Context, info tusd.FileInfo) (*prov
 	return r.ResolveUpload(ctx, info)
 }
 
+// PrepareCreatesNode reports whether the wrapped driver's PrepareUpload creates a
+// new file's node.
+func (fs *posixFS) PrepareCreatesNode() bool {
+	nc, ok := fs.FS.(storage.NodeCreator)
+	return ok && nc.PrepareCreatesNode()
+}
+
 // IsOrphaned reports whether the referenced resource exists but its metadata is unreadable.
 func (fs *posixFS) IsOrphaned(ctx context.Context, ref *provider.Reference) bool {
 	return fs.FS.(storage.OrphanChecker).IsOrphaned(ctx, ref)
