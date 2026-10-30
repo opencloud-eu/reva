@@ -159,6 +159,14 @@ func (fs *localfs) CommitUpload(_ context.Context, _ *provider.Reference, _ stri
 	return errtypes.NotSupported("op not supported")
 }
 
+func (fs *localfs) PrepareUpload(_ context.Context, _ *provider.Reference, _ string, info storage.UploadInfo) (*storage.PrepareUploadResult, error) {
+	return &storage.PrepareUploadResult{VersionCreated: info.NodeExisted}, nil
+}
+
+func (fs *localfs) RollbackUpload(_ context.Context, _ *provider.Reference, _ string, _ bool, _ int64) error {
+	return nil
+}
+
 // UseIn tells the tus upload middleware which extensions it supports.
 func (fs *localfs) UseIn(composer *tusd.StoreComposer) {
 	composer.UseCore(fs)

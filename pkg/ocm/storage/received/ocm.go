@@ -617,3 +617,11 @@ func (d *driver) AddLabel(ctx context.Context, ref *provider.Reference, userID *
 func (d *driver) RemoveLabel(ctx context.Context, ref *provider.Reference, userID *userpb.UserId, label string) error {
 	return errtypes.NotSupported("RemoveLabel not implemented")
 }
+
+func (d *driver) PrepareUpload(_ context.Context, _ *provider.Reference, _ string, info storage.UploadInfo) (*storage.PrepareUploadResult, error) {
+	return &storage.PrepareUploadResult{VersionCreated: info.NodeExisted}, nil
+}
+
+func (d *driver) RollbackUpload(_ context.Context, _ *provider.Reference, _ string, _ bool, _ int64) error {
+	return nil
+}
