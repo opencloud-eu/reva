@@ -67,19 +67,22 @@ var _ = Describe("the postprocessing consumer", func() {
 	Describe("StartPostprocessing", func() {
 		It("subscribes and switches the coordinator over to async uploads", func() {
 			stream := &fakeConsumer{ch: make(chan eventsapi.Event)}
+			ac := AsyncConf{ConsumerGroup: "storage-users", MountID: mountID, NumConsumers: 1, CommitMaxRetries: 5, CommitRetryBackoff: 30 * time.Second}
 
-			Expect(c.StartPostprocessing(stream, "storage-users", mountID, 1)).To(Succeed())
+			Expect(c.StartPostprocessing(stream, ac)).To(Succeed())
 
 			Expect(c.async).To(BeTrue())
 			Expect(c.mountID).To(Equal(mountID))
 			Expect(stream.group).To(Equal("storage-users"))
+			Expect(c.commitMaxRetries).To(Equal(ac.CommitMaxRetries))
+			Expect(c.commitRetryBackoff).To(Equal(ac.CommitRetryBackoff))
 		})
 
 		// Deferring a commit is only safe if something will arrive to finish it.
 		It("refuses to enable async uploads without a publisher", func() {
 			c = NewCoordinator(fs, store, "", nil)
 
-			err := c.StartPostprocessing(&fakeConsumer{ch: make(chan eventsapi.Event)}, "storage-users", mountID, 1)
+			err := c.StartPostprocessing(&fakeConsumer{ch: make(chan eventsapi.Event)}, AsyncConf{ConsumerGroup: "storage-users", MountID: mountID, NumConsumers: 1})
 
 			Expect(err).To(MatchError(ContainSubstring("need an event publisher")))
 			Expect(c.async).To(BeFalse())
@@ -89,7 +92,7 @@ var _ = Describe("the postprocessing consumer", func() {
 		It("leaves the coordinator synchronous when it cannot subscribe", func() {
 			stream := &fakeConsumer{err: errors.New("nats unreachable")}
 
-			Expect(c.StartPostprocessing(stream, "storage-users", mountID, 1)).To(MatchError("nats unreachable"))
+			Expect(c.StartPostprocessing(stream, AsyncConf{ConsumerGroup: "storage-users", MountID: mountID, NumConsumers: 1})).To(MatchError("nats unreachable"))
 			Expect(c.async).To(BeFalse())
 		})
 
@@ -98,7 +101,7 @@ var _ = Describe("the postprocessing consumer", func() {
 			c = NewCoordinator(fs, store, "", &channelPublisher{published: published})
 			stream := &fakeConsumer{ch: make(chan eventsapi.Event)}
 
-			Expect(c.StartPostprocessing(stream, "storage-users", mountID, 0)).To(Succeed())
+			Expect(c.StartPostprocessing(stream, AsyncConf{ConsumerGroup: "storage-users", MountID: mountID, NumConsumers: 0})).To(Succeed())
 
 			// The one consumer is what drains the channel.
 			pushEvent(stream.ch, events.RestartPostprocessing{UploadID: preparedSession(false).ID()})
@@ -112,7 +115,7 @@ var _ = Describe("the postprocessing consumer", func() {
 			published := make(chan interface{}, 1)
 			c = NewCoordinator(fs, store, "", &channelPublisher{published: published})
 			stream := &fakeConsumer{ch: make(chan eventsapi.Event)}
-			Expect(c.StartPostprocessing(stream, "storage-users", mountID, 1)).To(Succeed())
+			Expect(c.StartPostprocessing(stream, AsyncConf{ConsumerGroup: "storage-users", MountID: mountID, NumConsumers: 1})).To(Succeed())
 			session := preparedSession(false)
 
 			pushEvent(stream.ch, events.PostprocessingFinished{
@@ -141,7 +144,7 @@ var _ = Describe("the postprocessing consumer", func() {
 			published := make(chan interface{}, 2)
 			c = NewCoordinator(fs, store, "", &channelPublisher{published: published})
 			stream := &fakeConsumer{ch: make(chan eventsapi.Event)}
-			Expect(c.StartPostprocessing(stream, "storage-users", mountID, 1)).To(Succeed())
+			Expect(c.StartPostprocessing(stream, AsyncConf{ConsumerGroup: "storage-users", MountID: mountID, NumConsumers: 1})).To(Succeed())
 			session := preparedSession(false)
 
 			pushEvent(stream.ch, events.PostprocessingRetry{UploadID: session.ID()})
@@ -262,9 +265,11 @@ var _ = Describe("the postprocessing consumer", func() {
 				Expect(fs.committed.ScanDate).To(BeTemporally("==", time.Unix(1700000000, 0)))
 			})
 
-			// Nobody is waiting on the response, so the bytes are kept for a retry
-			// with RestartPostprocessing rather than silently lost.
-			It("keeps the node marked and the session on disk when the commit fails", func() {
+			// After retries are exhausted the node is reverted so the file is
+			// unblocked for users and the quota is freed, but the staged bytes and
+			// the session are kept: the outage may be transient, so an admin can
+			// retry with RestartPostprocessing rather than lose the upload.
+			It("reverts the node but keeps the bytes and the session when all retries fail", func() {
 				session := preparedSession(false)
 				fs.commitErr = errors.New("blobstore unavailable")
 
@@ -273,8 +278,8 @@ var _ = Describe("the postprocessing consumer", func() {
 					Outcome:  events.PPOutcomeContinue,
 				}})
 
-				Expect(fs.calls).ToNot(ContainElement("MarkProcessing(false)"))
-				Expect(fs.calls).ToNot(ContainElement(ContainSubstring("RollbackUpload")))
+				Expect(fs.calls).To(ContainElement(ContainSubstring("RollbackUpload")))
+				Expect(fs.calls).To(ContainElement("MarkProcessing(false)"))
 				_, err := store.Get(ctx, session.ID())
 				Expect(err).ToNot(HaveOccurred())
 				_, sErr := os.Stat(session.BinPath())
@@ -293,6 +298,61 @@ var _ = Describe("the postprocessing consumer", func() {
 
 				Expect(pub.published).To(HaveLen(1))
 				Expect(pub.published[0].(events.UploadReady).Failed).To(BeTrue())
+			})
+
+			It("counts exhausted retries", func() {
+				session := preparedSession(false)
+				fs.commitErr = errors.New("blobstore unavailable")
+				before := testutil.ToFloat64(metrics.UploadSessionsCommitFailed)
+
+				c.processEvent(ctx, events.Event{Event: events.PostprocessingFinished{
+					UploadID: session.ID(),
+					Outcome:  events.PPOutcomeContinue,
+				}})
+
+				Expect(testutil.ToFloat64(metrics.UploadSessionsCommitFailed) - before).To(Equal(float64(1)))
+			})
+
+			Context("with retries configured", func() {
+				BeforeEach(func() {
+					c.commitMaxRetries = 2
+					c.commitRetryBackoff = 0
+				})
+
+				It("retries a transient commit failure and succeeds", func() {
+					session := preparedSession(false)
+					fs.commitErr = errors.New("blobstore blip")
+					fs.commitErrCount = 2 // fail twice, succeed on third
+
+					c.processEvent(ctx, events.Event{Event: events.PostprocessingFinished{
+						UploadID: session.ID(),
+						Outcome:  events.PPOutcomeContinue,
+					}})
+
+					Expect(fs.commitCalls).To(Equal(3))
+					Expect(pub.published).To(HaveLen(1))
+					Expect(pub.published[0].(events.UploadReady).Failed).To(BeFalse())
+					_, err := store.Get(ctx, session.ID())
+					Expect(err).To(HaveOccurred())
+				})
+
+				It("reverts the node but keeps the bytes after all retries are exhausted", func() {
+					session := preparedSession(true)
+					fs.commitErr = errors.New("blobstore unavailable")
+
+					c.processEvent(ctx, events.Event{Event: events.PostprocessingFinished{
+						UploadID: session.ID(),
+						Outcome:  events.PPOutcomeContinue,
+					}})
+
+					Expect(fs.commitCalls).To(Equal(3))
+					Expect(fs.calls).To(ContainElement(ContainSubstring("RollbackUpload")))
+					Expect(fs.calls).To(ContainElement("MarkProcessing(false)"))
+					_, err := store.Get(ctx, session.ID())
+					Expect(err).ToNot(HaveOccurred())
+					_, sErr := os.Stat(session.BinPath())
+					Expect(sErr).ToNot(HaveOccurred())
+				})
 			})
 		})
 
@@ -314,6 +374,24 @@ var _ = Describe("the postprocessing consumer", func() {
 				Expect(err).ToNot(HaveOccurred())
 				_, sErr := os.Stat(session.BinPath())
 				Expect(sErr).ToNot(HaveOccurred())
+			})
+
+			It("records the failure and does not give the size back twice", func() {
+				session := preparedSession(true)
+
+				c.processEvent(ctx, events.Event{Event: events.PostprocessingFinished{
+					UploadID: session.ID(),
+					Outcome:  events.PPOutcomeAbort,
+				}})
+
+				kept, err := store.Get(ctx, session.ID())
+				Expect(err).ToNot(HaveOccurred())
+				Expect(kept.Status()).To(Equal(SessionStatusFailed))
+				Expect(kept.StatusMessage()).To(Equal("postprocessing aborted"))
+				Expect(kept.SizeDiff()).To(BeZero())
+
+				c.processEvent(ctx, events.Event{Event: events.CleanUpload{UploadID: session.ID()}})
+				Expect(fs.calls).To(ContainElement("RollbackUpload(nodeExisted=true,sizeDiff=0)"))
 			})
 
 			It("tells the client the upload failed", func() {
@@ -813,8 +891,8 @@ var _ = Describe("the postprocessing consumer", func() {
 			})).To(Equal(float64(-1)))
 		})
 
-		// The upload is still in flight, waiting to be retried.
-		It("stays up when the commit fails", func() {
+		// Rollback on exhaustion unmarks processing, so the gauge comes back down.
+		It("comes back down when the commit exhausts all retries", func() {
 			session := preparedSession(false)
 			fs.commitErr = errors.New("blobstore unavailable")
 
@@ -823,7 +901,7 @@ var _ = Describe("the postprocessing consumer", func() {
 					UploadID: session.ID(),
 					Outcome:  events.PPOutcomeContinue,
 				}})
-			})).To(BeZero())
+			})).To(Equal(float64(-1)))
 		})
 
 		// A restart increments it again, so an aborted upload that is retried has to

@@ -39,25 +39,24 @@ var RegisteredEvents = []events.Unmarshaller{
 // will arrive to finish it, so there is no way to enable async without a running
 // consumer, and none to run a consumer that never receives work.
 //
-// mountID is the storage id this provider serves. Postprocessing events are
-// broadcast to every provider, so events for other storages must be dropped;
-// pass "" only in tests, where a single provider sees a private stream.
-//
-// numConsumers goroutines share the subscription. Call once, before serving
-// requests. Fails without a publisher: nothing would hand uploads to
-// postprocessing, so every one of them would wait for a verdict that never comes.
-func (c *coordinator) StartPostprocessing(stream events.Consumer, group, mountID string, numConsumers int) error {
+// Call once, before serving requests. Fails without a publisher: nothing would
+// hand uploads to postprocessing, so every one of them would wait for a verdict
+// that never comes.
+func (c *coordinator) StartPostprocessing(stream events.Consumer, ac AsyncConf) error {
 	if c.pub == nil {
 		return errors.New("coordinator: async uploads need an event publisher")
 	}
-	ch, err := events.Consume(stream, group, RegisteredEvents...)
+	ch, err := events.Consume(stream, ac.ConsumerGroup, RegisteredEvents...)
 	if err != nil {
 		return err
 	}
+	numConsumers := ac.NumConsumers
 	if numConsumers <= 0 {
 		numConsumers = 1
 	}
-	c.mountID = mountID
+	c.mountID = ac.MountID
+	c.commitMaxRetries = ac.CommitMaxRetries
+	c.commitRetryBackoff = ac.CommitRetryBackoff
 	c.async = true
 	for i := 0; i < numConsumers; i++ {
 		go c.Postprocessing(ch)
@@ -122,7 +121,7 @@ func (c *coordinator) processEvent(ctx context.Context, event events.Event) {
 		if !ev.KeepUpload {
 			c.rollbackPrepared(ctx, session, session.SizeDiff())
 		} else {
-			c.rollbackNode(ctx, session)
+			c.rollbackNode(ctx, session, "cleaned up, keeping the upload")
 			metrics.UploadProcessing.Dec()
 		}
 	case events.PostprocessingStepFinished:
@@ -176,10 +175,12 @@ func (c *coordinator) onPostprocessingFinished(ctx context.Context, ev events.Po
 	switch ev.Outcome {
 	case events.PPOutcomeContinue:
 		if err := c.finishAsync(ctx, session); err != nil {
-			// Deliberately left as it is: the node stays marked and the session on
-			// disk, so this can be retried with RestartPostprocessing or discarded
-			// with CleanUpload rather than silently losing the bytes.
-			log.Error().Err(err).Str("uploadid", ev.UploadID).Msg("could not commit upload after postprocessing")
+			log.Error().Err(err).Str("uploadid", ev.UploadID).Msg("blob commit failed after all retries, reverting node and keeping bytes")
+			metrics.UploadSessionsCommitFailed.Inc()
+			// Keep the staged bytes: the blobstore outage may be transient, so an
+			// admin can retry with RestartPostprocessing rather than lose the upload.
+			c.rollbackNode(ctx, session, "commit failed: "+err.Error())
+			metrics.UploadProcessing.Dec()
 			c.publishUploadFailed(ctx, session, ev)
 		}
 		return
@@ -187,14 +188,14 @@ func (c *coordinator) onPostprocessingFinished(ctx context.Context, ev events.Po
 		metrics.UploadSessionsAborted.Inc()
 		// Keep the staged bytes: an abort is a transient failure and the upload can
 		// be restarted with RestartPostprocessing.
-		c.rollbackNode(ctx, session)
+		c.rollbackNode(ctx, session, "postprocessing aborted")
 	case events.PPOutcomeDelete:
 		metrics.UploadSessionsDeleted.Inc()
 		c.rollbackPrepared(ctx, session, session.SizeDiff())
 	default:
 		log.Error().Str("outcome", string(ev.Outcome)).Str("uploadid", ev.UploadID).Msg("unknown postprocessing outcome, aborting")
 		metrics.UploadSessionsAborted.Inc()
-		c.rollbackNode(ctx, session)
+		c.rollbackNode(ctx, session, "unknown postprocessing outcome: "+string(ev.Outcome))
 	}
 
 	c.publishUploadFailed(ctx, session, ev)
@@ -216,13 +217,21 @@ func (c *coordinator) onRestartPostprocessing(ctx context.Context, ev events.Res
 
 // rollbackNode reverts the node to its pre-upload state but keeps the staged
 // bytes and the session, so postprocessing can be restarted.
-func (c *coordinator) rollbackNode(ctx context.Context, session Session) {
+func (c *coordinator) rollbackNode(ctx context.Context, session Session, reason string) {
 	ref := session.Reference()
 	if err := c.fs.RollbackUpload(ctx, &ref, session.ID(), rollbackInfo(session, session.SizeDiff())); err != nil {
 		appctx.GetLogger(ctx).Error().Err(err).Str("uploadid", session.ID()).Msg("could not roll back upload, keeping session")
 		return
 	}
 	c.unmarkProcessing(ctx, session, &ref)
+
+	// the size was given back, so a later cleanup of the kept session must not
+	// release it again
+	session.SetSizeDiff(0)
+	session.SetStatus(SessionStatusFailed, reason)
+	if err := session.Persist(ctx); err != nil {
+		appctx.GetLogger(ctx).Error().Err(err).Str("uploadid", session.ID()).Msg("could not persist the rolled back session")
+	}
 }
 
 // publishUploadFailed tells consumers the upload will not become available.

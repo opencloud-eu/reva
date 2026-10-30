@@ -1,6 +1,8 @@
 package upload
 
 import (
+	"time"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
@@ -35,5 +37,22 @@ var _ = Describe("AsyncConfFromDriverConf", func() {
 		Expect(ac.ConsumerGroup).To(Equal("custom"))
 		Expect(ac.NumConsumers).To(Equal(4))
 		Expect(ac.MountID).To(Equal("storage-users-1"))
+	})
+
+	It("defaults commit retry to 3 attempts with 5s backoff", func() {
+		ac := AsyncConfFromDriverConf(map[string]interface{}{})
+		Expect(ac.CommitMaxRetries).To(Equal(3))
+		Expect(ac.CommitRetryBackoff).To(Equal(5 * time.Second))
+	})
+
+	It("reads explicit commit retry settings", func() {
+		ac := AsyncConfFromDriverConf(map[string]interface{}{
+			"events": map[string]interface{}{
+				"commit_max_retries":   5,
+				"commit_retry_backoff": time.Minute,
+			},
+		})
+		Expect(ac.CommitMaxRetries).To(Equal(5))
+		Expect(ac.CommitRetryBackoff).To(Equal(time.Minute))
 	})
 })
