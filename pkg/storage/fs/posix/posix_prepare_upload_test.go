@@ -177,7 +177,7 @@ var _ = Describe("PrepareUpload on posix", func() {
 		Expect(result.SizeDiff).To(Equal(int64(9)))
 
 		Expect(env.Fs.MarkProcessing(env.Ctx, ref, true, "session-1")).To(Succeed())
-		Expect(env.Fs.RollbackUpload(env.Ctx, ref, "session-1", true, result.SizeDiff)).To(Succeed())
+		Expect(env.Fs.RollbackUpload(env.Ctx, ref, "session-1", storage.RollbackInfo{NodeExisted: true, SizeDiff: result.SizeDiff})).To(Succeed())
 
 		n, err := env.Lookup.NodeFromResource(env.Ctx, ref)
 		Expect(err).ToNot(HaveOccurred())
@@ -203,13 +203,52 @@ var _ = Describe("PrepareUpload on posix", func() {
 		Expect(err).ToNot(HaveOccurred())
 
 		Expect(env.Fs.MarkProcessing(env.Ctx, newRef, true, "session-new")).To(Succeed())
-		Expect(env.Fs.RollbackUpload(env.Ctx, newRef, "session-new", false, result.SizeDiff)).To(Succeed())
+		Expect(env.Fs.RollbackUpload(env.Ctx, newRef, "session-new", storage.RollbackInfo{NodeExisted: false, SizeDiff: result.SizeDiff})).To(Succeed())
 
 		_, err = os.Stat(created.InternalPath())
 		Expect(os.IsNotExist(err)).To(BeTrue(), "the file created by the upload should be gone")
 		n, err := env.Lookup.NodeFromResource(env.Ctx, newRef)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(n.Exists).To(BeFalse())
+	})
+
+	It("removes a file whose metadata became unreadable on rollback", func() {
+		newRef := &provider.Reference{ResourceId: env.SpaceRootRes, Path: "./orphan.txt"}
+		Expect(env.Fs.TouchFile(env.Ctx, newRef, false, "")).To(Succeed())
+		created, err := env.Lookup.NodeFromResource(env.Ctx, newRef)
+		Expect(err).ToNot(HaveOccurred())
+		rootBefore, err := env.Fs.GetMD(env.Ctx, &provider.Reference{ResourceId: env.SpaceRootRes}, nil, nil)
+		Expect(err).ToNot(HaveOccurred())
+
+		result, err := env.Fs.PrepareUpload(env.Ctx, newRef, "session-orphan", storage.UploadInfo{
+			NodeExisted: false,
+			Size:        20,
+		})
+		Expect(err).ToNot(HaveOccurred())
+		Expect(env.Fs.MarkProcessing(env.Ctx, newRef, true, "session-orphan")).To(Succeed())
+
+		Expect(env.Lookup.MetadataBackend().Purge(env.Ctx, created)).To(Succeed())
+		idRef := &provider.Reference{ResourceId: &provider.ResourceId{
+			StorageId: env.SpaceRootRes.GetStorageId(),
+			SpaceId:   env.SpaceRootRes.GetSpaceId(),
+			OpaqueId:  created.ID,
+		}}
+		_, err = env.Lookup.NodeFromResource(env.Ctx, idRef)
+		Expect(err).To(HaveOccurred(), "the node should be unreadable")
+
+		Expect(env.Fs.RollbackUpload(env.Ctx, idRef, "session-orphan", storage.RollbackInfo{
+			SizeDiff: result.SizeDiff,
+			NodeID:   created.ID,
+			ParentID: created.ParentID,
+			Filename: "orphan.txt",
+			Size:     20,
+		})).To(Succeed())
+
+		_, err = os.Stat(created.InternalPath())
+		Expect(os.IsNotExist(err)).To(BeTrue(), "the orphaned file should be gone")
+		rootAfter, err := env.Fs.GetMD(env.Ctx, &provider.Reference{ResourceId: env.SpaceRootRes}, nil, nil)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(rootAfter.Size).To(Equal(rootBefore.Size), "the quota should be released")
 	})
 
 	It("leaves no revision behind when a precondition fails", func() {
