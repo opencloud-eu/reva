@@ -408,6 +408,113 @@ var _ = Describe("Spaces", func() {
 		})
 	})
 
+	Describe("List spaces with personal space permissions", func() {
+		var (
+			env        *helpers.DecomposedTestEnv
+			spaceadmin *userv1beta1.User
+			admin      *userv1beta1.User
+		)
+
+		BeforeEach(func() {
+			var err error
+			env, err = helpers.NewTestEnv(nil)
+			Expect(err).ToNot(HaveOccurred())
+
+			spaceadmin = env.Users[0]
+			admin = env.Users[1]
+
+			// space permissions granted to the users by their role
+			grantedPermissions := func(user *userv1beta1.User) []string {
+				switch user.GetId().GetOpaqueId() {
+				case spaceadmin.GetId().GetOpaqueId():
+					return []string{"Drives.Create", "Drives.List", "Drives.ReadWrite"}
+				case admin.GetId().GetOpaqueId():
+					return []string{"Drives.Create", "Drives.List", "Drives.ListPersonal", "Drives.ReadWrite", "Drives.ReadWritePersonal"}
+				case env.Owner.GetId().GetOpaqueId():
+					return []string{"Drives.Create"} // setup actor
+				}
+				return []string{}
+			}
+			env.PermissionsClient.On("CheckPermission", mock.Anything, mock.Anything, mock.Anything).Return(
+				func(ctx context.Context, in *cs3permissions.CheckPermissionRequest, opts ...grpc.CallOption) *cs3permissions.CheckPermissionResponse {
+					for _, permission := range grantedPermissions(ctxpkg.ContextMustGetUser(ctx)) {
+						if permission == in.Permission {
+							return &cs3permissions.CheckPermissionResponse{Status: &rpcv1beta1.Status{Code: rpcv1beta1.Code_CODE_OK}}
+						}
+					}
+					return &cs3permissions.CheckPermissionResponse{Status: &rpcv1beta1.Status{Code: rpcv1beta1.Code_CODE_PERMISSION_DENIED}}
+				},
+				nil)
+
+			env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything).Unset()
+			env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything).Return(
+				func(ctx context.Context, n *node.Node) *provider.ResourcePermissions {
+					u := ctxpkg.ContextMustGetUser(ctx)
+					switch u.GetId().GetOpaqueId() {
+					case env.Owner.GetId().GetOpaqueId():
+						return node.OwnerPermissions() // setup actor
+					case spaceadmin.GetId().GetOpaqueId(), admin.GetId().GetOpaqueId():
+						if n.GetSpaceID() == u.GetId().GetOpaqueId() {
+							return node.OwnerPermissions() // own personal space
+						}
+					}
+					return node.NoPermissions()
+				}, nil)
+
+			createSpace := func(req *provider.CreateStorageSpaceRequest) {
+				resp, err := env.Fs.CreateStorageSpace(env.Ctx, req)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(resp.GetStatus().GetCode()).To(Equal(rpcv1beta1.Code_CODE_OK))
+			}
+			// personal spaces of the other users, in addition to the owner's own one
+			createSpace(&provider.CreateStorageSpaceRequest{Owner: spaceadmin, Name: "spaceadmin", Type: "personal"})
+			createSpace(&provider.CreateStorageSpaceRequest{Owner: admin, Name: "admin", Type: "personal"})
+			createSpace(&provider.CreateStorageSpaceRequest{Name: "Project A", Type: "project"})
+			createSpace(&provider.CreateStorageSpaceRequest{Name: "Project B", Type: "project"})
+		})
+
+		AfterEach(func() {
+			if env != nil {
+				env.Cleanup()
+			}
+		})
+
+		spaceNames := func(spaces []*provider.StorageSpace) []string {
+			names := make([]string, 0, len(spaces))
+			for _, space := range spaces {
+				names = append(names, space.GetName())
+			}
+			return names
+		}
+
+		It("lists all project spaces but only the own personal space without Drives.ListPersonal", func() {
+			spaces, err := env.Fs.ListStorageSpaces(ctxpkg.ContextSetUser(context.Background(), spaceadmin), nil, true)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(spaceNames(spaces)).To(ConsistOf("spaceadmin", "Project A", "Project B"))
+		})
+
+		It("lists all spaces with Drives.ListPersonal", func() {
+			spaces, err := env.Fs.ListStorageSpaces(ctxpkg.ContextSetUser(context.Background(), admin), nil, true)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(spaceNames(spaces)).To(ConsistOf("username", "spaceadmin", "admin", "Project A", "Project B"))
+		})
+
+		It("only lists the own personal space when filtering by the personal space type", func() {
+			spaces, err := env.Fs.ListStorageSpaces(ctxpkg.ContextSetUser(context.Background(), spaceadmin), []*provider.ListStorageSpacesRequest_Filter{
+				{Type: provider.ListStorageSpacesRequest_Filter_TYPE_SPACE_TYPE, Term: &provider.ListStorageSpacesRequest_Filter_SpaceType{SpaceType: "personal"}},
+			}, true)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(spaceNames(spaces)).To(ConsistOf("spaceadmin"))
+			Expect(spaces[0].GetSpaceType()).To(Equal("personal"))
+		})
+
+		It("only lists the own spaces when listing restricted", func() {
+			spaces, err := env.Fs.ListStorageSpaces(ctxpkg.ContextSetUser(context.Background(), spaceadmin), nil, false)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(spaceNames(spaces)).To(ConsistOf("spaceadmin"))
+		})
+	})
+
 	Context("Create Space with custom alias template", func() {
 		Describe("Create Spaces with custom alias template", func() {
 			var (
@@ -460,6 +567,9 @@ var _ = Describe("Spaces", func() {
 			env     *helpers.DecomposedTestEnv
 			spaceid *provider.StorageSpaceId
 
+			spaceadmin    *userv1beta1.User
+			personalSpace *provider.StorageSpaceId
+
 			manager  = &userv1beta1.User{Id: &userv1beta1.UserId{OpaqueId: "manager"}}
 			editor   = &userv1beta1.User{Id: &userv1beta1.UserId{OpaqueId: "editor"}}
 			viewer   = &userv1beta1.User{Id: &userv1beta1.UserId{OpaqueId: "viewer"}}
@@ -471,6 +581,9 @@ var _ = Describe("Spaces", func() {
 			env, err = helpers.NewTestEnv(nil)
 			Expect(err).ToNot(HaveOccurred())
 
+			spaceadmin = env.Users[0]
+			personalSpace = &provider.StorageSpaceId{OpaqueId: storagespace.FormatResourceID(env.SpaceRootRes)}
+
 			// space permissions
 			env.PermissionsClient.On("CheckPermission", mock.Anything, mock.Anything, mock.Anything).Return(
 				func(ctx context.Context, in *cs3permissions.CheckPermissionRequest, opts ...grpc.CallOption) *cs3permissions.CheckPermissionResponse {
@@ -478,6 +591,13 @@ var _ = Describe("Spaces", func() {
 					case manager.GetId().GetOpaqueId():
 						switch in.Permission {
 						case "Drives.Create":
+							return &cs3permissions.CheckPermissionResponse{Status: &rpcv1beta1.Status{Code: rpcv1beta1.Code_CODE_OK}}
+						default:
+							return &cs3permissions.CheckPermissionResponse{Status: &rpcv1beta1.Status{Code: rpcv1beta1.Code_CODE_PERMISSION_DENIED}}
+						}
+					case spaceadmin.GetId().GetOpaqueId():
+						switch in.Permission {
+						case "Drives.ReadWrite":
 							return &cs3permissions.CheckPermissionResponse{Status: &rpcv1beta1.Status{Code: rpcv1beta1.Code_CODE_OK}}
 						default:
 							return &cs3permissions.CheckPermissionResponse{Status: &rpcv1beta1.Status{Code: rpcv1beta1.Code_CODE_PERMISSION_DENIED}}
@@ -495,6 +615,8 @@ var _ = Describe("Spaces", func() {
 					switch ctxpkg.ContextMustGetUser(ctx).GetId().GetOpaqueId() {
 					case manager.GetId().GetOpaqueId():
 						return node.OwnerPermissions() // id of owner/admin
+					case env.Owner.GetId().GetOpaqueId():
+						return node.OwnerPermissions() // owner of the personal space
 					case editor.GetId().GetOpaqueId():
 						return &provider.ResourcePermissions{InitiateFileUpload: true} // mock editor
 					case viewer.GetId().GetOpaqueId():
@@ -694,6 +816,78 @@ var _ = Describe("Spaces", func() {
 					}
 				},
 				rpcv1beta1.Code_CODE_NOT_FOUND,
+			),
+		)
+
+		DescribeTable("update personal spaces",
+			func(details func() (*userv1beta1.User, *provider.UpdateStorageSpaceRequest), expectedStatusCode rpcv1beta1.Code) {
+				u, req := details()
+				r, err := env.Fs.UpdateStorageSpace(ctxpkg.ContextSetUser(context.Background(), u), req)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(r.Status.Code).To(Equal(expectedStatusCode))
+			},
+
+			Entry("SpaceAdmin cannot change the name of a personal space",
+				func() (*userv1beta1.User, *provider.UpdateStorageSpaceRequest) {
+					return spaceadmin, &provider.UpdateStorageSpaceRequest{
+						StorageSpace: &provider.StorageSpace{
+							Name: "new personal space name",
+							Id:   personalSpace,
+						},
+					}
+				},
+				rpcv1beta1.Code_CODE_PERMISSION_DENIED,
+			),
+			Entry("SpaceAdmin cannot change the description of a personal space",
+				func() (*userv1beta1.User, *provider.UpdateStorageSpaceRequest) {
+					return spaceadmin, &provider.UpdateStorageSpaceRequest{
+						StorageSpace: &provider.StorageSpace{
+							Id: personalSpace,
+							Opaque: &typesv1beta1.Opaque{
+								Map: map[string]*typesv1beta1.OpaqueEntry{
+									"description": {
+										Decoder: "plain",
+										Value:   []byte("new description"),
+									},
+								},
+							},
+						},
+					}
+				},
+				rpcv1beta1.Code_CODE_PERMISSION_DENIED,
+			),
+			Entry("Admin can change the name of a personal space",
+				func() (*userv1beta1.User, *provider.UpdateStorageSpaceRequest) {
+					return admin, &provider.UpdateStorageSpaceRequest{
+						StorageSpace: &provider.StorageSpace{
+							Name: "new personal space name",
+							Id:   personalSpace,
+						},
+					}
+				},
+				rpcv1beta1.Code_CODE_OK,
+			),
+			Entry("Owner can change the name of his personal space",
+				func() (*userv1beta1.User, *provider.UpdateStorageSpaceRequest) {
+					return env.Owner, &provider.UpdateStorageSpaceRequest{
+						StorageSpace: &provider.StorageSpace{
+							Name: "new personal space name",
+							Id:   personalSpace,
+						},
+					}
+				},
+				rpcv1beta1.Code_CODE_OK,
+			),
+			Entry("SpaceAdmin can change the name of a project space",
+				func() (*userv1beta1.User, *provider.UpdateStorageSpaceRequest) {
+					return spaceadmin, &provider.UpdateStorageSpaceRequest{
+						StorageSpace: &provider.StorageSpace{
+							Name: "new space name",
+							Id:   spaceid,
+						},
+					}
+				},
+				rpcv1beta1.Code_CODE_OK,
 			),
 		)
 	})
