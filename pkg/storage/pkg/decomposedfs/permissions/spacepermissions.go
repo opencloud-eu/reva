@@ -116,7 +116,7 @@ func (p Permissions) ListSpacesOfUser(ctx context.Context, userid *userv1beta1.U
 	case utils.UserIDEqual(ctxpkg.ContextMustGetUser(ctx).GetId(), userid):
 		return true
 	default:
-		return p.ListAllSpaces(ctx)
+		return p.ListAllSpaces(ctx) || p.ListAllPersonalSpaces(ctx)
 	}
 }
 
