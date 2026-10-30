@@ -8,8 +8,8 @@ import (
 )
 
 // Header carries the request context between services, as HTTP header and as
-// gRPC metadata. Everything else the audit record needs (user, tenant, user
-// agent, initiator, trace) already travels in its own header.
+// gRPC metadata. Everything else the audit record needs (user, tenant,
+// initiator, trace) already travels in its own header.
 const Header = "x-audit-context"
 
 // Short keys keep the header small, it is sent with every call.
@@ -19,6 +19,7 @@ const (
 	keyAuthMethod     = "am"
 	keyClientID       = "cid"
 	keyImpersonatedBy = "imp"
+	keyUserAgent      = "ua"
 )
 
 // RequestContext is what the proxy knows about a request and the audit
@@ -34,6 +35,10 @@ type RequestContext struct {
 	ClientID string
 	// ImpersonatedBy is set when someone acts on behalf of the user.
 	ImpersonatedBy string
+	// UserAgent is the user agent of the client. The x-user-agent metadata
+	// is not set by every service, and the gRPC user-agent is the one of
+	// the calling service, not of the client.
+	UserAgent string
 }
 
 // IsZero reports whether no field is set.
@@ -54,6 +59,7 @@ func (rc RequestContext) Encode() string {
 	set(keyAuthMethod, rc.AuthMethod)
 	set(keyClientID, rc.ClientID)
 	set(keyImpersonatedBy, rc.ImpersonatedBy)
+	set(keyUserAgent, rc.UserAgent)
 	return v.Encode()
 }
 
@@ -70,6 +76,7 @@ func ParseRequestContext(s string) RequestContext {
 		AuthMethod:     v.Get(keyAuthMethod),
 		ClientID:       v.Get(keyClientID),
 		ImpersonatedBy: v.Get(keyImpersonatedBy),
+		UserAgent:      v.Get(keyUserAgent),
 	}
 }
 
