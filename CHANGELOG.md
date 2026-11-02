@@ -1,6 +1,6 @@
 # Changelog
 
-## [2.52.2](https://github.com/opencloud-eu/reva/releases/tag/v2.52.2) - 2026-10-29
+## [2.52.2](https://github.com/opencloud-eu/reva/releases/tag/v2.52.2) - 2026-11-02
 
 ### ❤️ Thanks to all contributors! ❤️
 
@@ -12,6 +12,7 @@
 
 ### 📦️ Dependencies
 
+- chore(deps): bump github.com/go-playground/validator/v10 from 10.30.3 to 10.30.5 [[#826](https://github.com/opencloud-eu/reva/pull/826)]
 - chore(deps): bump github.com/go-playground/locales from 0.14.1 to 0.14.2 [[#835](https://github.com/opencloud-eu/reva/pull/835)]
 
 ## [2.52.1](https://github.com/opencloud-eu/reva/releases/tag/v2.52.1) - 2026-10-27
