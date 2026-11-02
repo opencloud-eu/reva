@@ -4,10 +4,12 @@ import (
 	"crypto/rand"
 	"os"
 	"os/exec"
+	"strconv"
 	"time"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata/prefixes"
+	"github.com/pkg/xattr"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -188,6 +190,43 @@ var _ = Describe("Watching tree", func() {
 					g.Expect(err).ToNot(HaveOccurred())
 					g.Expect(root.GetTreeSize(env.Ctx)).To(Equal(uint64(11)))
 				}).Should(Succeed())
+			})
+
+			It("drops the stale cache when another process assimilated a changed file", func() {
+				// 'opencloud posixfs scan' assimilates with its own metadata cache. The raw
+				// xattr writes below do the same: they do not update the cache of this env.
+				path := root + "/scanned.txt"
+				Expect(os.WriteFile(path, []byte("hello"), 0600)).To(Succeed())
+
+				fileRef := &provider.Reference{ResourceId: env.SpaceRootRes, Path: subtree + "/scanned.txt"}
+				dirRef := &provider.Reference{ResourceId: env.SpaceRootRes, Path: subtree}
+				expectSizes := func(size int) {
+					Eventually(func(g Gomega) {
+						n, err := env.Lookup.NodeFromResource(env.Ctx, fileRef)
+						g.Expect(err).ToNot(HaveOccurred())
+						g.Expect(n.Blobsize).To(Equal(int64(size)))
+						dir, err := env.Lookup.NodeFromResource(env.Ctx, dirRef)
+						g.Expect(err).ToNot(HaveOccurred())
+						g.Expect(dir.GetTreeSize(env.Ctx)).To(Equal(uint64(size)))
+					}).ProbeEvery(200 * time.Millisecond).Should(Succeed())
+				}
+				expectSizes(5)
+
+				// the other process changes the file and its metadata before this one gets the
+				// close_write event
+				content := []byte("hello, changed world")
+				f, err := os.OpenFile(path, os.O_WRONLY|os.O_TRUNC, 0600)
+				Expect(err).ToNot(HaveOccurred())
+				_, err = f.Write(content)
+				Expect(err).ToNot(HaveOccurred())
+				fi, err := f.Stat()
+				Expect(err).ToNot(HaveOccurred())
+				Expect(xattr.Set(path, prefixes.MTimeAttr, []byte(fi.ModTime().UTC().Format(time.RFC3339Nano)))).To(Succeed())
+				Expect(xattr.Set(path, prefixes.BlobsizeAttr, []byte(strconv.Itoa(len(content))))).To(Succeed())
+				Expect(xattr.Set(root, prefixes.TreesizeAttr, []byte(strconv.Itoa(len(content))))).To(Succeed())
+				Expect(f.Close()).To(Succeed())
+
+				expectSizes(len(content))
 			})
 
 			It("handles deleted files", func() {

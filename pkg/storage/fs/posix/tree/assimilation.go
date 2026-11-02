@@ -507,6 +507,7 @@ func (t *Tree) assimilate(item scanItem) error {
 		// we can skip the assimilation because the file was handled by us. A stored name or parent that differs from
 		// the disk means a rename or a move was missed, even if the id cache already has the new path.
 		if previousPath == item.Path && mtime.Equal(fi.ModTime()) && !t.metadataIsStale(item.Path) {
+			t.dropStaleCache(assimilationNode, mtime)
 			return _errSkipAlreadyKnown
 		}
 
@@ -1134,6 +1135,37 @@ func (t *Tree) metadataIsStale(path string) bool {
 	}
 	parentOnDisk, err := xattr.Get(filepath.Dir(path), prefixes.IDAttr)
 	return err == nil && len(parentOnDisk) > 0 && string(parentID) != string(parentOnDisk)
+}
+
+// dropStaleCache drops the cached metadata of a known item and of its parents up to
+// the space root when the cached mtime differs from the one on disk. That happens
+// when another process, e.g. 'opencloud posixfs scan', assimilated the item with its
+// own cache. That process also changed the tree size and tree time of the parents.
+func (t *Tree) dropStaleCache(n *assimilationNode, mtime time.Time) {
+	backend := t.lookup.MetadataBackend()
+	cached, err := backend.Get(context.Background(), n, prefixes.MTimeAttr)
+	if err != nil {
+		return
+	}
+	if cachedMtime, err := time.Parse(time.RFC3339Nano, string(cached)); err == nil && cachedMtime.Equal(mtime) {
+		return
+	}
+
+	t.log.Debug().Str("path", n.path).Msg("metadata changed on disk, dropping the cached metadata of the item and its parents")
+	path, id := n.path, n.nodeId
+	for {
+		if err := backend.InvalidateCache(&assimilationNode{spaceID: n.spaceID, nodeId: id, path: path}); err != nil {
+			t.log.Error().Err(err).Str("path", path).Msg("could not invalidate the metadata cache")
+		}
+		if id == n.spaceID || t.Ignorer.IsRootPath(path) {
+			return
+		}
+		path = filepath.Dir(path)
+		_, id, _, _, err = backend.IdentifyPath(context.Background(), path)
+		if err != nil || id == "" {
+			return
+		}
+	}
 }
 
 func (t *Tree) propagateSizeDiff(n *node.Node, size int64) error {
