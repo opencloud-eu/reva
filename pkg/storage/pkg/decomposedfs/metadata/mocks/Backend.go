@@ -297,6 +297,52 @@ func (_c *Backend_IdentifyPath_Call) RunAndReturn(run func(context.Context, stri
 	return _c
 }
 
+// InvalidateCache provides a mock function with given fields: n
+func (_m *Backend) InvalidateCache(n metadata.MetadataNode) error {
+	ret := _m.Called(n)
+
+	if len(ret) == 0 {
+		panic("no return value specified for InvalidateCache")
+	}
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(metadata.MetadataNode) error); ok {
+		r0 = rf(n)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+// Backend_InvalidateCache_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'InvalidateCache'
+type Backend_InvalidateCache_Call struct {
+	*mock.Call
+}
+
+// InvalidateCache is a helper method to define mock.On call
+//   - n metadata.MetadataNode
+func (_e *Backend_Expecter) InvalidateCache(n interface{}) *Backend_InvalidateCache_Call {
+	return &Backend_InvalidateCache_Call{Call: _e.mock.On("InvalidateCache", n)}
+}
+
+func (_c *Backend_InvalidateCache_Call) Run(run func(n metadata.MetadataNode)) *Backend_InvalidateCache_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(metadata.MetadataNode))
+	})
+	return _c
+}
+
+func (_c *Backend_InvalidateCache_Call) Return(_a0 error) *Backend_InvalidateCache_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *Backend_InvalidateCache_Call) RunAndReturn(run func(metadata.MetadataNode) error) *Backend_InvalidateCache_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // IsMetaFile provides a mock function with given fields: path
 func (_m *Backend) IsMetaFile(path string) bool {
 	ret := _m.Called(path)
