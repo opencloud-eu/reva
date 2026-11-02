@@ -274,6 +274,11 @@ func (b MessagePackBackend) Purge(_ context.Context, n MetadataNode) error {
 	return os.Remove(b.MetadataPath(n))
 }
 
+// InvalidateCache drops the cached metadata of a node, so that the next read goes to disk
+func (b MessagePackBackend) InvalidateCache(n MetadataNode) error {
+	return b.metaCache.RemoveMetadata(b.cacheKey(n))
+}
+
 // Rename moves the data for a given path to a new path
 func (b MessagePackBackend) Rename(oldNode, newNode MetadataNode) error {
 	data := map[string][]byte{}

@@ -304,6 +304,34 @@ var _ = Describe("HybridBackend", func() {
 		})
 	})
 
+	Describe("InvalidateCache", func() {
+		It("makes the next read see changes made on disk by another process", func() {
+			err := backend.Set(context.Background(), n, nonOffloadingKey, []byte("old"))
+			Expect(err).ToNot(HaveOccurred())
+			_, err = backend.All(context.Background(), n)
+			Expect(err).ToNot(HaveOccurred())
+
+			// another process writes the attribute without touching our cache
+			Expect(xattr.Set(n.InternalPath(), nonOffloadingKey, []byte("new"))).To(Succeed())
+			readData, err := backend.Get(context.Background(), n, nonOffloadingKey)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(readData).To(Equal([]byte("old")))
+
+			Expect(backend.InvalidateCache(n)).To(Succeed())
+
+			readData, err = backend.Get(context.Background(), n, nonOffloadingKey)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(readData).To(Equal([]byte("new")))
+			attribs, err := backend.All(context.Background(), n)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(attribs[nonOffloadingKey]).To(Equal([]byte("new")))
+		})
+
+		It("does not fail when nothing is cached", func() {
+			Expect(backend.InvalidateCache(n)).To(Succeed())
+		})
+	})
+
 	Describe("Lock", func() {
 		It("acquires a lock", func() {
 			unlock, err := backend.Lock(n)

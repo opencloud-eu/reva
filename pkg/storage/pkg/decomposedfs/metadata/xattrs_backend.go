@@ -272,6 +272,11 @@ func (b XattrsBackend) Purge(ctx context.Context, n MetadataNode) error {
 	return b.metaCache.RemoveMetadata(b.cacheKey(n))
 }
 
+// InvalidateCache drops the cached metadata of a node, so that the next read goes to disk
+func (b XattrsBackend) InvalidateCache(n MetadataNode) error {
+	return b.metaCache.RemoveMetadata(b.cacheKey(n))
+}
+
 // Rename moves the data for a given path to a new path
 func (b XattrsBackend) Rename(oldNode, newNode MetadataNode) error {
 	data := map[string][]byte{}

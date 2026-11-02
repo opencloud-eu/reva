@@ -384,6 +384,13 @@ func LockAndReadNode(ctx context.Context, lu PathLookup, spaceID, nodeID, intern
 		return nil, nil, err
 	}
 
+	// Callers lock a node to read, modify and write its metadata. Read it from
+	// disk, because another process (e.g. 'opencloud posixfs scan') can have
+	// changed it without updating our cache.
+	if err := lu.MetadataBackend().InvalidateCache(bn); err != nil {
+		appctx.GetLogger(ctx).Warn().Err(err).Str("spaceid", spaceID).Str("nodeid", nodeID).Msg("could not invalidate the metadata cache of a locked node")
+	}
+
 	n, err := readNode(ctx, lu, spaceID, nodeID, internalPath, canListDisabledSpace, spaceRoot, skipParentCheck, true)
 	if err != nil {
 		_ = unlock()
