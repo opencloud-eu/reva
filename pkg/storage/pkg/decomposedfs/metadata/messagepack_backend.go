@@ -275,7 +275,7 @@ func (b MessagePackBackend) Purge(_ context.Context, n MetadataNode) error {
 }
 
 // InvalidateCache drops the cached metadata of a node, so that the next read goes to disk
-func (b MessagePackBackend) InvalidateCache(n MetadataNode) error {
+func (b MessagePackBackend) InvalidateCache(_ context.Context, n MetadataNode) error {
 	return b.metaCache.RemoveMetadata(b.cacheKey(n))
 }
 

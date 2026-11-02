@@ -273,7 +273,7 @@ func (b XattrsBackend) Purge(ctx context.Context, n MetadataNode) error {
 }
 
 // InvalidateCache drops the cached metadata of a node, so that the next read goes to disk
-func (b XattrsBackend) InvalidateCache(n MetadataNode) error {
+func (b XattrsBackend) InvalidateCache(_ context.Context, n MetadataNode) error {
 	return b.metaCache.RemoveMetadata(b.cacheKey(n))
 }
 

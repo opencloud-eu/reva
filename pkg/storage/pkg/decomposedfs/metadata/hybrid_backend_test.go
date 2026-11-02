@@ -317,7 +317,7 @@ var _ = Describe("HybridBackend", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(readData).To(Equal([]byte("old")))
 
-			Expect(backend.InvalidateCache(n)).To(Succeed())
+			Expect(backend.InvalidateCache(context.Background(), n)).To(Succeed())
 
 			readData, err = backend.Get(context.Background(), n, nonOffloadingKey)
 			Expect(err).ToNot(HaveOccurred())
@@ -328,7 +328,7 @@ var _ = Describe("HybridBackend", func() {
 		})
 
 		It("does not fail when nothing is cached", func() {
-			Expect(backend.InvalidateCache(n)).To(Succeed())
+			Expect(backend.InvalidateCache(context.Background(), n)).To(Succeed())
 		})
 	})
 
