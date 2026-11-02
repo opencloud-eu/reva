@@ -71,7 +71,7 @@ type Backend interface {
 	Purge(ctx context.Context, n MetadataNode) error
 	// InvalidateCache drops the cached metadata of a node, so that the next read
 	// goes to disk. It does not change the metadata on disk.
-	InvalidateCache(n MetadataNode) error
+	InvalidateCache(ctx context.Context, n MetadataNode) error
 	Rename(oldNode, newNode MetadataNode) error
 	MetadataPath(n MetadataNode) string
 	LockfilePath(n MetadataNode) string
@@ -132,7 +132,9 @@ func (NullBackend) IsMetaFile(path string) bool { return false }
 func (NullBackend) Purge(_ context.Context, n MetadataNode) error { return errUnconfiguredError }
 
 // InvalidateCache drops the cached metadata of a node
-func (NullBackend) InvalidateCache(n MetadataNode) error { return errUnconfiguredError }
+func (NullBackend) InvalidateCache(_ context.Context, n MetadataNode) error {
+	return errUnconfiguredError
+}
 
 // Rename moves the data for a given path to a new path
 func (NullBackend) Rename(oldNode, newNode MetadataNode) error { return errUnconfiguredError }

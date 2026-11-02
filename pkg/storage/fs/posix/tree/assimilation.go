@@ -497,6 +497,8 @@ func (t *Tree) assimilate(item scanItem) error {
 		if err != nil {
 			return err
 		}
+		// another process can have assimilated the item. Drop the stale cache before the code below reads from it.
+		t.dropStaleCache(assimilationNode, mtime)
 
 		previousPath, err := t.lookup.GetCachedID(context.Background(), spaceID, id)
 		if previousPath == "" || err != nil {
@@ -507,7 +509,6 @@ func (t *Tree) assimilate(item scanItem) error {
 		// we can skip the assimilation because the file was handled by us. A stored name or parent that differs from
 		// the disk means a rename or a move was missed, even if the id cache already has the new path.
 		if previousPath == item.Path && mtime.Equal(fi.ModTime()) && !t.metadataIsStale(item.Path) {
-			t.dropStaleCache(assimilationNode, mtime)
 			return _errSkipAlreadyKnown
 		}
 
@@ -1154,13 +1155,14 @@ func (t *Tree) dropStaleCache(n *assimilationNode, mtime time.Time) {
 	t.log.Debug().Str("path", n.path).Msg("metadata changed on disk, dropping the cached metadata of the item and its parents")
 	path, id := n.path, n.nodeId
 	for {
-		if err := backend.InvalidateCache(&assimilationNode{spaceID: n.spaceID, nodeId: id, path: path}); err != nil {
-			t.log.Error().Err(err).Str("path", path).Msg("could not invalidate the metadata cache")
+		if err := backend.InvalidateCache(context.Background(), &assimilationNode{spaceID: n.spaceID, nodeId: id, path: path}); err != nil {
+			t.log.Warn().Err(err).Str("path", path).Msg("could not invalidate the metadata cache")
 		}
-		if id == n.spaceID || t.Ignorer.IsRootPath(path) {
+		parent := filepath.Dir(path)
+		if id == n.spaceID || t.Ignorer.IsRootPath(path) || parent == path {
 			return
 		}
-		path = filepath.Dir(path)
+		path = parent
 		_, id, _, _, err = backend.IdentifyPath(context.Background(), path)
 		if err != nil || id == "" {
 			return
@@ -1169,6 +1171,10 @@ func (t *Tree) dropStaleCache(n *assimilationNode, mtime time.Time) {
 }
 
 func (t *Tree) propagateSizeDiff(n *node.Node, size int64) error {
+	// read the old tree size from disk. Another process can have changed it.
+	if err := t.lookup.MetadataBackend().InvalidateCache(context.Background(), n); err != nil {
+		t.log.Warn().Err(err).Str("path", n.InternalPath()).Msg("could not invalidate the metadata cache")
+	}
 	attrs, err := t.lookup.MetadataBackend().All(context.Background(), n)
 	if err != nil {
 		return err

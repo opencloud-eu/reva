@@ -192,41 +192,88 @@ var _ = Describe("Watching tree", func() {
 				}).Should(Succeed())
 			})
 
-			It("drops the stale cache when another process assimilated a changed file", func() {
+			Describe("changed by another process", func() {
 				// 'opencloud posixfs scan' assimilates with its own metadata cache. The raw
 				// xattr writes below do the same: they do not update the cache of this env.
-				path := root + "/scanned.txt"
-				Expect(os.WriteFile(path, []byte("hello"), 0600)).To(Succeed())
+				var (
+					dir, path string
+					refs      []*provider.Reference // the file, then its parents
+				)
 
-				fileRef := &provider.Reference{ResourceId: env.SpaceRootRes, Path: subtree + "/scanned.txt"}
-				dirRef := &provider.Reference{ResourceId: env.SpaceRootRes, Path: subtree}
 				expectSizes := func(size int) {
 					Eventually(func(g Gomega) {
-						n, err := env.Lookup.NodeFromResource(env.Ctx, fileRef)
+						n, err := env.Lookup.NodeFromResource(env.Ctx, refs[0])
 						g.Expect(err).ToNot(HaveOccurred())
 						g.Expect(n.Blobsize).To(Equal(int64(size)))
-						dir, err := env.Lookup.NodeFromResource(env.Ctx, dirRef)
-						g.Expect(err).ToNot(HaveOccurred())
-						g.Expect(dir.GetTreeSize(env.Ctx)).To(Equal(uint64(size)))
+						for _, ref := range refs[1:] {
+							d, err := env.Lookup.NodeFromResource(env.Ctx, ref)
+							g.Expect(err).ToNot(HaveOccurred())
+							g.Expect(d.GetTreeSize(env.Ctx)).To(Equal(uint64(size)))
+						}
 					}).ProbeEvery(200 * time.Millisecond).Should(Succeed())
 				}
-				expectSizes(5)
 
-				// the other process changes the file and its metadata before this one gets the
-				// close_write event
-				content := []byte("hello, changed world")
-				f, err := os.OpenFile(path, os.O_WRONLY|os.O_TRUNC, 0600)
-				Expect(err).ToNot(HaveOccurred())
-				_, err = f.Write(content)
-				Expect(err).ToNot(HaveOccurred())
-				fi, err := f.Stat()
-				Expect(err).ToNot(HaveOccurred())
-				Expect(xattr.Set(path, prefixes.MTimeAttr, []byte(fi.ModTime().UTC().Format(time.RFC3339Nano)))).To(Succeed())
-				Expect(xattr.Set(path, prefixes.BlobsizeAttr, []byte(strconv.Itoa(len(content))))).To(Succeed())
-				Expect(xattr.Set(root, prefixes.TreesizeAttr, []byte(strconv.Itoa(len(content))))).To(Succeed())
-				Expect(f.Close()).To(Succeed())
+				// writeLikeScan writes content and the metadata that the scan writes. Then it
+				// writes extra, which the scan did not see. Close sends the close_write event.
+				writeLikeScan := func(content, extra []byte) {
+					f, err := os.OpenFile(path, os.O_WRONLY|os.O_TRUNC, 0600)
+					Expect(err).ToNot(HaveOccurred())
+					_, err = f.Write(content)
+					Expect(err).ToNot(HaveOccurred())
+					fi, err := f.Stat()
+					Expect(err).ToNot(HaveOccurred())
+					Expect(xattr.Set(path, prefixes.MTimeAttr, []byte(fi.ModTime().UTC().Format(time.RFC3339Nano)))).To(Succeed())
+					Expect(xattr.Set(path, prefixes.BlobsizeAttr, []byte(strconv.Itoa(len(content))))).To(Succeed())
+					for _, d := range []string{dir, root} {
+						Expect(xattr.Set(d, prefixes.TreesizeAttr, []byte(strconv.Itoa(len(content))))).To(Succeed())
+					}
+					if len(extra) > 0 {
+						_, err = f.Write(extra)
+						Expect(err).ToNot(HaveOccurred())
+						// make sure that the mtime differs from the one the scan saw
+						Expect(os.Chtimes(path, time.Time{}, fi.ModTime().Add(time.Second))).To(Succeed())
+					}
+					Expect(f.Close()).To(Succeed())
+				}
 
-				expectSizes(len(content))
+				BeforeEach(func() {
+					dir = root + "/nested"
+					path = dir + "/scanned.txt"
+					refs = []*provider.Reference{
+						{ResourceId: env.SpaceRootRes, Path: subtree + "/nested/scanned.txt"},
+						{ResourceId: env.SpaceRootRes, Path: subtree + "/nested"},
+						{ResourceId: env.SpaceRootRes, Path: subtree},
+					}
+					Expect(os.Mkdir(dir, 0700)).To(Succeed())
+					Expect(os.WriteFile(path, []byte("hello"), 0600)).To(Succeed())
+					expectSizes(5)
+				})
+
+				It("drops the stale cache of the file and its parents", func() {
+					content := []byte("hello, changed world")
+					writeLikeScan(content, nil)
+					expectSizes(len(content))
+				})
+
+				It("counts the change of the other process once when the file changed again", func() {
+					content, extra := []byte("hello, changed world"), []byte(", again...")
+					writeLikeScan(content, extra)
+					expectSizes(len(content) + len(extra))
+				})
+
+				It("keeps the cache when the mtime on disk did not change", func() {
+					Expect(xattr.Set(path, prefixes.BlobsizeAttr, []byte("99"))).To(Succeed())
+					// close_write without a change
+					f, err := os.OpenFile(path, os.O_WRONLY, 0600)
+					Expect(err).ToNot(HaveOccurred())
+					Expect(f.Close()).To(Succeed())
+
+					Consistently(func(g Gomega) {
+						n, err := env.Lookup.NodeFromResource(env.Ctx, refs[0])
+						g.Expect(err).ToNot(HaveOccurred())
+						g.Expect(n.Blobsize).To(Equal(int64(5)))
+					}).WithTimeout(2 * time.Second).ProbeEvery(200 * time.Millisecond).Should(Succeed())
+				})
 			})
 
 			It("handles deleted files", func() {
