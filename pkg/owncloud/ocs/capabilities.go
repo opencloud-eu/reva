@@ -180,6 +180,13 @@ type CapabilitiesCore struct {
 type CapabilitiesGraph struct {
 	PersonalDataExport ocsBool                `json:"personal-data-export" xml:"personal-data-export" mapstructure:"personal_data_export"`
 	Users              CapabilitiesGraphUsers `json:"users" xml:"users" mapstructure:"users"`
+	Tags               CapabilitiesGraphTags  `json:"tags" xml:"tags" mapstructure:"tags"`
+}
+
+// CapabilitiesGraphTags holds the graph capabilities for tags
+type CapabilitiesGraphTags struct {
+	// MaxTagLength is the maximum number of characters of a single tag
+	MaxTagLength int `json:"max_tag_length" xml:"max_tag_length" mapstructure:"max_tag_length"`
 }
 
 // CapabilitiesPasswordPolicy hold the password policy capabilities
