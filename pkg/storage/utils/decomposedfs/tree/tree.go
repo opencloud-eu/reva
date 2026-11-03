@@ -502,14 +502,13 @@ func (t *Tree) Delete(ctx context.Context, n *node.Node) (err error) {
 	trashPath := nodePath + node.TrashIDDelimiter + deletionTime
 	err = os.Rename(nodePath, trashPath)
 	if err != nil {
-		// To roll back changes
-		// TODO remove symlink
-		// Roll back changes
+		_ = os.Remove(trashLink)
 		_ = n.RemoveXattr(ctx, prefixes.TrashOriginAttr, true)
 		return
 	}
 	err = t.lookup.MetadataBackend().Rename(nodePath, trashPath)
 	if err != nil {
+		_ = os.Remove(trashLink)
 		_ = n.RemoveXattr(ctx, prefixes.TrashOriginAttr, true)
 		_ = os.Rename(trashPath, nodePath)
 		return
@@ -520,10 +519,9 @@ func (t *Tree) Delete(ctx context.Context, n *node.Node) (err error) {
 
 	// finally remove the entry from the parent dir
 	if err = os.Remove(path); err != nil {
-		// To roll back changes
-		// TODO revert the rename
-		// TODO remove symlink
-		// Roll back changes
+		_ = t.lookup.MetadataBackend().Rename(trashPath, nodePath)
+		_ = os.Rename(trashPath, nodePath)
+		_ = os.Remove(trashLink)
 		_ = n.RemoveXattr(ctx, prefixes.TrashOriginAttr, true)
 		return
 	}
