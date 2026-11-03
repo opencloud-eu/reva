@@ -434,4 +434,78 @@ var _ = Describe("File uploads", func() {
 		})
 
 	})
+
+	Context("when overwriting a file", func() {
+		var uploadFile func()
+
+		BeforeEach(func() {
+			pmock.On("AssemblePermissions", mock.Anything, mock.Anything).Return(&provider.ResourcePermissions{
+				Stat:               true,
+				GetQuota:           true,
+				InitiateFileUpload: true,
+				ListContainer:      true,
+			}, nil)
+
+			fileContent := []byte("0123456789")
+			uploadFile = func() {
+				uploadIds, err := fs.InitiateUpload(ctx, ref, int64(len(fileContent)), map[string]string{})
+				Expect(err).ToNot(HaveOccurred())
+
+				_, err = fs.Upload(ctx, storage.UploadRequest{
+					Ref:    &provider.Reference{Path: "/" + uploadIds["simple"]},
+					Body:   io.NopCloser(bytes.NewReader(fileContent)),
+					Length: int64(len(fileContent)),
+				}, nil)
+				Expect(err).ToNot(HaveOccurred())
+			}
+		})
+
+		Context("with versioning enabled", func() {
+			It("keeps the previous blob", func() {
+				bs.On("Upload", mock.Anything, mock.Anything, mock.Anything).Return(nil)
+
+				uploadFile()
+				uploadFile()
+
+				bs.AssertNumberOfCalls(GinkgoT(), "Upload", 2)
+				bs.AssertNotCalled(GinkgoT(), "Delete", mock.Anything)
+			})
+		})
+
+		Context("with versioning disabled", func() {
+			BeforeEach(func() {
+				tree := tree.New(lu, bs, o, permissions.Permissions{}, store.Create(), &zerolog.Logger{})
+				var err error
+				fs, err = decomposedfs.New(o, aspects.Aspects{
+					Lookup:            lu,
+					Tree:              tree,
+					Permissions:       permissions.NewPermissions(pmock, permissionsSelector),
+					Trashbin:          &decomposedfs.DecomposedfsTrashbin{},
+					DisableVersioning: true,
+				}, &zerolog.Logger{})
+				Expect(err).ToNot(HaveOccurred())
+			})
+
+			It("deletes the previous blob", func() {
+				var firstBlobID string
+
+				bs.On("Upload", mock.Anything, mock.Anything, mock.Anything).Return(nil).
+					Run(func(args mock.Arguments) {
+						if firstBlobID == "" {
+							firstBlobID = args.Get(0).(*node.Node).BlobID
+						}
+					})
+				bs.On("Delete", mock.Anything).Return(nil)
+
+				uploadFile()
+				uploadFile()
+
+				Expect(firstBlobID).ToNot(BeEmpty())
+				bs.AssertNumberOfCalls(GinkgoT(), "Upload", 2)
+				bs.AssertCalled(GinkgoT(), "Delete", mock.MatchedBy(func(n *node.Node) bool {
+					return n.BlobID == firstBlobID
+				}))
+			})
+		})
+	})
 })
