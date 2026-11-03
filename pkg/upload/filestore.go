@@ -111,12 +111,7 @@ func newFileStoreWithTokens(uploadDir string, driverConf map[string]interface{},
 	if tokens, ok := driverConf["tokens"]; ok {
 		_ = mapstructure.Decode(tokens, &tc)
 	}
-	return NewFileStore(uploadDir, TokenOptions{
-		DownloadEndpoint:     tc.DownloadEndpoint,
-		DataGatewayEndpoint:  tc.DataGatewayEndpoint,
-		TransferSharedSecret: tc.TransferSharedSecret,
-		TransferExpires:      tc.TransferExpires,
-	}, log)
+	return NewFileStore(uploadDir, TokenOptions(tc), log)
 }
 
 // NewFileStore creates a FileStore staging uploads in uploadDir.
