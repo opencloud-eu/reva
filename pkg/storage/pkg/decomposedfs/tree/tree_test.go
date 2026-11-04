@@ -442,6 +442,42 @@ var _ = Describe("Tree", func() {
 				Expect(size).To(Equal(uint64(200)))
 			})
 		})
+
+		Describe("metrics", func() {
+			metric := func(name string) float64 {
+				v, err := helpers.MetricValue(name, "root", env.Lookup.InternalRoot())
+				Expect(err).ToNot(HaveOccurred())
+				return v
+			}
+
+			It("counts the changes and the directory updates", func() {
+				file, err := env.CreateTestFile("file1", "", dir.ID, dir.SpaceID, 1)
+				Expect(err).ToNot(HaveOccurred())
+				changes := metric("reva_propagation_changes_total")
+				updates := metric("reva_propagation_directory_updates_total")
+
+				err = env.Tree.Propagate(env.Ctx, file, 1)
+				Expect(err).ToNot(HaveOccurred())
+
+				Expect(metric("reva_propagation_changes_total")).To(Equal(changes + 1))
+				// testdir and the space root
+				Expect(metric("reva_propagation_directory_updates_total")).To(Equal(updates + 2))
+			})
+
+			It("counts the failures", func() {
+				file, err := env.CreateTestFile("file1", "", dir.ID, dir.SpaceID, 1)
+				Expect(err).ToNot(HaveOccurred())
+				failures := metric("reva_propagation_failures_total")
+				updates := metric("reva_propagation_directory_updates_total")
+
+				file.ParentID = uuid.New().String()
+				err = env.Tree.Propagate(env.Ctx, file, 1)
+				Expect(err).To(HaveOccurred())
+
+				Expect(metric("reva_propagation_failures_total")).To(Equal(failures + 1))
+				Expect(metric("reva_propagation_directory_updates_total")).To(Equal(updates))
+			})
+		})
 	})
 
 	DescribeTable("ReadSpaceAndNodeFromIndexLink",
