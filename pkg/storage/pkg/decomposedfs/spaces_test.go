@@ -35,6 +35,7 @@ import (
 	ctxpkg "github.com/opencloud-eu/reva/v2/pkg/ctx"
 	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/lookup"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata/prefixes"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/node"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/spaceidindex"
 	helpers "github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/testhelpers"
@@ -413,6 +414,7 @@ var _ = Describe("Spaces", func() {
 			env          *helpers.DecomposedTestEnv
 			spaceadmin   *userv1beta1.User
 			admin        *userv1beta1.User
+			adminSpace   *provider.StorageSpace
 			projectSpace *provider.StorageSpace
 		)
 
@@ -472,7 +474,7 @@ var _ = Describe("Spaces", func() {
 			}
 			// personal spaces of the other users, in addition to the owner's own one
 			createSpace(&provider.CreateStorageSpaceRequest{Owner: spaceadmin, Name: "spaceadmin", Type: "personal"})
-			createSpace(&provider.CreateStorageSpaceRequest{Owner: admin, Name: "admin", Type: "personal"})
+			adminSpace = createSpace(&provider.CreateStorageSpaceRequest{Owner: admin, Name: "admin", Type: "personal"})
 			projectSpace = createSpace(&provider.CreateStorageSpaceRequest{Name: "Project A", Type: "project"})
 			createSpace(&provider.CreateStorageSpaceRequest{Name: "Project B", Type: "project"})
 		})
@@ -531,6 +533,47 @@ var _ = Describe("Spaces", func() {
 			)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(spaceNames(spaces)).To(ConsistOf("admin"))
+		})
+
+		It("does not list personal spaces without a space type when the user lacks Drives.ListPersonal", func() {
+			// simulate a space root without a type attribute: the space is still
+			// reachable through the user space index, but it cannot be classified
+			// and is therefore rejected
+			n, err := node.ReadNode(
+				context.Background(),
+				env.Lookup,
+				adminSpace.GetRoot().GetSpaceId(),
+				adminSpace.GetRoot().GetOpaqueId(),
+				"",
+				false,
+				nil,
+				false,
+			)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(n.RemoveXattr(context.Background(), prefixes.SpaceTypeAttr)).To(Succeed())
+
+			// the requested user's groups would normally be resolved via the gateway
+			Expect(env.Fs.UserCache.Set(admin.GetId().GetOpaqueId(), admin)).To(Succeed())
+
+			spaces, err := env.Fs.ListStorageSpaces(
+				ctxpkg.ContextSetUser(context.Background(), spaceadmin),
+				[]*provider.ListStorageSpacesRequest_Filter{
+					{Type: provider.ListStorageSpacesRequest_Filter_TYPE_USER, Term: &provider.ListStorageSpacesRequest_Filter_User{User: admin.GetId()}},
+				},
+				true,
+			)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(spaceNames(spaces)).To(BeEmpty())
+
+			// a direct lookup cannot classify the space either and has to fail
+			_, err = env.Fs.ListStorageSpaces(
+				ctxpkg.ContextSetUser(context.Background(), spaceadmin),
+				[]*provider.ListStorageSpacesRequest_Filter{
+					{Type: provider.ListStorageSpacesRequest_Filter_TYPE_ID, Term: &provider.ListStorageSpacesRequest_Filter_Id{Id: &provider.StorageSpaceId{OpaqueId: storagespace.FormatResourceID(adminSpace.GetRoot())}}},
+				},
+				true,
+			)
+			Expect(err).To(BeAssignableToTypeOf(errtypes.InternalError("")))
 		})
 
 		It("space admin can read the quota of a project space", func() {

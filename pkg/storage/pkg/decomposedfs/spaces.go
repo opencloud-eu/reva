@@ -968,7 +968,7 @@ func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, n *node.Node, 
 
 	spaceType, err := n.SpaceRoot.XattrString(ctx, prefixes.SpaceTypeAttr)
 	if err != nil {
-		appctx.GetLogger(ctx).Debug().Err(err).Msg("space does not have a type attribute")
+		return nil, errtypes.InternalError(fmt.Sprintf("space %s does not have a type attribute", n.GetID()))
 	}
 
 	checkPermissions := checkProjectNodePermissions
