@@ -11,7 +11,9 @@ import (
 	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/lookup"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/timemanager"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata/prefixes"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/node"
+	"github.com/pkg/xattr"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -252,5 +254,35 @@ var _ = Describe("Non-watching tree", func() {
 		dir, err = non_watching_env.Lookup.NodeFromResource(non_watching_env.Ctx, ref)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(dir.GetTreeSize(non_watching_env.Ctx)).To(BeZero())
+	})
+
+	Describe("metadata changed on disk by another process", func() {
+		// 'opencloud posixfs scan' writes the metadata on disk with its own cache. The raw
+		// xattr writes below do the same: they do not update the cache of this env.
+		var dirRef *provider.Reference
+
+		BeforeEach(func() {
+			dirRef = &provider.Reference{ResourceId: non_watching_env.SpaceRootRes, Path: subtree}
+		})
+
+		readNode := func(g Gomega, ref *provider.Reference) *node.Node {
+			n, err := non_watching_env.Lookup.NodeFromResource(non_watching_env.Ctx, ref)
+			g.Expect(err).ToNot(HaveOccurred())
+			return n
+		}
+
+		It("propagates from the tree size on disk", func() {
+			childRef := &provider.Reference{ResourceId: non_watching_env.SpaceRootRes, Path: subtree + "/child"}
+			Expect(non_watching_env.Tree.CreateDir(non_watching_env.Ctx, readNode(Default, childRef))).To(Succeed())
+			// fill the cache
+			Expect(readNode(Default, dirRef).GetTreeSize(non_watching_env.Ctx)).To(BeZero())
+
+			Expect(xattr.Set(root, prefixes.TreesizeAttr, []byte("1000"))).To(Succeed())
+			Expect(non_watching_env.Tree.Propagate(non_watching_env.Ctx, readNode(Default, childRef), 10)).To(Succeed())
+
+			treeSize, err := xattr.Get(root, prefixes.TreesizeAttr)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(string(treeSize)).To(Equal("1010"))
+		})
 	})
 })

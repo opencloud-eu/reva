@@ -18,13 +18,16 @@
 
 package cache
 
+import "github.com/opencloud-eu/reva/v2/pkg/store"
+
 type fileMetadataCache struct {
 	cacheStore
+	shared bool
 }
 
 // NewFileMetadataCache creates a new FileMetadataCache
 func NewFileMetadataCache(cfg Config) FileMetadataCache {
-	c := &fileMetadataCache{}
+	c := &fileMetadataCache{shared: isSharedMetadataStore(cfg.Store)}
 	c.s = getStore(cfg)
 	c.database = cfg.Database
 	c.table = cfg.Table
@@ -33,7 +36,26 @@ func NewFileMetadataCache(cfg Config) FileMetadataCache {
 	return c
 }
 
+func isSharedMetadataStore(storeType string) bool {
+	switch storeType {
+	case store.TypeEtcd, store.TypeRedis, store.TypeRedisSentinel, store.TypeNatsJS, store.TypeNatsJSKV:
+		// all processes share these stores, so their entries do not go stale
+		return true
+	default:
+		return false
+	}
+}
+
 // RemoveMetadata removes a reference from the metadata cache
 func (c *fileMetadataCache) RemoveMetadata(path string) error {
+	return c.Delete(path)
+}
+
+// Invalidate drops an entry that another process can have made stale. It does nothing
+// for shared stores, because they see the writes of the other processes.
+func (c *fileMetadataCache) Invalidate(path string) error {
+	if c.shared {
+		return nil
+	}
 	return c.Delete(path)
 }

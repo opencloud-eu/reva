@@ -104,6 +104,16 @@ func (b MessagePackBackend) Get(ctx context.Context, n MetadataNode, key string)
 	return val, nil
 }
 
+// GetCached reads an attribute from the cache without falling back to disk.
+func (b MessagePackBackend) GetCached(ctx context.Context, n MetadataNode, key string) ([]byte, bool) {
+	attribs := map[string][]byte{}
+	if err := b.metaCache.PullFromCache(b.cacheKey(n), &attribs); err != nil {
+		return nil, false
+	}
+	val, ok := attribs[key]
+	return val, ok
+}
+
 // GetInt64 reads a string as int64 from the xattrs
 func (b MessagePackBackend) GetInt64(ctx context.Context, n MetadataNode, key string) (int64, error) {
 	attribs, err := b.loadAttributes(ctx, n)
@@ -279,6 +289,11 @@ func (b MessagePackBackend) Purge(_ context.Context, n MetadataNode) error {
 
 	b.metrics.writes.Inc()
 	return os.Remove(b.MetadataPath(n))
+}
+
+// InvalidateCache drops the cached metadata of a node, so that the next read goes to disk
+func (b MessagePackBackend) InvalidateCache(_ context.Context, n MetadataNode) error {
+	return b.metaCache.Invalidate(b.cacheKey(n))
 }
 
 // Rename moves the data for a given path to a new path

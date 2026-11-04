@@ -497,6 +497,8 @@ func (t *Tree) assimilate(item scanItem) error {
 		if err != nil {
 			return err
 		}
+		// another process can have assimilated the item. Reload the stale cache before the code below reads from it.
+		t.reloadStaleCache(assimilationNode, mtime)
 
 		previousPath, err := t.lookup.GetCachedID(context.Background(), spaceID, id)
 		if previousPath == "" || err != nil {
@@ -1136,15 +1138,58 @@ func (t *Tree) metadataIsStale(path string) bool {
 	return err == nil && len(parentOnDisk) > 0 && string(parentID) != string(parentOnDisk)
 }
 
-func (t *Tree) propagateSizeDiff(n *node.Node, size int64) error {
-	attrs, err := t.lookup.MetadataBackend().All(context.Background(), n)
+// reloadStaleCache reloads the cached metadata of a known item and its parents up to the space root.
+// It reloads when the cached mtime is missing or differs from the one on disk.
+// Another process, e.g. 'opencloud posixfs scan', can assimilate the item with its own cache.
+// That process also changes the tree size and tree time of the parents.
+// The caller must hold the lock of n.
+func (t *Tree) reloadStaleCache(n *assimilationNode, mtime time.Time) {
+	backend := t.lookup.MetadataBackend()
+	if cached, ok := backend.GetCached(context.Background(), n, prefixes.MTimeAttr); ok {
+		if cachedMtime, err := time.Parse(time.RFC3339Nano, string(cached)); err == nil && cachedMtime.Equal(mtime) {
+			return
+		}
+	}
+
+	t.log.Debug().Str("path", n.path).Msg("metadata cache is missing or stale, reloading the item and its parents")
+	an := n
+	for {
+		if err := t.reloadCache(an); err != nil {
+			t.log.Warn().Err(err).Str("path", an.path).Msg("could not reload the metadata cache")
+		}
+		parent := filepath.Dir(an.path)
+		if an.nodeId == n.spaceID || t.Ignorer.IsRootPath(an.path) || parent == an.path {
+			return
+		}
+		_, id, _, _, err := backend.IdentifyPath(context.Background(), parent)
+		if err != nil || id == "" {
+			return
+		}
+		an = &assimilationNode{spaceID: n.spaceID, nodeId: id, path: parent}
+	}
+}
+
+// reloadCache reads the metadata of n from disk into the cache. It holds the lock of n
+// meanwhile, so that no other holder of the lock reads from a missing cache entry.
+func (t *Tree) reloadCache(n *assimilationNode) error {
+	backend := t.lookup.MetadataBackend()
+	unlock, err := backend.Lock(n)
 	if err != nil {
 		return err
 	}
-
-	oldSize, err := node.Attributes(attrs).Int64(prefixes.TreesizeAttr)
-	if err != nil {
+	defer func() { _ = unlock() }()
+	if err := backend.InvalidateCache(context.Background(), n); err != nil {
 		return err
+	}
+	_, err = backend.All(context.Background(), n)
+	return err
+}
+
+func (t *Tree) propagateSizeDiff(n *node.Node, size int64) error {
+	// read the old tree size from disk. Another process can have changed it.
+	oldSize, ok := t.storedTreeSize(n.InternalPath())
+	if !ok {
+		return fmt.Errorf("could not read the tree size of %s", n.InternalPath())
 	}
 	return t.Propagate(context.Background(), n, size-oldSize)
 }
