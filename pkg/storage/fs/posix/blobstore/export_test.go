@@ -7,5 +7,5 @@ package blobstore
 // When set to false, Upload uses the copy-with-periodic-sync fallback instead of
 // renaming the source into place.
 func (bs *Blobstore) SetCanUseRenameForUpload(v bool) {
-	bs.canUseRenameForUpload = v
+	bs.canUseRenameForUpload.Store(v)
 }
