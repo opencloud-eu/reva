@@ -58,6 +58,9 @@ type Backend interface {
 	All(ctx context.Context, n MetadataNode) (map[string][]byte, error)
 
 	Get(ctx context.Context, n MetadataNode, key string) ([]byte, error)
+	// GetCached reads an attribute from the cache without falling back to disk.
+	// It returns false if the entry is missing or the cache read fails.
+	GetCached(ctx context.Context, n MetadataNode, key string) ([]byte, bool)
 	GetInt64(ctx context.Context, n MetadataNode, key string) (int64, error)
 	Set(ctx context.Context, n MetadataNode, key string, val []byte) error
 	// SetMultiple sets multiple extended attributes for a node. It acquires the node's
@@ -70,7 +73,8 @@ type Backend interface {
 	Lock(n MetadataNode) (UnlockFunc, error)
 	Purge(ctx context.Context, n MetadataNode) error
 	// InvalidateCache drops the cached metadata of a node, so that the next read
-	// goes to disk. It does not change the metadata on disk.
+	// goes to disk. It does not change the metadata on disk. It does nothing for
+	// shared cache stores, because they do not go stale.
 	InvalidateCache(ctx context.Context, n MetadataNode) error
 	Rename(oldNode, newNode MetadataNode) error
 	MetadataPath(n MetadataNode) string
@@ -98,6 +102,11 @@ func (NullBackend) All(ctx context.Context, n MetadataNode) (map[string][]byte, 
 // Get an extended attribute value for the given key
 func (NullBackend) Get(ctx context.Context, n MetadataNode, key string) ([]byte, error) {
 	return []byte{}, errUnconfiguredError
+}
+
+// GetCached reports a cache miss for the unconfigured backend.
+func (NullBackend) GetCached(ctx context.Context, n MetadataNode, key string) ([]byte, bool) {
+	return nil, false
 }
 
 // GetInt64 reads a string as int64 from the xattrs

@@ -73,6 +73,16 @@ func (b XattrsBackend) Get(ctx context.Context, n MetadataNode, key string) ([]b
 	return xattr.Get(n.InternalPath(), key)
 }
 
+// GetCached reads an attribute from the cache without falling back to disk.
+func (b XattrsBackend) GetCached(ctx context.Context, n MetadataNode, key string) ([]byte, bool) {
+	attribs := map[string][]byte{}
+	if err := b.metaCache.PullFromCache(b.cacheKey(n), &attribs); err != nil {
+		return nil, false
+	}
+	val, ok := attribs[key]
+	return val, ok
+}
+
 // GetInt64 reads a string as int64 from the xattrs
 func (b XattrsBackend) GetInt64(ctx context.Context, n MetadataNode, key string) (int64, error) {
 	attr, err := b.Get(ctx, n, key)
@@ -274,7 +284,7 @@ func (b XattrsBackend) Purge(ctx context.Context, n MetadataNode) error {
 
 // InvalidateCache drops the cached metadata of a node, so that the next read goes to disk
 func (b XattrsBackend) InvalidateCache(_ context.Context, n MetadataNode) error {
-	return b.metaCache.RemoveMetadata(b.cacheKey(n))
+	return b.metaCache.Invalidate(b.cacheKey(n))
 }
 
 // Rename moves the data for a given path to a new path
