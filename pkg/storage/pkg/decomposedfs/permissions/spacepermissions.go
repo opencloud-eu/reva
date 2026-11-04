@@ -97,6 +97,16 @@ func (p Permissions) SpaceAbility(ctx context.Context, spaceid string) bool {
 	return p.checkPermission(ctx, "Drives.ReadWriteEnabled", spaceRef(spaceid))
 }
 
+// RestoreSpace returns true when the user is allowed to restore a disabled space
+func (p Permissions) RestoreSpace(ctx context.Context, spaceid string, spaceType string) bool {
+	switch spaceType {
+	case _spaceTypePersonal:
+		return p.DeleteAllHomeSpaces(ctx)
+	default:
+		return p.SpaceAbility(ctx, spaceid)
+	}
+}
+
 // ListAllSpaces returns true when the user is allowed to list all project spaces
 func (p Permissions) ListAllSpaces(ctx context.Context) bool {
 	return p.checkPermission(ctx, "Drives.List", nil)

@@ -731,10 +731,22 @@ func (fs *Decomposedfs) UpdateStorageSpace(ctx context.Context, req *provider.Up
 			}
 		}
 
-		if restore && !fs.p.SpaceAbility(ctx, spaceID) {
-			return &provider.UpdateStorageSpaceResponse{
-				Status: &v1beta11.Status{Code: v1beta11.Code_CODE_NOT_FOUND},
-			}, nil
+		if restore {
+			typ, err := spaceNode.SpaceRoot.XattrString(ctx, prefixes.SpaceTypeAttr)
+			if err != nil {
+				return &provider.UpdateStorageSpaceResponse{
+					Status: &v1beta11.Status{
+						Code:    v1beta11.Code_CODE_INTERNAL,
+						Message: "space has no type",
+					},
+				}, nil
+			}
+
+			if !fs.p.RestoreSpace(ctx, spaceID, typ) {
+				return &provider.UpdateStorageSpaceResponse{
+					Status: &v1beta11.Status{Code: v1beta11.Code_CODE_NOT_FOUND},
+				}, nil
+			}
 		}
 	}
 

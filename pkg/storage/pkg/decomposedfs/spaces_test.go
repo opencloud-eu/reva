@@ -675,7 +675,7 @@ var _ = Describe("Spaces", func() {
 						}
 					case spaceadmin.GetId().GetOpaqueId():
 						switch in.Permission {
-						case "Drives.ReadWrite":
+						case "Drives.ReadWrite", "Drives.ReadWriteEnabled":
 							return &cs3permissions.CheckPermissionResponse{Status: &rpcv1beta1.Status{Code: rpcv1beta1.Code_CODE_OK}}
 						default:
 							return &cs3permissions.CheckPermissionResponse{Status: &rpcv1beta1.Status{Code: rpcv1beta1.Code_CODE_PERMISSION_DENIED}}
@@ -715,6 +715,11 @@ var _ = Describe("Spaces", func() {
 				env.Cleanup()
 			}
 		})
+
+		disableSpace := func(u *userv1beta1.User, id *provider.StorageSpaceId) {
+			err := env.Fs.DeleteStorageSpace(ctxpkg.ContextSetUser(context.Background(), u), &provider.DeleteStorageSpaceRequest{Id: id})
+			Expect(err).ToNot(HaveOccurred())
+		}
 
 		DescribeTable("update project spaces",
 			func(details func() (*userv1beta1.User, *provider.UpdateStorageSpaceRequest), expectedStatusCode rpcv1beta1.Code) {
@@ -895,6 +900,25 @@ var _ = Describe("Spaces", func() {
 				},
 				rpcv1beta1.Code_CODE_NOT_FOUND,
 			),
+			Entry("SpaceAdmin can restore a project space",
+				func() (*userv1beta1.User, *provider.UpdateStorageSpaceRequest) {
+					disableSpace(manager, spaceid)
+					return spaceadmin, &provider.UpdateStorageSpaceRequest{
+						Opaque: &typesv1beta1.Opaque{
+							Map: map[string]*typesv1beta1.OpaqueEntry{
+								"restore": {
+									Decoder: "plain",
+									Value:   []byte("true"),
+								},
+							},
+						},
+						StorageSpace: &provider.StorageSpace{
+							Id: spaceid,
+						},
+					}
+				},
+				rpcv1beta1.Code_CODE_OK,
+			),
 		)
 
 		DescribeTable("update personal spaces",
@@ -962,6 +986,44 @@ var _ = Describe("Spaces", func() {
 						StorageSpace: &provider.StorageSpace{
 							Name: "new space name",
 							Id:   spaceid,
+						},
+					}
+				},
+				rpcv1beta1.Code_CODE_OK,
+			),
+			Entry("SpaceAdmin cannot restore a personal space",
+				func() (*userv1beta1.User, *provider.UpdateStorageSpaceRequest) {
+					disableSpace(admin, personalSpace)
+					return spaceadmin, &provider.UpdateStorageSpaceRequest{
+						Opaque: &typesv1beta1.Opaque{
+							Map: map[string]*typesv1beta1.OpaqueEntry{
+								"restore": {
+									Decoder: "plain",
+									Value:   []byte("true"),
+								},
+							},
+						},
+						StorageSpace: &provider.StorageSpace{
+							Id: personalSpace,
+						},
+					}
+				},
+				rpcv1beta1.Code_CODE_NOT_FOUND,
+			),
+			Entry("Admin can restore a personal space",
+				func() (*userv1beta1.User, *provider.UpdateStorageSpaceRequest) {
+					disableSpace(admin, personalSpace)
+					return admin, &provider.UpdateStorageSpaceRequest{
+						Opaque: &typesv1beta1.Opaque{
+							Map: map[string]*typesv1beta1.OpaqueEntry{
+								"restore": {
+									Decoder: "plain",
+									Value:   []byte("true"),
+								},
+							},
+						},
+						StorageSpace: &provider.StorageSpace{
+							Id: personalSpace,
 						},
 					}
 				},
