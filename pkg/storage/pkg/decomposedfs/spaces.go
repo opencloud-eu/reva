@@ -588,12 +588,13 @@ func (fs *Decomposedfs) UserIDToUserAndGroups(ctx context.Context, userid *userv
 // MustCheckNodePermissions checks if permission checks are needed to be performed when user requests spaces
 func (fs *Decomposedfs) MustCheckNodePermissions(ctx context.Context, unrestricted bool) bool {
 	// canListAllSpaces indicates if the user has the permission from the global user role
-	canListAllSpaces := fs.p.ListAllSpaces(ctx)
+	// and requests all spaces
+	canListAllSpaces := unrestricted && fs.p.ListAllSpaces(ctx)
 	// unrestricted is the param which indicates if the user wants to list all spaces or only the spaces he is part of
 	// if a user lists all spaces unrestricted and doesn't have the permissions from the role, we need to check
 	// the nodePermissions and this will return a spaces list where the user has access to
 	// we can only skip the NodePermissions check if both values are true
-	if canListAllSpaces && unrestricted {
+	if canListAllSpaces {
 		return false
 	}
 	return true
@@ -612,7 +613,7 @@ func (fs *Decomposedfs) canListAllSpaces(ctx context.Context, n *node.Node) bool
 
 // mustCheckPersonalNodePermissions is the Drives.ListPersonal counterpart of MustCheckNodePermissions.
 func (fs *Decomposedfs) mustCheckPersonalNodePermissions(ctx context.Context, unrestricted bool) bool {
-	if fs.p.ListAllPersonalSpaces(ctx) && unrestricted {
+	if unrestricted && fs.p.ListAllPersonalSpaces(ctx) {
 		return false
 	}
 
