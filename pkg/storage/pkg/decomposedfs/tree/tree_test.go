@@ -19,6 +19,7 @@
 package tree_test
 
 import (
+	"context"
 	"os"
 	"path"
 	"path/filepath"
@@ -26,6 +27,7 @@ import (
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/google/uuid"
+	"github.com/opencloud-eu/reva/v2/pkg/storage"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/lookup"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata/prefixes"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/node"
@@ -275,6 +277,39 @@ var _ = Describe("Tree", func() {
 				existingFile, err := env.Lookup.NodeFromResource(env.Ctx, ref)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(existingFile.Exists).To(BeTrue())
+			})
+
+			// not the etag: it also follows the dir's own mtime, which the child link changes
+			parentTMTime := func() string {
+				dir, err := env.Lookup.NodeFromID(env.Ctx, &provider.ResourceId{SpaceId: n.SpaceID, OpaqueId: n.ID})
+				Expect(err).ToNot(HaveOccurred())
+				tmtime, _ := dir.XattrString(env.Ctx, prefixes.TreeMTimeAttr)
+				return tmtime
+			}
+
+			touch := func(ctx context.Context) {
+				fileToBeCreated, err := env.Lookup.NodeFromResource(env.Ctx, &provider.Reference{
+					ResourceId: env.SpaceRootRes,
+					Path:       "emptydir/newFile",
+				})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(t.TouchFile(ctx, fileToBeCreated, false, "")).To(Succeed())
+			}
+
+			It("propagates the new file to its parent", func() {
+				before := parentTMTime()
+
+				touch(env.Ctx)
+
+				Expect(parentTMTime()).ToNot(Equal(before))
+			})
+
+			It("does not propagate when the context asks it not to", func() {
+				before := parentTMTime()
+
+				touch(storage.ContextSkipTouchPropagation(env.Ctx))
+
+				Expect(parentTMTime()).To(Equal(before))
 			})
 		})
 

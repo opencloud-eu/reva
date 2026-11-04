@@ -137,3 +137,24 @@ var _ = Describe("preFinishResponseCallback", func() {
 		Expect(resp.Header).ToNot(HaveKey(net.HeaderOCPermissions))
 	})
 })
+
+var _ = Describe("fileID", func() {
+	info := func(nodeExists string) tusd.FileInfo {
+		return tusd.FileInfo{
+			MetaData: tusd.MetaData{"providerID": "provider"},
+			Storage:  map[string]string{"SpaceRoot": "space", "NodeId": "node", "NodeExists": nodeExists},
+		}
+	}
+
+	It("names an existing file", func() {
+		Expect(fileID(info("true"), false)).To(Equal("provider$space!node"))
+	})
+
+	It("names nothing for a new file whose id the commit decides", func() {
+		Expect(fileID(info(""), false)).To(BeEmpty())
+	})
+
+	It("names a new file the driver creates under the initiate id", func() {
+		Expect(fileID(info(""), true)).To(Equal("provider$space!node"))
+	})
+})

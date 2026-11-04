@@ -9,8 +9,8 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/go-viper/mapstructure/v2"
 	"github.com/google/uuid"
-	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	tusd "github.com/tus/tusd/v2/pkg/handler"
@@ -32,6 +32,9 @@ type SessionStore interface {
 	New(ctx context.Context) Session
 	Get(ctx context.Context, id string) (Session, error)
 	List(ctx context.Context) ([]Session, error)
+	// FromInfo wraps an upload's tus FileInfo without reading the store, so it also
+	// works after a synchronous upload has cleaned up its session.
+	FromInfo(info tusd.FileInfo) Session
 }
 
 // FileStore is a filesystem-backed SessionStore. Sessions are stored as a pair
@@ -145,6 +148,11 @@ func (fs *FileStore) New(_ context.Context) Session {
 			},
 		},
 	}
+}
+
+// FromInfo wraps an upload's tus FileInfo into a session without reading the store.
+func (fs *FileStore) FromInfo(info tusd.FileInfo) Session {
+	return &FileSession{store: fs, info: info}
 }
 
 // Get loads the session with the given id from disk.

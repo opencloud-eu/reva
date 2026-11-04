@@ -49,6 +49,10 @@ func (u *tusAdapter) WriteChunk(ctx context.Context, offset int64, src io.Reader
 // FinishUpload runs the coordinator's finish path once all bytes have arrived.
 func (u *tusAdapter) FinishUpload(ctx context.Context) error {
 	_, err := u.coord.finishUpload(u.session.Context(ctx), u.session)
+	if err != nil {
+		// tusd only answers the client, so log the cause here
+		appctx.GetLogger(ctx).Error().Err(err).Str("uploadid", u.session.ID()).Msg("failed to finish upload")
+	}
 
 	// tusd answers an error type it does not recognise with a bare 500.
 	switch err.(type) {
@@ -70,6 +74,8 @@ func (u *tusAdapter) FinishUpload(ctx context.Context) error {
 		return tusd.NewError("ERR_CHECKSUM_MISMATCH", err.Error(), errtypes.StatusChecksumMismatch)
 	case errtypes.IsPermissionDenied:
 		return tusd.NewError("ERR_PERMISSION_DENIED", err.Error(), http.StatusForbidden)
+	case errtypes.InsufficientStorage:
+		return tusd.NewError("ERR_INSUFFICIENT_STORAGE", err.Error(), http.StatusInsufficientStorage)
 	default:
 		return err
 	}
@@ -81,8 +87,9 @@ func (u *tusAdapter) Terminate(ctx context.Context) error {
 
 	// Rollback rather than Delete, which is permission-gated. It is a no-op unless
 	// this upload still owns the node.
-	if err := u.coord.fs.RollbackUpload(ctx, &ref, u.session.ID(), u.session.NodeExists(), u.session.SizeDiff()); err != nil {
-		appctx.GetLogger(ctx).Error().Err(err).Str("uploadid", u.session.ID()).Msg("could not roll back terminated upload")
+	if err := u.coord.fs.RollbackUpload(ctx, &ref, u.session.ID(), rollbackInfo(u.session, u.session.SizeDiff())); err != nil {
+		appctx.GetLogger(ctx).Error().Err(err).Str("uploadid", u.session.ID()).Msg("could not roll back terminated upload, keeping session")
+		return err
 	}
 	// A node that was never created cannot be unmarked, which is the normal case here.
 	if err := u.coord.fs.MarkProcessing(ctx, &ref, false, u.session.ID()); err != nil {

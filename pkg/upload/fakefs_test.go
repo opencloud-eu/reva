@@ -2,16 +2,20 @@ package upload
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"reflect"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	. "github.com/onsi/gomega"
 	tusd "github.com/tus/tusd/v2/pkg/handler"
 	eventsapi "go-micro.dev/v4/events"
 
 	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
+	"github.com/opencloud-eu/reva/v2/pkg/events"
 	"github.com/opencloud-eu/reva/v2/pkg/storage"
 )
 
@@ -27,32 +31,32 @@ type fakeFS struct {
 	mdErr error
 	tree  map[string]*provider.ResourceInfo
 	// mdErrs fails one path in the tree, for the errors that are not not-found.
-	mdErrs       map[string]error
-	quota        uint64
-	quotaErr     error
-	lock         *provider.Lock
-	lockErr      error
-	pathByID     string
-	pathByIDErr  error
-	touched      *provider.ResourceId
-	touchedOwner *userpb.UserId
-	touchErr     error
-	markErr      error
-	prepared     *storage.PrepareUploadResult
-	prepareErr   error
-	commitErr    error
-	rollbackErr  error
-	deleteErr    error
-
-	// markErrAfter applies markErr only from the nth MarkProcessing call on.
-	markErrAfter int
-	markCalls    int
+	mdErrs         map[string]error
+	quota          uint64
+	quotaErr       error
+	lock           *provider.Lock
+	lockErr        error
+	pathByID       string
+	pathByIDErr    error
+	touched        *provider.ResourceId
+	touchedOwner   *userpb.UserId
+	touchErr       error
+	markErr        error
+	prepared       *storage.PrepareUploadResult
+	prepareErr     error
+	commitErr      error
+	commitErrCount int // return commitErr for the first N calls, then succeed
+	commitCalls    int
+	rollbackErr    error
 
 	// what the driver was handed, for the arguments the call list does not carry.
 	committed   storage.UploadSource
 	prepareInfo storage.UploadInfo
+	rolledBack  storage.RollbackInfo
 	touchRef    *provider.Reference
 	touchMtime  string
+
+	touchSkippedPropagation bool
 
 	// hooks fire inside a driver call, to make the coordinator's next step fail.
 	afterMark, afterPrepare func()
@@ -99,9 +103,10 @@ func (f *fakeFS) GetPathByID(_ context.Context, _ *provider.ResourceId) (string,
 	return f.pathByID, f.pathByIDErr
 }
 
-func (f *fakeFS) TouchFile(_ context.Context, ref *provider.Reference, markprocessing bool, mtime string) error {
+func (f *fakeFS) TouchFile(ctx context.Context, ref *provider.Reference, markprocessing bool, mtime string) error {
 	f.record("TouchFile(markprocessing=%v)", markprocessing)
 	f.touchMtime = mtime
+	f.touchSkippedPropagation = storage.SkipTouchPropagation(ctx)
 	if f.touchErr != nil {
 		return f.touchErr
 	}
@@ -111,8 +116,7 @@ func (f *fakeFS) TouchFile(_ context.Context, ref *provider.Reference, markproce
 
 func (f *fakeFS) MarkProcessing(_ context.Context, _ *provider.Reference, processing bool, _ string) error {
 	f.record("MarkProcessing(%v)", processing)
-	f.markCalls++
-	if f.markErr != nil && f.markCalls > f.markErrAfter {
+	if f.markErr != nil {
 		return f.markErr
 	}
 	if f.afterMark != nil {
@@ -139,17 +143,25 @@ func (f *fakeFS) PrepareUpload(_ context.Context, _ *provider.Reference, _ strin
 func (f *fakeFS) CommitUpload(_ context.Context, _ *provider.Reference, _ string, source storage.UploadSource) error {
 	f.record("CommitUpload(length=%d)", source.Length)
 	f.committed = source
+	f.commitCalls++
+	if f.commitErrCount > 0 {
+		if f.commitCalls <= f.commitErrCount {
+			return f.commitErr
+		}
+		return nil
+	}
 	return f.commitErr
 }
 
-func (f *fakeFS) RollbackUpload(_ context.Context, _ *provider.Reference, _ string, nodeExisted bool, sizeDiff int64) error {
-	f.record("RollbackUpload(nodeExisted=%v,sizeDiff=%d)", nodeExisted, sizeDiff)
+func (f *fakeFS) RollbackUpload(_ context.Context, _ *provider.Reference, _ string, info storage.RollbackInfo) error {
+	f.record("RollbackUpload(nodeExisted=%v,sizeDiff=%d)", info.NodeExisted, info.SizeDiff)
+	f.rolledBack = info
 	return f.rollbackErr
 }
 
 func (f *fakeFS) Delete(_ context.Context, _ *provider.Reference) error {
 	f.record("Delete")
-	return f.deleteErr
+	return nil
 }
 
 // fakePublisher is an events.Publisher test double keeping the published events.
@@ -164,6 +176,50 @@ func (p *fakePublisher) Publish(_ string, event interface{}, _ ...eventsapi.Publ
 	}
 	p.published = append(p.published, event)
 	return nil
+}
+
+// channelPublisher hands each published event to the spec's goroutine, which is how
+// the consumer specs observe a background commit without racing on a slice.
+type channelPublisher struct {
+	published chan interface{}
+}
+
+func (p *channelPublisher) Publish(_ string, event interface{}, _ ...eventsapi.PublishOption) error {
+	p.published <- event
+	return nil
+}
+
+// fakeConsumer is an events.Consumer test double handing out a channel the specs
+// push raw stream events into.
+type fakeConsumer struct {
+	ch  chan eventsapi.Event
+	err error
+
+	// group is what events.Consume subscribed with.
+	group string
+}
+
+func (c *fakeConsumer) Consume(_ string, opts ...eventsapi.ConsumeOption) (<-chan eventsapi.Event, error) {
+	if c.err != nil {
+		return nil, c.err
+	}
+	o := &eventsapi.ConsumeOptions{}
+	for _, opt := range opts {
+		opt(o)
+	}
+	c.group = o.Group
+	return c.ch, nil
+}
+
+// pushEvent delivers an event the way the stream does: a JSON payload plus the type
+// metadata events.Consume dispatches on.
+func pushEvent(ch chan eventsapi.Event, ev interface{}) {
+	payload, err := json.Marshal(ev)
+	Expect(err).ToNot(HaveOccurred())
+	ch <- eventsapi.Event{
+		Metadata: map[string]string{events.MetadatakeyEventType: reflect.TypeOf(ev).String()},
+		Payload:  payload,
+	}
 }
 
 // brokenSession fails what a real FileSession cannot be made to fail from outside.
@@ -210,15 +266,31 @@ func (s *brokenSession) URL(ctx context.Context) (string, error) {
 	return s.Session.URL(ctx)
 }
 
-// brokenStore stands in for the store where the code creates its own session.
+// brokenStore stands in for the store where the code creates or loads its own
+// session.
 type brokenStore struct {
 	SessionStore
 	failPersist bool
 	listErr     error
+
+	// loadedURLErr fails URL() on the sessions Get hands back.
+	loadedURLErr error
 }
 
 func (s *brokenStore) New(ctx context.Context) Session {
 	return &brokenSession{Session: s.SessionStore.New(ctx), failPersist: s.failPersist}
+}
+
+func (s *brokenStore) Get(ctx context.Context, id string) (Session, error) {
+	session, err := s.SessionStore.Get(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	return &brokenSession{
+		Session:     session,
+		failPersist: s.failPersist,
+		urlErr:      s.loadedURLErr,
+	}, nil
 }
 
 func (s *brokenStore) List(ctx context.Context) ([]Session, error) {
@@ -226,4 +298,32 @@ func (s *brokenStore) List(ctx context.Context) ([]Session, error) {
 		return nil, s.listErr
 	}
 	return s.SessionStore.List(ctx)
+}
+
+// fakeCreatorFS is a fakeFS that also implements storage.NodeCreator, as
+// decomposedfs does. fakeFS deliberately does not, so the specs cover the drivers
+// that create a new file's node in TouchFile.
+type fakeCreatorFS struct {
+	*fakeFS
+}
+
+func (f *fakeCreatorFS) PrepareCreatesNode() bool {
+	return true
+}
+
+// fakeOrphanFS is a fakeFS that also implements storage.OrphanChecker. fakeFS
+// deliberately does not, so the specs can cover a driver that cannot answer.
+type fakeOrphanFS struct {
+	*fakeFS
+
+	// orphaned maps a node id to the verdict the driver reports for it.
+	orphaned map[string]bool
+
+	// refs records what the coordinator asked about, in order.
+	refs []*provider.Reference
+}
+
+func (f *fakeOrphanFS) IsOrphaned(_ context.Context, ref *provider.Reference) bool {
+	f.refs = append(f.refs, ref)
+	return f.orphaned[ref.GetResourceId().GetOpaqueId()]
 }

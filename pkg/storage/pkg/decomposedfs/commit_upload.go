@@ -65,9 +65,7 @@ func (fs *Decomposedfs) MarkProcessing(ctx context.Context, ref *provider.Refere
 		return n.RemoveXattr(ctx, prefixes.StatusPrefix)
 	}
 
-	if n.IsProcessing(ctx) {
-		return errtypes.ResourceProcessing(ref.String())
-	}
+	// a newer upload takes over the mark, the last writer wins
 	return n.SetXattrsWithContext(ctx, node.Attributes{
 		prefixes.StatusPrefix: []byte(node.ProcessingStatus + sessionID),
 	})
@@ -155,6 +153,18 @@ func (fs *Decomposedfs) CommitUpload(ctx context.Context, ref *provider.Referenc
 		}
 	}
 
+	if target != n {
+		// the revision kept this upload's processing mark for a rollback of the newer
+		// upload; this upload is done, so restoring it must not mark the node again
+		if err := target.RemoveXattr(ctx, prefixes.StatusPrefix); err != nil && !metadata.IsAttrUnset(err) {
+			appctx.GetLogger(ctx).Error().Err(err).Str("nodeid", target.ID).Msg("could not remove the processing mark from the revision")
+		}
+	} else {
+		// revisions kept only for a rollback of this upload served their purpose; versions
+		// stay, also the ones created before versioning was disabled
+		fs.removeRevisions(ctx, n)
+	}
+
 	now := time.Now()
 	if p, err := n.Parent(ctx); err != nil {
 		appctx.GetLogger(ctx).Error().Err(err).Str("nodeid", n.ID).Msg("could not read parent for etag propagation")
@@ -166,6 +176,46 @@ func (fs *Decomposedfs) CommitUpload(ctx context.Context, ref *provider.Referenc
 	}
 
 	return nil
+}
+
+// removeRevisions deletes the revisions of n that were kept only for a rollback, with their
+// blobs, while the caller holds the node lock: the ones of uploads that were rolled back,
+// and the snapshots taken with versioning disabled.
+func (fs *Decomposedfs) removeRevisions(ctx context.Context, n *node.Node) {
+	revPrefix := fs.lu.VersionPath(n.SpaceID, n.ID, "")
+	revisions, err := filepath.Glob(fs.lu.VersionPath(n.SpaceID, n.ID, "*"))
+	if err != nil {
+		appctx.GetLogger(ctx).Error().Err(err).Str("nodeid", n.ID).Msg("could not list revisions")
+		return
+	}
+	for _, rev := range revisions {
+		if strings.HasSuffix(rev, ".mpk") || strings.HasSuffix(rev, ".mlock") {
+			continue
+		}
+		revisionNode := node.NewBaseNode(n.SpaceID, n.ID+node.RevisionIDDelimiter+strings.TrimPrefix(rev, revPrefix), fs.lu)
+		if !fs.keptForRollback(ctx, revisionNode) {
+			continue
+		}
+		blobID, err := fs.lu.MetadataBackend().Get(ctx, revisionNode, prefixes.BlobIDAttr)
+		if err == nil && len(blobID) > 0 && string(blobID) != n.BlobID {
+			blobNode := node.New(n.SpaceID, revisionNode.ID, "", "", 0, string(blobID), provider.ResourceType_RESOURCE_TYPE_FILE, nil, fs.lu)
+			if err := fs.tp.DeleteBlob(blobNode); err != nil {
+				appctx.GetLogger(ctx).Error().Err(err).Str("revisionid", revisionNode.ID).Msg("could not delete the blob of a superseded revision")
+			}
+		}
+		removeRevision(ctx, fs.lu, revisionNode)
+	}
+}
+
+// keptForRollback reports whether a revision exists only for a rollback, rather than as a
+// version.
+func (fs *Decomposedfs) keptForRollback(ctx context.Context, revision metadata.MetadataNode) bool {
+	for _, attr := range []string{purgeOnRestoreAttr, uploadSnapshotAttr} {
+		if _, err := fs.lu.MetadataBackend().Get(ctx, revision, attr); err == nil {
+			return true
+		}
+	}
+	return false
 }
 
 // uploadRevision returns the locked revision of n that holds the upload sessionID,
@@ -189,6 +239,9 @@ func (fs *Decomposedfs) uploadRevision(ctx context.Context, n *node.Node, sessio
 		if err != nil {
 			return nil, nil, err
 		}
+		// ReadNode caches the attributes of the node, not of the revision. The posix
+		// blobstore copies them onto the file it writes, so read the revision's own.
+		revision.ResetXattrsCache()
 		return revision, unlock, nil
 	}
 	return nil, nil, nil

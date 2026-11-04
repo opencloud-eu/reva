@@ -131,7 +131,6 @@ var _ = Describe("tusAdapter", func() {
 			Expect(adapterFor(session).FinishUpload(ctx)).To(Succeed())
 			Expect(fs.calls).To(Equal([]string{
 				"TouchFile(markprocessing=false)",
-				"MarkProcessing(true)",
 				"PrepareUpload(size=17)",
 				"CommitUpload(length=17)",
 				"MarkProcessing(false)",
@@ -161,6 +160,7 @@ var _ = Describe("tusAdapter", func() {
 			Entry("bad request", errtypes.BadRequest("invalid mtime"), "ERR_BAD_REQUEST", http.StatusBadRequest),
 			Entry("checksum mismatch", errtypes.ChecksumMismatch("sha1"), "ERR_CHECKSUM_MISMATCH", errtypes.StatusChecksumMismatch),
 			Entry("permission denied", errtypes.PermissionDenied("share was revoked"), "ERR_PERMISSION_DENIED", http.StatusForbidden),
+			Entry("insufficient storage", errtypes.InsufficientStorage("quota exceeded"), "ERR_INSUFFICIENT_STORAGE", http.StatusInsufficientStorage),
 		)
 
 		It("passes an unmapped error through for tusd to answer with a 500", func() {
@@ -208,16 +208,15 @@ var _ = Describe("tusAdapter", func() {
 			Expect(err).To(HaveOccurred())
 		})
 
-		// A cancel must always leave the client with a clean 204.
-		It("succeeds even when the driver refuses both calls", func() {
+		// Rollback failure keeps the session so quota can be reclaimed on retry.
+		It("returns an error when the driver rollback fails", func() {
 			session := stagedSession(ctx, store, false)
 			fs.rollbackErr = errors.New("no such node")
-			fs.markErr = errtypes.NotFound("no such node")
 
-			Expect(adapterFor(session).Terminate(ctx)).To(Succeed())
+			Expect(adapterFor(session).Terminate(ctx)).To(MatchError(ContainSubstring("no such node")))
 
 			_, err := os.Stat(session.BinPath())
-			Expect(errors.Is(err, os.ErrNotExist)).To(BeTrue())
+			Expect(err).ToNot(HaveOccurred(), "session bin should be kept for retry")
 		})
 	})
 

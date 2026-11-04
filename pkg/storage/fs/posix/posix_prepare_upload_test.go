@@ -5,11 +5,16 @@ package posix_test
 
 import (
 	"bytes"
+	"context"
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
+	"time"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/google/uuid"
+	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
 	"github.com/opencloud-eu/reva/v2/pkg/storage"
 	posixblobstore "github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/blobstore"
 	posixhelpers "github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/testhelpers"
@@ -153,7 +158,9 @@ var _ = Describe("PrepareUpload on posix", func() {
 		It("writes into the revision when a newer upload took over the file", func() {
 			prepare("session-a")
 			prepare("session-b")
-			commit("session-a", bodySource())
+			source := bodySource()
+			source.ScanResult, source.ScanDate = "clean", time.Now()
+			commit("session-a", source)
 
 			n, err := env.Lookup.NodeFromResource(env.Ctx, ref)
 			Expect(err).ToNot(HaveOccurred())
@@ -162,6 +169,90 @@ var _ = Describe("PrepareUpload on posix", func() {
 			Expect(os.ReadFile(n.InternalPath())).To(Equal(oldContent))
 			// session-a's bytes went to the revision session-b created for it
 			Expect(revisionContents(n)).To(ConsistOf(oldContent, newContent))
+
+			// and the revision still describes session-a's upload, not the file
+			revisions, err := filepath.Glob(env.Lookup.VersionPath(n.SpaceID, n.ID, "*"))
+			Expect(err).ToNot(HaveOccurred())
+			var blobIDs []string
+			for _, r := range revisions {
+				rev := node.NewBaseNode(n.SpaceID, n.ID+node.RevisionIDDelimiter+strings.TrimPrefix(r, env.Lookup.VersionPath(n.SpaceID, n.ID, "")), env.Lookup)
+				blobID, err := env.Lookup.MetadataBackend().Get(env.Ctx, rev, prefixes.BlobIDAttr)
+				Expect(err).ToNot(HaveOccurred())
+				blobIDs = append(blobIDs, string(blobID))
+			}
+			Expect(blobIDs).To(ContainElement("session-a"))
+			Expect(blobIDs).ToNot(ContainElement("session-b"))
+		})
+	})
+
+	Describe("a new file nothing has created yet", func() {
+		var (
+			placeholder string
+			createRef   *provider.Reference
+			info        storage.UploadInfo
+		)
+
+		BeforeEach(func() {
+			placeholder = uuid.New().String()
+			createRef = &provider.Reference{ResourceId: &provider.ResourceId{SpaceId: env.SpaceRootRes.SpaceId, OpaqueId: placeholder}}
+			info = storage.UploadInfo{
+				NodeExisted: false,
+				Size:        42,
+				ParentID:    env.SpaceRootRes.OpaqueId,
+				Name:        "new.txt",
+			}
+		})
+
+		byName := func() *node.Node {
+			n, err := env.Lookup.NodeFromResource(env.Ctx, &provider.Reference{ResourceId: env.SpaceRootRes, Path: "./new.txt"})
+			Expect(err).ToNot(HaveOccurred())
+			return n
+		}
+
+		It("creates the file under the placeholder id, marked as processing", func() {
+			result, err := env.Fs.PrepareUpload(env.Ctx, createRef, "session-new", info)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(result.SizeDiff).To(Equal(int64(42)))
+			Expect(result.SpaceOwner).ToNot(BeNil())
+
+			n := byName()
+			Expect(n.Exists).To(BeTrue())
+			Expect(n.ID).To(Equal(placeholder))
+			Expect(n.InternalPath()).To(Equal(filepath.Join(env.Root, "users", env.Owner.Username, "new.txt")))
+			id, err := n.ProcessingID(env.Ctx)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(id).To(Equal("session-new"))
+		})
+
+		It("leaves a file that took the name meanwhile alone", func() {
+			Expect(env.Fs.TouchFile(env.Ctx, &provider.Reference{ResourceId: env.SpaceRootRes, Path: "./new.txt"}, false, "")).To(Succeed())
+			other := byName()
+
+			_, err := env.Fs.PrepareUpload(env.Ctx, createRef, "session-new", info)
+			Expect(err).To(BeAssignableToTypeOf(errtypes.AlreadyExists("")))
+			Expect(err.Error()).ToNot(ContainSubstring(env.Root), "the error should not reveal the storage path")
+
+			kept := byName()
+			Expect(kept.ID).To(Equal(other.ID))
+			path, err := env.Lookup.IDCache.Get(env.Ctx, env.SpaceRootRes.SpaceId, placeholder)
+			Expect(err).To(HaveOccurred(), "the losing upload's id should not be cached, got %q", path)
+		})
+
+		It("removes the file and its cache entry when the quota is exceeded", func() {
+			original := node.CheckQuota
+			node.CheckQuota = func(context.Context, *node.Node, bool, uint64, uint64) (bool, error) {
+				return false, errtypes.InsufficientStorage("quota exceeded")
+			}
+			defer func() { node.CheckQuota = original }()
+
+			_, err := env.Fs.PrepareUpload(env.Ctx, createRef, "session-new", info)
+			Expect(err).To(BeAssignableToTypeOf(errtypes.InsufficientStorage("")))
+
+			Expect(byName().Exists).To(BeFalse())
+			_, err = os.Stat(filepath.Join(env.Root, "users", env.Owner.Username, "new.txt"))
+			Expect(os.IsNotExist(err)).To(BeTrue(), "the file was left on disk")
+			_, err = env.Lookup.IDCache.Get(env.Ctx, env.SpaceRootRes.SpaceId, placeholder)
+			Expect(err).To(HaveOccurred(), "the id was left in the cache")
 		})
 	})
 
@@ -177,7 +268,7 @@ var _ = Describe("PrepareUpload on posix", func() {
 		Expect(result.SizeDiff).To(Equal(int64(9)))
 
 		Expect(env.Fs.MarkProcessing(env.Ctx, ref, true, "session-1")).To(Succeed())
-		Expect(env.Fs.RollbackUpload(env.Ctx, ref, "session-1", true, result.SizeDiff)).To(Succeed())
+		Expect(env.Fs.RollbackUpload(env.Ctx, ref, "session-1", storage.RollbackInfo{NodeExisted: true, SizeDiff: result.SizeDiff})).To(Succeed())
 
 		n, err := env.Lookup.NodeFromResource(env.Ctx, ref)
 		Expect(err).ToNot(HaveOccurred())
@@ -203,13 +294,53 @@ var _ = Describe("PrepareUpload on posix", func() {
 		Expect(err).ToNot(HaveOccurred())
 
 		Expect(env.Fs.MarkProcessing(env.Ctx, newRef, true, "session-new")).To(Succeed())
-		Expect(env.Fs.RollbackUpload(env.Ctx, newRef, "session-new", false, result.SizeDiff)).To(Succeed())
+		Expect(env.Fs.RollbackUpload(env.Ctx, newRef, "session-new", storage.RollbackInfo{NodeExisted: false, SizeDiff: result.SizeDiff})).To(Succeed())
 
 		_, err = os.Stat(created.InternalPath())
 		Expect(os.IsNotExist(err)).To(BeTrue(), "the file created by the upload should be gone")
 		n, err := env.Lookup.NodeFromResource(env.Ctx, newRef)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(n.Exists).To(BeFalse())
+	})
+
+	It("removes a file whose metadata became unreadable on rollback", func() {
+		newRef := &provider.Reference{ResourceId: env.SpaceRootRes, Path: "./orphan.txt"}
+		Expect(env.Fs.TouchFile(env.Ctx, newRef, false, "")).To(Succeed())
+		created, err := env.Lookup.NodeFromResource(env.Ctx, newRef)
+		Expect(err).ToNot(HaveOccurred())
+		rootBefore, err := env.Fs.GetMD(env.Ctx, &provider.Reference{ResourceId: env.SpaceRootRes}, nil, nil)
+		Expect(err).ToNot(HaveOccurred())
+
+		result, err := env.Fs.PrepareUpload(env.Ctx, newRef, "session-orphan", storage.UploadInfo{
+			NodeExisted: false,
+			Size:        20,
+		})
+		Expect(err).ToNot(HaveOccurred())
+		Expect(env.Fs.MarkProcessing(env.Ctx, newRef, true, "session-orphan")).To(Succeed())
+
+		Expect(env.Lookup.MetadataBackend().Purge(env.Ctx, created)).To(Succeed())
+		idRef := &provider.Reference{ResourceId: &provider.ResourceId{
+			StorageId: env.SpaceRootRes.GetStorageId(),
+			SpaceId:   env.SpaceRootRes.GetSpaceId(),
+			OpaqueId:  created.ID,
+		}}
+		_, err = env.Lookup.NodeFromResource(env.Ctx, idRef)
+		Expect(err).To(HaveOccurred(), "the node should be unreadable")
+		Expect(env.Fs.IsOrphaned(env.Ctx, idRef)).To(BeTrue())
+
+		Expect(env.Fs.RollbackUpload(env.Ctx, idRef, "session-orphan", storage.RollbackInfo{
+			SizeDiff: result.SizeDiff,
+			NodeID:   created.ID,
+			ParentID: created.ParentID,
+			Filename: "orphan.txt",
+			Size:     20,
+		})).To(Succeed())
+
+		_, err = os.Stat(created.InternalPath())
+		Expect(os.IsNotExist(err)).To(BeTrue(), "the orphaned file should be gone")
+		rootAfter, err := env.Fs.GetMD(env.Ctx, &provider.Reference{ResourceId: env.SpaceRootRes}, nil, nil)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(rootAfter.Size).To(Equal(rootBefore.Size), "the quota should be released")
 	})
 
 	It("leaves no revision behind when a precondition fails", func() {
