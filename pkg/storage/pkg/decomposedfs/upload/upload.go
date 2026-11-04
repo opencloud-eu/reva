@@ -388,6 +388,22 @@ func (session *DecomposedFsSession) Finalize(ctx context.Context) (err error) {
 		return errors.Wrap(err, "failed to upload file to blobstore")
 	}
 
+	// when versioning is disabled no revision keeps the previous content alive;
+	// now that the new blob has been written the old one can be deleted
+	if session.store.disableVersioning {
+		if oldBlobID := session.info.MetaData["oldBlobID"]; oldBlobID != "" && oldBlobID != session.ID() {
+			if derr := session.store.tp.DeleteBlob(&node.Node{
+				BaseNode: node.BaseNode{SpaceID: session.SpaceID()},
+				BlobID:   oldBlobID,
+			}); derr != nil {
+				appctx.GetLogger(ctx).Error().Err(derr).
+					Str("nodeid", n.ID).
+					Str("blobid", oldBlobID).
+					Msg("Decomposedfs: could not delete superseded blob")
+			}
+		}
+	}
+
 	return nil
 }
 

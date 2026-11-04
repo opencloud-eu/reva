@@ -214,7 +214,6 @@ func (store DecomposedFsStore) CreateNodeForUpload(ctx context.Context, session 
 	}
 
 	var unlock metadata.UnlockFunc
-	var oldBlobID string
 	if session.NodeExists() { // TODO this is wrong. The node should be created when the upload starts, the revisions should be created independently of the node
 		// we do not need to propagate a change when a node is created, only when the upload is ready.
 		// that still creates problems for desktop clients because if another change causes propagation it will detects an empty file
@@ -224,7 +223,7 @@ func (store DecomposedFsStore) CreateNodeForUpload(ctx context.Context, session 
 		// so we have to check if the node has been created meanwhile (well, only in case the upload does not know the nodeid ... or the NodeExists array that is checked by session.NodeExists())
 		// FIXME look at the disk again to see if the file has been created in between, or just try initializing a new node and do the update existing node as a fallback. <- the latter!
 
-		unlock, oldBlobID, err = store.updateExistingNode(ctx, session, n, session.SpaceID(), uint64(session.Size()))
+		unlock, err = store.updateExistingNode(ctx, session, n, session.SpaceID(), uint64(session.Size()))
 		if err != nil {
 			appctx.GetLogger(ctx).Error().Err(err).Msg("failed to update existing node")
 		}
@@ -282,22 +281,6 @@ func (store DecomposedFsStore) CreateNodeForUpload(ctx context.Context, session 
 		return nil, errors.Wrap(err, "Decomposedfs: could not write metadata")
 	}
 
-	// when versioning is disabled no revision keeps the previous content alive, so the
-	// old blob is no longer referenced and can be deleted
-	if store.disableVersioning {
-		if oldBlobID != "" && oldBlobID != n.BlobID {
-			if derr := store.tp.DeleteBlob(&node.Node{
-				BaseNode: node.BaseNode{SpaceID: n.SpaceID},
-				BlobID:   oldBlobID,
-			}); derr != nil {
-				appctx.GetLogger(ctx).Error().Err(derr).
-					Str("nodeid", n.ID).
-					Str("blobid", oldBlobID).
-					Msg("Decomposedfs: could not delete superseded blob")
-			}
-		}
-	}
-
 	err = store.um.RunInBaseScope(func() error {
 		return session.Persist(ctx)
 	})
@@ -308,47 +291,45 @@ func (store DecomposedFsStore) CreateNodeForUpload(ctx context.Context, session 
 	return n, nil
 }
 
-func (store DecomposedFsStore) updateExistingNode(ctx context.Context, session *DecomposedFsSession, n *node.Node, spaceID string, fsize uint64) (metadata.UnlockFunc, string, error) {
+func (store DecomposedFsStore) updateExistingNode(ctx context.Context, session *DecomposedFsSession, n *node.Node, spaceID string, fsize uint64) (metadata.UnlockFunc, error) {
 	_, span := tracer.Start(ctx, "updateExistingNode")
 	defer span.End()
-
-	var oldBlobID string
 
 	// write lock existing node before reading any metadata
 	unlock, err := store.lu.MetadataBackend().Lock(n)
 	if err != nil {
-		return nil, "", err
+		return nil, err
 	}
 
 	old, _ := node.ReadNode(ctx, store.lu, spaceID, n.ID, "", false, nil, false)
 	if _, err := node.CheckQuota(ctx, n.SpaceRoot, true, uint64(old.Blobsize), fsize); err != nil {
-		return unlock, "", err
+		return unlock, err
 	}
 
 	oldNodeMtime, err := old.GetMTime(ctx)
 	if err != nil {
-		return unlock, "", err
+		return unlock, err
 	}
 	oldNodeEtag, err := node.CalculateEtag(old.ID, oldNodeMtime)
 	if err != nil {
-		return unlock, "", err
+		return unlock, err
 	}
 
 	// When the if-match header was set we need to check if the
 	// etag still matches before finishing the upload.
 	if session.HeaderIfMatch() != "" && session.HeaderIfMatch() != oldNodeEtag {
-		return unlock, "", errtypes.Aborted("etag mismatch")
+		return unlock, errtypes.Aborted("etag mismatch")
 	}
 
 	// When the if-none-match header was set we need to check if any of the
 	// etags matches before finishing the upload.
 	if session.HeaderIfNoneMatch() != "" {
 		if session.HeaderIfNoneMatch() == "*" {
-			return unlock, "", errtypes.Aborted("etag mismatch, resource exists")
+			return unlock, errtypes.Aborted("etag mismatch, resource exists")
 		}
 		for _, ifNoneMatchTag := range strings.Split(session.HeaderIfNoneMatch(), ",") {
 			if ifNoneMatchTag == oldNodeEtag {
-				return unlock, "", errtypes.Aborted("etag mismatch")
+				return unlock, errtypes.Aborted("etag mismatch")
 			}
 		}
 	}
@@ -358,11 +339,11 @@ func (store DecomposedFsStore) updateExistingNode(ctx context.Context, session *
 	if session.HeaderIfUnmodifiedSince() != "" {
 		ifUnmodifiedSince, err := time.Parse(time.RFC3339Nano, session.HeaderIfUnmodifiedSince())
 		if err != nil {
-			return unlock, "", errtypes.InternalError(fmt.Sprintf("failed to parse if-unmodified-since time: %s", err))
+			return unlock, errtypes.InternalError(fmt.Sprintf("failed to parse if-unmodified-since time: %s", err))
 		}
 
 		if oldNodeMtime.After(ifUnmodifiedSince) {
-			return unlock, "", errtypes.Aborted("if-unmodified-since mismatch")
+			return unlock, errtypes.Aborted("if-unmodified-since mismatch")
 		}
 	}
 
@@ -373,28 +354,28 @@ func (store DecomposedFsStore) updateExistingNode(ctx context.Context, session *
 		versionPath, err := session.store.tp.CreateRevision(ctx, n, timestamp)
 		if err != nil {
 			if !errors.Is(err, os.ErrExist) {
-				return unlock, "", err
+				return unlock, err
 			}
 
 			// a revision with this mtime does already exist.
 			// If the blobs are the same we can just delete the old one
 			versionNode := node.NewBaseNode(n.SpaceID, versionID, session.store.lu)
 			if err := validateChecksums(ctx, old, session, versionNode); err != nil {
-				return unlock, "", err
+				return unlock, err
 			}
 
 			// delete old blob
 			bID, _, err := session.store.lu.ReadBlobIDAndSizeAttr(ctx, versionNode, nil)
 			if err != nil {
-				return unlock, "", err
+				return unlock, err
 			}
 			if err := session.store.tp.DeleteBlob(&node.Node{BaseNode: node.BaseNode{SpaceID: n.SpaceID}, BlobID: bID}); err != nil {
-				return unlock, "", err
+				return unlock, err
 			}
 
 			// clean revision file
 			if versionPath, err = session.store.tp.CreateRevision(ctx, n, timestamp); err != nil {
-				return unlock, "", err
+				return unlock, err
 			}
 		}
 
@@ -402,16 +383,17 @@ func (store DecomposedFsStore) updateExistingNode(ctx context.Context, session *
 		// keep mtime from previous version
 		span.AddEvent("os.Chtimes")
 		if err := os.Chtimes(versionPath, oldNodeMtime, oldNodeMtime); err != nil {
-			return unlock, "", errtypes.InternalError(fmt.Sprintf("failed to change mtime of version node: %s", err))
+			return unlock, errtypes.InternalError(fmt.Sprintf("failed to change mtime of version node: %s", err))
 		}
 	} else {
-		// with versioning disabled no revision keeps the previous content alive
-		oldBlobID = old.BlobID
+		// with versioning disabled no revision keeps the previous content alive,
+		// remember the blob so it can be deleted once the new content is written
+		session.info.MetaData["oldBlobID"] = old.BlobID
 	}
 
 	session.info.MetaData["sizeDiff"] = strconv.FormatInt((int64(fsize) - old.Blobsize), 10)
 
-	return unlock, oldBlobID, nil
+	return unlock, nil
 }
 
 func validateChecksums(ctx context.Context, n *node.Node, session *DecomposedFsSession, versionNode metadata.MetadataNode) error {

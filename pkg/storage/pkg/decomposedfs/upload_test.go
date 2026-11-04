@@ -436,7 +436,10 @@ var _ = Describe("File uploads", func() {
 	})
 
 	Context("when overwriting a file", func() {
-		var uploadFile func()
+		var (
+			uploadFile  func()
+			fileContent []byte
+		)
 
 		BeforeEach(func() {
 			pmock.On("AssemblePermissions", mock.Anything, mock.Anything).Return(&provider.ResourcePermissions{
@@ -446,7 +449,7 @@ var _ = Describe("File uploads", func() {
 				ListContainer:      true,
 			}, nil)
 
-			fileContent := []byte("0123456789")
+			fileContent = []byte("0123456789")
 			uploadFile = func() {
 				uploadIds, err := fs.InitiateUpload(ctx, ref, int64(len(fileContent)), map[string]string{})
 				Expect(err).ToNot(HaveOccurred())
@@ -503,6 +506,36 @@ var _ = Describe("File uploads", func() {
 				Expect(firstBlobID).ToNot(BeEmpty())
 				bs.AssertNumberOfCalls(GinkgoT(), "Upload", 2)
 				bs.AssertCalled(GinkgoT(), "Delete", mock.MatchedBy(func(n *node.Node) bool {
+					return n.BlobID == firstBlobID
+				}))
+			})
+
+			It("keeps the previous blob when finalizing fails", func() {
+				var firstBlobID string
+
+				bs.On("Upload", mock.Anything, mock.Anything, mock.Anything).Return(nil).Once().
+					Run(func(args mock.Arguments) {
+						firstBlobID = args.Get(0).(*node.Node).BlobID
+					})
+
+				uploadFile()
+
+				bs.On("Upload", mock.Anything, mock.Anything, mock.Anything).Return(errors.New("blobstore failure"))
+
+				uploadIds, err := fs.InitiateUpload(ctx, ref, int64(len(fileContent)), map[string]string{})
+				Expect(err).ToNot(HaveOccurred())
+
+				_, err = fs.Upload(ctx, storage.UploadRequest{
+					Ref:    &provider.Reference{Path: "/" + uploadIds["simple"]},
+					Body:   io.NopCloser(bytes.NewReader(fileContent)),
+					Length: int64(len(fileContent)),
+				}, nil)
+				Expect(err).To(HaveOccurred())
+				// the failure comes from writing the new blob, i.e. after the node metadata was updated
+				bs.AssertNumberOfCalls(GinkgoT(), "Upload", 2)
+
+				Expect(firstBlobID).ToNot(BeEmpty())
+				bs.AssertNotCalled(GinkgoT(), "Delete", mock.MatchedBy(func(n *node.Node) bool {
 					return n.BlobID == firstBlobID
 				}))
 			})
