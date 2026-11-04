@@ -602,10 +602,17 @@ func (fs *Decomposedfs) MustCheckNodePermissions(ctx context.Context, unrestrict
 
 // canListAllSpaces returns true when the user is allowed to list all spaces of the given node's type
 func (fs *Decomposedfs) canListAllSpaces(ctx context.Context, n *node.Node) bool {
-	if n.SpaceRoot != nil {
-		if spaceType, err := n.SpaceRoot.XattrString(ctx, prefixes.SpaceTypeAttr); err == nil && spaceType == _spaceTypePersonal {
-			return fs.p.ListAllPersonalSpaces(ctx)
-		}
+	if n.SpaceRoot == nil {
+		return false
+	}
+
+	spaceType, err := n.SpaceRoot.XattrString(ctx, prefixes.SpaceTypeAttr)
+	if err != nil {
+		return false
+	}
+
+	if spaceType == _spaceTypePersonal {
+		return fs.p.ListAllPersonalSpaces(ctx)
 	}
 
 	return fs.p.ListAllSpaces(ctx)

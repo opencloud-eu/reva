@@ -587,6 +587,25 @@ var _ = Describe("Spaces", func() {
 			Expect(err).To(BeAssignableToTypeOf(errtypes.NotFound("")))
 		})
 
+		It("space admin cannot read the quota of a personal space without a space type", func() {
+			n, err := node.ReadNode(
+				context.Background(),
+				env.Lookup,
+				adminSpace.GetRoot().GetSpaceId(),
+				adminSpace.GetRoot().GetOpaqueId(),
+				"",
+				false,
+				nil,
+				false,
+			)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(n.RemoveXattr(context.Background(), prefixes.SpaceTypeAttr)).To(Succeed())
+
+			_, _, _, err = env.Fs.GetQuota(ctxpkg.ContextSetUser(context.Background(), spaceadmin), &provider.Reference{ResourceId: adminSpace.GetRoot()})
+			Expect(err).To(HaveOccurred())
+			Expect(err).To(BeAssignableToTypeOf(errtypes.NotFound("")))
+		})
+
 		It("admin can read the quota of another user's personal space", func() {
 			_, _, _, err := env.Fs.GetQuota(ctxpkg.ContextSetUser(context.Background(), admin), &provider.Reference{ResourceId: env.SpaceRootRes})
 			Expect(err).ToNot(HaveOccurred())
