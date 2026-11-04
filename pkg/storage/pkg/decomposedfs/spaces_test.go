@@ -349,6 +349,22 @@ var _ = Describe("Spaces", func() {
 			})
 			// purging one space must remove only that space's entry: a sibling
 			// space of the same owner must stay in the by-user-id index.
+			// purging must delete the blobs of all nodes in the space, not only of the root node
+			// https://github.com/opencloud-eu/opencloud/issues/1865
+			It("deletes the blobs of the nodes in the space", func() {
+				_, spaceID, _, err := storagespace.SplitID(delReq.Id.GetOpaqueId())
+				Expect(err).ToNot(HaveOccurred())
+				_, err = env.CreateTestFile("file1", "file1-blobid", spaceID, spaceID, 1)
+				Expect(err).ToNot(HaveOccurred())
+				env.Blobstore.On("Delete", mock.AnythingOfType("*node.Node")).Return(nil)
+
+				ctx := ctxpkg.ContextSetUser(context.Background(), env.DeleteAllSpacesUser)
+				Expect(env.Fs.DeleteStorageSpace(ctx, delReq)).To(Succeed())
+
+				env.Blobstore.AssertCalled(GinkgoT(), "Delete", mock.MatchedBy(func(n *node.Node) bool {
+					return n.BlobID == "file1-blobid" && n.SpaceID == spaceID
+				}))
+			})
 			It("keeps a sibling space in the by-user-id index when another is purged", func() {
 				_, purgedID, _, err := storagespace.SplitID(delReq.Id.GetOpaqueId())
 				Expect(err).ToNot(HaveOccurred())

@@ -854,7 +854,7 @@ func (fs *Decomposedfs) DeleteStorageSpace(ctx context.Context, req *provider.De
 				return err
 			}
 
-			bid := m["user.oc.blobid"]
+			bid := m[prefixes.BlobIDAttr]
 			if string(bid) == "" {
 				return nil
 			}
@@ -870,14 +870,19 @@ func (fs *Decomposedfs) DeleteStorageSpace(ctx context.Context, req *provider.De
 			return os.Remove(path)
 		}
 
-		// This is deletes all blobs of the space
+		// This deletes all blobs of the space, including revisions and trashed nodes.
+		// The node metadata lives in the nodes tree of the space, not below the root node,
+		// so walk the whole space directory.
+		// https://github.com/opencloud-eu/opencloud/issues/1865
 		// NOTE: This isn't needed when no s3 is used, but we can't differentiate that here...
-		if err := filepath.Walk(root, walkfn); err != nil {
-			return err
+		spaceRoot := fs.lu.InternalSpaceRoot(spaceID)
+		if spaceRoot != "" {
+			if err := filepath.Walk(spaceRoot, walkfn); err != nil && !os.IsNotExist(err) {
+				return err
+			}
 		}
 
 		// remove space metadata
-		spaceRoot := fs.lu.InternalSpaceRoot(spaceID)
 		if spaceRoot != "" {
 			if err := removeSpaceRoot(spaceRoot); err != nil {
 				return err
