@@ -355,3 +355,61 @@ func TestBuilders(t *testing.T) {
 		require.Equal(t, list.AsList(), slice.AsList())
 	}
 }
+
+func TestAddAfterRemoveAtMaximum(t *testing.T) {
+	full := []string{"a", "b", "c", "d", "e"}
+
+	testCases := []struct {
+		Alias        string
+		TagsToRemove []string
+		TagsToAdd    []string
+		ExpectedTags string
+		ExpectAdded  bool
+	}{
+		{
+			Alias:        "a removed tag frees a slot",
+			TagsToRemove: []string{"a"},
+			TagsToAdd:    []string{"f"},
+			ExpectedTags: "f,b,c,d,e",
+			ExpectAdded:  true,
+		},
+		{
+			Alias:        "as many slots as removed tags",
+			TagsToRemove: []string{"a", "b"},
+			TagsToAdd:    []string{"f", "g", "h"},
+			ExpectedTags: "f,g,c,d,e",
+			ExpectAdded:  true,
+		},
+		{
+			Alias:        "removing a removed tag again frees nothing",
+			TagsToRemove: []string{"a", "a"},
+			TagsToAdd:    []string{"f", "g"},
+			ExpectedTags: "f,b,c,d,e",
+			ExpectAdded:  true,
+		},
+		{
+			Alias:        "removing an unknown tag frees nothing",
+			TagsToRemove: []string{"x"},
+			TagsToAdd:    []string{"f"},
+			ExpectedTags: "a,b,c,d,e",
+			ExpectAdded:  false,
+		},
+		{
+			Alias:        "a removed tag can be added again",
+			TagsToRemove: []string{"c"},
+			TagsToAdd:    []string{"c"},
+			ExpectedTags: "c,a,b,d,e",
+			ExpectAdded:  true,
+		},
+	}
+
+	for _, tc := range testCases {
+		ts := New(full...)
+		ts.maxtags = len(full)
+
+		ts.Remove(tc.TagsToRemove...)
+		added := ts.Add(tc.TagsToAdd...)
+		require.Equal(t, tc.ExpectAdded, added, tc.Alias)
+		require.Equal(t, tc.ExpectedTags, ts.AsList(), tc.Alias)
+	}
+}
