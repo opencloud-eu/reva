@@ -122,8 +122,9 @@ func (h *Handler) Init(c *config.Config) {
 	if h.c.Capabilities.Dav == nil {
 		h.c.Capabilities.Dav = &ocs.CapabilitiesDav{}
 	}
-	if h.c.Capabilities.Dav.Trashbin == "" {
-		h.c.Capabilities.Dav.Trashbin = "1.0"
+	// Trashbin is deprecated for clients, but we keep announcing it until they read the providers section.
+	if h.c.Capabilities.Dav.Trashbin == "" { //nolint:staticcheck // SA1019: still announced for older clients
+		h.c.Capabilities.Dav.Trashbin = "1.0" //nolint:staticcheck // SA1019: still announced for older clients
 	}
 	if h.c.Capabilities.Dav.Reports == nil {
 		h.c.Capabilities.Dav.Reports = []string{}
