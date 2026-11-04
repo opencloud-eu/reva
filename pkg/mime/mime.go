@@ -168,6 +168,7 @@ var mimeTypes = map[string]string{
 	"cpp":                      "text/x-c",
 	"cpt":                      "application/mac-compactpro",
 	"cr2":                      "image/x-canon-cr2",
+	"cr3":                      "image/x-canon-cr3",
 	"crd":                      "application/x-mscardfile",
 	"crl":                      "application/pkix-crl",
 	"crt":                      "application/x-x509-ca-cert",
