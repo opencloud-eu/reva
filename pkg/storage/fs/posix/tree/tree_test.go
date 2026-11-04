@@ -255,6 +255,22 @@ var _ = Describe("Watching tree", func() {
 					expectSizes(len(content))
 				})
 
+				It("refreshes stale parents when the file cache entry is missing", func() {
+					n, err := env.Lookup.NodeFromResource(env.Ctx, refs[0])
+					Expect(err).ToNot(HaveOccurred())
+					backend := env.Lookup.MetadataBackend()
+					Expect(backend.InvalidateCache(env.Ctx, n)).To(Succeed())
+					content := []byte("hello, changed world")
+					writeLikeScan(content, nil)
+					// Read the cached parent first, so the test does not fill the missing file entry.
+					Eventually(func(g Gomega) {
+						parent, err := env.Lookup.NodeFromResource(env.Ctx, refs[1])
+						g.Expect(err).ToNot(HaveOccurred())
+						g.Expect(parent.GetTreeSize(env.Ctx)).To(Equal(uint64(len(content))))
+					}).Should(Succeed())
+					expectSizes(len(content))
+				})
+
 				It("counts the change of the other process once when the file changed again", func() {
 					content, extra := []byte("hello, changed world"), []byte(", again...")
 					writeLikeScan(content, extra)
