@@ -8,6 +8,7 @@
 
 ### 🐛 Bug Fixes
 
+- fix(mime): map the 3mf, blend, fb2, ipynb and kra extensions [[#970](https://github.com/opencloud-eu/reva/pull/970)]
 - fix(tags): free a slot for each removed tag [[#968](https://github.com/opencloud-eu/reva/pull/968)]
 - fix(metrics): clarify the help texts of the upload session metrics [[#955](https://github.com/opencloud-eu/reva/pull/955)]
 - fix(mime): map the m4b and azw3 extensions [[#965](https://github.com/opencloud-eu/reva/pull/965)]
