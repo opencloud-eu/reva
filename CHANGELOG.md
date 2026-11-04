@@ -1,13 +1,14 @@
 # Changelog
 
-## [2.52.2](https://github.com/opencloud-eu/reva/releases/tag/v2.52.2) - 2026-11-02
+## [2.52.2](https://github.com/opencloud-eu/reva/releases/tag/v2.52.2) - 2026-11-04
 
 ### ❤️ Thanks to all contributors! ❤️
 
-@aduffeck, @butonic, @kulmann, @maki5, @rhafer
+@aduffeck, @butonic, @dschmidt, @kulmann, @maki5, @rhafer
 
 ### 🐛 Bug Fixes
 
+- fix(mime): map the m4b and azw3 extensions [[#965](https://github.com/opencloud-eu/reva/pull/965)]
 - fix: escape realm in WWW-Authenticate challenges [[#920](https://github.com/opencloud-eu/reva/pull/920)]
 
 ### 📦️ Dependencies
