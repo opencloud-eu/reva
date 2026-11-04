@@ -380,6 +380,14 @@ func (store DecomposedFsStore) updateExistingNode(ctx context.Context, session *
 		}
 
 		session.info.MetaData["versionID"] = versionID
+		// The version holds the metadata of an older upload that is still in postprocessing, not
+		// content that was ever accepted. Remember it, so that rolling back this upload can hand the
+		// node back to the older one instead of leaving it with the metadata of an unfinished upload.
+		if status, _ := old.XattrString(ctx, prefixes.StatusPrefix); strings.HasPrefix(status, node.ProcessingStatus) {
+			if processingID := strings.TrimPrefix(status, node.ProcessingStatus); processingID != session.ID() {
+				session.info.MetaData["versionProcessingID"] = processingID
+			}
+		}
 		// keep mtime from previous version
 		span.AddEvent("os.Chtimes")
 		if err := os.Chtimes(versionPath, oldNodeMtime, oldNodeMtime); err != nil {
