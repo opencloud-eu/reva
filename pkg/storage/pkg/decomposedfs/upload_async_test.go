@@ -667,8 +667,8 @@ var _ = Describe("Async file uploads", Ordered, func() {
 			failPostprocessing(secondUploadID, events.PPOutcomeDelete)
 
 			_, status, size := fileStatus()
-			// check processing status has been removed because the most recent upload finished and can be downloaded
-			Expect(status).To(Equal(""))
+			// the node is the first upload's again, which is still processing
+			Expect(status).To(Equal("processing"))
 			// size should match the first upload
 			Expect(size).To(Equal(len(firstContent)))
 
@@ -686,6 +686,127 @@ var _ = Describe("Async file uploads", Ordered, func() {
 			// parent size should be 0
 			// FIXME we are not correctly reverting the sizediff
 			// Expect(parentSize()).To(Equal(0))
+		})
+	})
+
+	When("two uploads overwrite an existing file in parallel", func() {
+		var (
+			olderUploadID string
+			newerUploadID string
+			olderContent  = []byte("012345678901234")
+		)
+
+		JustBeforeEach(func() {
+			// the file exists with firstContent
+			succeedPostprocessing(uploadID)
+
+			upload := func(content []byte) string {
+				uploadIds, err := fs.InitiateUpload(ctx, ref, int64(len(content)), map[string]string{})
+				Expect(err).ToNot(HaveOccurred())
+				_, err = fs.Upload(ctx, storage.UploadRequest{
+					Ref:    &provider.Reference{Path: "/" + uploadIds["simple"]},
+					Body:   io.NopCloser(bytes.NewReader(content)),
+					Length: int64(len(content)),
+				}, nil)
+				Expect(err).ToNot(HaveOccurred())
+				_, ok := (<-pub).(events.BytesReceived)
+				Expect(ok).To(BeTrue())
+				return uploadIds["simple"]
+			}
+			olderUploadID = upload(olderContent)
+			newerUploadID = upload(secondContent)
+		})
+
+		revisionSizes := func() []uint64 {
+			revisions, err := fs.ListRevisions(ctx, ref)
+			Expect(err).ToNot(HaveOccurred())
+			sizes := []uint64{}
+			for _, r := range revisions {
+				sizes = append(sizes, r.Size)
+			}
+			return sizes
+		}
+
+		// FIXME: when the older upload fails after the newer one has created a version for it, that
+		// version stays although it never got its content (#838). The expected versions are then only
+		// the original one.
+
+		It("keeps the newer upload when the older one fails after the newer one succeeded", func() {
+			succeedPostprocessing(newerUploadID)
+
+			_, status, size := fileStatus()
+			Expect(status).To(Equal(""))
+			Expect(size).To(Equal(len(secondContent)))
+
+			failPostprocessing(olderUploadID, events.PPOutcomeDelete)
+
+			// rolling back the older upload must not replace the newer content with the old version
+			_, status, size = fileStatus()
+			Expect(status).To(Equal(""))
+			Expect(size).To(Equal(len(secondContent)))
+			Expect(parentSize()).To(Equal(len(secondContent)))
+
+			// the version of the original file is kept
+			Expect(revisionSizes()).To(ContainElement(uint64(len(firstContent))))
+			// FIXME Expect(revisionSizes()).To(ConsistOf(uint64(len(firstContent))))
+		})
+
+		It("keeps the newer upload when the older one fails before the newer one succeeds", func() {
+			failPostprocessing(olderUploadID, events.PPOutcomeDelete)
+			succeedPostprocessing(newerUploadID)
+
+			_, status, size := fileStatus()
+			Expect(status).To(Equal(""))
+			Expect(size).To(Equal(len(secondContent)))
+			Expect(revisionSizes()).To(ContainElement(uint64(len(firstContent))))
+			// FIXME Expect(revisionSizes()).To(ConsistOf(uint64(len(firstContent))))
+		})
+
+		It("restores the original file when both fail, the newer one first", func() {
+			failPostprocessing(newerUploadID, events.PPOutcomeDelete)
+
+			// the node is the older upload's again, which is still in postprocessing
+			_, status, _ := fileStatus()
+			Expect(status).To(Equal("processing"))
+
+			failPostprocessing(olderUploadID, events.PPOutcomeDelete)
+
+			_, status, size := fileStatus()
+			Expect(status).To(Equal(""))
+			Expect(size).To(Equal(len(firstContent)))
+			Expect(parentSize()).To(Equal(len(firstContent)))
+			Expect(revisionSizes()).To(BeEmpty())
+		})
+
+		It("keeps the older upload when it succeeds after the newer one failed", func() {
+			failPostprocessing(newerUploadID, events.PPOutcomeDelete)
+			succeedPostprocessing(olderUploadID)
+
+			_, status, size := fileStatus()
+			Expect(status).To(Equal(""))
+			Expect(size).To(Equal(len(olderContent)))
+			Expect(revisionSizes()).To(ConsistOf(uint64(len(firstContent))))
+		})
+
+		It("does not hand the node back to an older upload that was aborted", func() {
+			failPostprocessing(olderUploadID, events.PPOutcomeAbort)
+			failPostprocessing(newerUploadID, events.PPOutcomeDelete)
+
+			_, status, _ := fileStatus()
+			Expect(status).To(Equal(""))
+		})
+
+		// FIXME: the older upload fails first and keeps the node of the newer one. The newer one
+		// then rolls back to the version it created for the older one, which never got its content
+		// (#838).
+		PIt("restores the original file when both fail, the older one first", func() {
+			failPostprocessing(olderUploadID, events.PPOutcomeDelete)
+			failPostprocessing(newerUploadID, events.PPOutcomeDelete)
+
+			_, status, size := fileStatus()
+			Expect(status).To(Equal(""))
+			Expect(size).To(Equal(len(firstContent)))
+			Expect(revisionSizes()).To(BeEmpty())
 		})
 	})
 })
