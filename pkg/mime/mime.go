@@ -656,6 +656,7 @@ var mimeTypes = map[string]string{
 	"opf":                      "application/oebps-package+xml",
 	"opml":                     "text/x-opml",
 	"oprc":                     "application/vnd.palm",
+	"ora":                      "image/openraster",
 	"orf":                      "image/x-olympus-orf",
 	"org":                      "text/x-org",
 	"osf":                      "application/vnd.yamaha.openscoreformat",
