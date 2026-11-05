@@ -1,13 +1,14 @@
 # Changelog
 
-## [2.52.2](https://github.com/opencloud-eu/reva/releases/tag/v2.52.2) - 2026-11-04
+## [2.52.2](https://github.com/opencloud-eu/reva/releases/tag/v2.52.2) - 2026-11-05
 
 ### ❤️ Thanks to all contributors! ❤️
 
-@aduffeck, @butonic, @dschmidt, @kulmann, @maki5, @pbleser-oc, @rhafer
+@aduffeck, @butonic, @dschmidt, @kulmann, @maki5, @pbleser-oc, @rhafer, @v-scharf
 
 ### 🐛 Bug Fixes
 
+- fix(decomposedfs): delete all blobs when purging a space [[#971](https://github.com/opencloud-eu/reva/pull/971)]
 - fix(mime): map the 3mf, blend, fb2, ipynb and kra extensions [[#970](https://github.com/opencloud-eu/reva/pull/970)]
 - fix(tags): free a slot for each removed tag [[#968](https://github.com/opencloud-eu/reva/pull/968)]
 - fix(metrics): clarify the help texts of the upload session metrics [[#955](https://github.com/opencloud-eu/reva/pull/955)]
