@@ -599,6 +599,10 @@ func (s *Service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 		}, nil
 	}
 
+	caps := storage.FullCapabilities()
+	if cp, ok := s.Storage.(storage.CapabilityProvider); ok {
+		caps = cp.Capabilities(ctx)
+	}
 	for _, sp := range spaces {
 		if sp.GetId() == nil || sp.GetId().GetOpaqueId() == "" {
 			log.Error().Str("service", "storageprovider").Str("driver", s.conf.Driver).Interface("space", sp).Msg("space is missing space id and root id")
@@ -606,6 +610,7 @@ func (s *Service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 		}
 
 		s.addMissingStorageProviderID(sp.GetRoot(), sp.GetId())
+		sp.Opaque = utils.AppendJSONToOpaque(sp.Opaque, storage.CapabilitiesOpaqueKey, caps)
 	}
 
 	return &provider.ListStorageSpacesResponse{
