@@ -9,12 +9,14 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	cs3permissions "github.com/cs3org/go-cs3apis/cs3/permissions/v1beta1"
 	v1beta11 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	ruser "github.com/opencloud-eu/reva/v2/pkg/ctx"
+	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
 	"github.com/opencloud-eu/reva/v2/pkg/rgrpc/todo/pool"
 	"github.com/opencloud-eu/reva/v2/pkg/storage"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/decomposed/blobstore"
@@ -210,9 +212,12 @@ var _ = Describe("Synchronous uploads", func() {
 	})
 
 	Context("with a node left processing by an interrupted upload", func() {
+		var v1BlobID string
+
 		BeforeEach(func() {
 			_, err := upload("v1", nil)
 			Expect(err).ToNot(HaveOccurred())
+			v1BlobID = file().BlobID
 		})
 
 		mark := func(blobID, status string) {
@@ -238,6 +243,49 @@ var _ = Describe("Synchronous uploads", func() {
 			mark(ids["tus"], node.ProcessingStatus+ids["tus"])
 			return ids["tus"]
 		}
+
+		age := func(id string) {
+			then := time.Now().Add(-time.Hour)
+			Expect(os.Chtimes(filepath.Join(o.Root, "uploads", id+".info"), then, then)).To(Succeed())
+		}
+
+		It("finishes the upload when the file is read", func() {
+			id := interrupt("v2")
+			age(id)
+
+			Expect(download()).To(Equal("v2"))
+			Expect(file().IsProcessing(ctx)).To(BeFalse())
+			Expect(uploadFiles()).ToNot(ContainElement(HavePrefix(id)))
+		})
+
+		It("drops the marker when the blob was stored already", func() {
+			mark(v1BlobID, node.ProcessingStatus+v1BlobID)
+
+			Expect(download()).To(Equal("v1"))
+			Expect(file().IsProcessing(ctx)).To(BeFalse())
+		})
+
+		It("leaves an upload alone that might still be running", func() {
+			interrupt("v2")
+
+			_, err := download()
+			Expect(err).To(MatchError(errtypes.TooEarly("file is still being processed")))
+		})
+
+		It("keeps the marker when the content is lost", func() {
+			mark("lost", node.ProcessingStatus+"lost")
+
+			_, err := download()
+			Expect(err).To(MatchError(errtypes.TooEarly("file is still being processed")))
+			Expect(file().IsProcessing(ctx)).To(BeTrue())
+		})
+
+		It("leaves markers alone that do not belong to an upload", func() {
+			mark(v1BlobID, node.ProcessingStatus)
+
+			_, err := download()
+			Expect(err).To(MatchError(errtypes.TooEarly("file is still being processed")))
+		})
 
 		It("is cleared by the next upload", func() {
 			interrupt("v2")
