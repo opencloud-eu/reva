@@ -66,6 +66,7 @@ type DecomposedFsStore struct {
 	async             bool
 	tknopts           options.TokenOptions
 	disableVersioning bool
+	separateBlobs     bool
 	log               *zerolog.Logger
 }
 
@@ -80,6 +81,7 @@ func NewSessionStore(fs storage.FS, aspects aspects.Aspects, root string, async 
 		async:             async,
 		tknopts:           tknopts,
 		disableVersioning: aspects.DisableVersioning,
+		separateBlobs:     aspects.SeparateBlobs,
 		um:                aspects.UserMapper,
 		log:               log,
 	}
@@ -262,7 +264,18 @@ func (store DecomposedFsStore) CreateNodeForUpload(ctx context.Context, session 
 	initAttrs.SetString(prefixes.NameAttr, n.Name)
 	initAttrs.SetString(prefixes.BlobIDAttr, n.BlobID)
 	initAttrs.SetInt64(prefixes.BlobsizeAttr, n.Blobsize)
-	initAttrs.SetString(prefixes.StatusPrefix, node.ProcessingStatus+session.ID())
+	// The caller puts a processing marker into initAttrs if the upload still
+	// needs processing, and it replaces whatever marker the node has. Without
+	// one the node is complete after this write. Writing the attributes can't
+	// remove an attribute though, so a marker of an earlier upload, like one
+	// that was interrupted, has to be removed here. Otherwise the node would
+	// stay processing and downloads would fail with 425.
+	_, needsProcessing := initAttrs[prefixes.StatusPrefix]
+	if !needsProcessing && n.IsProcessing(ctx) {
+		if err := n.RemoveXattr(ctx, prefixes.StatusPrefix); err != nil {
+			return nil, errors.Wrap(err, "Decomposedfs: could not remove processing status")
+		}
+	}
 
 	// set mtime on the new node
 	mtime := time.Now()

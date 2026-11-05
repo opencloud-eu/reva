@@ -1,0 +1,251 @@
+// Copyright 2026 OpenCloud GmbH <mail@opencloud.eu>
+// SPDX-License-Identifier: Apache-2.0
+
+package decomposedfs_test
+
+import (
+	"context"
+	"io"
+	"os"
+	"path/filepath"
+	"strings"
+
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	cs3permissions "github.com/cs3org/go-cs3apis/cs3/permissions/v1beta1"
+	v1beta11 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	ruser "github.com/opencloud-eu/reva/v2/pkg/ctx"
+	"github.com/opencloud-eu/reva/v2/pkg/rgrpc/todo/pool"
+	"github.com/opencloud-eu/reva/v2/pkg/storage"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/decomposed/blobstore"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/aspects"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/lookup"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata/prefixes"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/node"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/options"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/permissions"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/permissions/mocks"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/timemanager"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/tree"
+	"github.com/opencloud-eu/reva/v2/pkg/storagespace"
+	"github.com/opencloud-eu/reva/v2/pkg/store"
+	"github.com/opencloud-eu/reva/v2/tests/helpers"
+	"github.com/rs/zerolog"
+	"github.com/stretchr/testify/mock"
+	tusd "github.com/tus/tusd/v2/pkg/handler"
+	"google.golang.org/grpc"
+
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+)
+
+// watchedBlobstore lets a test look at the node while its blob is stored
+type watchedBlobstore struct {
+	*blobstore.Blobstore
+	onUpload func(blob *node.Node)
+}
+
+func (bs *watchedBlobstore) Upload(n *node.Node, source, copyTarget string) error {
+	if bs.onUpload != nil {
+		bs.onUpload(n)
+	}
+	return bs.Blobstore.Upload(n, source, copyTarget)
+}
+
+var _ = Describe("Synchronous uploads", func() {
+	var (
+		ctx context.Context
+		ref *provider.Reference
+		fs  storage.FS
+		o   *options.Options
+		lu  *lookup.Lookup
+		bs  *watchedBlobstore
+	)
+
+	BeforeEach(func() {
+		user := &userpb.User{
+			Id: &userpb.UserId{
+				Idp:      "idp",
+				OpaqueId: "u-s-e-r-id",
+				Type:     userpb.UserType_USER_TYPE_PRIMARY,
+			},
+			Username: "username",
+		}
+		ctx = ruser.ContextSetUser(context.Background(), user)
+
+		root, err := helpers.TempDir("reva-unit-tests-*-root")
+		Expect(err).ToNot(HaveOccurred())
+		// configured like the system storage
+		o, err = options.New(map[string]any{
+			"root":               root,
+			"disable_versioning": true,
+			"filemetadatacache": map[string]any{
+				"cache_database": root,
+			},
+		})
+		Expect(err).ToNot(HaveOccurred())
+		lu = lookup.New(metadata.NewMessagePackBackend(o.FileMetadataCache), o, &timemanager.Manager{})
+
+		blobs, err := blobstore.New(root)
+		Expect(err).ToNot(HaveOccurred())
+		bs = &watchedBlobstore{Blobstore: blobs}
+
+		pmock := &mocks.PermissionsChecker{}
+		pmock.On("AssemblePermissions", mock.Anything, mock.Anything).Return(&provider.ResourcePermissions{
+			Stat:                 true,
+			GetQuota:             true,
+			AddGrant:             true,
+			ListContainer:        true,
+			InitiateFileUpload:   true,
+			InitiateFileDownload: true,
+		}, nil)
+		cs3permissionsclient := &mocks.CS3PermissionsClient{}
+		cs3permissionsclient.On("CheckPermission", mock.Anything, mock.Anything, mock.Anything).Return(&cs3permissions.CheckPermissionResponse{
+			Status: &v1beta11.Status{Code: v1beta11.Code_CODE_OK},
+		}, nil)
+		pool.RemoveSelector("PermissionsSelector" + "any")
+		permissionsSelector := pool.GetSelector[cs3permissions.PermissionsAPIClient](
+			"PermissionsSelector",
+			"any",
+			func(cc grpc.ClientConnInterface) cs3permissions.PermissionsAPIClient {
+				return cs3permissionsclient
+			},
+		)
+
+		fs, err = decomposedfs.New(o, aspects.Aspects{
+			Lookup:            lu,
+			Tree:              tree.New(lu, bs, o, permissions.Permissions{}, store.Create(), &zerolog.Logger{}),
+			Permissions:       permissions.NewPermissions(pmock, permissionsSelector),
+			Trashbin:          &decomposedfs.DecomposedfsTrashbin{},
+			DisableVersioning: true,
+			SeparateBlobs:     true,
+		}, &zerolog.Logger{})
+		Expect(err).ToNot(HaveOccurred())
+
+		resp, err := fs.CreateStorageSpace(ctx, &provider.CreateStorageSpaceRequest{Owner: user, Type: "personal"})
+		Expect(err).ToNot(HaveOccurred())
+		Expect(resp.Status.Code).To(Equal(v1beta11.Code_CODE_OK))
+		spaceID, err := storagespace.ParseID(resp.StorageSpace.Id.OpaqueId)
+		Expect(err).ToNot(HaveOccurred())
+		ref = &provider.Reference{ResourceId: &spaceID, Path: "/shares.json"}
+	})
+
+	AfterEach(func() {
+		if o != nil && o.Root != "" {
+			_ = os.RemoveAll(o.Root)
+		}
+	})
+
+	upload := func(content string, metadata map[string]string) (string, error) {
+		ids, err := fs.InitiateUpload(ctx, ref, int64(len(content)), metadata)
+		if err != nil {
+			return "", err
+		}
+		_, err = fs.Upload(ctx, storage.UploadRequest{
+			Ref:    &provider.Reference{Path: "/" + ids["simple"]},
+			Body:   io.NopCloser(strings.NewReader(content)),
+			Length: int64(len(content)),
+		}, nil)
+		return ids["simple"], err
+	}
+
+	download := func() (string, error) {
+		_, r, err := fs.Download(ctx, ref, func(*provider.ResourceInfo) bool { return true })
+		if err != nil {
+			return "", err
+		}
+		defer r.Close()
+		b, err := io.ReadAll(r)
+		return string(b), err
+	}
+
+	file := func() *node.Node {
+		n, err := lu.NodeFromResource(ctx, ref)
+		Expect(err).ToNot(HaveOccurred())
+		return n
+	}
+
+	uploadFiles := func() []string {
+		entries, err := os.ReadDir(filepath.Join(o.Root, "uploads"))
+		Expect(err).ToNot(HaveOccurred())
+		names := []string{}
+		for _, e := range entries {
+			names = append(names, e.Name())
+		}
+		return names
+	}
+
+	It("stores the blob before the node points to it", func() {
+		_, err := upload("v1", nil)
+		Expect(err).ToNot(HaveOccurred())
+
+		stored := false
+		bs.onUpload = func(blob *node.Node) {
+			current := file()
+			Expect(current.IsProcessing(ctx)).To(BeFalse())
+			Expect(current.BlobID).ToNot(Equal(blob.BlobID))
+			stored = true
+		}
+		id, err := upload("v2", nil)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(stored).To(BeTrue())
+
+		Expect(file().IsProcessing(ctx)).To(BeFalse())
+		Expect(download()).To(Equal("v2"))
+		Expect(uploadFiles()).ToNot(ContainElement(HavePrefix(id)))
+	})
+
+	It("keeps the old content and drops the new blob when the upload is rejected", func() {
+		_, err := upload("v1", nil)
+		Expect(err).ToNot(HaveOccurred())
+
+		id, err := upload("v2", map[string]string{"if-match": `"not-the-etag"`})
+		Expect(err).To(HaveOccurred())
+
+		Expect(file().IsProcessing(ctx)).To(BeFalse())
+		Expect(download()).To(Equal("v1"))
+		Expect(bs.Path(&node.Node{BaseNode: node.BaseNode{SpaceID: ref.ResourceId.SpaceId}, BlobID: id})).ToNot(BeAnExistingFile())
+	})
+
+	Context("with a node left processing by an interrupted upload", func() {
+		BeforeEach(func() {
+			_, err := upload("v1", nil)
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		mark := func(blobID, status string) {
+			attrs := node.Attributes{}
+			attrs.SetString(prefixes.BlobIDAttr, blobID)
+			attrs.SetString(prefixes.StatusPrefix, status)
+			Expect(file().SetXattrsWithContext(ctx, attrs)).To(Succeed())
+		}
+
+		// interrupt receives content and switches the node over to it the way
+		// older versions did, then stops before the blob is stored
+		interrupt := func(content string) string {
+			ids, err := fs.InitiateUpload(ctx, ref, int64(len(content)), nil)
+			Expect(err).ToNot(HaveOccurred())
+			session, err := fs.(tusd.DataStore).GetUpload(ctx, ids["tus"])
+			Expect(err).ToNot(HaveOccurred())
+			_, err = session.WriteChunk(ctx, 0, strings.NewReader(content))
+			Expect(err).ToNot(HaveOccurred())
+
+			attrs := node.Attributes{}
+			attrs.SetInt64(prefixes.BlobsizeAttr, int64(len(content)))
+			Expect(file().SetXattrsWithContext(ctx, attrs)).To(Succeed())
+			mark(ids["tus"], node.ProcessingStatus+ids["tus"])
+			return ids["tus"]
+		}
+
+		It("is cleared by the next upload", func() {
+			interrupt("v2")
+
+			_, err := upload("v3", nil)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(file().IsProcessing(ctx)).To(BeFalse())
+			Expect(download()).To(Equal("v3"))
+		})
+	})
+})

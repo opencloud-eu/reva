@@ -191,6 +191,7 @@ func NewDefault(m map[string]interface{}, bs node.Blobstore, es events.Stream, l
 		EventStream:       es,
 		DisableVersioning: o.DisableVersioning,
 		Trashbin:          &DecomposedfsTrashbin{},
+		SeparateBlobs:     true,
 	}
 
 	return New(o, aspects, log)
