@@ -20,6 +20,7 @@ package decomposedfs_test
 
 import (
 	"context"
+	"os"
 	"path/filepath"
 
 	grouppb "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
@@ -33,6 +34,7 @@ import (
 	"github.com/opencloud-eu/reva/v2/internal/grpc/services/storageprovider"
 	ctxpkg "github.com/opencloud-eu/reva/v2/pkg/ctx"
 	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/lookup"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/node"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/spaceidindex"
 	helpers "github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/testhelpers"
@@ -347,9 +349,6 @@ var _ = Describe("Spaces", func() {
 				Expect(load("by-group-id", groupGrantee)).ToNot(HaveKey(spaceID))
 				Expect(load("by-mail", guestFilename)).ToNot(HaveKey(spaceID))
 			})
-			// purging one space must remove only that space's entry: a sibling
-			// space of the same owner must stay in the by-user-id index.
-			// purging must delete the blobs of all nodes in the space, not only of the root node
 			// https://github.com/opencloud-eu/opencloud/issues/1865
 			It("deletes the blobs of the nodes in the space", func() {
 				_, spaceID, _, err := storagespace.SplitID(delReq.Id.GetOpaqueId())
@@ -365,6 +364,25 @@ var _ = Describe("Spaces", func() {
 					return n.BlobID == "file1-blobid" && n.SpaceID == spaceID
 				}))
 			})
+			It("skips entries it cannot handle when deleting the blobs", func() {
+				_, spaceID, _, err := storagespace.SplitID(delReq.Id.GetOpaqueId())
+				Expect(err).ToNot(HaveOccurred())
+				_, err = env.CreateTestFile("backup.mpk", "backup-blobid", spaceID, spaceID, 1)
+				Expect(err).ToNot(HaveOccurred())
+				nodesDir := filepath.Join(env.Root, "spaces", lookup.Pathify(spaceID, 1, 2), "nodes")
+				Expect(os.WriteFile(filepath.Join(nodesDir, "broken.mpk"), []byte("not msgpack"), 0600)).To(Succeed())
+				Expect(os.WriteFile(filepath.Join(nodesDir, "empty.mpk"), nil, 0600)).To(Succeed())
+				env.Blobstore.On("Delete", mock.AnythingOfType("*node.Node")).Return(nil)
+
+				ctx := ctxpkg.ContextSetUser(context.Background(), env.DeleteAllSpacesUser)
+				Expect(env.Fs.DeleteStorageSpace(ctx, delReq)).To(Succeed())
+
+				env.Blobstore.AssertCalled(GinkgoT(), "Delete", mock.MatchedBy(func(n *node.Node) bool {
+					return n.BlobID == "backup-blobid"
+				}))
+			})
+			// purging one space must remove only that space's entry: a sibling
+			// space of the same owner must stay in the by-user-id index.
 			It("keeps a sibling space in the by-user-id index when another is purged", func() {
 				_, purgedID, _, err := storagespace.SplitID(delReq.Id.GetOpaqueId())
 				Expect(err).ToNot(HaveOccurred())
