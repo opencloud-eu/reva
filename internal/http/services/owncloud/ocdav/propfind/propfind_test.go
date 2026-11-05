@@ -21,12 +21,14 @@ package propfind_test
 import (
 	"context"
 	"encoding/xml"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
+	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	sprovider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
@@ -1692,5 +1694,124 @@ var _ = Describe("PropfindWithoutDepthInfinity", func() {
 			Expect(err).To(HaveOccurred())
 
 		})
+	})
+})
+
+// davError is the webdav error document as a namespace aware client parses it,
+// see http://www.webdav.org/specs/rfc4918.html#ELEMENT_error
+type davError struct {
+	XMLName   xml.Name `xml:"DAV error"`
+	Exception string   `xml:"http://sabredav.org/ns exception"`
+	Message   string   `xml:"http://sabredav.org/ns message"`
+}
+
+var _ = Describe("PropfindWithFailingListContainer", func() {
+	var (
+		handler *propfind.Handler
+		client  *mocks.GatewayAPIClient
+		ctx     context.Context
+		spaceID string
+
+		// readDavError asserts that the body is a parsable webdav error document and
+		// returns it. This is what the reported bug was about: the handler used to
+		// answer with an empty body, which a webdav client can only report as a
+		// generic "response is not XML" error.
+		readDavError = func(r io.Reader) davError {
+			body, err := io.ReadAll(r)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(body).ToNot(BeEmpty())
+
+			e := davError{}
+			Expect(xml.Unmarshal(body, &e)).To(Succeed())
+			return e
+		}
+
+		// listContainerFails makes the ListContainer call for the space root answer
+		// with the given non OK status.
+		listContainerFails = func(s *rpc.Status) {
+			client.On("ListContainer", mock.Anything, mock.Anything).Return(&sprovider.ListContainerResponse{
+				Status: s,
+			}, nil)
+		}
+
+		// propfindSpaceRoot issues a depth 1 propfind on the space root, which is the
+		// request the desktop client sends while syncing a folder.
+		propfindSpaceRoot = func() *httptest.ResponseRecorder {
+			rr := httptest.NewRecorder()
+			req, err := http.NewRequest("PROPFIND", "/", strings.NewReader(""))
+			Expect(err).ToNot(HaveOccurred())
+			req = req.WithContext(ctx)
+
+			handler.HandleSpacesPropfind(rr, req, spaceID)
+			return rr
+		}
+	)
+
+	BeforeEach(func() {
+		ctx = context.WithValue(context.Background(), net.CtxKeyBaseURI, "http://127.0.0.1:3000")
+		client = &mocks.GatewayAPIClient{}
+
+		cfg := &config.Config{
+			FilesNamespace:  "/users/{{.Username}}",
+			WebdavNamespace: "/users/{{.Username}}",
+			NameValidation: config.NameValidation{
+				MaxLength:    255,
+				InvalidChars: []string{"\f", "\r", "\n", "\\"},
+			},
+		}
+		handler = propfind.NewHandler("127.0.0.1:3000", selector{client: client}, nil, cfg)
+
+		spaceID = storagespace.FormatResourceID(&sprovider.ResourceId{StorageId: "provider-1", SpaceId: "foospace", OpaqueId: "root"})
+
+		// the space root itself stats fine, only listing its children fails
+		client.On("Stat", mock.Anything, mock.Anything).Return(&sprovider.StatResponse{
+			Status: status.NewOK(ctx),
+			Info: &sprovider.ResourceInfo{
+				Id:   &sprovider.ResourceId{StorageId: "provider-1", SpaceId: "foospace", OpaqueId: "root"},
+				Type: sprovider.ResourceType_RESOURCE_TYPE_CONTAINER,
+				Path: ".",
+				Size: uint64(131),
+			},
+		}, nil)
+	})
+
+	It("maps a not found status to 404 and returns a webdav error body", func() {
+		listContainerFails(status.NewNotFound(ctx, "gone while syncing"))
+
+		rr := propfindSpaceRoot()
+		Expect(rr.Code).To(Equal(http.StatusNotFound))
+
+		e := readDavError(rr.Result().Body)
+		Expect(e.Exception).To(Equal("Sabre\\DAV\\Exception\\NotFound"))
+		Expect(e.Message).To(Equal("Resource not found"))
+	})
+
+	It("maps a permission denied status to 403 and returns a webdav error body", func() {
+		listContainerFails(status.NewPermissionDenied(ctx, nil, "no access"))
+
+		rr := propfindSpaceRoot()
+		Expect(rr.Code).To(Equal(http.StatusForbidden))
+
+		e := readDavError(rr.Result().Body)
+		Expect(e.Exception).To(Equal("Sabre\\DAV\\Exception\\Forbidden"))
+		Expect(e.Message).To(Equal("no access"))
+	})
+
+	It("still answers 500 for an internal status, but with a parsable body", func() {
+		listContainerFails(status.NewInternal(ctx, "storage exploded"))
+
+		rr := propfindSpaceRoot()
+		Expect(rr.Code).To(Equal(http.StatusInternalServerError))
+
+		Expect(readDavError(rr.Result().Body).Message).To(Equal("storage exploded"))
+	})
+
+	It("returns a webdav error body when the list container request itself fails", func() {
+		client.On("ListContainer", mock.Anything, mock.Anything).Return(nil, fmt.Errorf("transport is closing"))
+
+		rr := propfindSpaceRoot()
+		Expect(rr.Code).To(Equal(http.StatusInternalServerError))
+
+		Expect(readDavError(rr.Result().Body).Message).To(Equal("error listing container"))
 	})
 })
