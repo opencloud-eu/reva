@@ -8,6 +8,7 @@
 
 ### 🐛 Bug Fixes
 
+- fix(mime): map the cr3 extension [[#972](https://github.com/opencloud-eu/reva/pull/972)]
 - fix(decomposedfs): delete all blobs when purging a space [[#971](https://github.com/opencloud-eu/reva/pull/971)]
 - fix(mime): map the 3mf, blend, fb2, ipynb and kra extensions [[#970](https://github.com/opencloud-eu/reva/pull/970)]
 - fix(tags): free a slot for each removed tag [[#968](https://github.com/opencloud-eu/reva/pull/968)]
