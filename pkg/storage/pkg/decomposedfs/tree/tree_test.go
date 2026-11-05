@@ -29,6 +29,7 @@ import (
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/google/uuid"
+	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
 	"github.com/opencloud-eu/reva/v2/pkg/storage"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/timemanager"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/lookup"
@@ -353,6 +354,94 @@ var _ = Describe("Tree", func() {
 				Path:       "emptydir",
 			})
 			Expect(err).ToNot(HaveOccurred())
+		})
+
+		Describe("InitNewNode", func() {
+			newNode := func() *node.Node {
+				nn, err := env.Lookup.NodeFromResource(env.Ctx, &provider.Reference{
+					ResourceId: env.SpaceRootRes,
+					Path:       "emptydir/newFile",
+				})
+				Expect(err).ToNot(HaveOccurred())
+				nn.ID = uuid.New().String()
+				return nn
+			}
+			nameLink := func(nn *node.Node) string { return filepath.Join(nn.ParentPath(), nn.Name) }
+			// the lock files stay on disk (https://github.com/opencloud-eu/opencloud/issues/1793),
+			// so check that the lock can be taken again instead
+			lockReleased := func(nn *node.Node) {
+				locked := make(chan error, 1)
+				go func() {
+					unlock, err := env.Lookup.MetadataBackend().Lock(node.NewBaseNode(nn.SpaceID, nn.ID, env.Lookup))
+					if err == nil {
+						err = unlock()
+					}
+					locked <- err
+				}()
+				Eventually(locked).Should(Receive(BeNil()))
+			}
+
+			It("creates the node file and links the name to it", func() {
+				nn := newNode()
+
+				unlock, err := t.InitNewNode(env.Ctx, nn, 0)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(unlock()).To(Succeed())
+
+				Expect(nn.InternalPath()).To(BeAnExistingFile())
+				target, err := os.Readlink(nameLink(nn))
+				Expect(err).ToNot(HaveOccurred())
+				Expect(target).To(HaveSuffix(lookup.Pathify(nn.ID, 4, 2)))
+			})
+
+			Context("when another upload took the name", func() {
+				It("removes its own node file, keeps the other's link and releases the lock", func() {
+					winner := newNode()
+					unlock, err := t.InitNewNode(env.Ctx, winner, 0)
+					Expect(err).ToNot(HaveOccurred())
+					Expect(unlock()).To(Succeed())
+
+					// resolving the name now finds the winner, so race it with the same parent and name
+					loser := node.New(winner.SpaceID, uuid.New().String(), winner.ParentID, winner.Name, 0, "", provider.ResourceType_RESOURCE_TYPE_FILE, nil, env.Lookup)
+					loser.SpaceRoot = winner.SpaceRoot
+					unlock, err = t.InitNewNode(env.Ctx, loser, 0)
+					Expect(err).To(BeAssignableToTypeOf(errtypes.AlreadyExists("")))
+					Expect(unlock).To(BeNil())
+
+					Expect(loser.InternalPath()).ToNot(BeAnExistingFile())
+					lockReleased(loser)
+					Expect(winner.InternalPath()).To(BeAnExistingFile())
+					target, err := os.Readlink(nameLink(winner))
+					Expect(err).ToNot(HaveOccurred())
+					Expect(target).To(HaveSuffix(lookup.Pathify(winner.ID, 4, 2)))
+				})
+			})
+
+			Context("when the quota is exceeded", func() {
+				originalCheckQuota := node.CheckQuota
+
+				BeforeEach(func() {
+					node.CheckQuota = func(context.Context, *node.Node, bool, uint64, uint64) (bool, error) {
+						return false, errtypes.InsufficientStorage("quota exceeded")
+					}
+				})
+				AfterEach(func() {
+					node.CheckQuota = originalCheckQuota
+				})
+
+				It("removes its node file, links nothing and releases the lock", func() {
+					nn := newNode()
+
+					unlock, err := t.InitNewNode(env.Ctx, nn, 1)
+					Expect(err).To(BeAssignableToTypeOf(errtypes.InsufficientStorage("")))
+					Expect(unlock).To(BeNil())
+
+					Expect(nn.InternalPath()).ToNot(BeAnExistingFile())
+					lockReleased(nn)
+					_, err = os.Lstat(nameLink(nn))
+					Expect(os.IsNotExist(err)).To(BeTrue())
+				})
+			})
 		})
 
 		Describe("TouchFile", func() {

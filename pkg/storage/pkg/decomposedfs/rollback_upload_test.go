@@ -409,6 +409,17 @@ var _ = Describe("RollbackUpload", func() {
 			Expect(statErr).ToNot(HaveOccurred(), "the node should be left for a retry")
 		})
 
+		// the space is what the propagation walks up to, so there is nothing to walk without it
+		It("rejects a reference that names no space", func() {
+			orphan()
+
+			err := env.Fs.RollbackUpload(env.Ctx, &provider.Reference{Path: "/dir1/rollback-target.txt"}, "session-orphan", info)
+
+			Expect(err).To(MatchError(ContainSubstring("resource_id must be set")))
+			_, statErr := os.Stat(nodePath)
+			Expect(statErr).ToNot(HaveOccurred(), "the node should be left for a retry")
+		})
+
 		It("keeps the node when the quota cannot be released", func() {
 			orphan()
 			// a parent id pointing nowhere fails the walk up the tree
