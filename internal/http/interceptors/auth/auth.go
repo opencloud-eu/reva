@@ -197,6 +197,12 @@ func New(m map[string]interface{}, unprotected []string, tp trace.TracerProvider
 				isUnprotectedEndpoint = true
 			}
 
+			// unprotected endpoints need the audit context as well, e.g.
+			// public-files authenticates the public link itself
+			if v := r.Header.Get(audit.Header); v != "" {
+				r = r.WithContext(audit.ContextSetRequest(r.Context(), audit.ParseRequestContext(v)))
+			}
+
 			ctx, err := authenticateUser(w, r, conf, tokenStrategyChain, tokenManager, tokenWriter, credChain, isUnprotectedEndpoint)
 			if err != nil {
 				if !isUnprotectedEndpoint {
@@ -355,9 +361,6 @@ func ctxWithUserInfo(ctx context.Context, r *http.Request, user *userpb.User, to
 	ctx = metadata.AppendToOutgoingContext(ctx, ctxpkg.UserAgentHeader, r.UserAgent())
 	ctx = metadata.AppendToOutgoingContext(ctx, ctxpkg.InitiatorHeader, initiatorid)
 	ctx = ctxpkg.ContextSetScopes(ctx, tokenScope)
-	if v := r.Header.Get(audit.Header); v != "" {
-		ctx = audit.ContextSetRequest(ctx, audit.ParseRequestContext(v))
-	}
 	return ctx
 }
 

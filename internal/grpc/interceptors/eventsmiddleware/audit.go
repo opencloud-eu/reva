@@ -18,6 +18,7 @@ import (
 	"github.com/opencloud-eu/reva/v3/pkg/events/raw"
 	"github.com/opencloud-eu/reva/v3/pkg/storagespace"
 	"github.com/opencloud-eu/reva/v3/pkg/utils"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // auditConfig is the audit part of the middleware config.
@@ -176,6 +177,11 @@ func auditEvent(req, res interface{}, itemType provider.ResourceType) (audit.Eve
 
 	case *provider.CreateStorageSpaceResponse:
 		r := req.(*provider.CreateStorageSpaceRequest)
+		// the proxy calls CreateHome on every request, for an existing
+		// personal space nothing was created
+		if r.GetType() == "personal" && v.GetStatus().GetCode() == rpc.Code_CODE_ALREADY_EXISTS {
+			return ev, false
+		}
 		ev = audit.Event{Definition: audit.SpaceCreate, Target: spaceTarget(v.GetStorageSpace().GetRoot())}
 		ev.Target.Name = r.GetName()
 		if ev.Target.ID == "" {
@@ -239,7 +245,8 @@ func publicLinkAccess(r *link.GetPublicShareByTokenRequest, res *link.GetPublicS
 		switch {
 		case r.GetAuthentication().GetPassword() != "":
 			ev.Reason = "invalid_password"
-		case r.GetAuthentication().GetSignature() != nil:
+		// ocdav sends an empty signature when the request has no credentials
+		case r.GetAuthentication().GetSignature().GetSignature() != "":
 			ev.Reason = "invalid_signature"
 		default:
 			return ev, false
@@ -352,10 +359,19 @@ func shareID(id *collaboration.ShareId, ref *collaboration.ShareReference) strin
 	return ref.GetId().GetOpaqueId()
 }
 
-// firstLinkAccess drops repeated successful accesses of a link by the same client.
+// firstLinkAccess drops repeated successful accesses of a link by the same
+// client. A failed one counts once per request: the proxy and ocdav both check
+// the credentials of a request to public-files.
 func firstLinkAccess(ctx context.Context, o *onceWithin, ev audit.Event) bool {
-	if ev.Definition != audit.PublicLinkAccess || ev.Outcome != audit.OutcomeSuccess {
+	if ev.Definition != audit.PublicLinkAccess {
 		return true
+	}
+	if ev.Outcome != audit.OutcomeSuccess {
+		tid := trace.SpanContextFromContext(ctx).TraceID()
+		if !tid.IsValid() {
+			return true
+		}
+		return o.first(ev.Target.ID+"|"+ev.Reason+"|"+tid.String(), time.Now())
 	}
 	rc, _ := audit.ContextGetRequest(ctx)
 	return o.first(ev.Target.ID+"|"+rc.ClientAddress+"|"+rc.SessionID, time.Now())

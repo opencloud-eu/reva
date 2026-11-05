@@ -13,6 +13,7 @@ import (
 	"github.com/opencloud-eu/reva/v3/pkg/audit"
 	"github.com/opencloud-eu/reva/v3/pkg/utils"
 	"github.com/stretchr/testify/assert"
+	"go.opentelemetry.io/otel/trace"
 )
 
 var (
@@ -96,6 +97,18 @@ func TestAuditEvent(t *testing.T) {
 			definition: audit.PublicLinkDelete, outcome: audit.OutcomeSuccess, targetID: "l-1",
 		},
 		{
+			name:       "home created",
+			req:        &provider.CreateStorageSpaceRequest{Type: "personal", Name: "Alan"},
+			res:        &provider.CreateStorageSpaceResponse{Status: ok, StorageSpace: &provider.StorageSpace{Root: root}},
+			definition: audit.SpaceCreate, outcome: audit.OutcomeSuccess, targetID: "storage$space",
+		},
+		{
+			name:       "project space exists",
+			req:        &provider.CreateStorageSpaceRequest{Type: "project", Name: "Marketing"},
+			res:        &provider.CreateStorageSpaceResponse{Status: &rpc.Status{Code: rpc.Code_CODE_ALREADY_EXISTS}},
+			definition: audit.SpaceCreate, outcome: audit.OutcomeFailure, reason: "already_exists", targetID: "Marketing",
+		},
+		{
 			name:       "space restored",
 			req:        &provider.UpdateStorageSpaceRequest{Opaque: opaque("restore"), StorageSpace: &provider.StorageSpace{Root: root}},
 			res:        &provider.UpdateStorageSpaceResponse{Status: ok},
@@ -174,12 +187,14 @@ func TestAuditEvent(t *testing.T) {
 
 func TestAuditEventNotMapped(t *testing.T) {
 	for name, tc := range map[string]struct{ req, res interface{} }{
-		"move, type unknown":   {&provider.MoveRequest{}, &provider.MoveResponse{Status: ok}},
-		"delete, type unknown": {&provider.DeleteRequest{}, &provider.DeleteResponse{Status: &rpc.Status{Code: rpc.Code_CODE_NOT_FOUND}}},
-		"purge, type unknown":  {&provider.PurgeRecycleRequest{Ref: &provider.Reference{ResourceId: root}, Key: "k"}, &provider.PurgeRecycleResponse{Status: ok}},
-		"share hidden":         {&collaboration.UpdateReceivedShareRequest{}, &collaboration.UpdateReceivedShareResponse{Status: ok, Share: &collaboration.ReceivedShare{State: collaboration.ShareState_SHARE_STATE_PENDING}}},
-		"share with noevent":   {&collaboration.CreateShareRequest{}, &collaboration.CreateShareResponse{Status: ok, Opaque: opaque("noevent")}},
-		"password probe":       {&link.GetPublicShareByTokenRequest{Token: "t"}, &link.GetPublicShareByTokenResponse{Status: denied}},
+		"move, type unknown":    {&provider.MoveRequest{}, &provider.MoveResponse{Status: ok}},
+		"delete, type unknown":  {&provider.DeleteRequest{}, &provider.DeleteResponse{Status: &rpc.Status{Code: rpc.Code_CODE_NOT_FOUND}}},
+		"purge, type unknown":   {&provider.PurgeRecycleRequest{Ref: &provider.Reference{ResourceId: root}, Key: "k"}, &provider.PurgeRecycleResponse{Status: ok}},
+		"share hidden":          {&collaboration.UpdateReceivedShareRequest{}, &collaboration.UpdateReceivedShareResponse{Status: ok, Share: &collaboration.ReceivedShare{State: collaboration.ShareState_SHARE_STATE_PENDING}}},
+		"share with noevent":    {&collaboration.CreateShareRequest{}, &collaboration.CreateShareResponse{Status: ok, Opaque: opaque("noevent")}},
+		"password probe":        {&link.GetPublicShareByTokenRequest{Token: "t"}, &link.GetPublicShareByTokenResponse{Status: denied}},
+		"empty signature probe": {&link.GetPublicShareByTokenRequest{Token: "t", Authentication: &link.PublicShareAuthentication{Spec: &link.PublicShareAuthentication_Signature{Signature: &link.ShareSignature{}}}}, &link.GetPublicShareByTokenResponse{Status: denied}},
+		"existing home":         {&provider.CreateStorageSpaceRequest{Type: "personal"}, &provider.CreateStorageSpaceResponse{Status: &rpc.Status{Code: rpc.Code_CODE_ALREADY_EXISTS}}},
 	} {
 		_, mapped := auditEvent(tc.req, tc.res, provider.ResourceType_RESOURCE_TYPE_INVALID)
 		assert.False(t, mapped, name)
@@ -253,8 +268,17 @@ func TestFirstLinkAccessOnlyDropsRepeatedSuccesses(t *testing.T) {
 
 	assert.True(t, firstLinkAccess(context.Background(), o, ok))
 	assert.False(t, firstLinkAccess(context.Background(), o, ok))
-	assert.True(t, firstLinkAccess(context.Background(), o, failed), "every failure counts")
+	assert.True(t, firstLinkAccess(context.Background(), o, failed), "a failure without trace counts")
 	assert.True(t, firstLinkAccess(context.Background(), o, failed))
+
+	inTrace := func(id byte) context.Context {
+		return trace.ContextWithSpanContext(context.Background(), trace.NewSpanContext(trace.SpanContextConfig{
+			TraceID: trace.TraceID{id}, SpanID: trace.SpanID{1},
+		}))
+	}
+	assert.True(t, firstLinkAccess(inTrace(1), o, failed), "the proxy checks the password")
+	assert.False(t, firstLinkAccess(inTrace(1), o, failed), "ocdav checks it again in the same request")
+	assert.True(t, firstLinkAccess(inTrace(2), o, failed), "the next attempt counts")
 	assert.True(t, firstLinkAccess(context.Background(), o, other))
 	assert.True(t, firstLinkAccess(context.Background(), o, other))
 }
