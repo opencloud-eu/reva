@@ -2,15 +2,21 @@ package upload_test
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	tusd "github.com/tus/tusd/v2/pkg/handler"
+
+	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
 
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/aspects"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/options"
@@ -88,4 +94,56 @@ func TestServeContent(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, "o", string(body))
 	})
+}
+
+func newTestSession(t *testing.T, size int64) (*upload.DecomposedFsSession, string) {
+	t.Helper()
+	log := &zerolog.Logger{}
+	root := t.TempDir()
+	store := upload.NewSessionStore(nil, aspects.Aspects{}, root, false, options.TokenOptions{}, log)
+	session := store.New(context.Background())
+	session.SetSize(size)
+	require.NoError(t, os.MkdirAll(filepath.Join(root, "uploads"), 0755))
+	require.NoError(t, session.TouchBin())
+	return session, filepath.Join(root, "uploads", session.ID())
+}
+
+func TestWriteChunkRejectsStaleOffset(t *testing.T) {
+	ctx := context.Background()
+	session, binPath := newTestSession(t, 10)
+
+	n, err := session.WriteChunk(ctx, 0, strings.NewReader("01234"))
+	require.NoError(t, err)
+	assert.Equal(t, int64(5), n)
+
+	// a second request that still believes the upload is at offset 0 must not append
+	n, err = session.WriteChunk(ctx, 0, strings.NewReader("01234"))
+	var tusErr tusd.Error
+	require.True(t, errors.As(err, &tusErr), "expected a tusd error, got %v", err)
+	assert.Equal(t, http.StatusConflict, tusErr.HTTPResponse.StatusCode)
+	assert.Equal(t, int64(0), n)
+
+	data, err := os.ReadFile(binPath)
+	require.NoError(t, err)
+	assert.Equal(t, "01234", string(data))
+
+	// resuming from the actual offset still works
+	n, err = session.WriteChunk(ctx, 5, strings.NewReader("56789"))
+	require.NoError(t, err)
+	assert.Equal(t, int64(5), n)
+	data, err = os.ReadFile(binPath)
+	require.NoError(t, err)
+	assert.Equal(t, "0123456789", string(data))
+}
+
+func TestFinishUploadRejectsSizeMismatch(t *testing.T) {
+	ctx := context.Background()
+	session, binPath := newTestSession(t, 10)
+	require.NoError(t, os.WriteFile(binPath, []byte("01234"), 0600))
+
+	err := session.FinishUploadDecomposed(ctx)
+	require.Error(t, err)
+	assert.IsType(t, errtypes.ChecksumMismatch(""), err)
+	assert.Contains(t, err.Error(), "expected 10 bytes, got 5")
+	assert.NoFileExists(t, binPath, "the staging file of a rejected upload must be removed")
 }

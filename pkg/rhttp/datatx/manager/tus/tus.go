@@ -31,6 +31,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	tusd "github.com/tus/tusd/v2/pkg/handler"
+	"github.com/tus/tusd/v2/pkg/memorylocker"
 	"golang.org/x/exp/slog"
 
 	"github.com/opencloud-eu/reva/v2/internal/http/services/owncloud/ocdav/net"
@@ -103,6 +104,14 @@ func (m *manager) Handler(fs storage.FS) (http.Handler, error) {
 
 	// let the composable storage tell tus which extensions it supports
 	composable.UseIn(composer)
+
+	// tusd requires a locker to serialize concurrent requests for the same upload. Without one,
+	// a retried PATCH can append to the upload while an earlier, stalled PATCH is still writing,
+	// interleaving or duplicating bytes. The lock lives in memory, so it only covers requests
+	// handled by this process.
+	if !composer.UsesLocker {
+		memorylocker.New().UseIn(composer)
+	}
 
 	config := tusd.Config{
 		StoreComposer:         composer,
