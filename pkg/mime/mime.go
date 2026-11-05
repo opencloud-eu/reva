@@ -50,7 +50,7 @@ var mimeTypes = map[string]string{
 	"afm":                      "application/x-font-type1",
 	"afp":                      "application/vnd.ibm.modcap",
 	"ahead":                    "application/vnd.ahead.space",
-	"ai":                       "application/postscript",
+	"ai":                       "application/illustrator",
 	"aif":                      "audio/x-aiff",
 	"aifc":                     "audio/x-aiff",
 	"aiff":                     "audio/x-aiff",
