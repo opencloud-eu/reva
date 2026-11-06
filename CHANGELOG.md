@@ -22,6 +22,7 @@
 
 ### 📦️ Dependencies
 
+- chore(deps): bump github.com/thanhpk/randstr from 1.0.6 to 1.0.7 [[#980](https://github.com/opencloud-eu/reva/pull/980)]
 - chore(deps): bump the go_modules group across 1 directory with 2 updates [[#931](https://github.com/opencloud-eu/reva/pull/931)]
 - chore(deps): bump github.com/go-playground/validator/v10 from 10.30.3 to 10.30.5 [[#826](https://github.com/opencloud-eu/reva/pull/826)]
 - chore(deps): bump github.com/go-playground/locales from 0.14.1 to 0.14.2 [[#835](https://github.com/opencloud-eu/reva/pull/835)]
