@@ -268,15 +268,13 @@ func (store DecomposedFsStore) CreateNodeForUpload(ctx context.Context, session 
 	initAttrs.SetInt64(prefixes.BlobsizeAttr, n.Blobsize)
 	// The caller puts a processing marker into initAttrs if the upload still
 	// needs processing, and it replaces whatever marker the node has. Without
-	// one the node is complete after this write. Writing the attributes can't
-	// remove an attribute though, so a marker of an earlier upload, like one
-	// that was interrupted, has to be removed here. Otherwise the node would
-	// stay processing and downloads would fail with 425.
+	// one the node is complete after this write, so the marker of an earlier
+	// upload, like one that was interrupted, is cleared in the same write.
+	// Removing it beforehand could leave the node pointing to that upload's
+	// blob without the marker that recovering the upload relies on.
 	_, needsProcessing := initAttrs[prefixes.StatusPrefix]
 	if !needsProcessing && n.IsProcessing(ctx) {
-		if err := n.RemoveXattr(ctx, prefixes.StatusPrefix); err != nil {
-			return nil, errors.Wrap(err, "Decomposedfs: could not remove processing status")
-		}
+		initAttrs.SetString(prefixes.StatusPrefix, "")
 	}
 
 	// set mtime on the new node

@@ -329,5 +329,18 @@ var _ = Describe("Synchronous uploads", func() {
 			Expect(file().IsProcessing(ctx)).To(BeFalse())
 			Expect(download()).To(Equal("v3"))
 		})
+
+		It("stays recoverable when the next upload fails to write the node", func() {
+			id := interrupt("v2")
+			age(id)
+
+			mb.failSwitch = "before"
+			_, err := upload("v3", nil)
+			Expect(err).To(HaveOccurred())
+			mb.failSwitch = ""
+
+			Expect(file().IsProcessing(ctx)).To(BeTrue())
+			Expect(download()).To(Equal("v2"))
+		})
 	})
 })
