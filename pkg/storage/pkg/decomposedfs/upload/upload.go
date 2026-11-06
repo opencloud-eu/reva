@@ -213,6 +213,12 @@ func (session *DecomposedFsSession) FinishUploadDecomposed(ctx context.Context) 
 
 	attrs.SetString(prefixes.StatusPrefix, node.ProcessingStatus+session.ID())
 	n, err := session.store.CreateNodeForUpload(ctx, session, attrs)
+	if err == nil {
+		// postprocessing needs what CreateNodeForUpload learned about the node
+		err = session.store.um.RunInBaseScope(func() error {
+			return session.Persist(ctx)
+		})
+	}
 	if err != nil {
 		session.markFailed(ctx, err)
 		return err
@@ -260,8 +266,11 @@ func (session *DecomposedFsSession) finishBlobFirst(ctx context.Context, attrs n
 
 	n, err := session.store.CreateNodeForUpload(ctx, session, attrs)
 	if err != nil {
-		if derr := session.store.tp.DeleteBlob(blob); derr != nil {
-			appctx.GetLogger(ctx).Error().Err(derr).Msg("failed to delete the blob of a failed upload")
+		// a node comes back if writing it failed, it might point to the blob
+		if n == nil {
+			if derr := session.store.tp.DeleteBlob(blob); derr != nil {
+				appctx.GetLogger(ctx).Error().Err(derr).Msg("failed to delete the blob of a failed upload")
+			}
 		}
 		session.markFailed(ctx, err)
 		return err

@@ -187,7 +187,9 @@ type Session interface {
 	Cleanup(revertNodeMetadata, cleanBin, cleanInfo bool)
 }
 
-// CreateNodeForUpload will create the target node for the Upload
+// CreateNodeForUpload will create the target node for the Upload. If writing
+// the node's metadata fails, the node is returned along with the error, as the
+// write might have happened anyway.
 // TODO move this to the node package as NodeFromUpload?
 // should we in InitiateUpload create the node first? and then the upload?
 func (store DecomposedFsStore) CreateNodeForUpload(ctx context.Context, session *DecomposedFsSession, initAttrs node.Attributes) (*node.Node, error) {
@@ -291,14 +293,7 @@ func (store DecomposedFsStore) CreateNodeForUpload(ctx context.Context, session 
 	// update node metadata with new blobid etc
 	err = n.SetXattrsWithContext(ctx, initAttrs)
 	if err != nil {
-		return nil, errors.Wrap(err, "Decomposedfs: could not write metadata")
-	}
-
-	err = store.um.RunInBaseScope(func() error {
-		return session.Persist(ctx)
-	})
-	if err != nil {
-		return nil, err
+		return n, errors.Wrap(err, "Decomposedfs: could not write metadata")
 	}
 
 	return n, nil

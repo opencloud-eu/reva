@@ -5,6 +5,7 @@ package decomposedfs_test
 
 import (
 	"context"
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
@@ -56,6 +57,25 @@ func (bs *watchedBlobstore) Upload(n *node.Node, source, copyTarget string) erro
 	return bs.Blobstore.Upload(n, source, copyTarget)
 }
 
+// faultyBackend fails writes that switch a node to another blob, either
+// before or after writing
+type faultyBackend struct {
+	metadata.Backend
+	failSwitch string
+}
+
+func (b *faultyBackend) SetMultiple(ctx context.Context, n metadata.MetadataNode, attribs map[string][]byte) error {
+	if _, ok := attribs[prefixes.BlobIDAttr]; !ok || b.failSwitch == "" {
+		return b.Backend.SetMultiple(ctx, n, attribs)
+	}
+	if b.failSwitch == "after" {
+		if err := b.Backend.SetMultiple(ctx, n, attribs); err != nil {
+			return err
+		}
+	}
+	return errors.New("metadata write failed")
+}
+
 var _ = Describe("Synchronous uploads", func() {
 	var (
 		ctx context.Context
@@ -64,6 +84,7 @@ var _ = Describe("Synchronous uploads", func() {
 		o   *options.Options
 		lu  *lookup.Lookup
 		bs  *watchedBlobstore
+		mb  *faultyBackend
 	)
 
 	BeforeEach(func() {
@@ -88,7 +109,8 @@ var _ = Describe("Synchronous uploads", func() {
 			},
 		})
 		Expect(err).ToNot(HaveOccurred())
-		lu = lookup.New(metadata.NewMessagePackBackend(o.FileMetadataCache), o, &timemanager.Manager{})
+		mb = &faultyBackend{Backend: metadata.NewMessagePackBackend(o.FileMetadataCache)}
+		lu = lookup.New(mb, o, &timemanager.Manager{})
 
 		blobs, err := blobstore.New(root)
 		Expect(err).ToNot(HaveOccurred())
@@ -209,6 +231,18 @@ var _ = Describe("Synchronous uploads", func() {
 		Expect(file().IsProcessing(ctx)).To(BeFalse())
 		Expect(download()).To(Equal("v1"))
 		Expect(bs.Path(&node.Node{BaseNode: node.BaseNode{SpaceID: ref.ResourceId.SpaceId}, BlobID: id})).ToNot(BeAnExistingFile())
+	})
+
+	It("keeps the new blob when the node was written despite an error", func() {
+		_, err := upload("v1", nil)
+		Expect(err).ToNot(HaveOccurred())
+
+		mb.failSwitch = "after"
+		_, err = upload("v2", nil)
+		Expect(err).To(HaveOccurred())
+		mb.failSwitch = ""
+
+		Expect(download()).To(Equal("v2"))
 	})
 
 	Context("with a node left processing by an interrupted upload", func() {
