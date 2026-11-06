@@ -25,6 +25,8 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"sync"
+	"time"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	cs3permissions "github.com/cs3org/go-cs3apis/cs3/permissions/v1beta1"
@@ -38,7 +40,6 @@ import (
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/aspects"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/lookup"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata"
-	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata/prefixes"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/node"
 	nodemocks "github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/node/mocks"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/options"
@@ -48,6 +49,7 @@ import (
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/tree"
 	"github.com/opencloud-eu/reva/v2/pkg/storagespace"
 	"github.com/opencloud-eu/reva/v2/pkg/store"
+	"github.com/opencloud-eu/reva/v2/pkg/upload"
 	"github.com/opencloud-eu/reva/v2/tests/helpers"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/mock"
@@ -63,6 +65,7 @@ var _ = Describe("File uploads", func() {
 		ref     *provider.Reference
 		rootRef *provider.Reference
 		fs      storage.FS
+		coord   upload.Coordinator
 		user    *userpb.User
 		ctx     context.Context
 
@@ -159,65 +162,18 @@ var _ = Describe("File uploads", func() {
 		resID, err := storagespace.ParseID(resp.StorageSpace.Id.OpaqueId)
 		Expect(err).ToNot(HaveOccurred())
 		ref.ResourceId = &resID
+
+		// The coordinator owns the upload flow; the driver only sees the slim contract.
+		// No publisher and no chunking: without a postprocessing consumer an upload
+		// finishes synchronously, so the specs below observe the driver's final state.
+		log := zerolog.Nop()
+		coord, err = upload.NewCoordinatorFromConfig(GinkgoT().TempDir(), nil, fs, nil, &log, false)
+		Expect(err).ToNot(HaveOccurred())
 	})
 
-	Context("the user's quota is exceeded", func() {
-		BeforeEach(func() {
-			pmock.On("AssemblePermissions", mock.Anything, mock.Anything).Return(&provider.ResourcePermissions{
-				Stat:     true,
-				GetQuota: true,
-			}, nil)
-		})
-		When("the user wants to initiate a file upload", func() {
-			It("fails", func() {
-				var originalFunc = node.CheckQuota
-				node.CheckQuota = func(ctx context.Context, spaceRoot *node.Node, overwrite bool, oldSize, newSize uint64) (quotaSufficient bool, err error) {
-					return false, errtypes.InsufficientStorage("quota exceeded")
-				}
-				_, err := fs.InitiateUpload(ctx, ref, 10, map[string]string{})
-				Expect(err).To(MatchError(errtypes.InsufficientStorage("quota exceeded")))
-				node.CheckQuota = originalFunc
-			})
-		})
-	})
-
-	Context("the user has insufficient permissions", func() {
-		BeforeEach(func() {
-			pmock.On("AssemblePermissions", mock.Anything, mock.Anything).Return(&provider.ResourcePermissions{
-				Stat: true,
-			}, nil)
-		})
-
-		When("the user wants to initiate a file upload", func() {
-			It("fails", func() {
-				msg := "error: permission denied: u-s-e-r-id!u-s-e-r-id/foo"
-				_, err := fs.InitiateUpload(ctx, ref, 10, map[string]string{})
-				Expect(err).To(MatchError(msg))
-			})
-		})
-	})
-
-	Context("with insufficient permissions, home node", func() {
-		JustBeforeEach(func() {
-			var err error
-			// the space name attribute is the stop condition in the lookup
-			h, err := lu.NodeFromResource(ctx, rootRef)
-			Expect(err).ToNot(HaveOccurred())
-			err = h.SetXattrString(ctx, prefixes.SpaceNameAttr, "username")
-			Expect(err).ToNot(HaveOccurred())
-			pmock.On("AssemblePermissions", mock.Anything, mock.Anything).Return(&provider.ResourcePermissions{
-				Stat: true,
-			}, nil)
-		})
-
-		When("the user wants to initiate a file upload", func() {
-			It("fails", func() {
-				msg := "error: permission denied: u-s-e-r-id!u-s-e-r-id/foo"
-				_, err := fs.InitiateUpload(ctx, ref, 10, map[string]string{})
-				Expect(err).To(MatchError(msg))
-			})
-		})
-	})
+	// The quota and permission checks at initiate now live in the coordinator, which
+	// resolves them through GetQuota/GetMD rather than node.CheckQuota. They are
+	// asserted against the coordinator directly in pkg/upload/initiate_test.go.
 
 	Context("with sufficient permissions", func() {
 		BeforeEach(func() {
@@ -232,7 +188,7 @@ var _ = Describe("File uploads", func() {
 
 		When("the user initiates a non zero byte file upload", func() {
 			It("succeeds", func() {
-				uploadIds, err := fs.InitiateUpload(ctx, ref, 10, map[string]string{})
+				uploadIds, err := coord.InitiateUpload(ctx, ref, 10, map[string]string{})
 
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(uploadIds)).To(Equal(2))
@@ -249,7 +205,7 @@ var _ = Describe("File uploads", func() {
 			It("succeeds", func() {
 				bs.On("Upload", mock.AnythingOfType("*node.Node"), mock.AnythingOfType("string"), mock.Anything).
 					Return(nil)
-				uploadIds, err := fs.InitiateUpload(ctx, ref, 0, map[string]string{})
+				uploadIds, err := coord.InitiateUpload(ctx, ref, 0, map[string]string{})
 
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(uploadIds)).To(Equal(2))
@@ -264,7 +220,7 @@ var _ = Describe("File uploads", func() {
 			It("fails when trying to upload empty data. 0-byte uploads are finished during initialization already", func() {
 				bs.On("Upload", mock.AnythingOfType("*node.Node"), mock.AnythingOfType("string"), mock.Anything).
 					Return(nil)
-				uploadIds, err := fs.InitiateUpload(ctx, ref, 0, map[string]string{})
+				uploadIds, err := coord.InitiateUpload(ctx, ref, 0, map[string]string{})
 
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(uploadIds)).To(Equal(2))
@@ -272,7 +228,7 @@ var _ = Describe("File uploads", func() {
 
 				uploadRef := &provider.Reference{Path: "/" + uploadIds["simple"]}
 
-				_, err = fs.Upload(ctx, storage.UploadRequest{
+				_, err = coord.Upload(ctx, upload.Request{
 					Ref:    uploadRef,
 					Body:   io.NopCloser(bytes.NewReader([]byte(""))),
 					Length: 0,
@@ -288,7 +244,7 @@ var _ = Describe("File uploads", func() {
 					fileContent = []byte("0123456789")
 				)
 
-				uploadIds, err := fs.InitiateUpload(ctx, ref, 10, map[string]string{})
+				uploadIds, err := coord.InitiateUpload(ctx, ref, 10, map[string]string{})
 
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(uploadIds)).To(Equal(2))
@@ -306,7 +262,7 @@ var _ = Describe("File uploads", func() {
 						Expect(data).To(Equal([]byte("0123456789")))
 					})
 
-				_, err = fs.Upload(ctx, storage.UploadRequest{
+				_, err = coord.Upload(ctx, upload.Request{
 					Ref:    uploadRef,
 					Body:   io.NopCloser(bytes.NewReader(fileContent)),
 					Length: int64(len(fileContent)),
@@ -329,10 +285,10 @@ var _ = Describe("File uploads", func() {
 					fileContent = []byte("0123456789")
 				)
 
-				uploadIds, err := fs.InitiateUpload(ctx, ref, 10, map[string]string{})
+				uploadIds, err := coord.InitiateUpload(ctx, ref, 10, map[string]string{})
 				Expect(err).ToNot(HaveOccurred())
 
-				session, err := fs.(tusd.DataStore).GetUpload(ctx, uploadIds["tus"])
+				session, err := coord.GetUpload(ctx, uploadIds["tus"])
 				Expect(err).ToNot(HaveOccurred())
 
 				_, err = session.WriteChunk(ctx, 0, bytes.NewReader(fileContent))
@@ -364,7 +320,7 @@ var _ = Describe("File uploads", func() {
 				)
 
 				uploadRef := &provider.Reference{Path: "/some-non-existent-upload-reference"}
-				_, err := fs.Upload(ctx, storage.UploadRequest{
+				_, err := coord.Upload(ctx, upload.Request{
 					Ref:    uploadRef,
 					Body:   io.NopCloser(bytes.NewReader(fileContent)),
 					Length: int64(len(fileContent)),
@@ -379,28 +335,264 @@ var _ = Describe("File uploads", func() {
 			})
 		})
 
-		It("writes staged bytes to the session's blob slot", func() {
-			pmock.On("AssemblePermissions", mock.Anything, mock.Anything).Return(&provider.ResourcePermissions{
-				Stat:               true,
-				InitiateFileUpload: true,
-			}, nil).Once()
-			Expect(fs.TouchFile(ctx, ref, false, "")).To(Succeed())
-
+		Describe("CommitUpload", func() {
 			body := []byte("staged upload")
-			bs.On("UploadFromReader", mock.AnythingOfType("*node.Node"), mock.Anything, int64(len(body))).
-				Run(func(args mock.Arguments) {
-					Expect(args.Get(0).(*node.Node).BlobID).To(Equal("session-1"))
-					data, err := io.ReadAll(args.Get(1).(io.Reader))
-					Expect(err).ToNot(HaveOccurred())
-					Expect(data).To(Equal(body))
-				}).Return(nil).Once()
 
-			err := fs.CommitUpload(ctx, ref, "session-1", storage.UploadSource{
-				Body:   io.NopCloser(bytes.NewReader(body)),
-				Length: int64(len(body)),
+			prepare := func(sessionID string, nodeExisted bool) {
+				_, err := fs.PrepareUpload(ctx, ref, sessionID, storage.UploadInfo{
+					NodeExisted: nodeExisted,
+					Size:        int64(len(body)),
+				})
+				Expect(err).ToNot(HaveOccurred())
+			}
+
+			BeforeEach(func() {
+				Expect(fs.TouchFile(ctx, ref, false, "")).To(Succeed())
 			})
 
-			Expect(err).ToNot(HaveOccurred())
+			It("writes the staged bytes to the node prepared for the session", func() {
+				prepare("session-1", false)
+
+				bs.On("UploadFromReader", mock.AnythingOfType("*node.Node"), mock.Anything, int64(len(body))).
+					Run(func(args mock.Arguments) {
+						n := args.Get(0).(*node.Node)
+						Expect(n.BlobID).To(Equal("session-1"))
+						Expect(n.SpaceRoot).ToNot(BeNil())
+						data, err := io.ReadAll(args.Get(1).(io.Reader))
+						Expect(err).ToNot(HaveOccurred())
+						Expect(data).To(Equal(body))
+					}).Return(nil).Once()
+
+				Expect(fs.CommitUpload(ctx, ref, "session-1", storage.UploadSource{
+					Body:   io.NopCloser(bytes.NewReader(body)),
+					Length: int64(len(body)),
+				})).To(Succeed())
+				bs.AssertExpectations(GinkgoT())
+			})
+
+			It("moves a staged file into place", func() {
+				prepare("session-1", false)
+
+				bs.On("Upload", mock.AnythingOfType("*node.Node"), "/staged/session-1", mock.Anything).
+					Run(func(args mock.Arguments) {
+						Expect(args.Get(0).(*node.Node).BlobID).To(Equal("session-1"))
+					}).Return(nil).Once()
+
+				Expect(fs.CommitUpload(ctx, ref, "session-1", storage.UploadSource{
+					Path:   "/staged/session-1",
+					Length: int64(len(body)),
+				})).To(Succeed())
+				bs.AssertExpectations(GinkgoT())
+			})
+
+			It("writes into the revision when a newer upload took over the node", func() {
+				prepare("session-a", false)
+				prepare("session-b", true)
+
+				bs.On("UploadFromReader", mock.AnythingOfType("*node.Node"), mock.Anything, int64(len(body))).
+					Run(func(args mock.Arguments) {
+						n := args.Get(0).(*node.Node)
+						Expect(n.BlobID).To(Equal("session-a"))
+						Expect(n.ID).To(ContainSubstring(node.RevisionIDDelimiter))
+					}).Return(nil).Once()
+
+				Expect(fs.CommitUpload(ctx, ref, "session-a", storage.UploadSource{
+					Body:   io.NopCloser(bytes.NewReader(body)),
+					Length: int64(len(body)),
+				})).To(Succeed())
+				bs.AssertExpectations(GinkgoT())
+			})
+
+			It("records the scan result on the node", func() {
+				prepare("session-1", false)
+				bs.On("UploadFromReader", mock.AnythingOfType("*node.Node"), mock.Anything, int64(len(body))).Return(nil).Once()
+
+				scanDate := time.Now().UTC().Truncate(time.Second)
+				Expect(fs.CommitUpload(ctx, ref, "session-1", storage.UploadSource{
+					Body:       io.NopCloser(bytes.NewReader(body)),
+					Length:     int64(len(body)),
+					ScanResult: "infected",
+					ScanDate:   scanDate,
+				})).To(Succeed())
+
+				n, err := lu.NodeFromResource(ctx, ref)
+				Expect(err).ToNot(HaveOccurred())
+				scanned, virus, date := n.ScanData(ctx)
+				Expect(scanned).To(BeTrue())
+				Expect(virus).To(Equal("infected"))
+				Expect(date).To(BeTemporally("==", scanDate))
+			})
+
+			It("records the scan result on the revision when a newer upload took over the node", func() {
+				prepare("session-a", false)
+				prepare("session-b", true)
+
+				var revision *node.Node
+				bs.On("UploadFromReader", mock.AnythingOfType("*node.Node"), mock.Anything, int64(len(body))).
+					Run(func(args mock.Arguments) {
+						revision = args.Get(0).(*node.Node)
+					}).Return(nil).Once()
+
+				Expect(fs.CommitUpload(ctx, ref, "session-a", storage.UploadSource{
+					Body:       io.NopCloser(bytes.NewReader(body)),
+					Length:     int64(len(body)),
+					ScanResult: "infected",
+					ScanDate:   time.Now(),
+				})).To(Succeed())
+
+				Expect(revision).ToNot(BeNil())
+				_, virus, _ := revision.ScanData(ctx)
+				Expect(virus).To(Equal("infected"))
+
+				n, err := lu.NodeFromResource(ctx, ref)
+				Expect(err).ToNot(HaveOccurred())
+				scanned, _, _ := n.ScanData(ctx)
+				Expect(scanned).To(BeFalse(), "the scan result of the older upload must not land on the node")
+			})
+
+			It("rejects a source with neither body nor path", func() {
+				err := fs.CommitUpload(ctx, ref, "session-1", storage.UploadSource{Length: 1})
+
+				Expect(err).To(HaveOccurred())
+				_, ok := err.(errtypes.IsBadRequest)
+				Expect(ok).To(BeTrue(), "expected errtypes.BadRequest, got %T: %v", err, err)
+			})
+
+			It("fails with NotFound when the node does not exist", func() {
+				missingRef := &provider.Reference{ResourceId: ref.ResourceId, Path: "/never-created"}
+
+				err := fs.CommitUpload(ctx, missingRef, "session-1", storage.UploadSource{
+					Body:   io.NopCloser(bytes.NewReader(body)),
+					Length: int64(len(body)),
+				})
+
+				Expect(err).To(HaveOccurred())
+				_, ok := err.(errtypes.IsNotFound)
+				Expect(ok).To(BeTrue(), "expected errtypes.NotFound, got %T: %v", err, err)
+			})
+
+			It("writes each overwrite to the blob of its own session", func() {
+				var blobIDs []string
+				bs.On("UploadFromReader", mock.AnythingOfType("*node.Node"), mock.Anything, int64(len(body))).
+					Run(func(args mock.Arguments) {
+						blobIDs = append(blobIDs, args.Get(0).(*node.Node).BlobID)
+					}).Return(nil).Twice()
+
+				prepare("session-1", false)
+				Expect(fs.CommitUpload(ctx, ref, "session-1", storage.UploadSource{
+					Body:   io.NopCloser(bytes.NewReader(body)),
+					Length: int64(len(body)),
+				})).To(Succeed())
+
+				prepare("session-2", true)
+				Expect(fs.CommitUpload(ctx, ref, "session-2", storage.UploadSource{
+					Body:   io.NopCloser(bytes.NewReader(body)),
+					Length: int64(len(body)),
+				})).To(Succeed())
+
+				Expect(blobIDs).To(Equal([]string{"session-1", "session-2"}))
+			})
+
+			It("propagates the change to the parent", func() {
+				prepare("session-1", false)
+				bs.On("UploadFromReader", mock.AnythingOfType("*node.Node"), mock.Anything, int64(len(body))).Return(nil).Once()
+
+				before := time.Now()
+				Expect(fs.CommitUpload(ctx, ref, "session-1", storage.UploadSource{
+					Body:   io.NopCloser(bytes.NewReader(body)),
+					Length: int64(len(body)),
+				})).To(Succeed())
+
+				n, err := lu.NodeFromResource(ctx, ref)
+				Expect(err).ToNot(HaveOccurred())
+				parent, err := n.Parent(ctx)
+				Expect(err).ToNot(HaveOccurred())
+				tmtime, err := parent.GetTMTime(ctx)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(tmtime).To(BeTemporally(">=", before))
+			})
+
+			It("deletes the blob when the write fails", func() {
+				prepare("session-1", false)
+				bs.On("UploadFromReader", mock.AnythingOfType("*node.Node"), mock.Anything, int64(len(body))).
+					Return(errors.New("blobstore unavailable")).Once()
+				bs.On("Delete", mock.AnythingOfType("*node.Node")).
+					Run(func(args mock.Arguments) {
+						Expect(args.Get(0).(*node.Node).BlobID).To(Equal("session-1"))
+					}).Return(nil).Once()
+
+				err := fs.CommitUpload(ctx, ref, "session-1", storage.UploadSource{
+					Body:   io.NopCloser(bytes.NewReader(body)),
+					Length: int64(len(body)),
+				})
+
+				Expect(err).To(MatchError(ContainSubstring("blobstore unavailable")))
+				bs.AssertExpectations(GinkgoT())
+			})
+		})
+
+		Describe("MarkProcessing", func() {
+			BeforeEach(func() {
+				Expect(fs.TouchFile(ctx, ref, false, "")).To(Succeed())
+			})
+
+			processingID := func() string {
+				n, err := lu.NodeFromResource(ctx, ref)
+				Expect(err).ToNot(HaveOccurred())
+				if !n.IsProcessing(ctx) {
+					return ""
+				}
+				id, err := n.ProcessingID(ctx)
+				Expect(err).ToNot(HaveOccurred())
+				return id
+			}
+
+			It("marks an unmarked node", func() {
+				Expect(fs.MarkProcessing(ctx, ref, true, "session-1")).To(Succeed())
+				Expect(processingID()).To(Equal("session-1"))
+			})
+
+			It("does nothing when clearing an unmarked node", func() {
+				Expect(fs.MarkProcessing(ctx, ref, false, "session-1")).To(Succeed())
+				Expect(processingID()).To(BeEmpty())
+			})
+
+			It("clears the mark of its own session", func() {
+				Expect(fs.MarkProcessing(ctx, ref, true, "session-1")).To(Succeed())
+				Expect(fs.MarkProcessing(ctx, ref, false, "session-1")).To(Succeed())
+				Expect(processingID()).To(BeEmpty())
+			})
+
+			It("lets the last of two concurrent marks win", func() {
+				sessions := []string{"session-a", "session-b"}
+				errs := make([]error, len(sessions))
+				ready := make(chan struct{})
+				var wg sync.WaitGroup
+				for i := range sessions {
+					wg.Add(1)
+					go func() {
+						defer wg.Done()
+						<-ready
+						errs[i] = fs.MarkProcessing(ctx, ref, true, sessions[i])
+					}()
+				}
+				close(ready)
+				wg.Wait()
+
+				Expect(errs[0]).ToNot(HaveOccurred())
+				Expect(errs[1]).ToNot(HaveOccurred())
+				Expect(processingID()).To(BeElementOf(sessions))
+			})
+
+			It("fails with NotFound when the node does not exist", func() {
+				missingRef := &provider.Reference{ResourceId: ref.ResourceId, Path: "/never-created"}
+
+				err := fs.MarkProcessing(ctx, missingRef, true, "session-1")
+
+				Expect(err).To(HaveOccurred())
+				_, ok := err.(errtypes.IsNotFound)
+				Expect(ok).To(BeTrue(), "expected errtypes.NotFound, got %T: %v", err, err)
+			})
 		})
 
 		It("rejects an empty sessionID", func() {
@@ -431,6 +623,23 @@ var _ = Describe("File uploads", func() {
 			file, err = lu.NodeFromResource(ctx, ref)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(file.IsProcessing(ctx)).To(BeFalse())
+		})
+
+		It("lets a newer session take over the processing marker", func() {
+			pmock.On("AssemblePermissions", mock.Anything, mock.Anything).Return(&provider.ResourcePermissions{
+				Stat:               true,
+				InitiateFileUpload: true,
+			}, nil).Once()
+			Expect(fs.TouchFile(ctx, ref, false, "")).To(Succeed())
+
+			Expect(fs.MarkProcessing(ctx, ref, true, "session-1")).To(Succeed())
+			Expect(fs.MarkProcessing(ctx, ref, true, "session-2")).To(Succeed())
+
+			file, err := lu.NodeFromResource(ctx, ref)
+			Expect(err).ToNot(HaveOccurred())
+			id, err := file.ProcessingID(ctx)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(id).To(Equal("session-2"))
 		})
 
 	})

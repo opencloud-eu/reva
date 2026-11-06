@@ -176,6 +176,7 @@ var _ = Describe("ocm share", func() {
 			{Name: "cesnethttp", Config: "ocm-share/ocm-server-cesnet-http.toml"},
 			{Name: "cernboxocmsharesauth", Config: "ocm-share/ocm-cernbox-ocmshares-authprovider.toml"},
 			{Name: "cernboxmachineauth", Config: "ocm-share/cernbox-machine-authprovider.toml"},
+			{Name: "cesnetserviceaccounts", Config: "ocm-share/cesnet-serviceaccounts-authprovider.toml"},
 		}, variables)
 		Expect(err).ToNot(HaveOccurred())
 		cernboxgw, err = pool.GetGatewayServiceClient(revads["cernboxgw"].GrpcAddress)
