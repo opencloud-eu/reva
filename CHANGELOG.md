@@ -8,6 +8,7 @@
 
 ### 🐛 Bug Fixes
 
+- fix(decomposedfs): return NotFound when restoring a missing trash item [[#982](https://github.com/opencloud-eu/reva/pull/982)]
 - fix(eventsmiddleware): read the grantee group of removed shares into the group id [[#981](https://github.com/opencloud-eu/reva/pull/981)]
 - fix(mime): map the ora extension to image/openraster [[#975](https://github.com/opencloud-eu/reva/pull/975)]
 - fix(mime): map the comic book archive extensions to their own types [[#974](https://github.com/opencloud-eu/reva/pull/974)]
