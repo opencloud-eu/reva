@@ -1,13 +1,17 @@
 # Changelog
 
-## [2.52.2](https://github.com/opencloud-eu/reva/releases/tag/v2.52.2) - 2026-11-05
+## [2.52.2](https://github.com/opencloud-eu/reva/releases/tag/v2.52.2) - 2026-11-06
 
 ### ❤️ Thanks to all contributors! ❤️
 
-@aduffeck, @butonic, @dschmidt, @kulmann, @maki5, @pbleser-oc, @rhafer, @v-scharf
+@AlexAndBear, @aduffeck, @butonic, @dschmidt, @kulmann, @maki5, @pbleser-oc, @rhafer, @v-scharf
 
 ### 🐛 Bug Fixes
 
+- fix(eventsmiddleware): read the grantee group of removed shares into the group id [[#981](https://github.com/opencloud-eu/reva/pull/981)]
+- fix(mime): map the ora extension to image/openraster [[#975](https://github.com/opencloud-eu/reva/pull/975)]
+- fix(mime): map the comic book archive extensions to their own types [[#974](https://github.com/opencloud-eu/reva/pull/974)]
+- fix(mime): map ai to application/illustrator [[#973](https://github.com/opencloud-eu/reva/pull/973)]
 - fix(mime): map the cr3 extension [[#972](https://github.com/opencloud-eu/reva/pull/972)]
 - fix(decomposedfs): delete all blobs when purging a space [[#971](https://github.com/opencloud-eu/reva/pull/971)]
 - fix(mime): map the 3mf, blend, fb2, ipynb and kra extensions [[#970](https://github.com/opencloud-eu/reva/pull/970)]
