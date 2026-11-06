@@ -938,6 +938,7 @@ func (fs *Decomposedfs) Move(ctx context.Context, oldRef, newRef *provider.Refer
 	if !oldNode.Exists {
 		return nil, errtypes.NotFound(filepath.Join(oldNode.ParentID, oldNode.Name))
 	}
+	storagespace.ContextSetItemType(ctx, oldNode.Type(ctx))
 
 	orp, err := fs.p.AssemblePermissions(ctx, oldNode)
 	switch {
@@ -1218,6 +1219,7 @@ func (fs *Decomposedfs) Delete(ctx context.Context, ref *provider.Reference) (er
 	if !node.Exists {
 		return errtypes.NotFound(filepath.Join(node.ParentID, node.Name))
 	}
+	storagespace.ContextSetItemType(ctx, node.Type(ctx))
 
 	rp, err := fs.p.AssemblePermissions(ctx, node)
 	switch {
