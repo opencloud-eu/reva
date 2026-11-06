@@ -3,10 +3,13 @@ package eventsmiddleware
 import (
 	"testing"
 
+	group "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/opencloud-eu/reva/v2/pkg/storage"
+	"github.com/opencloud-eu/reva/v2/pkg/utils"
 	"github.com/stretchr/testify/require"
 )
 
@@ -37,4 +40,37 @@ func TestItemMoved(t *testing.T) {
 	require.Equal(t, newRef, ev.Ref)
 	require.Equal(t, oldRef, ev.OldReference)
 	require.NotNil(t, ev.Timestamp)
+}
+
+func TestShareRemoved(t *testing.T) {
+	executant := &user.User{Id: &user.UserId{OpaqueId: "user-1"}}
+	req := &collaboration.RemoveShareRequest{
+		Ref: &collaboration.ShareReference{Spec: &collaboration.ShareReference_Id{Id: &collaboration.ShareId{OpaqueId: "share-1"}}},
+	}
+
+	t.Run("group share", func(t *testing.T) {
+		groupID := &group.GroupId{OpaqueId: "group-1"}
+		res := &collaboration.RemoveShareResponse{
+			Status: &rpc.Status{Code: rpc.Code_CODE_OK},
+			Opaque: utils.AppendJSONToOpaque(nil, "granteegroupid", groupID),
+		}
+
+		ev := ShareRemoved(res, req, executant)
+
+		require.Nil(t, ev.GranteeUserID)
+		require.Equal(t, groupID.GetOpaqueId(), ev.GranteeGroupID.GetOpaqueId())
+	})
+
+	t.Run("user share", func(t *testing.T) {
+		userID := &user.UserId{OpaqueId: "user-2"}
+		res := &collaboration.RemoveShareResponse{
+			Status: &rpc.Status{Code: rpc.Code_CODE_OK},
+			Opaque: utils.AppendJSONToOpaque(nil, "granteeuserid", userID),
+		}
+
+		ev := ShareRemoved(res, req, executant)
+
+		require.Nil(t, ev.GranteeGroupID)
+		require.Equal(t, userID.GetOpaqueId(), ev.GranteeUserID.GetOpaqueId())
+	})
 }
