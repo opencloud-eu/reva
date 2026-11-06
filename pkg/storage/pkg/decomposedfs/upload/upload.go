@@ -354,12 +354,19 @@ func (session *DecomposedFsSession) Finalize(ctx context.Context) (err error) {
 	processingID := strings.TrimPrefix(status, node.ProcessingStatus)
 
 	// another upload on this node is in progress or has finished since we started
+	writeBlob := true
 	if !isProcessing || processingID != session.ID() {
 		// The node's current content is already this upload's content (e.g. a
 		// newer upload was reverted in the meantime) - no revision is needed,
 		// upload the blob to the node itself.
 		if attribs.String(prefixes.BlobIDAttr) == session.ID() {
 			appctx.GetLogger(ctx).Debug().Str("nodepath", n.InternalPath()).Msg("node already contains this upload's content, no revision needed")
+		} else if session.store.disableVersioning {
+			// with versioning disabled there is no revision to keep this upload's content in.
+			// A newer upload (or an external change) has taken over the node, so this upload
+			// is obsolete and is dropped.
+			appctx.GetLogger(ctx).Debug().Str("nodepath", n.InternalPath()).Msg("node was updated by a newer upload, dropping obsolete upload")
+			writeBlob = false
 		} else {
 			versionID := n.ID + node.RevisionIDDelimiter + session.MTime().UTC().Format(time.RFC3339Nano)
 			// There should be a revision node (created by the other upload that finished before us), read it and upload our blob there.
@@ -381,11 +388,29 @@ func (session *DecomposedFsSession) Finalize(ctx context.Context) (err error) {
 	}
 
 	// upload the data to the blobstore
-	_, subspan := tracer.Start(ctx, "WriteBlob")
-	err = session.store.tp.WriteBlob(n, session.binPath())
-	subspan.End()
-	if err != nil {
-		return errors.Wrap(err, "failed to upload file to blobstore")
+	if writeBlob {
+		_, subspan := tracer.Start(ctx, "WriteBlob")
+		err = session.store.tp.WriteBlob(n, session.binPath())
+		subspan.End()
+		if err != nil {
+			return errors.Wrap(err, "failed to upload file to blobstore")
+		}
+	}
+
+	// when versioning is disabled no revision keeps the previous content alive;
+	// now that the new blob has been written the old one can be deleted
+	if session.store.disableVersioning {
+		if oldBlobID := session.info.MetaData["oldBlobID"]; oldBlobID != "" && oldBlobID != session.ID() {
+			if derr := session.store.tp.DeleteBlob(&node.Node{
+				BaseNode: node.BaseNode{SpaceID: session.SpaceID()},
+				BlobID:   oldBlobID,
+			}); derr != nil {
+				appctx.GetLogger(ctx).Error().Err(derr).
+					Str("nodeid", n.ID).
+					Str("blobid", oldBlobID).
+					Msg("Decomposedfs: could not delete superseded blob")
+			}
+		}
 	}
 
 	return nil
