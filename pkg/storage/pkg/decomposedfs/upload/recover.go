@@ -41,11 +41,15 @@ func (store DecomposedFsStore) RecoverInterruptedUpload(ctx context.Context, n *
 	}
 	defer func() { _ = unlock() }()
 
+	// the node might have changed while waiting for the lock
+	n.ResetXattrsCache()
 	attrs, err := n.Xattrs(ctx)
 	if err != nil {
 		log.Error().Err(err).Msg("could not read node to recover an interrupted upload")
 		return false
 	}
+	n.BlobID = attrs.String(prefixes.BlobIDAttr)
+	n.Blobsize, _ = attrs.Int64(prefixes.BlobsizeAttr)
 	status := attrs.String(prefixes.StatusPrefix)
 	if !strings.HasPrefix(status, node.ProcessingStatus) {
 		return true
@@ -53,7 +57,7 @@ func (store DecomposedFsStore) RecoverInterruptedUpload(ctx context.Context, n *
 	// uploads point the node to a blob named after their session, other
 	// markers are none of our business
 	uploadID := strings.TrimPrefix(status, node.ProcessingStatus)
-	if uploadID == "" || attrs.String(prefixes.BlobIDAttr) != uploadID {
+	if uploadID == "" || n.BlobID != uploadID {
 		return false
 	}
 	log = log.With().Str("uploadid", uploadID).Logger()
@@ -64,8 +68,6 @@ func (store DecomposedFsStore) RecoverInterruptedUpload(ctx context.Context, n *
 		return false
 	}
 
-	n.BlobID = uploadID
-	n.Blobsize, _ = attrs.Int64(prefixes.BlobsizeAttr)
 	if _, err := os.Stat(binPath); err == nil {
 		// the upload stopped before its blob was stored
 		if err := store.tp.WriteBlob(n, binPath); err != nil {

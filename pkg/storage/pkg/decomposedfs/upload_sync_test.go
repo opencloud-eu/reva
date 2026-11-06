@@ -58,10 +58,19 @@ func (bs *watchedBlobstore) Upload(n *node.Node, source, copyTarget string) erro
 }
 
 // faultyBackend fails writes that switch a node to another blob, either
-// before or after writing
+// before or after writing. It can also run a hook before the next lock.
 type faultyBackend struct {
 	metadata.Backend
 	failSwitch string
+	beforeLock func()
+}
+
+func (b *faultyBackend) Lock(n metadata.MetadataNode) (metadata.UnlockFunc, error) {
+	if hook := b.beforeLock; hook != nil {
+		b.beforeLock = nil
+		hook()
+	}
+	return b.Backend.Lock(n)
 }
 
 func (b *faultyBackend) SetMultiple(ctx context.Context, n metadata.MetadataNode, attribs map[string][]byte) error {
@@ -304,6 +313,17 @@ var _ = Describe("Synchronous uploads", func() {
 
 			_, err := download()
 			Expect(err).To(MatchError(errtypes.TooEarly("file is still being processed")))
+		})
+
+		It("leaves an upload alone that started while waiting for the lock", func() {
+			id := interrupt("v2")
+			age(id)
+
+			var next string
+			mb.beforeLock = func() { next = interrupt("v3") }
+			_, err := download()
+			Expect(err).To(MatchError(errtypes.TooEarly("file is still being processed")))
+			Expect(file().ProcessingID(ctx)).To(Equal(next))
 		})
 
 		It("keeps the marker when the content is lost", func() {
