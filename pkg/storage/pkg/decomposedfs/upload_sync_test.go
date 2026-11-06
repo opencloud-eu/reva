@@ -109,10 +109,11 @@ var _ = Describe("Synchronous uploads", func() {
 
 		root, err := helpers.TempDir("reva-unit-tests-*-root")
 		Expect(err).ToNot(HaveOccurred())
-		// configured like the system storage
+		// configured like the system storage, plus tree times to see propagation
 		o, err = options.New(map[string]any{
-			"root":               root,
-			"disable_versioning": true,
+			"root":                root,
+			"disable_versioning":  true,
+			"treetime_accounting": true,
 			"filemetadatacache": map[string]any{
 				"cache_database": root,
 			},
@@ -299,6 +300,22 @@ var _ = Describe("Synchronous uploads", func() {
 			Expect(download()).To(Equal("v2"))
 			Expect(file().IsProcessing(ctx)).To(BeFalse())
 			Expect(uploadFiles()).ToNot(ContainElement(HavePrefix(id)))
+		})
+
+		It("propagates the finished upload", func() {
+			id := interrupt("v2")
+			age(id)
+			treeTime := func() time.Time {
+				root, err := lu.NodeFromResource(ctx, &provider.Reference{ResourceId: ref.ResourceId})
+				Expect(err).ToNot(HaveOccurred())
+				t, err := root.GetTMTime(ctx)
+				Expect(err).ToNot(HaveOccurred())
+				return t
+			}
+			before := treeTime()
+
+			Expect(download()).To(Equal("v2"))
+			Expect(treeTime()).To(BeTemporally(">", before))
 		})
 
 		It("drops the marker when the blob was stored already", func() {
