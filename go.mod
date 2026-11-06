@@ -71,12 +71,11 @@ require (
 	github.com/sercand/kuberesolver/v5 v5.1.1
 	github.com/sethvargo/go-diceware v0.6.0
 	github.com/sethvargo/go-password v0.4.0
-	github.com/shamaton/msgpack/v2 v2.4.1
 	github.com/shirou/gopsutil v3.21.11+incompatible
 	github.com/stretchr/testify v1.12.1
 	github.com/studio-b12/gowebdav v0.9.0
 	github.com/test-go/testify v1.1.4
-	github.com/thanhpk/randstr v1.0.6
+	github.com/thanhpk/randstr v1.0.7
 	github.com/tus/tusd/v2 v2.10.0
 	github.com/vmihailenco/msgpack/v5 v5.4.1
 	github.com/wk8/go-ordered-map v1.0.0
