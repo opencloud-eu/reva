@@ -1,5 +1,33 @@
 # Changelog
 
+## [2.52.2](https://github.com/opencloud-eu/reva/releases/tag/v2.52.2) - 2026-11-06
+
+### ❤️ Thanks to all contributors! ❤️
+
+@AlexAndBear, @aduffeck, @butonic, @dschmidt, @kulmann, @maki5, @pbleser-oc, @rhafer, @v-scharf
+
+### 🐛 Bug Fixes
+
+- fix(decomposedfs): return NotFound when restoring a missing trash item [[#982](https://github.com/opencloud-eu/reva/pull/982)]
+- fix(eventsmiddleware): read the grantee group of removed shares into the group id [[#981](https://github.com/opencloud-eu/reva/pull/981)]
+- fix(mime): map the ora extension to image/openraster [[#975](https://github.com/opencloud-eu/reva/pull/975)]
+- fix(mime): map the comic book archive extensions to their own types [[#974](https://github.com/opencloud-eu/reva/pull/974)]
+- fix(mime): map ai to application/illustrator [[#973](https://github.com/opencloud-eu/reva/pull/973)]
+- fix(mime): map the cr3 extension [[#972](https://github.com/opencloud-eu/reva/pull/972)]
+- fix(decomposedfs): delete all blobs when purging a space [[#971](https://github.com/opencloud-eu/reva/pull/971)]
+- fix(mime): map the 3mf, blend, fb2, ipynb and kra extensions [[#970](https://github.com/opencloud-eu/reva/pull/970)]
+- fix(tags): free a slot for each removed tag [[#968](https://github.com/opencloud-eu/reva/pull/968)]
+- fix(metrics): clarify the help texts of the upload session metrics [[#955](https://github.com/opencloud-eu/reva/pull/955)]
+- fix(mime): map the m4b and azw3 extensions [[#965](https://github.com/opencloud-eu/reva/pull/965)]
+- fix: escape realm in WWW-Authenticate challenges [[#920](https://github.com/opencloud-eu/reva/pull/920)]
+
+### 📦️ Dependencies
+
+- chore(deps): bump github.com/thanhpk/randstr from 1.0.6 to 1.0.7 [[#980](https://github.com/opencloud-eu/reva/pull/980)]
+- chore(deps): bump the go_modules group across 1 directory with 2 updates [[#931](https://github.com/opencloud-eu/reva/pull/931)]
+- chore(deps): bump github.com/go-playground/validator/v10 from 10.30.3 to 10.30.5 [[#826](https://github.com/opencloud-eu/reva/pull/826)]
+- chore(deps): bump github.com/go-playground/locales from 0.14.1 to 0.14.2 [[#835](https://github.com/opencloud-eu/reva/pull/835)]
+
 ## [2.52.1](https://github.com/opencloud-eu/reva/releases/tag/v2.52.1) - 2026-10-27
 
 ### ❤️ Thanks to all contributors! ❤️
