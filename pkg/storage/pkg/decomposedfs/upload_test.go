@@ -25,6 +25,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"sync"
 	"time"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -455,6 +456,142 @@ var _ = Describe("File uploads", func() {
 				Expect(err).To(HaveOccurred())
 				_, ok := err.(errtypes.IsBadRequest)
 				Expect(ok).To(BeTrue(), "expected errtypes.BadRequest, got %T: %v", err, err)
+			})
+
+			It("fails with NotFound when the node does not exist", func() {
+				missingRef := &provider.Reference{ResourceId: ref.ResourceId, Path: "/never-created"}
+
+				err := fs.CommitUpload(ctx, missingRef, "session-1", storage.UploadSource{
+					Body:   io.NopCloser(bytes.NewReader(body)),
+					Length: int64(len(body)),
+				})
+
+				Expect(err).To(HaveOccurred())
+				_, ok := err.(errtypes.IsNotFound)
+				Expect(ok).To(BeTrue(), "expected errtypes.NotFound, got %T: %v", err, err)
+			})
+
+			It("writes each overwrite to the blob of its own session", func() {
+				var blobIDs []string
+				bs.On("UploadFromReader", mock.AnythingOfType("*node.Node"), mock.Anything, int64(len(body))).
+					Run(func(args mock.Arguments) {
+						blobIDs = append(blobIDs, args.Get(0).(*node.Node).BlobID)
+					}).Return(nil).Twice()
+
+				prepare("session-1", false)
+				Expect(fs.CommitUpload(ctx, ref, "session-1", storage.UploadSource{
+					Body:   io.NopCloser(bytes.NewReader(body)),
+					Length: int64(len(body)),
+				})).To(Succeed())
+
+				prepare("session-2", true)
+				Expect(fs.CommitUpload(ctx, ref, "session-2", storage.UploadSource{
+					Body:   io.NopCloser(bytes.NewReader(body)),
+					Length: int64(len(body)),
+				})).To(Succeed())
+
+				Expect(blobIDs).To(Equal([]string{"session-1", "session-2"}))
+			})
+
+			It("propagates the change to the parent", func() {
+				prepare("session-1", false)
+				bs.On("UploadFromReader", mock.AnythingOfType("*node.Node"), mock.Anything, int64(len(body))).Return(nil).Once()
+
+				before := time.Now()
+				Expect(fs.CommitUpload(ctx, ref, "session-1", storage.UploadSource{
+					Body:   io.NopCloser(bytes.NewReader(body)),
+					Length: int64(len(body)),
+				})).To(Succeed())
+
+				n, err := lu.NodeFromResource(ctx, ref)
+				Expect(err).ToNot(HaveOccurred())
+				parent, err := n.Parent(ctx)
+				Expect(err).ToNot(HaveOccurred())
+				tmtime, err := parent.GetTMTime(ctx)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(tmtime).To(BeTemporally(">=", before))
+			})
+
+			It("deletes the blob when the write fails", func() {
+				prepare("session-1", false)
+				bs.On("UploadFromReader", mock.AnythingOfType("*node.Node"), mock.Anything, int64(len(body))).
+					Return(errors.New("blobstore unavailable")).Once()
+				bs.On("Delete", mock.AnythingOfType("*node.Node")).
+					Run(func(args mock.Arguments) {
+						Expect(args.Get(0).(*node.Node).BlobID).To(Equal("session-1"))
+					}).Return(nil).Once()
+
+				err := fs.CommitUpload(ctx, ref, "session-1", storage.UploadSource{
+					Body:   io.NopCloser(bytes.NewReader(body)),
+					Length: int64(len(body)),
+				})
+
+				Expect(err).To(MatchError(ContainSubstring("blobstore unavailable")))
+				bs.AssertExpectations(GinkgoT())
+			})
+		})
+
+		Describe("MarkProcessing", func() {
+			BeforeEach(func() {
+				Expect(fs.TouchFile(ctx, ref, false, "")).To(Succeed())
+			})
+
+			processingID := func() string {
+				n, err := lu.NodeFromResource(ctx, ref)
+				Expect(err).ToNot(HaveOccurred())
+				if !n.IsProcessing(ctx) {
+					return ""
+				}
+				id, err := n.ProcessingID(ctx)
+				Expect(err).ToNot(HaveOccurred())
+				return id
+			}
+
+			It("marks an unmarked node", func() {
+				Expect(fs.MarkProcessing(ctx, ref, true, "session-1")).To(Succeed())
+				Expect(processingID()).To(Equal("session-1"))
+			})
+
+			It("does nothing when clearing an unmarked node", func() {
+				Expect(fs.MarkProcessing(ctx, ref, false, "session-1")).To(Succeed())
+				Expect(processingID()).To(BeEmpty())
+			})
+
+			It("clears the mark of its own session", func() {
+				Expect(fs.MarkProcessing(ctx, ref, true, "session-1")).To(Succeed())
+				Expect(fs.MarkProcessing(ctx, ref, false, "session-1")).To(Succeed())
+				Expect(processingID()).To(BeEmpty())
+			})
+
+			It("lets the last of two concurrent marks win", func() {
+				sessions := []string{"session-a", "session-b"}
+				errs := make([]error, len(sessions))
+				ready := make(chan struct{})
+				var wg sync.WaitGroup
+				for i := range sessions {
+					wg.Add(1)
+					go func() {
+						defer wg.Done()
+						<-ready
+						errs[i] = fs.MarkProcessing(ctx, ref, true, sessions[i])
+					}()
+				}
+				close(ready)
+				wg.Wait()
+
+				Expect(errs[0]).ToNot(HaveOccurred())
+				Expect(errs[1]).ToNot(HaveOccurred())
+				Expect(processingID()).To(BeElementOf(sessions))
+			})
+
+			It("fails with NotFound when the node does not exist", func() {
+				missingRef := &provider.Reference{ResourceId: ref.ResourceId, Path: "/never-created"}
+
+				err := fs.MarkProcessing(ctx, missingRef, true, "session-1")
+
+				Expect(err).To(HaveOccurred())
+				_, ok := err.(errtypes.IsNotFound)
+				Expect(ok).To(BeTrue(), "expected errtypes.NotFound, got %T: %v", err, err)
 			})
 		})
 
