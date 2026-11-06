@@ -5,13 +5,22 @@ package tree
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
+	"fmt"
+	"os"
 	"path/filepath"
+	"strings"
+	"time"
 
+	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/options"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/watcher"
 	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
 	kafka "github.com/segmentio/kafka-go"
+	"github.com/segmentio/kafka-go/sasl"
+	"github.com/segmentio/kafka-go/sasl/plain"
+	"github.com/segmentio/kafka-go/sasl/scram"
 )
 
 const (
@@ -38,16 +47,72 @@ type CephFSWatcher struct {
 	tree    *Tree
 	root    string
 	brokers []string
+	dialer  *kafka.Dialer
 	log     *zerolog.Logger
 }
 
 func NewCephfsWatcher(tree *Tree, brokers []string, log *zerolog.Logger) (*CephFSWatcher, error) {
+	dialer, err := newKafkaDialer(tree.options.KafkaWatcher)
+	if err != nil {
+		return nil, err
+	}
 	return &CephFSWatcher{
 		tree:    tree,
 		root:    tree.options.WatchRoot,
 		brokers: brokers,
+		dialer:  dialer,
 		log:     log,
 	}, nil
+}
+
+// newKafkaDialer returns a dialer with the configured TLS and SASL settings.
+func newKafkaDialer(c options.KafkaWatcherConfig) (*kafka.Dialer, error) {
+	dialer := &kafka.Dialer{
+		Timeout:   10 * time.Second,
+		DualStack: true,
+	}
+
+	if c.EnableTLS {
+		var rootCAPool *x509.CertPool
+		if c.TLSRootCACertificate != "" {
+			rootCrtFile, err := os.ReadFile(c.TLSRootCACertificate)
+			if err != nil {
+				return nil, fmt.Errorf("failed to read root CA: %w", err)
+			}
+			rootCAPool = x509.NewCertPool()
+			if !rootCAPool.AppendCertsFromPEM(rootCrtFile) {
+				return nil, fmt.Errorf("no certificates found in root CA file %s", c.TLSRootCACertificate)
+			}
+			c.TLSInsecure = false
+		}
+		dialer.TLS = &tls.Config{
+			MinVersion:         tls.VersionTLS12,
+			InsecureSkipVerify: c.TLSInsecure,
+			RootCAs:            rootCAPool,
+		}
+	}
+
+	var (
+		mechanism sasl.Mechanism
+		err       error
+	)
+	switch strings.ToUpper(c.SASLMechanism) {
+	case "":
+		return dialer, nil
+	case "PLAIN":
+		mechanism = plain.Mechanism{Username: c.Username, Password: c.Password}
+	case "SCRAM-SHA-256":
+		mechanism, err = scram.Mechanism(scram.SHA256, c.Username, c.Password)
+	case "SCRAM-SHA-512":
+		mechanism, err = scram.Mechanism(scram.SHA512, c.Username, c.Password)
+	default:
+		return nil, fmt.Errorf("unsupported sasl mechanism %q", c.SASLMechanism)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to set up sasl mechanism %s: %w", c.SASLMechanism, err)
+	}
+	dialer.SASLMechanism = mechanism
+	return dialer, nil
 }
 
 type cephfsEvent struct {
@@ -62,18 +127,26 @@ type cephfsEvent struct {
 	DestPath string `json:"dest_path"`
 }
 
+// cephfsScan is a single tree.Scan call derived from an event
+type cephfsScan struct {
+	path   string
+	action watcher.EventAction
+	isDir  bool
+}
+
 func (w *CephFSWatcher) Watch(topic string) {
 	w.log.Info().Str("topic", topic).Msg("cephfs watcher watching topic")
 	r := kafka.NewReader(kafka.ReaderConfig{
 		Brokers: w.brokers,
 		GroupID: "opencloud-posixfs",
 		Topic:   topic,
+		Dialer:  w.dialer,
 	})
 
 	for {
 		m, err := r.ReadMessage(context.Background())
 		if err != nil {
-			log.Error().Err(err).Msg("error reading message")
+			w.log.Error().Err(err).Msg("error reading message")
 			continue
 		}
 
@@ -84,40 +157,58 @@ func (w *CephFSWatcher) Watch(topic string) {
 			continue
 		}
 
-		if w.tree.Ignorer.IsIgnored(ev.Path) {
-			continue
-		}
-
-		mask := ev.Mask
-		path := filepath.Join(w.tree.options.WatchRoot, ev.Path)
-		if ev.DestMask > 0 {
-			mask = ev.DestMask
-			path = filepath.Join(w.tree.options.WatchRoot, ev.DestPath)
-		}
-		isDir := mask&CEPH_MDS_NOTIFY_ONLYDIR > 0
-		go func() {
-			switch {
-			case mask&CEPH_MDS_NOTIFY_DELETE > 0:
-				err = w.tree.Scan(path, watcher.ActionDelete, isDir)
-			case mask&CEPH_MDS_NOTIFY_MOVED_TO > 0:
-				if ev.SrcMask > 0 {
-					// This is a move, clean up the old path
-					err = w.tree.Scan(filepath.Join(w.tree.options.WatchRoot, ev.SrcPath), watcher.ActionMoveFrom, isDir)
-				}
-				err = w.tree.Scan(path, watcher.ActionMove, isDir)
-			case mask&CEPH_MDS_NOTIFY_CREATE > 0:
-				err = w.tree.Scan(path, watcher.ActionCreate, isDir)
-			case mask&CEPH_MDS_NOTIFY_CLOSE_WRITE > 0:
-				err = w.tree.Scan(path, watcher.ActionUpdate, isDir)
-			case mask&CEPH_MDS_NOTIFY_CLOSE > 0:
-				// ignore, already handled by CLOSE_WRITE
-			default:
-				w.log.Trace().Interface("event", ev).Msg("unhandled event")
-				return
+		// The MDS keeps the order of the events it emits, so scan them in
+		// the order they arrive. Scan only debounces, except for deletes
+		// and moves which have to happen before later events for the path.
+		for _, s := range w.scans(ev) {
+			if err := w.tree.Scan(s.path, s.action, s.isDir); err != nil {
+				w.log.Error().Err(err).Str("path", s.path).Msg("error scanning file")
 			}
-			if err != nil {
-				w.log.Error().Err(err).Str("path", path).Msg("error scanning file")
-			}
-		}()
+		}
 	}
+}
+
+// scans translates an event into the scans to run, in order. The event
+// paths are relative to the watch root, the ignorer only knows absolute
+// paths, so each path is made absolute before checking it.
+func (w *CephFSWatcher) scans(ev *cephfsEvent) []cephfsScan {
+	var scans []cephfsScan
+	add := func(rel string, action watcher.EventAction, isDir bool) {
+		path := filepath.Join(w.root, rel)
+		if w.tree.Ignorer.IsIgnored(path) {
+			return
+		}
+		scans = append(scans, cephfsScan{path: path, action: action, isDir: isDir})
+	}
+
+	if ev.DestMask > 0 {
+		// A move. Either half may be ignored, e.g. when a file is moved
+		// into place from the tmp dir or into the trash, so handle them
+		// separately like the inotify watcher does.
+		if ev.DestMask&CEPH_MDS_NOTIFY_MOVED_TO == 0 {
+			w.log.Trace().Interface("event", ev).Msg("unhandled event")
+			return nil
+		}
+		isDir := ev.DestMask&CEPH_MDS_NOTIFY_ONLYDIR > 0
+		if ev.SrcMask > 0 {
+			add(ev.SrcPath, watcher.ActionMoveFrom, isDir)
+		}
+		add(ev.DestPath, watcher.ActionMove, isDir)
+		return scans
+	}
+
+	isDir := ev.Mask&CEPH_MDS_NOTIFY_ONLYDIR > 0
+	switch {
+	case ev.Mask&CEPH_MDS_NOTIFY_DELETE > 0:
+		add(ev.Path, watcher.ActionDelete, isDir)
+	case ev.Mask&CEPH_MDS_NOTIFY_CREATE > 0:
+		add(ev.Path, watcher.ActionCreate, isDir)
+	case ev.Mask&CEPH_MDS_NOTIFY_CLOSE_WRITE > 0:
+		add(ev.Path, watcher.ActionUpdate, isDir)
+	case ev.Mask&CEPH_MDS_NOTIFY_CLOSE > 0:
+		// ignore, already handled by CLOSE_WRITE
+	default:
+		w.log.Trace().Interface("event", ev).Msg("unhandled event")
+	}
+	return scans
 }
