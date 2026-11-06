@@ -116,6 +116,7 @@ type SessionStore interface {
 	SessionFromInfo(info tusd.FileInfo) *upload.DecomposedFsSession
 	List(ctx context.Context) ([]*upload.DecomposedFsSession, error)
 	Get(ctx context.Context, id string) (*upload.DecomposedFsSession, error)
+	RecoverInterruptedUpload(ctx context.Context, n *node.Node) bool
 }
 
 // Decomposedfs provides the base for decomposed filesystem implementations
@@ -191,6 +192,7 @@ func NewDefault(m map[string]interface{}, bs node.Blobstore, es events.Stream, l
 		EventStream:       es,
 		DisableVersioning: o.DisableVersioning,
 		Trashbin:          &DecomposedfsTrashbin{},
+		SeparateBlobs:     true,
 	}
 
 	return New(o, aspects, log)
@@ -1270,7 +1272,7 @@ func (fs *Decomposedfs) Download(ctx context.Context, ref *provider.Reference, o
 		return nil, nil, err
 	}
 
-	if n.IsProcessing(ctx) {
+	if n.IsProcessing(ctx) && !fs.sessionStore.RecoverInterruptedUpload(ctx, n) {
 		return nil, nil, errtypes.TooEarly("file is still being processed")
 	}
 
