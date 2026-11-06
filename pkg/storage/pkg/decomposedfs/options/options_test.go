@@ -44,6 +44,7 @@ var _ = Describe("Options", func() {
 
 		It("sets defaults", func() {
 			Expect(o.MetadataBackend).ToNot(BeEmpty())
+			Expect(o.MetadataBackend).To(Equal("messagepack"))
 		})
 
 		Context("with unclean root path configuration", func() {

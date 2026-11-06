@@ -86,6 +86,17 @@ var _ = Describe("Decomposed", func() {
 			}, bs, nil, nil)
 			Expect(err).ToNot(HaveOccurred())
 		})
+
+		It("rejects the xattrs metadata backend", func() {
+			bs := &nodemocks.Blobstore{}
+			_, err := decomposedfs.NewDefault(map[string]interface{}{
+				"root":             env.Root,
+				"permissionssvc":   "any",
+				"metadata_backend": "xattrs",
+			}, bs, nil, nil)
+			Expect(err).To(MatchError(ContainSubstring("xattrs")))
+			Expect(err).To(MatchError(ContainSubstring("messagepack")))
+		})
 	})
 
 	Describe("CreateDir", func() {
