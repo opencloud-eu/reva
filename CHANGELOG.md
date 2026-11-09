@@ -1,6 +1,6 @@
 # Changelog
 
-## [2.52.2](https://github.com/opencloud-eu/reva/releases/tag/v2.52.2) - 2026-11-06
+## [2.52.2](https://github.com/opencloud-eu/reva/releases/tag/v2.52.2) - 2026-11-09
 
 ### ❤️ Thanks to all contributors! ❤️
 
@@ -8,6 +8,7 @@
 
 ### 🐛 Bug Fixes
 
+- fix(metrics): record the metadata lock hold time once per lock [[#979](https://github.com/opencloud-eu/reva/pull/979)]
 - fix(decomposedfs): return NotFound when restoring a missing trash item [[#982](https://github.com/opencloud-eu/reva/pull/982)]
 - fix(eventsmiddleware): read the grantee group of removed shares into the group id [[#981](https://github.com/opencloud-eu/reva/pull/981)]
 - fix(mime): map the ora extension to image/openraster [[#975](https://github.com/opencloud-eu/reva/pull/975)]
