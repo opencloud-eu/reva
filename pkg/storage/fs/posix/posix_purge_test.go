@@ -91,8 +91,8 @@ var _ = Describe("Purging a space", func() {
 				})
 			}
 
-			Expect(env.Fs.DeleteStorageSpace(env.Ctx, &provider.DeleteStorageSpaceRequest{Id: spaceID})).To(Succeed())
-			err = env.Fs.DeleteStorageSpace(env.Ctx, &provider.DeleteStorageSpaceRequest{
+			Expect(env.Fs.DeleteStorageSpace(env.Ctx, &provider.DeleteStorageSpaceRequest{Id: spaceID})).Error().To(Succeed())
+			_, err = env.Fs.DeleteStorageSpace(env.Ctx, &provider.DeleteStorageSpaceRequest{
 				Id: spaceID,
 				Opaque: &typesv1beta1.Opaque{Map: map[string]*typesv1beta1.OpaqueEntry{
 					"purge": {Decoder: "plain", Value: []byte("true")},

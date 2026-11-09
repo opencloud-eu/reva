@@ -661,7 +661,8 @@ func (s *Service) DeleteStorageSpace(ctx context.Context, req *provider.DeleteSt
 		}, nil
 	}
 
-	if err := s.Storage.DeleteStorageSpace(ctx, req); err != nil {
+	result, err := s.Storage.DeleteStorageSpace(ctx, req)
+	if err != nil {
 		var st *rpc.Status
 		switch err.(type) {
 		case errtypes.IsNotFound:
@@ -682,6 +683,10 @@ func (s *Service) DeleteStorageSpace(ctx context.Context, req *provider.DeleteSt
 		return &provider.DeleteStorageSpaceResponse{
 			Status: st,
 		}, nil
+	}
+
+	if result != nil {
+		storagespace.ContextSetDeleteStorageSpaceResult(ctx, result)
 	}
 
 	// TODO: update cs3api
