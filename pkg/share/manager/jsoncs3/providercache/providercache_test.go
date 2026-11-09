@@ -30,12 +30,13 @@ import (
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	"github.com/opencloud-eu/reva/v2/pkg/share/manager/jsoncs3/providercache"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/metadata"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/metadata/locks"
 )
 
 var _ = Describe("Cache", func() {
 	var (
 		c       providercache.Cache
-		storage metadata.Storage
+		storage metadata.LockingStorage
 
 		storageID = "storageid"
 		spaceID   = "spaceid"
@@ -60,7 +61,7 @@ var _ = Describe("Cache", func() {
 		err = os.MkdirAll(tmpdir, 0755)
 		Expect(err).ToNot(HaveOccurred())
 
-		storage, err = metadata.NewDiskStorage(tmpdir)
+		storage, err = metadata.NewDiskStorage(tmpdir, metadata.WithLocker(locks.NewDiskLocker(tmpdir)))
 		Expect(err).ToNot(HaveOccurred())
 
 		c = providercache.New(storage, 0*time.Second)
@@ -172,12 +173,13 @@ var _ = Describe("Cache", func() {
 
 		})
 
-		Describe("PersistWithTime", func() {
+		Describe("Persist", func() {
 			It("does not persist if the etag changed", func() {
-				time.Sleep(1 * time.Nanosecond)
 				path := filepath.Join(tmpdir, "storages/storageid/spaceid.json")
-				now := time.Now()
-				_ = os.Chtimes(path, now, now) // this only works for the file backend
+				// Modify the file content on disk so that its content-based etag
+				// no longer matches the one held in memory. The subsequent
+				// persist must then fail its If-Match precondition.
+				Expect(os.WriteFile(path, []byte(`{"Shares":{}}`), 0644)).To(Succeed())
 				Expect(c.Persist(ctx, storageID, spaceID)).ToNot(Succeed())
 			})
 		})

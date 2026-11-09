@@ -39,7 +39,10 @@ const (
 // metadata storages: they upload conditionally on the etag they read, so the
 // lock only avoids retries and is not needed for correctness. For the same
 // reason Lock does not fail when NATS is unavailable: it logs the error and
-// proceeds without a lock.
+// proceeds without a lock. While the connection is down, that happens after
+// the JetStream request timeout (5s by default), so writes get slower but do
+// not fail. The connection created by metadata.LockerOption keeps reconnecting
+// forever.
 type NatsLocker struct {
 	kv    jetstream.KeyValue
 	owner []byte
