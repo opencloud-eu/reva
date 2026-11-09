@@ -232,6 +232,97 @@ var _ = Describe("Jsoncs3", func() {
 		})
 	})
 
+	Describe("Dump", func() {
+		It("exports all shares from the provider cache", func() {
+			// Create a share on the source manager.
+			_, err := m.Share(ctx, sharedResource, grant)
+			Expect(err).ToNot(HaveOccurred())
+
+			sharesChan := make(chan *collaboration.Share, 16)
+			receivedChan := make(chan sharespkg.ReceivedShareWithUser, 16)
+
+			dumpWG := sync.WaitGroup{}
+			dumpWG.Add(1)
+			go func() {
+				defer dumpWG.Done()
+				Expect(m.Dump(ctx, sharesChan, receivedChan)).To(Succeed())
+			}()
+			dumpWG.Wait()
+			close(sharesChan)
+			close(receivedChan)
+
+			var dumped []*collaboration.Share
+			for s := range sharesChan {
+				dumped = append(dumped, s)
+			}
+			Expect(len(dumped)).To(BeNumerically(">", 0))
+
+			// The created share must be among the dumped shares.
+			found := false
+			for _, s := range dumped {
+				if s.GetResourceId().GetOpaqueId() == sharedResource.Id.OpaqueId {
+					found = true
+					break
+				}
+			}
+			Expect(found).To(BeTrue())
+		})
+	})
+
+	Describe("Dump and Load", func() {
+		It("moves shares, received states and group shares to another manager", func() {
+			userShare, err := m.Share(ctx, sharedResource, grant)
+			Expect(err).ToNot(HaveOccurred())
+			groupShare, err := m.Share(ctx, sharedResource2, groupGrant)
+			Expect(err).ToNot(HaveOccurred())
+
+			// the grantee accepted the user share and mounted it
+			ssid := sharedResource.Id.StorageId + shareid.IDDelimiter + sharedResource.Id.SpaceId
+			granteeID := utils.NewFSSafeUserID(grantee.GetId())
+			Expect(m.UserReceivedStates.Add(ctx, granteeID, ssid, &collaboration.ReceivedShare{
+				Share:      userShare,
+				State:      collaboration.ShareState_SHARE_STATE_ACCEPTED,
+				MountPoint: &provider.Reference{Path: "mounted"},
+				Hidden:     true,
+			})).To(Succeed())
+
+			targetDir := GinkgoT().TempDir()
+			targetStorage, err := metadata.NewDiskStorage(targetDir, metadata.WithLocker(locks.NewDiskLocker(targetDir)))
+			Expect(err).ToNot(HaveOccurred())
+			target, err := jsoncs3.New(targetStorage, nil, nil, 0, nil, 0)
+			Expect(err).ToNot(HaveOccurred())
+			target.SkipMigrations()
+
+			sharesChan := make(chan *collaboration.Share)
+			receivedChan := make(chan sharespkg.ReceivedShareWithUser)
+			loaded := make(chan error, 1)
+			go func() { loaded <- target.Load(ctx, sharesChan, receivedChan) }()
+			Expect(m.Dump(ctx, sharesChan, receivedChan)).To(Succeed())
+			close(sharesChan)
+			close(receivedChan)
+			Eventually(loaded).Should(Receive(BeNil()))
+
+			for _, s := range []*collaboration.Share{userShare, groupShare} {
+				got, err := target.Cache.Get(ctx, s.ResourceId.StorageId, s.ResourceId.SpaceId, s.Id.OpaqueId, false)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(got).To(BeComparableTo(s, protocmp.Transform()))
+			}
+
+			state, err := target.UserReceivedStates.Get(ctx, granteeID, ssid, userShare.Id.OpaqueId)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(state).ToNot(BeNil())
+			Expect(state.State).To(Equal(collaboration.ShareState_SHARE_STATE_ACCEPTED))
+			Expect(state.MountPoint.GetPath()).To(Equal("mounted"))
+			Expect(state.Hidden).To(BeTrue())
+
+			groupShares, err := target.GroupReceivedCache.List(ctx, utils.FSSafeGroupID{ID: groupGrant.Grantee.GetGroupId()})
+			Expect(err).ToNot(HaveOccurred())
+			gssid := sharedResource2.Id.StorageId + shareid.IDDelimiter + sharedResource2.Id.SpaceId
+			Expect(groupShares).To(HaveKey(gssid))
+			Expect(groupShares[gssid].IDs).To(HaveKey(groupShare.Id.OpaqueId))
+		})
+	})
+
 	Describe("concurrent adds", func() {
 		It("does not lose updates when many shares target the same space", func() {
 			const n = 20

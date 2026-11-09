@@ -46,6 +46,7 @@ import (
 	"github.com/opencloud-eu/reva/v2/pkg/share/manager/jsoncs3/sharecache"
 	"github.com/opencloud-eu/reva/v2/pkg/share/manager/jsoncs3/shareid"
 	"github.com/opencloud-eu/reva/v2/pkg/share/manager/registry"
+	"github.com/opencloud-eu/reva/v2/pkg/sharedconf"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/metadata" // nolint:staticcheck // we need the legacy package to convert V1 to V2 messages
 	"github.com/opencloud-eu/reva/v2/pkg/storagespace"
 	"github.com/opencloud-eu/reva/v2/pkg/utils"
@@ -116,6 +117,7 @@ const tracerName = "jsoncs3"
 
 func init() {
 	registry.Register("jsoncs3", NewDefault)
+	registry.Register("json", NewDisk)
 }
 
 var (
@@ -229,6 +231,70 @@ func NewDefault(m map[string]interface{}, logger *zerolog.Logger) (share.Manager
 		ServiceAccountSecret: c.ServiceAccountSecret,
 		ProviderRegistryAddr: providerRegistryAddr,
 	})
+	return mgr, nil
+}
+
+// diskConfig holds the configuration for the disk-backed "json" driver. Unlike
+// the CS3-backed "jsoncs3" driver it stores shares in a local directory and does
+// not need a storage provider. It still needs the gateway, to check the
+// permissions of users that did not create a share and to resolve users.
+type diskConfig struct {
+	GatewayAddr string `mapstructure:"gateway_addr"`
+	DataDir     string `mapstructure:"data_dir"`
+	CacheTTL    int    `mapstructure:"ttl"`
+	// LockConfig selects how writers are serialised, see metadata.LockConfig.
+	// lock_backend defaults to "disk" with lock_dir = data_dir: "none" is only
+	// safe with a single writer, because on disk the etag check and the write
+	// are not one atomic step.
+	metadata.LockConfig `mapstructure:",squash"`
+}
+
+// NewDisk returns a new manager instance backed by a local disk storage. It is
+// registered as the "json" driver and is intended for single-node deployments or
+// for loading data that was dumped from a CS3-backed manager (see Dump/Load).
+func NewDisk(c map[string]interface{}, logger *zerolog.Logger) (share.Manager, error) {
+	conf := &diskConfig{}
+	if err := mapstructure.Decode(c, conf); err != nil {
+		return nil, errors.Wrap(err, "error creating a new disk share manager")
+	}
+
+	if conf.DataDir == "" {
+		conf.DataDir = "/var/tmp/reva/sharemanager"
+	}
+
+	if conf.LockBackend == "" {
+		conf.LockBackend = "disk"
+	}
+	if conf.LockDir == "" {
+		conf.LockDir = conf.DataDir
+	}
+	lockOpt, err := metadata.LockerOption(conf.LockConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	s, err := metadata.NewDiskStorage(conf.DataDir, lockOpt)
+	if err != nil {
+		return nil, err
+	}
+
+	gatewayAddr := sharedconf.GetGatewaySVC(conf.GatewayAddr)
+	if gatewayAddr == "" {
+		return nil, errors.New("the json share manager requires gateway_addr")
+	}
+	gatewaySelector, err := pool.GatewaySelector(gatewayAddr)
+	if err != nil {
+		return nil, err
+	}
+
+	mgr, err := New(s, logger, gatewaySelector, conf.CacheTTL, nil, 0)
+	if err != nil {
+		return nil, err
+	}
+	// The disk driver has no gateway to migrate from; a fresh deployment marks
+	// all migrations as applied during initialize(). Skip the migration run so
+	// that write operations are not held waiting on it.
+	mgr.SkipMigrations()
 	return mgr, nil
 }
 
@@ -1416,6 +1482,10 @@ func (m *Manager) Load(ctx context.Context, shareChan <-chan *collaboration.Shar
 	}()
 	go func() {
 		for s := range receivedShareChan {
+			if s.ReceivedShare.GetShare().GetId() == nil || s.ReceivedShare.GetShare().GetResourceId() == nil {
+				l.Error().Interface("received share", s).Msg("received share without share id or resource id, skipping")
+				continue
+			}
 			if s.ReceivedShare != nil {
 				if !shareIsRoutable(s.ReceivedShare.GetShare()) {
 					updateShareID(s.ReceivedShare.GetShare())
@@ -1428,7 +1498,7 @@ func (m *Manager) Load(ctx context.Context, shareChan <-chan *collaboration.Shar
 						l.Debug().Str("userid", s.UserID.GetOpaqueId()).Str("spaceid", spaceid).Str("shareid", s.ReceivedShare.GetShare().Id.OpaqueId).Msg("updated received share userdata")
 					}
 				}
-				if s.ReceivedShare.Share.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_GROUP && s.UserID == nil {
+				if s.ReceivedShare.GetShare().GetGrantee().GetType() == provider.GranteeType_GRANTEE_TYPE_GROUP && s.UserID == nil {
 					if err := m.GroupReceivedCache.Add(context.Background(), utils.FSSafeGroupID{ID: s.ReceivedShare.GetShare().GetGrantee().GetGroupId()}, s.ReceivedShare.GetShare().GetId().GetOpaqueId()); err != nil {
 						l.Error().Err(err).Interface("received share", s).Msg("error persisting received share to group cache")
 					} else {
@@ -1442,6 +1512,126 @@ func (m *Manager) Load(ctx context.Context, shareChan <-chan *collaboration.Shar
 	wg.Wait()
 
 	return nil
+}
+
+// Dump exports all shares and received shares to the given channels. It is the
+// inverse of Load and is used to migrate data between backends (e.g. from a
+// CS3-backed manager to a disk-backed one).
+func (m *Manager) Dump(ctx context.Context, shareChan chan<- *collaboration.Share, receivedShareChan chan<- share.ReceivedShareWithUser) error {
+	if err := m.waitForInit(ctx); err != nil {
+		return err
+	}
+
+	var wg sync.WaitGroup
+	wg.Add(2)
+
+	// Export all shares from the provider cache.
+	go func() {
+		defer wg.Done()
+		providers, err := m.Cache.All(ctx)
+		if err != nil {
+			m.logger.Error().Err(err).Msg("error listing providers during dump")
+			return
+		}
+		providers.Range(func(storageID string, spaces *providercache.Spaces) bool {
+			spaces.Spaces.Range(func(spaceID string, shares *providercache.Shares) bool {
+				for _, s := range shares.Shares {
+					shareChan <- s
+				}
+				return true
+			})
+			return true
+		})
+	}()
+
+	// Export all received share states from the user and group caches. We
+	// enumerate users/groups from the storage tree (the keys are the safe
+	// filenames, which for non-guest ids equal the opaque id).
+	go func() {
+		defer wg.Done()
+
+		userIDs, err := m.listUserKeys(ctx, "users")
+		if err != nil {
+			m.logger.Error().Err(err).Msg("error listing users during dump")
+		}
+		for _, userID := range userIDs {
+			states, err := m.UserReceivedStates.List(ctx, utils.NewFSSafeUserID(&userv1beta1.UserId{OpaqueId: userID}))
+			if err != nil {
+				m.logger.Error().Err(err).Msg("error listing received states during dump")
+				continue
+			}
+			for ssid, space := range states {
+				for shareID, state := range space.States {
+					s := m.dumpShare(ctx, ssid, shareID)
+					if s == nil || state == nil {
+						continue
+					}
+					receivedShareChan <- share.ReceivedShareWithUser{
+						UserID: &userv1beta1.UserId{OpaqueId: userID},
+						ReceivedShare: &collaboration.ReceivedShare{
+							Share:      s,
+							State:      state.State,
+							MountPoint: state.MountPoint,
+							Hidden:     state.Hidden,
+						},
+					}
+				}
+			}
+		}
+
+		groupIDs, err := m.listUserKeys(ctx, "groups")
+		if err != nil {
+			m.logger.Error().Err(err).Msg("error listing groups during dump")
+		}
+		for _, groupID := range groupIDs {
+			states, err := m.GroupReceivedCache.List(ctx, utils.FSSafeGroupID{ID: &grouppb.GroupId{OpaqueId: groupID}})
+			if err != nil {
+				m.logger.Error().Err(err).Msg("error listing group received states during dump")
+				continue
+			}
+			for ssid, space := range states {
+				for shareID := range space.IDs {
+					s := m.dumpShare(ctx, ssid, shareID)
+					if s == nil {
+						continue
+					}
+					// Load adds group shares without a user to the group cache
+					receivedShareChan <- share.ReceivedShareWithUser{
+						ReceivedShare: &collaboration.ReceivedShare{Share: s},
+					}
+				}
+			}
+		}
+	}()
+
+	wg.Wait()
+	return nil
+}
+
+// dumpShare returns the share with shareID in the space ssid
+// ("<storageid>:<spaceid>") from the provider cache, or nil if it is gone.
+func (m *Manager) dumpShare(ctx context.Context, ssid, shareID string) *collaboration.Share {
+	storageID, spaceID, _ := shareid.Decode(ssid)
+	s, err := m.Cache.Get(ctx, storageID, spaceID, shareID, false)
+	if err != nil || s == nil {
+		m.logger.Error().Err(err).Str("spaceid", ssid).Str("shareid", shareID).Msg("received share not found in the provider cache during dump, skipping")
+		return nil
+	}
+	return s
+}
+
+// listUserKeys returns the directory entries (user/group ids) stored under the
+// given namespace in the manager's metadata storage.
+func (m *Manager) listUserKeys(ctx context.Context, namespace string) ([]string, error) {
+	entries, err := m.storage.ListDir(ctx, "/"+namespace)
+	if err != nil {
+		return nil, err
+	}
+	keys := make([]string, 0, len(entries))
+	for _, e := range entries {
+		keys = append(keys, e.Name)
+	}
+	return keys, nil
 }
 
 func (m *Manager) purgeSpace(ctx context.Context, id *provider.StorageSpaceId) {
