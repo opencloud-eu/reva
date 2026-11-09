@@ -54,7 +54,7 @@ type Cache struct {
 
 	Providers mtimesyncedcache.Map[string, *Spaces]
 
-	storage metadata.Storage
+	storage metadata.LockingStorage
 	ttl     time.Duration
 }
 
@@ -126,8 +126,9 @@ func (c *Cache) LockSpace(spaceID string) func() {
 	return func() { lock.Unlock() }
 }
 
-// New returns a new Cache instance
-func New(s metadata.Storage, ttl time.Duration) Cache {
+// New returns a new Cache instance. Writes go through s.UploadWithLock, so
+// the lock strategy is the one s was configured with.
+func New(s metadata.LockingStorage, ttl time.Duration) Cache {
 	return Cache{
 		Providers: mtimesyncedcache.Map[string, *Spaces]{},
 		storage:   s,
@@ -178,50 +179,91 @@ func (c *Cache) Add(ctx context.Context, storageID, spaceID, shareID string, sha
 		Str("spaceID", spaceID).
 		Str("shareID", shareID).Logger()
 
-	persistFunc := func() error {
+	// Apply the mutation atomically under the storage lock: read the latest
+	// state, add the share, and write it back in one locked cycle so concurrent
+	// writers cannot interleave between the read and the write.
+	err = c.atomicPersist(ctx, storageID, spaceID, func(existing *Shares) (*Shares, error) {
+		log.Info().Interface("shares", maps.Keys(existing.Shares)).Str("New share", shareID).Msg("Adding share to space")
+		if existing.Shares == nil {
+			existing.Shares = map[string]*collaboration.Share{}
+		}
+		existing.Shares[shareID] = share
+		return existing, nil
+	})
 
-		spaces, _ := c.Providers.Load(storageID)
-		space, _ := spaces.Spaces.Load(spaceID)
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, fmt.Sprintf("persisting added provider share failed: %s", err.Error()))
+		log.Error().Err(err).Msg("persisting added provider share failed")
+		return err
+	}
+	span.SetStatus(codes.Ok, "")
+	return nil
+}
 
-		log.Info().Interface("shares", maps.Keys(space.Shares)).Str("New share", shareID).Msg("Adding share to space")
-		space.Shares[shareID] = share
+// atomicPersist performs a locked read-modify-write of the space's JSON file.
+// fn receives the current on-storage state (a zero Shares when the file does not
+// yet exist) and returns the state to persist; returning nil aborts the write.
+// On success the in-memory cache is refreshed from the written bytes so that
+// subsequent operations see the new etag and content.
+func (c *Cache) atomicPersist(ctx context.Context, storageID, spaceID string, fn func(existing *Shares) (*Shares, error)) error {
+	_, span := tracer.Start(ctx, "atomicPersist")
+	defer span.End()
 
-		return c.Persist(ctx, storageID, spaceID)
+	jsonPath := spaceJSONPath(storageID, spaceID)
+	// UploadWithLock does not create parent folders.
+	if err := c.storage.MakeDirIfNotExist(ctx, path.Dir(jsonPath)); err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		return err
+	}
+	var written []byte
+	res, err := c.storage.UploadWithLock(ctx, metadata.UploadRequest{Path: jsonPath}, func(existing []byte) ([]byte, error) {
+		var s *Shares
+		if len(existing) > 0 {
+			s = &Shares{}
+			if err := json.Unmarshal(existing, s); err != nil {
+				return nil, err
+			}
+		} else {
+			s = &Shares{Shares: map[string]*collaboration.Share{}}
+		}
+		newState, err := fn(s)
+		if err != nil || newState == nil {
+			return nil, err
+		}
+		b, err := json.Marshal(newState)
+		if err != nil {
+			return nil, err
+		}
+		written = b
+		return b, nil
+	})
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		return err
 	}
 
-	for retries := 100; retries > 0; retries-- {
-		err = persistFunc()
-		switch err.(type) {
-		case nil:
-			span.SetStatus(codes.Ok, "")
-			return nil
-		case errtypes.Aborted:
-			log.Debug().Msg("aborted when persisting added provider share: etag changed. retrying...")
-			// this is the expected status code from the server when the if-match etag check fails
-			// continue with sync below
-		case errtypes.PreconditionFailed:
-			log.Debug().Msg("precondition failed when persisting added provider share: etag changed. retrying...")
-			// actually, this is the wrong status code and we treat it like errtypes.Aborted because of inconsistencies on the server side
-			// continue with sync below
-		case errtypes.AlreadyExists:
-			log.Debug().Msg("already exists when persisting added provider share. retrying...")
-			// CS3 uses an already exists error instead of precondition failed when using an If-None-Match=* header / IfExists flag in the InitiateFileUpload call.
-			// Thas happens when the cache thinks there is no file.
-			// continue with sync below
-		default:
-			span.SetStatus(codes.Error, fmt.Sprintf("persisting added provider share failed. giving up: %s", err.Error()))
-			log.Error().Err(err).Msg("persisting added provider share failed")
+	// Refresh the in-memory cache from the bytes we just wrote so that the
+	// etag and content stay consistent with the storage. The existing *Shares
+	// is mutated in place (not replaced) so that callers holding a reference
+	// to it observe the updated state, matching the previous behavior.
+	spaces, _ := c.Providers.LoadOrStore(storageID, &Spaces{
+		Spaces: mtimesyncedcache.Map[string, *Shares]{},
+	})
+	space, _ := spaces.Spaces.LoadOrStore(spaceID, &Shares{Shares: map[string]*collaboration.Share{}})
+	if len(written) > 0 {
+		var fresh Shares
+		if err := json.Unmarshal(written, &fresh); err != nil {
 			return err
 		}
-		if err := c.syncWithLock(ctx, storageID, spaceID); err != nil {
-			span.RecordError(err)
-			span.SetStatus(codes.Error, err.Error())
-			log.Error().Err(err).Msg("persisting added provider share failed. giving up.")
-			return err
-		}
+		space.Shares = fresh.Shares
 	}
+	space.Etag = res.Etag
 
-	return err
+	span.SetStatus(codes.Ok, "")
+	return nil
 }
 
 // Remove removes a share from the cache
@@ -241,54 +283,25 @@ func (c *Cache) Remove(ctx context.Context, storageID, spaceID, shareID string) 
 		}
 	}
 
-	persistFunc := func() error {
-		spaces, ok := c.Providers.Load(storageID)
-		if !ok {
-			return nil
-		}
-		space, _ := spaces.Spaces.Load(spaceID)
-		if !ok {
-			return nil
-		}
-		delete(space.Shares, shareID)
-
-		return c.Persist(ctx, storageID, spaceID)
-	}
-
 	log := appctx.GetLogger(ctx).With().
 		Str("hostname", os.Getenv("HOSTNAME")).
 		Str("storageID", storageID).
 		Str("spaceID", spaceID).
 		Str("shareID", shareID).Logger()
 
-	var err error
-	for retries := 100; retries > 0; retries-- {
-		err = persistFunc()
-		switch err.(type) {
-		case nil:
-			span.SetStatus(codes.Ok, "")
-			return nil
-		case errtypes.Aborted:
-			log.Debug().Msg("aborted when persisting removed provider share: etag changed. retrying...")
-			// this is the expected status code from the server when the if-match etag check fails
-			// continue with sync below
-		case errtypes.PreconditionFailed:
-			log.Debug().Msg("precondition failed when persisting removed provider share: etag changed. retrying...")
-			// actually, this is the wrong status code and we treat it like errtypes.Aborted because of inconsistencies on the server side
-			// continue with sync below
-		default:
-			span.SetStatus(codes.Error, fmt.Sprintf("persisting removed provider share failed. giving up: %s", err.Error()))
-			log.Error().Err(err).Msg("persisting removed provider share failed")
-			return err
-		}
-		if err := c.syncWithLock(ctx, storageID, spaceID); err != nil {
-			span.RecordError(err)
-			span.SetStatus(codes.Error, err.Error())
-			log.Error().Err(err).Msg("persisting removed provider share failed. giving up.")
-			return err
-		}
+	err := c.atomicPersist(ctx, storageID, spaceID, func(existing *Shares) (*Shares, error) {
+		delete(existing.Shares, shareID)
+		return existing, nil
+	})
+
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, fmt.Sprintf("persisting removed provider share failed: %s", err.Error()))
+		log.Error().Err(err).Msg("persisting removed provider share failed")
+		return err
 	}
-	return err
+	span.SetStatus(codes.Ok, "")
+	return nil
 }
 
 // Get returns one entry from the cache
@@ -465,17 +478,10 @@ func (c *Cache) PurgeSpace(ctx context.Context, storageID, spaceID string) error
 		}
 	}
 
-	spaces, ok := c.Providers.Load(storageID)
-	if !ok {
-		return nil
-	}
-	newShares := &Shares{}
-	if space, ok := spaces.Spaces.Load(spaceID); ok {
-		newShares.Etag = space.Etag // keep the etag to allow overwriting the state on the server
-	}
-	spaces.Spaces.Store(spaceID, newShares)
-
-	return c.Persist(ctx, storageID, spaceID)
+	// Atomically replace the space's share list with an empty one.
+	return c.atomicPersist(ctx, storageID, spaceID, func(existing *Shares) (*Shares, error) {
+		return &Shares{Shares: map[string]*collaboration.Share{}}, nil
+	})
 }
 
 func (c *Cache) syncWithLock(ctx context.Context, storageID, spaceID string) error {

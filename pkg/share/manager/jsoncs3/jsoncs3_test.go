@@ -21,6 +21,7 @@ package jsoncs3_test
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
@@ -42,6 +43,7 @@ import (
 	"github.com/opencloud-eu/reva/v2/pkg/share/manager/jsoncs3/sharecache"
 	"github.com/opencloud-eu/reva/v2/pkg/share/manager/jsoncs3/shareid"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/metadata"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/metadata/locks"
 	"github.com/opencloud-eu/reva/v2/pkg/utils"
 	"github.com/opencloud-eu/reva/v2/tests/cs3mocks/mocks"
 	"github.com/stretchr/testify/mock"
@@ -104,7 +106,7 @@ var _ = Describe("Jsoncs3", func() {
 				},
 			},
 		}
-		storage metadata.Storage
+		storage metadata.LockingStorage
 		client  *mocks.GatewayAPIClient
 		tmpdir  string
 		m       *jsoncs3.Manager
@@ -156,7 +158,7 @@ var _ = Describe("Jsoncs3", func() {
 		err = os.MkdirAll(tmpdir, 0755)
 		Expect(err).ToNot(HaveOccurred())
 
-		storage, err = metadata.NewDiskStorage(tmpdir)
+		storage, err = metadata.NewDiskStorage(tmpdir, metadata.WithLocker(locks.NewDiskLocker(tmpdir)))
 		Expect(err).ToNot(HaveOccurred())
 
 		pool.RemoveSelector("GatewaySelector" + "eu.opencloud.api.gateway")
@@ -227,6 +229,39 @@ var _ = Describe("Jsoncs3", func() {
 
 			Expect(err).ToNot(HaveOccurred())
 			Expect(s.ResourceId.OpaqueId).To(Equal(share.ResourceId.OpaqueId))
+		})
+	})
+
+	Describe("concurrent adds", func() {
+		It("does not lose updates when many shares target the same space", func() {
+			const n = 20
+			var wg sync.WaitGroup
+			wg.Add(n)
+			for i := 0; i < n; i++ {
+				i := i
+				go func() {
+					defer wg.Done()
+					// Each goroutine shares a distinct resource in the same
+					// space, exercising concurrent read-modify-write of the
+					// per-space JSON file.
+					res := &providerv1beta1.ResourceInfo{
+						Id: &providerv1beta1.ResourceId{
+							StorageId: "storageid",
+							SpaceId:   "spaceid",
+							OpaqueId:  fmt.Sprintf("opaque%d", i),
+						},
+					}
+					if _, err := m.Share(ctx, res, grant); err != nil {
+						Fail(fmt.Sprintf("share %d failed: %v", i, err))
+					}
+				}()
+			}
+			wg.Wait()
+
+			// All n shares must be present in the space.
+			shares, err := m.Cache.ListSpace(ctx, "storageid", "spaceid")
+			Expect(err).ToNot(HaveOccurred())
+			Expect(len(shares.Shares)).To(Equal(n))
 		})
 	})
 
@@ -1211,7 +1246,7 @@ var _ = Describe("CleanupStaleShares", func() {
 		Expect(err).ToNot(HaveOccurred())
 		DeferCleanup(os.RemoveAll, tmpdir)
 
-		storage, err := metadata.NewDiskStorage(tmpdir)
+		storage, err := metadata.NewDiskStorage(tmpdir, metadata.WithLocker(locks.NewDiskLocker(tmpdir)))
 		Expect(err).ToNot(HaveOccurred())
 		m, err := jsoncs3.New(storage, nil, nil, 0, nil, 0)
 		Expect(err).ToNot(HaveOccurred())

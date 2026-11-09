@@ -29,13 +29,14 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	"github.com/opencloud-eu/reva/v2/pkg/share/manager/jsoncs3/sharecache"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/metadata"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/metadata/locks"
 	"github.com/opencloud-eu/reva/v2/pkg/utils"
 )
 
 var _ = Describe("Sharecache", func() {
 	var (
 		c       sharecache.Cache
-		storage metadata.Storage
+		storage metadata.LockingStorage
 
 		userid = utils.NewFSSafeUserID(&userpb.UserId{
 			OpaqueId: "userid",
@@ -55,7 +56,7 @@ var _ = Describe("Sharecache", func() {
 		err = os.MkdirAll(tmpdir, 0755)
 		Expect(err).ToNot(HaveOccurred())
 
-		storage, err = metadata.NewDiskStorage(tmpdir)
+		storage, err = metadata.NewDiskStorage(tmpdir, metadata.WithLocker(locks.NewDiskLocker(tmpdir)))
 		Expect(err).ToNot(HaveOccurred())
 
 		c = sharecache.New(storage, "users", "created.json", 0*time.Second)

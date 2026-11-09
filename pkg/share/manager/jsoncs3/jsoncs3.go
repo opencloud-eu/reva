@@ -142,6 +142,8 @@ type config struct {
 	// SkipMigrations does not run the data migrations on startup. Only meant for
 	// test environments, skipped migrations are not applied later.
 	SkipMigrations bool `mapstructure:"skip_migrations"`
+	// LockConfig selects how writers are serialised, see metadata.LockConfig.
+	metadata.LockConfig `mapstructure:",squash"`
 }
 
 // EventOptions are the configurable options for events
@@ -162,7 +164,7 @@ type Manager struct {
 	GroupReceivedCache sharecache.Cache         // holds the list of shares a group has access to, sharded by group id
 	UserReceivedStates receivedsharecache.Cache // holds the state of shares a user has received, sharded by user id
 
-	storage   metadata.Storage
+	storage   metadata.LockingStorage
 	SpaceRoot *provider.ResourceId
 
 	ready          chan struct{} // closed once initialize() has completed successfully
@@ -187,7 +189,11 @@ func NewDefault(m map[string]interface{}, logger *zerolog.Logger) (share.Manager
 		return nil, err
 	}
 
-	s, err := metadata.NewCS3Storage(c.ProviderAddr, c.ProviderAddr, c.SystemUserID, c.SystemUserIdp, c.MachineAuthAPIKey)
+	lockOpt, err := metadata.LockerOption(c.LockConfig)
+	if err != nil {
+		return nil, err
+	}
+	s, err := metadata.NewCS3Storage(c.ProviderAddr, c.ProviderAddr, c.SystemUserID, c.SystemUserIdp, c.MachineAuthAPIKey, lockOpt)
 	if err != nil {
 		return nil, err
 	}
@@ -227,7 +233,7 @@ func NewDefault(m map[string]interface{}, logger *zerolog.Logger) (share.Manager
 }
 
 // New returns a new manager instance.
-func New(s metadata.Storage,
+func New(s metadata.LockingStorage,
 	logger *zerolog.Logger,
 	gatewaySelector pool.Selectable[gatewayv1beta1.GatewayAPIClient],
 	ttlSeconds int,
