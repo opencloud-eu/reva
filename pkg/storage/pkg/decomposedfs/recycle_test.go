@@ -62,13 +62,13 @@ var _ = Describe("Recycle", func() {
 				})
 
 				JustBeforeEach(func() {
-					err := env.GetFs().Delete(env.GetCtx(), &provider.Reference{
+					_, err := env.GetFs().Delete(env.GetCtx(), &provider.Reference{
 						ResourceId: env.GetSpaceRootRes(),
 						Path:       "/dir1/file1",
 					})
 					Expect(err).ToNot(HaveOccurred())
 
-					err = env.GetFs().Delete(env.GetCtx(), &provider.Reference{
+					_, err = env.GetFs().Delete(env.GetCtx(), &provider.Reference{
 						ResourceId: env.GetSpaceRootRes(),
 						Path:       "/dir1/subdir1",
 					})
@@ -177,13 +177,13 @@ var _ = Describe("Recycle", func() {
 				})
 
 				JustBeforeEach(func() {
-					err := env.GetFs().Delete(env.GetCtx(), &provider.Reference{
+					_, err := env.GetFs().Delete(env.GetCtx(), &provider.Reference{
 						ResourceId: env.GetSpaceRootRes(),
 						Path:       "/dir1/file1",
 					})
 					Expect(err).ToNot(HaveOccurred())
 
-					err = env.GetFs().Delete(ctx, &provider.Reference{
+					_, err = env.GetFs().Delete(ctx, &provider.Reference{
 						ResourceId: env.GetSpaceRootRes(),
 						Path:       "/dir1/subdir1",
 					})
@@ -280,13 +280,13 @@ var _ = Describe("Recycle", func() {
 				})
 
 				JustBeforeEach(func() {
-					err := env.GetFs().Delete(env.GetCtx(), &provider.Reference{
+					_, err := env.GetFs().Delete(env.GetCtx(), &provider.Reference{
 						ResourceId: env.GetSpaceRootRes(),
 						Path:       "/dir1/file1",
 					})
 					Expect(err).ToNot(HaveOccurred())
 
-					err = env.GetFs().Delete(env.GetCtx(), &provider.Reference{
+					_, err = env.GetFs().Delete(env.GetCtx(), &provider.Reference{
 						ResourceId: projectID,
 						Path:       "/dir1/file1",
 					})
@@ -363,7 +363,7 @@ var _ = Describe("Recycle", func() {
 				})
 
 				It("can list the trashbin", func() {
-					err := env.GetFs().Delete(env.GetCtx(), &provider.Reference{
+					_, err := env.GetFs().Delete(env.GetCtx(), &provider.Reference{
 						ResourceId: env.GetSpaceRootRes(),
 						Path:       "/dir1/file1",
 					})
@@ -375,7 +375,7 @@ var _ = Describe("Recycle", func() {
 				})
 
 				It("cannot delete files", func() {
-					err := env.GetFs().Delete(ctx, &provider.Reference{
+					_, err := env.GetFs().Delete(ctx, &provider.Reference{
 						ResourceId: env.GetSpaceRootRes(),
 						Path:       "/dir1/file1",
 					})
@@ -388,7 +388,7 @@ var _ = Describe("Recycle", func() {
 				})
 
 				It("cannot purge files from trashbin", func() {
-					err := env.GetFs().Delete(env.GetCtx(), &provider.Reference{
+					_, err := env.GetFs().Delete(env.GetCtx(), &provider.Reference{
 						ResourceId: env.GetSpaceRootRes(),
 						Path:       "/dir1/file1",
 					})
@@ -404,7 +404,7 @@ var _ = Describe("Recycle", func() {
 				})
 
 				It("cannot restore files from trashbin", func() {
-					err := env.GetFs().Delete(env.GetCtx(), &provider.Reference{
+					_, err := env.GetFs().Delete(env.GetCtx(), &provider.Reference{
 						ResourceId: env.GetSpaceRootRes(),
 						Path:       "/dir1/file1",
 					})
@@ -448,14 +448,14 @@ var _ = Describe("Recycle", func() {
 			})
 
 			It("cannot delete, list, purge or restore", func() {
-				err := env.GetFs().Delete(ctx, &provider.Reference{
+				_, err := env.GetFs().Delete(ctx, &provider.Reference{
 					ResourceId: env.GetSpaceRootRes(),
 					Path:       "/dir1/file1",
 				})
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("not found"))
 
-				err = env.GetFs().Delete(env.GetCtx(), &provider.Reference{
+				_, err = env.GetFs().Delete(env.GetCtx(), &provider.Reference{
 					ResourceId: env.GetSpaceRootRes(),
 					Path:       "/dir1/file1",
 				})

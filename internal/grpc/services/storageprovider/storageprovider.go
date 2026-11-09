@@ -798,7 +798,10 @@ func (s *Service) Delete(ctx context.Context, req *provider.DeleteRequest) (*pro
 		}, nil
 	}
 
-	err = s.Storage.Delete(ctx, req.Ref)
+	result, err := s.Storage.Delete(ctx, req.Ref)
+	if err == nil && result != nil {
+		storagespace.ContextSetDeleteResult(ctx, result)
+	}
 
 	return &provider.DeleteResponse{
 		Status: status.NewStatusFromErrType(ctx, "delete", err),

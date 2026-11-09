@@ -258,7 +258,7 @@ var _ = Describe("Decomposed", func() {
 				env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything).Unset()
 				env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything).Return(&provider.ResourcePermissions{}, nil)
 
-				err := env.Fs.Delete(env.Ctx, ref)
+				_, err := env.Fs.Delete(env.Ctx, ref)
 
 				Expect(err).To(MatchError(ContainSubstring("not found")))
 			})
@@ -272,7 +272,7 @@ var _ = Describe("Decomposed", func() {
 					Delete: false,
 				}, nil)
 
-				err := env.Fs.Delete(env.Ctx, ref)
+				_, err := env.Fs.Delete(env.Ctx, ref)
 
 				Expect(err).To(MatchError(ContainSubstring("permission denied")))
 			})
@@ -286,7 +286,7 @@ var _ = Describe("Decomposed", func() {
 				})
 				shareRoot := &provider.Reference{ResourceId: env.SpaceRootRes, Path: "/dir1/subdir1"}
 
-				err := env.Fs.Delete(env.Ctx, shareRoot)
+				_, err := env.Fs.Delete(env.Ctx, shareRoot)
 
 				Expect(err).To(MatchError(ContainSubstring("permission denied")))
 				_, err = env.Fs.GetMD(env.Ctx, shareRoot, nil, nil)
@@ -302,7 +302,7 @@ var _ = Describe("Decomposed", func() {
 					"file1": {Stat: true, Delete: true},
 				})
 
-				err := env.Fs.Delete(env.Ctx, &provider.Reference{ResourceId: env.SpaceRootRes, Path: "/dir1/file1"})
+				_, err := env.Fs.Delete(env.Ctx, &provider.Reference{ResourceId: env.SpaceRootRes, Path: "/dir1/file1"})
 
 				Expect(err).ToNot(HaveOccurred())
 			})
@@ -318,10 +318,21 @@ var _ = Describe("Decomposed", func() {
 			})
 
 			It("does not (yet) delete the blob from the blobstore", func() {
-				err := env.Fs.Delete(env.Ctx, ref)
+				_, err := env.Fs.Delete(env.Ctx, ref)
 
 				Expect(err).ToNot(HaveOccurred())
 				env.Blobstore.AssertNotCalled(GinkgoT(), "Delete", mock.AnythingOfType("string"))
+			})
+
+			It("returns a populated DeleteResult", func() {
+				result, err := env.Fs.Delete(env.Ctx, ref)
+
+				Expect(err).ToNot(HaveOccurred())
+				Expect(result).NotTo(BeNil())
+				Expect(result.SpaceOwner).NotTo(BeNil())
+				Expect(result.ResourceId).NotTo(BeNil())
+				Expect(result.ResourceId.SpaceId).NotTo(BeEmpty())
+				Expect(result.ResourceId.OpaqueId).NotTo(BeEmpty())
 			})
 		})
 	})
