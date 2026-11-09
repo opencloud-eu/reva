@@ -111,6 +111,17 @@ var _ = Describe("Metrics", func() {
 				Expect(metric("reva_metadata_lock_held_seconds", "space_root", "false")).To(Equal(holds + 1))
 			})
 
+			It("records the hold time once when a lock is unlocked twice", func() {
+				holds := metric("reva_metadata_lock_held_seconds", "space_root", "false")
+
+				unlock, err := backend.Lock(n)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(unlock()).To(Succeed())
+				_ = unlock() // like an explicit unlock followed by a deferred one
+
+				Expect(metric("reva_metadata_lock_held_seconds", "space_root", "false")).To(Equal(holds + 1))
+			})
+
 			It("records the locks of space roots separately", func() {
 				root := &testNode{spaceID: "789", id: "789", path: path.Join(tmpdir, "root")}
 				Expect(os.WriteFile(root.InternalPath(), nil, 0600)).To(Succeed())
