@@ -64,9 +64,9 @@ var _ = Describe("Purging a space", func() {
 				return &provider.Reference{ResourceId: root, Path: path}
 			}
 			for d := range dirs {
-				Expect(env.Fs.CreateDir(env.Ctx, ref(fmt.Sprintf("./d%d", d)))).To(Succeed())
+				Expect(env.Fs.CreateDir(env.Ctx, ref(fmt.Sprintf("./d%d", d)))).Error().To(Succeed())
 				for f := range files {
-					Expect(env.Fs.TouchFile(env.Ctx, ref(fmt.Sprintf("./d%d/f%d", d, f)), false, "")).To(Succeed())
+					Expect(env.Fs.TouchFile(env.Ctx, ref(fmt.Sprintf("./d%d/f%d", d, f)), false, "")).Error().To(Succeed())
 				}
 			}
 

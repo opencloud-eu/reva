@@ -113,7 +113,7 @@ var _ = Describe("Recycle", func() {
 					Expect(err).ToNot(HaveOccurred())
 					Expect(len(items)).To(Equal(2))
 
-					err = env.GetFs().RestoreRecycleItem(env.GetCtx(), &provider.Reference{ResourceId: env.GetSpaceRootRes()}, items[0].Key, "", nil)
+					_, err = env.GetFs().RestoreRecycleItem(env.GetCtx(), &provider.Reference{ResourceId: env.GetSpaceRootRes()}, items[0].Key, "", nil)
 					Expect(err).ToNot(HaveOccurred())
 
 					items, err = env.GetFs().ListRecycle(env.GetCtx(), &provider.Reference{ResourceId: env.GetSpaceRootRes()}, "", "")
@@ -128,10 +128,10 @@ var _ = Describe("Recycle", func() {
 					Expect(err).ToNot(HaveOccurred())
 					Expect(len(items)).To(Equal(2))
 
-					err = env.GetFs().RestoreRecycleItem(env.GetCtx(), &provider.Reference{ResourceId: env.GetSpaceRootRes()}, items[0].Key, "", nil)
+					_, err = env.GetFs().RestoreRecycleItem(env.GetCtx(), &provider.Reference{ResourceId: env.GetSpaceRootRes()}, items[0].Key, "", nil)
 					Expect(err).ToNot(HaveOccurred())
 
-					err = env.GetFs().RestoreRecycleItem(env.GetCtx(), &provider.Reference{ResourceId: env.GetSpaceRootRes()}, items[0].Key, "", nil)
+					_, err = env.GetFs().RestoreRecycleItem(env.GetCtx(), &provider.Reference{ResourceId: env.GetSpaceRootRes()}, items[0].Key, "", nil)
 					Expect(err).To(HaveOccurred())
 					_, ok := err.(errtypes.IsNotFound)
 					Expect(ok).To(BeTrue(), "expected errtypes.NotFound, got %T: %v", err, err)
@@ -248,10 +248,10 @@ var _ = Describe("Recycle", func() {
 						ctx2 = env.GetCtx()
 					}
 
-					err = env.GetFs().RestoreRecycleItem(ctx1, &provider.Reference{ResourceId: env.GetSpaceRootRes()}, items[0].Key, "", nil)
+					_, err = env.GetFs().RestoreRecycleItem(ctx1, &provider.Reference{ResourceId: env.GetSpaceRootRes()}, items[0].Key, "", nil)
 					Expect(err).ToNot(HaveOccurred())
 
-					err = env.GetFs().RestoreRecycleItem(ctx2, &provider.Reference{ResourceId: env.GetSpaceRootRes()}, items[1].Key, "", nil)
+					_, err = env.GetFs().RestoreRecycleItem(ctx2, &provider.Reference{ResourceId: env.GetSpaceRootRes()}, items[1].Key, "", nil)
 					Expect(err).ToNot(HaveOccurred())
 
 					items, err = env.GetFs().ListRecycle(env.GetCtx(), &provider.Reference{ResourceId: env.GetSpaceRootRes()}, "", "")
@@ -316,7 +316,7 @@ var _ = Describe("Recycle", func() {
 					_, err = env.CreateTestFile("largefile", "largefile-blobid", projectID.OpaqueId, projectID.SpaceId, 2000)
 					Expect(err).ToNot(HaveOccurred())
 
-					err = env.GetFs().RestoreRecycleItem(env.GetCtx(), &provider.Reference{ResourceId: projectID}, items[0].Key, "", nil)
+					_, err = env.GetFs().RestoreRecycleItem(env.GetCtx(), &provider.Reference{ResourceId: projectID}, items[0].Key, "", nil)
 					Expect(err).ToNot(HaveOccurred())
 
 					max, used, remaining, err := env.GetFs().GetQuota(env.GetCtx(), &provider.Reference{ResourceId: projectID})
@@ -414,7 +414,7 @@ var _ = Describe("Recycle", func() {
 					Expect(err).ToNot(HaveOccurred())
 					Expect(len(items)).To(Equal(1))
 
-					err = env.GetFs().RestoreRecycleItem(ctx, &provider.Reference{ResourceId: env.GetSpaceRootRes()}, items[0].Key, "", nil)
+					_, err = env.GetFs().RestoreRecycleItem(ctx, &provider.Reference{ResourceId: env.GetSpaceRootRes()}, items[0].Key, "", nil)
 					Expect(err).To(HaveOccurred())
 					Expect(err.Error()).To(ContainSubstring("permission denied"))
 				})
@@ -473,7 +473,7 @@ var _ = Describe("Recycle", func() {
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("not found"))
 
-				err = env.GetFs().RestoreRecycleItem(ctx, &provider.Reference{ResourceId: env.GetSpaceRootRes()}, items[0].Key, "", nil)
+				_, err = env.GetFs().RestoreRecycleItem(ctx, &provider.Reference{ResourceId: env.GetSpaceRootRes()}, items[0].Key, "", nil)
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("not found"))
 			})

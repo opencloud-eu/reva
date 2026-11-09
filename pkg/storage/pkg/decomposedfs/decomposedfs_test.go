@@ -96,7 +96,7 @@ var _ = Describe("Decomposed", func() {
 					Path:       "/dir2",
 				}
 				env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything).Return(&provider.ResourcePermissions{CreateContainer: true, Stat: true}, nil)
-				err := env.Fs.CreateDir(env.Ctx, dir2)
+				_, err := env.Fs.CreateDir(env.Ctx, dir2)
 				Expect(err).ToNot(HaveOccurred())
 				ri, err := env.Fs.GetMD(env.Ctx, dir2, []string{}, []string{})
 				Expect(err).ToNot(HaveOccurred())
@@ -108,15 +108,26 @@ var _ = Describe("Decomposed", func() {
 					Path:       "/dir1/dir2",
 				}
 				env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything).Return(&provider.ResourcePermissions{CreateContainer: true, Stat: true}, nil)
-				err := env.Fs.CreateDir(env.Ctx, dir2)
+				_, err := env.Fs.CreateDir(env.Ctx, dir2)
 				Expect(err).ToNot(HaveOccurred())
 				ri, err := env.Fs.GetMD(env.Ctx, dir2, []string{}, []string{})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(ri.Path).To(Equal(dir2.Path))
 			})
+			It("returns SpaceOwner in WriteResult", func() {
+				dir2 := &provider.Reference{
+					ResourceId: env.SpaceRootRes,
+					Path:       "/dir2",
+				}
+				env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(&provider.ResourcePermissions{CreateContainer: true, Stat: true}, nil)
+				res, err := env.Fs.CreateDir(env.Ctx, dir2)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(res).ToNot(BeNil())
+				Expect(res.SpaceOwner).ToNot(BeNil())
+			})
 			It("dir already exists", func() {
 				env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything).Return(&provider.ResourcePermissions{CreateContainer: true}, nil)
-				err := env.Fs.CreateDir(env.Ctx, ref)
+				_, err := env.Fs.CreateDir(env.Ctx, ref)
 				Expect(err).To(HaveOccurred())
 				Expect(err).Should(MatchError(errtypes.AlreadyExists("/dir1")))
 			})
@@ -126,9 +137,9 @@ var _ = Describe("Decomposed", func() {
 					Path:       "/dir1/dir3",
 				}
 				env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything).Return(&provider.ResourcePermissions{CreateContainer: true}, nil)
-				err := env.Fs.CreateDir(env.Ctx, dir3)
+				_, err := env.Fs.CreateDir(env.Ctx, dir3)
 				Expect(err).ToNot(HaveOccurred())
-				err = env.Fs.CreateDir(env.Ctx, dir3)
+				_, err = env.Fs.CreateDir(env.Ctx, dir3)
 				Expect(err).To(HaveOccurred())
 				Expect(err).Should(MatchError(errtypes.AlreadyExists("/dir1/dir3")))
 			})
@@ -138,7 +149,7 @@ var _ = Describe("Decomposed", func() {
 					Path:       "/dir1/dir2/dir3",
 				}
 				env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything).Return(&provider.ResourcePermissions{CreateContainer: true}, nil)
-				err := env.Fs.CreateDir(env.Ctx, dir2)
+				_, err := env.Fs.CreateDir(env.Ctx, dir2)
 				Expect(err).To(HaveOccurred())
 				Expect(err).Should(MatchError(errtypes.PreconditionFailed("/dir1/dir2")))
 			})
@@ -148,7 +159,7 @@ var _ = Describe("Decomposed", func() {
 					Path:       "/dir1/dir2/dir3/dir4",
 				}
 				env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything).Return(&provider.ResourcePermissions{CreateContainer: true}, nil)
-				err := env.Fs.CreateDir(env.Ctx, dir2)
+				_, err := env.Fs.CreateDir(env.Ctx, dir2)
 				Expect(err).To(HaveOccurred())
 				Expect(err).Should(MatchError(errtypes.PreconditionFailed("error: not found: dir2")))
 			})
@@ -233,7 +244,7 @@ var _ = Describe("Decomposed", func() {
 				return n.Exists
 			})).Return(&provider.ResourcePermissions{InitiateFileUpload: true, Stat: true}, nil)
 
-			Expect(env.Fs.TouchFile(env.Ctx, fileRef, false, "")).To(Succeed())
+			Expect(env.Fs.TouchFile(env.Ctx, fileRef, false, "")).Error().To(Succeed())
 
 			env.Permissions.AssertCalled(GinkgoT(), "AssemblePermissions", mock.Anything, mock.MatchedBy(func(n *node.Node) bool {
 				return n.Name == "dir1"
