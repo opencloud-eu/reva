@@ -23,7 +23,6 @@ import (
 	"io"
 	"net/url"
 
-	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	registry "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
@@ -31,7 +30,7 @@ import (
 )
 
 type MoveResult struct {
-	SpaceOwner   *user.UserId
+	SpaceOwner   *userpb.UserId
 	OldReference *provider.Reference
 	NewReference *provider.Reference
 }
@@ -165,9 +164,9 @@ type FS interface {
 	UnsetArbitraryMetadata(ctx context.Context, ref *provider.Reference, keys []string) error
 
 	// AddLabel adds a label to a resource
-	AddLabel(ctx context.Context, ref *provider.Reference, userID *user.UserId, label string) error
+	AddLabel(ctx context.Context, ref *provider.Reference, userID *userpb.UserId, label string) error
 	// RemoveLabel removes a label from a resource
-	RemoveLabel(ctx context.Context, ref *provider.Reference, userID *user.UserId, label string) error
+	RemoveLabel(ctx context.Context, ref *provider.Reference, userID *userpb.UserId, label string) error
 
 	// Locks
 
