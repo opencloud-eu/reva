@@ -51,6 +51,7 @@ import (
 	nodemocks "github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/node/mocks"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/options"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/permissions/mocks"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/revisioncleanup"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/tree"
 	"github.com/opencloud-eu/reva/v2/tests/helpers"
 )
@@ -221,11 +222,18 @@ func NewTestEnv(config map[string]interface{}) (*DecomposedTestEnv, error) {
 	log := &zerolog.Logger{}
 	bs := &nodemocks.Blobstore{}
 	tree := tree.New(lu, bs, o, permissions.Permissions{}, store.Create(), log)
+	// wire the revision cleanup like decomposedfs.NewDefault does, so that tests can
+	// configure it with the revisions_cleanup_* options
+	revisionsCleanup, err := revisioncleanup.NewServiceFromOptions(o, lu, tree, log)
+	if err != nil {
+		return nil, err
+	}
 	aspects := aspects.Aspects{
-		Lookup:      lu,
-		Tree:        tree,
-		Permissions: permissions.NewPermissions(pmock, permissionsSelector),
-		Trashbin:    &decomposedfs.DecomposedfsTrashbin{},
+		Lookup:           lu,
+		Tree:             tree,
+		Permissions:      permissions.NewPermissions(pmock, permissionsSelector),
+		Trashbin:         &decomposedfs.DecomposedfsTrashbin{},
+		RevisionsCleanup: revisionsCleanup,
 	}
 	fs, err := decomposedfs.New(o, aspects, log)
 	if err != nil {
@@ -258,6 +266,10 @@ func NewTestEnv(config map[string]interface{}) (*DecomposedTestEnv, error) {
 
 // Cleanup removes all files from disk
 func (t *DecomposedTestEnv) Cleanup() {
+	// stop background workers, e.g. of the revision cleanup, before their files are removed
+	if t.Fs != nil {
+		_ = t.Fs.Shutdown(context.Background())
+	}
 	for range 5 {
 		err := os.RemoveAll(t.Root)
 		if err == nil {
