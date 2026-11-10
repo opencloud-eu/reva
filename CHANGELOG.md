@@ -8,6 +8,7 @@
 
 ### 🐛 Bug Fixes
 
+- [stable-2.46] Limit inviteAcceptDialog values to URL path or base that exactly matc… [[#988](https://github.com/opencloud-eu/reva/pull/988)]
 - [stable-2.46] fix(ocm): use a public-only client for WAYF provider discovery [[#987](https://github.com/opencloud-eu/reva/pull/987)]
 
 ## [2.46.8](https://github.com/opencloud-eu/reva/releases/tag/v2.46.8) - 2026-08-20
