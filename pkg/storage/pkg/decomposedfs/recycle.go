@@ -366,6 +366,7 @@ func (tb *DecomposedfsTrashbin) RestoreRecycleItem(ctx context.Context, spaceID 
 		}
 		return nil, err
 	}
+	storagespace.ContextSetItemType(ctx, rn.Type(ctx))
 
 	// check permissions of deleted node
 	rp, err := tb.fs.p.AssembleTrashPermissions(ctx, rn)
@@ -411,6 +412,7 @@ func (tb *DecomposedfsTrashbin) PurgeRecycleItem(ctx context.Context, spaceID, k
 		}
 		return err
 	}
+	storagespace.ContextSetItemType(ctx, rn.Type(ctx))
 
 	// check permissions of deleted node
 	rp, err := tb.fs.p.AssembleTrashPermissions(ctx, rn)
