@@ -1,13 +1,14 @@
 # Changelog
 
-## [2.52.2](https://github.com/opencloud-eu/reva/releases/tag/v2.52.2) - 2026-11-09
+## [2.52.2](https://github.com/opencloud-eu/reva/releases/tag/v2.52.2) - 2026-11-10
 
 ### ❤️ Thanks to all contributors! ❤️
 
-@AlexAndBear, @aduffeck, @butonic, @dschmidt, @kulmann, @maki5, @pbleser-oc, @rhafer, @v-scharf
+@AlexAndBear, @VicDeo, @aduffeck, @butonic, @dschmidt, @kulmann, @maki5, @pbleser-oc, @rhafer, @v-scharf
 
 ### 🐛 Bug Fixes
 
+- Limit inviteAcceptDialog values to URL path or base that exactly matc… [[#924](https://github.com/opencloud-eu/reva/pull/924)]
 - fix(metrics): record the metadata lock hold time once per lock [[#979](https://github.com/opencloud-eu/reva/pull/979)]
 - fix(decomposedfs): return NotFound when restoring a missing trash item [[#982](https://github.com/opencloud-eu/reva/pull/982)]
 - fix(eventsmiddleware): read the grantee group of removed shares into the group id [[#981](https://github.com/opencloud-eu/reva/pull/981)]
