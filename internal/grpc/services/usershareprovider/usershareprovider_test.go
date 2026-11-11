@@ -496,6 +496,37 @@ var _ = Describe("user share provider service", func() {
 			)
 		})
 
+		Context("partial grant management on space roots", func() {
+			BeforeEach(func() {
+				spaceRoot := &providerpb.ResourceId{StorageId: "storage1", SpaceId: "space1", OpaqueId: "space1"}
+				statResourceResponse.Info = &providerpb.ResourceInfo{
+					Id:            spaceRoot,
+					Space:         &providerpb.StorageSpace{Root: spaceRoot, SpaceType: "project"},
+					PermissionSet: conversions.RoleFromName("manager").CS3ResourcePermissions(),
+				}
+			})
+
+			DescribeTable("only accepts grant management permissions as part of the manager role",
+				func(grantPermissions *providerpb.ResourcePermissions, expectedCode rpcpb.Code, expectedCalls int) {
+					createShareResponse, err := provider.CreateShare(ctx, &collaborationpb.CreateShareRequest{
+						ResourceInfo: statResourceResponse.Info,
+						Grant: &collaborationpb.ShareGrant{
+							Permissions: &collaborationpb.SharePermissions{Permissions: grantPermissions},
+						},
+					})
+
+					Expect(err).ToNot(HaveOccurred())
+					Expect(createShareResponse.Status.Code).To(Equal(expectedCode))
+					manager.AssertNumberOfCalls(GinkgoT(), "Share", expectedCalls)
+				},
+				Entry("RemoveGrant only", &providerpb.ResourcePermissions{RemoveGrant: true}, rpcpb.Code_CODE_INVALID_ARGUMENT, 0),
+				Entry("viewer plus RemoveGrant", &providerpb.ResourcePermissions{Stat: true, GetPath: true, ListGrants: true, RemoveGrant: true}, rpcpb.Code_CODE_INVALID_ARGUMENT, 0),
+				Entry("space viewer", conversions.NewSpaceViewerRole().CS3ResourcePermissions(), rpcpb.Code_CODE_OK, 1),
+				Entry("space editor", conversions.NewSpaceEditorRole().CS3ResourcePermissions(), rpcpb.Code_CODE_OK, 1),
+				Entry("manager", conversions.NewManagerRole().CS3ResourcePermissions(), rpcpb.Code_CODE_OK, 1),
+			)
+		})
+
 		Context("create share with tenant awareness", func() {
 			JustBeforeEach(func() {
 				rgrpcService := usershareprovider.New(gatewaySelector, manager, []*regexp.Regexp{})
@@ -1098,6 +1129,20 @@ var _ = Describe("user share provider service", func() {
 				Expect(err).ToNot(HaveOccurred())
 				Expect(updateShareResponse.Status.Code).To(Equal(rpcpb.Code_CODE_OK))
 				manager.AssertNumberOfCalls(GinkgoT(), "UpdateShare", 1)
+			})
+
+			It("rejects partial grant management permissions", func() {
+				updateShareResponse, err := provider.UpdateShare(ctx, &collaborationpb.UpdateShareRequest{
+					Ref: updateShareRef,
+					Share: &collaborationpb.Share{Permissions: &collaborationpb.SharePermissions{
+						Permissions: &providerpb.ResourcePermissions{Stat: true, GetPath: true, ListGrants: true, AddGrant: true, RemoveGrant: true},
+					}},
+					UpdateMask: &fieldmaskpb.FieldMask{Paths: []string{"permissions"}},
+				})
+
+				Expect(err).ToNot(HaveOccurred())
+				Expect(updateShareResponse.Status.Code).To(Equal(rpcpb.Code_CODE_INVALID_ARGUMENT))
+				manager.AssertNumberOfCalls(GinkgoT(), "UpdateShare", 0)
 			})
 
 			It("denies setting an expiration on the last permanent manager share", func() {

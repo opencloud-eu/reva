@@ -269,6 +269,9 @@ func (s *service) CreateShare(ctx context.Context, req *collaboration.CreateShar
 		if sRes.GetInfo().GetSpace().GetSpaceType() == _spaceTypePersonal || sRes.GetInfo().GetSpace().GetSpaceType() == _spaceTypeVirtual {
 			return &collaboration.CreateShareResponse{Status: status.NewInvalid(ctx, "space type is not eligible for sharing")}, nil
 		}
+		if HasPartialGrantPermissions(req.GetGrant().GetPermissions().GetPermissions()) {
+			return &collaboration.CreateShareResponse{Status: status.NewInvalid(ctx, "partial grant management permissions are not allowed on space roots")}, nil
+		}
 	}
 
 	// do not allow share to myself or the owner if share is for a user
@@ -362,6 +365,16 @@ func (s *service) CreateShare(ctx context.Context, req *collaboration.CreateShar
 
 func HasGrantPermissions(p *provider.ResourcePermissions) bool {
 	return p.GetAddGrant() || p.GetUpdateGrant() || p.GetRemoveGrant() || p.GetDenyGrant()
+}
+
+// managerPerms is the manager bitmap a space root share needs if it carries any grant management permission
+var managerPerms = conversions.NewManagerRole().CS3ResourcePermissions()
+
+// HasPartialGrantPermissions returns true if p carries some grant management permissions
+// without being a full manager. On a space root such a share would make the grantee a
+// manager the UI does not show as one.
+func HasPartialGrantPermissions(p *provider.ResourcePermissions) bool {
+	return HasGrantPermissions(p) && !conversions.SufficientCS3Permissions(p, managerPerms)
 }
 
 // spaceRootHasRemainingManager returns true if the given resource has at least one share
@@ -619,6 +632,11 @@ func (s *service) UpdateShare(ctx context.Context, req *collaboration.UpdateShar
 		newPermissions = req.GetShare().GetPermissions().GetPermissions()
 	} else {
 		newPermissions = req.GetField().GetPermissions().GetPermissions()
+	}
+	if utils.IsSpaceRoot(sRes.GetInfo()) && HasPartialGrantPermissions(newPermissions) {
+		return &collaboration.UpdateShareResponse{
+			Status: status.NewInvalid(ctx, "partial grant management permissions are not allowed on space roots"),
+		}, nil
 	}
 	if newPermissions != nil && !conversions.SufficientCS3Permissions(sRes.GetInfo().GetPermissionSet(), newPermissions) {
 		return &collaboration.UpdateShareResponse{
