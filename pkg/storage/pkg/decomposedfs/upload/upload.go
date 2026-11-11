@@ -359,15 +359,16 @@ func (session *DecomposedFsSession) Finalize(ctx context.Context) (err error) {
 		// The node's current content is already this upload's content (e.g. a
 		// newer upload was reverted in the meantime) - no revision is needed,
 		// upload the blob to the node itself.
-		if attribs.String(prefixes.BlobIDAttr) == session.ID() {
+		switch {
+		case attribs.String(prefixes.BlobIDAttr) == session.ID():
 			appctx.GetLogger(ctx).Debug().Str("nodepath", n.InternalPath()).Msg("node already contains this upload's content, no revision needed")
-		} else if session.store.disableVersioning {
+		case session.store.disableVersioning:
 			// with versioning disabled there is no revision to keep this upload's content in.
 			// A newer upload (or an external change) has taken over the node, so this upload
 			// is obsolete and is dropped.
 			appctx.GetLogger(ctx).Debug().Str("nodepath", n.InternalPath()).Msg("node was updated by a newer upload, dropping obsolete upload")
 			writeBlob = false
-		} else {
+		default:
 			versionID := n.ID + node.RevisionIDDelimiter + session.MTime().UTC().Format(time.RFC3339Nano)
 			// There should be a revision node (created by the other upload that finished before us), read it and upload our blob there.
 			existingRevisionNode, revisionNodeUnlock, err := node.LockAndReadNode(ctx, session.store.lu, session.SpaceID(), versionID, "", false, spaceRoot, false)
