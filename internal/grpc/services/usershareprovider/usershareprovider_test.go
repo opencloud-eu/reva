@@ -22,6 +22,7 @@ import (
 	"context"
 	"path/filepath"
 	"regexp"
+	"time"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -1049,6 +1050,56 @@ var _ = Describe("user share provider service", func() {
 				manager.AssertNumberOfCalls(GinkgoT(), "UpdateShare", 1)
 			})
 
+			It("denies downgrade when the only other manager share expires", func() {
+				manager.On("ListShares", mock.Anything, mock.Anything).Return([]*collaborationpb.Share{
+					getShareResponse,
+					{
+						Id:          &collaborationpb.ShareId{OpaqueId: "temporary-manager"},
+						Permissions: &collaborationpb.SharePermissions{Permissions: managerPerms},
+						Expiration:  utils.TimeToTS(time.Now().Add(24 * time.Hour)),
+					},
+				}, nil)
+
+				updateShareResponse, err := provider.UpdateShare(ctx, &collaborationpb.UpdateShareRequest{
+					Ref: updateShareRef,
+					Share: &collaborationpb.Share{Permissions: &collaborationpb.SharePermissions{
+						Permissions: &providerpb.ResourcePermissions{Stat: true},
+					}},
+					UpdateMask: &fieldmaskpb.FieldMask{Paths: []string{"permissions"}},
+				})
+
+				Expect(err).ToNot(HaveOccurred())
+				Expect(updateShareResponse.Status.Code).To(Equal(rpcpb.Code_CODE_PERMISSION_DENIED))
+				manager.AssertNumberOfCalls(GinkgoT(), "UpdateShare", 0)
+			})
+
+			It("allows downgrade when a permanent manager share remains next to an expiring one", func() {
+				manager.On("ListShares", mock.Anything, mock.Anything).Return([]*collaborationpb.Share{
+					getShareResponse,
+					{
+						Id:          &collaborationpb.ShareId{OpaqueId: "temporary-manager"},
+						Permissions: &collaborationpb.SharePermissions{Permissions: managerPerms},
+						Expiration:  utils.TimeToTS(time.Now().Add(24 * time.Hour)),
+					},
+					{
+						Id:          &collaborationpb.ShareId{OpaqueId: "permanent-manager"},
+						Permissions: &collaborationpb.SharePermissions{Permissions: managerPerms},
+					},
+				}, nil)
+
+				updateShareResponse, err := provider.UpdateShare(ctx, &collaborationpb.UpdateShareRequest{
+					Ref: updateShareRef,
+					Share: &collaborationpb.Share{Permissions: &collaborationpb.SharePermissions{
+						Permissions: &providerpb.ResourcePermissions{Stat: true},
+					}},
+					UpdateMask: &fieldmaskpb.FieldMask{Paths: []string{"permissions"}},
+				})
+
+				Expect(err).ToNot(HaveOccurred())
+				Expect(updateShareResponse.Status.Code).To(Equal(rpcpb.Code_CODE_OK))
+				manager.AssertNumberOfCalls(GinkgoT(), "UpdateShare", 1)
+			})
+
 			It("returns internal error when listing shares fails", func() {
 				manager.On("ListShares", mock.Anything, mock.Anything).Return(nil, errors.New("storage error"))
 
@@ -1189,6 +1240,48 @@ var _ = Describe("user share provider service", func() {
 					getShareResponse,
 					{
 						Id:          &collaborationpb.ShareId{OpaqueId: "manager-share"},
+						Permissions: &collaborationpb.SharePermissions{Permissions: managerPerms},
+					},
+				}, nil)
+
+				removeShareResponse, err := provider.RemoveShare(ctx, &collaborationpb.RemoveShareRequest{
+					Ref: removeShareRef,
+				})
+
+				Expect(err).ToNot(HaveOccurred())
+				Expect(removeShareResponse.Status.Code).To(Equal(rpcpb.Code_CODE_OK))
+				manager.AssertNumberOfCalls(GinkgoT(), "Unshare", 1)
+			})
+
+			It("denies removal when the only other manager share expires", func() {
+				manager.On("ListShares", mock.Anything, mock.Anything).Return([]*collaborationpb.Share{
+					getShareResponse,
+					{
+						Id:          &collaborationpb.ShareId{OpaqueId: "temporary-manager"},
+						Permissions: &collaborationpb.SharePermissions{Permissions: managerPerms},
+						Expiration:  utils.TimeToTS(time.Now().Add(24 * time.Hour)),
+					},
+				}, nil)
+
+				removeShareResponse, err := provider.RemoveShare(ctx, &collaborationpb.RemoveShareRequest{
+					Ref: removeShareRef,
+				})
+
+				Expect(err).ToNot(HaveOccurred())
+				Expect(removeShareResponse.Status.Code).To(Equal(rpcpb.Code_CODE_PERMISSION_DENIED))
+				manager.AssertNumberOfCalls(GinkgoT(), "Unshare", 0)
+			})
+
+			It("allows removal when a permanent manager share remains next to an expiring one", func() {
+				manager.On("ListShares", mock.Anything, mock.Anything).Return([]*collaborationpb.Share{
+					getShareResponse,
+					{
+						Id:          &collaborationpb.ShareId{OpaqueId: "temporary-manager"},
+						Permissions: &collaborationpb.SharePermissions{Permissions: managerPerms},
+						Expiration:  utils.TimeToTS(time.Now().Add(24 * time.Hour)),
+					},
+					{
+						Id:          &collaborationpb.ShareId{OpaqueId: "permanent-manager"},
 						Permissions: &collaborationpb.SharePermissions{Permissions: managerPerms},
 					},
 				}, nil)
