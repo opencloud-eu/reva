@@ -26,6 +26,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	ctxpkg "github.com/opencloud-eu/reva/v2/pkg/ctx"
+	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
 	posixhelpers "github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/testhelpers"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/permissions/mocks"
 	helpers "github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/testhelpers"
@@ -118,6 +119,22 @@ var _ = Describe("Recycle", func() {
 					items, err = env.GetFs().ListRecycle(env.GetCtx(), &provider.Reference{ResourceId: env.GetSpaceRootRes()}, "", "")
 					Expect(err).ToNot(HaveOccurred())
 					Expect(len(items)).To(Equal(1))
+				})
+
+				It("restoring an already restored item returns not found", func() {
+					env.GetBlobstore().On("Delete", mock.Anything).Return(nil).Times(2)
+
+					items, err := env.GetFs().ListRecycle(env.GetCtx(), &provider.Reference{ResourceId: env.GetSpaceRootRes()}, "", "")
+					Expect(err).ToNot(HaveOccurred())
+					Expect(len(items)).To(Equal(2))
+
+					err = env.GetFs().RestoreRecycleItem(env.GetCtx(), &provider.Reference{ResourceId: env.GetSpaceRootRes()}, items[0].Key, "", nil)
+					Expect(err).ToNot(HaveOccurred())
+
+					err = env.GetFs().RestoreRecycleItem(env.GetCtx(), &provider.Reference{ResourceId: env.GetSpaceRootRes()}, items[0].Key, "", nil)
+					Expect(err).To(HaveOccurred())
+					_, ok := err.(errtypes.IsNotFound)
+					Expect(ok).To(BeTrue(), "expected errtypes.NotFound, got %T: %v", err, err)
 				})
 			})
 
