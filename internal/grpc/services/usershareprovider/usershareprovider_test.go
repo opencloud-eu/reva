@@ -1115,6 +1115,100 @@ var _ = Describe("user share provider service", func() {
 				Expect(updateShareResponse.Status.Code).To(Equal(rpcpb.Code_CODE_INTERNAL))
 				manager.AssertNumberOfCalls(GinkgoT(), "UpdateShare", 0)
 			})
+
+			Context("when updating the expiration", func() {
+				var setExpiration *collaborationpb.UpdateShareRequest
+
+				BeforeEach(func() {
+					setExpiration = &collaborationpb.UpdateShareRequest{
+						Ref:        updateShareRef,
+						Share:      &collaborationpb.Share{Expiration: utils.TimeToTS(time.Now().Add(24 * time.Hour))},
+						UpdateMask: &fieldmaskpb.FieldMask{Paths: []string{"expiration"}},
+					}
+				})
+
+				It("denies setting an expiration on the last permanent manager share", func() {
+					manager.On("ListShares", mock.Anything, mock.Anything).Return([]*collaborationpb.Share{
+						getShareResponse, // only this share, which would no longer be permanent
+					}, nil)
+
+					updateShareResponse, err := provider.UpdateShare(ctx, setExpiration)
+
+					Expect(err).ToNot(HaveOccurred())
+					Expect(updateShareResponse.Status.Code).To(Equal(rpcpb.Code_CODE_PERMISSION_DENIED))
+					manager.AssertNumberOfCalls(GinkgoT(), "UpdateShare", 0)
+				})
+
+				It("allows setting an expiration when another permanent manager share remains", func() {
+					manager.On("ListShares", mock.Anything, mock.Anything).Return([]*collaborationpb.Share{
+						getShareResponse,
+						{
+							Id:          &collaborationpb.ShareId{OpaqueId: "other-manager"},
+							Permissions: &collaborationpb.SharePermissions{Permissions: managerPerms},
+						},
+					}, nil)
+
+					updateShareResponse, err := provider.UpdateShare(ctx, setExpiration)
+
+					Expect(err).ToNot(HaveOccurred())
+					Expect(updateShareResponse.Status.Code).To(Equal(rpcpb.Code_CODE_OK))
+					manager.AssertNumberOfCalls(GinkgoT(), "UpdateShare", 1)
+				})
+
+				It("denies setting an expiration when the only other manager share expires", func() {
+					manager.On("ListShares", mock.Anything, mock.Anything).Return([]*collaborationpb.Share{
+						getShareResponse,
+						{
+							Id:          &collaborationpb.ShareId{OpaqueId: "temporary-manager"},
+							Permissions: &collaborationpb.SharePermissions{Permissions: managerPerms},
+							Expiration:  utils.TimeToTS(time.Now().Add(24 * time.Hour)),
+						},
+					}, nil)
+
+					updateShareResponse, err := provider.UpdateShare(ctx, setExpiration)
+
+					Expect(err).ToNot(HaveOccurred())
+					Expect(updateShareResponse.Status.Code).To(Equal(rpcpb.Code_CODE_PERMISSION_DENIED))
+					manager.AssertNumberOfCalls(GinkgoT(), "UpdateShare", 0)
+				})
+
+				It("denies setting an expiration together with unchanged manager permissions", func() {
+					manager.On("ListShares", mock.Anything, mock.Anything).Return([]*collaborationpb.Share{
+						getShareResponse,
+					}, nil)
+					setExpiration.Share.Permissions = &collaborationpb.SharePermissions{Permissions: managerPerms}
+					setExpiration.UpdateMask.Paths = []string{"permissions", "expiration"}
+
+					updateShareResponse, err := provider.UpdateShare(ctx, setExpiration)
+
+					Expect(err).ToNot(HaveOccurred())
+					Expect(updateShareResponse.Status.Code).To(Equal(rpcpb.Code_CODE_PERMISSION_DENIED))
+					manager.AssertNumberOfCalls(GinkgoT(), "UpdateShare", 0)
+				})
+
+				It("does not check when the expiration is removed", func() {
+					setExpiration.Share.Expiration = nil
+
+					updateShareResponse, err := provider.UpdateShare(ctx, setExpiration)
+
+					Expect(err).ToNot(HaveOccurred())
+					Expect(updateShareResponse.Status.Code).To(Equal(rpcpb.Code_CODE_OK))
+					manager.AssertNumberOfCalls(GinkgoT(), "ListShares", 0)
+					manager.AssertNumberOfCalls(GinkgoT(), "UpdateShare", 1)
+				})
+
+				It("does not check when the update mask does not include the expiration", func() {
+					setExpiration.Share.Permissions = &collaborationpb.SharePermissions{Permissions: managerPerms}
+					setExpiration.UpdateMask.Paths = []string{"permissions"}
+
+					updateShareResponse, err := provider.UpdateShare(ctx, setExpiration)
+
+					Expect(err).ToNot(HaveOccurred())
+					Expect(updateShareResponse.Status.Code).To(Equal(rpcpb.Code_CODE_OK))
+					manager.AssertNumberOfCalls(GinkgoT(), "ListShares", 0)
+					manager.AssertNumberOfCalls(GinkgoT(), "UpdateShare", 1)
+				})
+			})
 		})
 	})
 
