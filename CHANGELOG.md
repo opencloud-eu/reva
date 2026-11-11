@@ -4,10 +4,11 @@
 
 ### ❤️ Thanks to all contributors! ❤️
 
-@butonic
+@aduffeck, @butonic
 
 ### 🐛 Bug Fixes
 
+- Fix files stuck in processing after an interrupted synchronous upload [[#976](https://github.com/opencloud-eu/reva/pull/976)]
 - storage: return typed results from write operations [[#986](https://github.com/opencloud-eu/reva/pull/986)]
 
 ## [2.52.2](https://github.com/opencloud-eu/reva/releases/tag/v2.52.2) - 2026-11-10
