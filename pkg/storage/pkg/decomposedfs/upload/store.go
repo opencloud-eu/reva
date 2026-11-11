@@ -301,13 +301,19 @@ func (store DecomposedFsStore) updateExistingNode(ctx context.Context, session *
 	_, span := tracer.Start(ctx, "updateExistingNode")
 	defer span.End()
 
-	// write lock existing node before reading any metadata
-	unlock, err := store.lu.MetadataBackend().Lock(n)
+	// Read through a lock-aware node. A separate unlocked node would wait for our
+	// own metadata lock when its cache entry is missing.
+	old, unlockOld, err := node.LockAndReadNode(ctx, store.lu, spaceID, n.ID, "", false, n.SpaceRoot, false)
 	if err != nil {
 		return nil, err
 	}
+	// CreateNodeForUpload writes through n until it releases this lock.
+	n.SetLockHeld(true)
+	unlock := func() error {
+		n.SetLockHeld(false)
+		return unlockOld()
+	}
 
-	old, _ := node.ReadNode(ctx, store.lu, spaceID, n.ID, "", false, nil, false)
 	if _, err := node.CheckQuota(ctx, n.SpaceRoot, true, uint64(old.Blobsize), fsize); err != nil {
 		return unlock, err
 	}
