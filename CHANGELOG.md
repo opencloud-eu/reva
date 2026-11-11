@@ -1,5 +1,15 @@
 # Changelog
 
+## [2.52.3](https://github.com/opencloud-eu/reva/releases/tag/v2.52.3) - 2026-11-11
+
+### ❤️ Thanks to all contributors! ❤️
+
+@butonic
+
+### 🐛 Bug Fixes
+
+- storage: return typed results from write operations [[#986](https://github.com/opencloud-eu/reva/pull/986)]
+
 ## [2.52.2](https://github.com/opencloud-eu/reva/releases/tag/v2.52.2) - 2026-11-10
 
 ### ❤️ Thanks to all contributors! ❤️
