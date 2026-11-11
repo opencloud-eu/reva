@@ -1100,6 +1100,81 @@ var _ = Describe("user share provider service", func() {
 				manager.AssertNumberOfCalls(GinkgoT(), "UpdateShare", 1)
 			})
 
+			It("denies setting an expiration on the last permanent manager share", func() {
+				manager.On("ListShares", mock.Anything, mock.Anything).Return([]*collaborationpb.Share{
+					getShareResponse,
+				}, nil)
+
+				updateShareResponse, err := provider.UpdateShare(ctx, &collaborationpb.UpdateShareRequest{
+					Ref:        updateShareRef,
+					Share:      &collaborationpb.Share{Expiration: utils.TimeToTS(time.Now().Add(24 * time.Hour))},
+					UpdateMask: &fieldmaskpb.FieldMask{Paths: []string{"expiration"}},
+				})
+
+				Expect(err).ToNot(HaveOccurred())
+				Expect(updateShareResponse.Status.Code).To(Equal(rpcpb.Code_CODE_PERMISSION_DENIED))
+				manager.AssertNumberOfCalls(GinkgoT(), "UpdateShare", 0)
+			})
+
+			It("denies setting manager permissions with an expiration when only an expiring manager share remains", func() {
+				manager.On("ListShares", mock.Anything, mock.Anything).Return([]*collaborationpb.Share{
+					getShareResponse,
+					{
+						Id:          &collaborationpb.ShareId{OpaqueId: "temporary-manager"},
+						Permissions: &collaborationpb.SharePermissions{Permissions: managerPerms},
+						Expiration:  utils.TimeToTS(time.Now().Add(24 * time.Hour)),
+					},
+				}, nil)
+
+				updateShareResponse, err := provider.UpdateShare(ctx, &collaborationpb.UpdateShareRequest{
+					Ref: updateShareRef,
+					Share: &collaborationpb.Share{
+						Permissions: &collaborationpb.SharePermissions{Permissions: managerPerms},
+						Expiration:  utils.TimeToTS(time.Now().Add(24 * time.Hour)),
+					},
+					UpdateMask: &fieldmaskpb.FieldMask{Paths: []string{"permissions", "expiration"}},
+				})
+
+				Expect(err).ToNot(HaveOccurred())
+				Expect(updateShareResponse.Status.Code).To(Equal(rpcpb.Code_CODE_PERMISSION_DENIED))
+				manager.AssertNumberOfCalls(GinkgoT(), "UpdateShare", 0)
+			})
+
+			It("allows setting an expiration on a manager share when another permanent manager share remains", func() {
+				manager.On("ListShares", mock.Anything, mock.Anything).Return([]*collaborationpb.Share{
+					getShareResponse,
+					{
+						Id:          &collaborationpb.ShareId{OpaqueId: "permanent-manager"},
+						Permissions: &collaborationpb.SharePermissions{Permissions: managerPerms},
+					},
+				}, nil)
+
+				updateShareResponse, err := provider.UpdateShare(ctx, &collaborationpb.UpdateShareRequest{
+					Ref:        updateShareRef,
+					Share:      &collaborationpb.Share{Expiration: utils.TimeToTS(time.Now().Add(24 * time.Hour))},
+					UpdateMask: &fieldmaskpb.FieldMask{Paths: []string{"expiration"}},
+				})
+
+				Expect(err).ToNot(HaveOccurred())
+				Expect(updateShareResponse.Status.Code).To(Equal(rpcpb.Code_CODE_OK))
+				manager.AssertNumberOfCalls(GinkgoT(), "UpdateShare", 1)
+			})
+
+			It("does not check when the expiration of a manager share is removed", func() {
+				getShareResponse.Expiration = utils.TimeToTS(time.Now().Add(24 * time.Hour))
+
+				updateShareResponse, err := provider.UpdateShare(ctx, &collaborationpb.UpdateShareRequest{
+					Ref:        updateShareRef,
+					Share:      &collaborationpb.Share{},
+					UpdateMask: &fieldmaskpb.FieldMask{Paths: []string{"expiration"}},
+				})
+
+				Expect(err).ToNot(HaveOccurred())
+				Expect(updateShareResponse.Status.Code).To(Equal(rpcpb.Code_CODE_OK))
+				manager.AssertNumberOfCalls(GinkgoT(), "ListShares", 0)
+				manager.AssertNumberOfCalls(GinkgoT(), "UpdateShare", 1)
+			})
+
 			It("returns internal error when listing shares fails", func() {
 				manager.On("ListShares", mock.Anything, mock.Anything).Return(nil, errors.New("storage error"))
 
