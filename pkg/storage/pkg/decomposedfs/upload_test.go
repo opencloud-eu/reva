@@ -384,7 +384,7 @@ var _ = Describe("File uploads", func() {
 				Stat:               true,
 				InitiateFileUpload: true,
 			}, nil).Once()
-			Expect(fs.TouchFile(ctx, ref, false, "")).To(Succeed())
+			Expect(fs.TouchFile(ctx, ref, false, "")).Error().To(Succeed())
 
 			body := []byte("staged upload")
 			bs.On("UploadFromReader", mock.AnythingOfType("*node.Node"), mock.Anything, int64(len(body))).
@@ -419,7 +419,7 @@ var _ = Describe("File uploads", func() {
 				Stat:               true,
 				InitiateFileUpload: true,
 			}, nil).Once()
-			Expect(fs.TouchFile(ctx, ref, false, "")).To(Succeed())
+			Expect(fs.TouchFile(ctx, ref, false, "")).Error().To(Succeed())
 
 			Expect(fs.MarkProcessing(ctx, ref, true, "session-1")).To(Succeed())
 			Expect(fs.MarkProcessing(ctx, ref, false, "session-2")).To(Succeed())

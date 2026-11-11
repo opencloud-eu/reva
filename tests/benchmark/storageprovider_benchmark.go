@@ -56,14 +56,14 @@ var _ = Describe("FS Benchmark", func() {
 		}
 		experiment.SampleDuration("runtime: posix fs", func(idx int) {
 			ref.Path = fmt.Sprintf("%d.txt", idx)
-			Expect(posixEnv.Fs.TouchFile(posixEnv.Ctx, ref, false, "")).To(Succeed())
+			Expect(posixEnv.Fs.TouchFile(posixEnv.Ctx, ref, false, "")).Error().To(Succeed())
 		}, gmeasure.SamplingConfig{N: N})
 
 		By("testing decomposed fs")
 		ref.ResourceId = decomposedEnv.SpaceRootRes
 		experiment.SampleDuration("runtime: decomposed fs", func(idx int) {
 			ref.Path = fmt.Sprintf("%d.txt", idx)
-			Expect(decomposedEnv.Fs.TouchFile(decomposedEnv.Ctx, ref, false, "")).To(Succeed())
+			Expect(decomposedEnv.Fs.TouchFile(decomposedEnv.Ctx, ref, false, "")).Error().To(Succeed())
 		}, gmeasure.SamplingConfig{N: N})
 	})
 
@@ -78,7 +78,7 @@ var _ = Describe("FS Benchmark", func() {
 		}
 		for i := range N {
 			ref.Path = fmt.Sprintf("%d.txt", i)
-			Expect(posixEnv.Fs.TouchFile(posixEnv.Ctx, ref, false, "")).To(Succeed())
+			Expect(posixEnv.Fs.TouchFile(posixEnv.Ctx, ref, false, "")).Error().To(Succeed())
 		}
 		experiment.SampleDuration("runtime: posix fs", func(idx int) {
 			ref.Path = fmt.Sprintf("%d.txt", idx)
@@ -92,7 +92,7 @@ var _ = Describe("FS Benchmark", func() {
 		}
 		for i := range N {
 			ref.Path = fmt.Sprintf("%d.txt", i)
-			Expect(decomposedEnv.Fs.TouchFile(decomposedEnv.Ctx, ref, false, "")).To(Succeed())
+			Expect(decomposedEnv.Fs.TouchFile(decomposedEnv.Ctx, ref, false, "")).Error().To(Succeed())
 		}
 		experiment.SampleDuration("runtime: decomposed fs", func(idx int) {
 			ref.Path = fmt.Sprintf("%d.txt", idx)
@@ -113,14 +113,14 @@ var _ = Describe("FS Benchmark", func() {
 		By("testing posix fs")
 		experiment.SampleDuration("runtime: posix fs", func(idx int) {
 			ref.Path = fmt.Sprintf("%d", idx)
-			Expect(posixEnv.Fs.CreateDir(posixEnv.Ctx, ref)).To(Succeed())
+			Expect(posixEnv.Fs.CreateDir(posixEnv.Ctx, ref)).Error().To(Succeed())
 		}, gmeasure.SamplingConfig{N: N})
 
 		By("testing decomposed fs")
 		ref.ResourceId = decomposedEnv.SpaceRootRes
 		experiment.SampleDuration("runtime: decomposed fs", func(idx int) {
 			ref.Path = fmt.Sprintf("%d", idx)
-			Expect(decomposedEnv.Fs.CreateDir(decomposedEnv.Ctx, ref)).To(Succeed())
+			Expect(decomposedEnv.Fs.CreateDir(decomposedEnv.Ctx, ref)).Error().To(Succeed())
 		}, gmeasure.SamplingConfig{N: N})
 	})
 
@@ -136,7 +136,7 @@ var _ = Describe("FS Benchmark", func() {
 		}
 		for i := range NFiles {
 			ref.Path = fmt.Sprintf("%d.txt", i)
-			Expect(posixEnv.Fs.TouchFile(posixEnv.Ctx, ref, false, "")).To(Succeed())
+			Expect(posixEnv.Fs.TouchFile(posixEnv.Ctx, ref, false, "")).Error().To(Succeed())
 		}
 		experiment.SampleDuration("runtime: posix fs", func(idx int) {
 			ref.Path = ""
@@ -148,7 +148,7 @@ var _ = Describe("FS Benchmark", func() {
 		ref.ResourceId = decomposedEnv.SpaceRootRes
 		for i := range NFiles {
 			ref.Path = fmt.Sprintf("%d.txt", i)
-			Expect(decomposedEnv.Fs.TouchFile(decomposedEnv.Ctx, ref, false, "")).To(Succeed())
+			Expect(decomposedEnv.Fs.TouchFile(decomposedEnv.Ctx, ref, false, "")).Error().To(Succeed())
 		}
 		experiment.SampleDuration("runtime: decomposed fs", func(idx int) {
 			ref.Path = ""
@@ -165,18 +165,18 @@ var _ = Describe("FS Benchmark", func() {
 		Expect(posixEnv.Fs.TouchFile(posixEnv.Ctx, &provider.Reference{
 			ResourceId: posixEnv.SpaceRootRes,
 			Path:       "file.txt",
-		}, false, "")).To(Succeed())
+		}, false, "")).Error().To(Succeed())
 		Expect(decomposedEnv.Fs.TouchFile(decomposedEnv.Ctx, &provider.Reference{
 			ResourceId: decomposedEnv.SpaceRootRes,
 			Path:       "file.txt",
-		}, false, "")).To(Succeed())
+		}, false, "")).Error().To(Succeed())
 		for i := range N {
-			err := posixEnv.Fs.CreateDir(posixEnv.Ctx, &provider.Reference{
+			_, err := posixEnv.Fs.CreateDir(posixEnv.Ctx, &provider.Reference{
 				ResourceId: posixEnv.SpaceRootRes,
 				Path:       fmt.Sprintf("%d", i),
 			})
 			Expect(err).ToNot(HaveOccurred())
-			err = decomposedEnv.Fs.CreateDir(decomposedEnv.Ctx, &provider.Reference{
+			_, err = decomposedEnv.Fs.CreateDir(decomposedEnv.Ctx, &provider.Reference{
 				ResourceId: decomposedEnv.SpaceRootRes,
 				Path:       fmt.Sprintf("%d", i),
 			})

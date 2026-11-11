@@ -64,9 +64,9 @@ var _ = Describe("Purging a space", func() {
 				return &provider.Reference{ResourceId: root, Path: path}
 			}
 			for d := range dirs {
-				Expect(env.Fs.CreateDir(env.Ctx, ref(fmt.Sprintf("./d%d", d)))).To(Succeed())
+				Expect(env.Fs.CreateDir(env.Ctx, ref(fmt.Sprintf("./d%d", d)))).Error().To(Succeed())
 				for f := range files {
-					Expect(env.Fs.TouchFile(env.Ctx, ref(fmt.Sprintf("./d%d/f%d", d, f)), false, "")).To(Succeed())
+					Expect(env.Fs.TouchFile(env.Ctx, ref(fmt.Sprintf("./d%d/f%d", d, f)), false, "")).Error().To(Succeed())
 				}
 			}
 
@@ -91,8 +91,8 @@ var _ = Describe("Purging a space", func() {
 				})
 			}
 
-			Expect(env.Fs.DeleteStorageSpace(env.Ctx, &provider.DeleteStorageSpaceRequest{Id: spaceID})).To(Succeed())
-			err = env.Fs.DeleteStorageSpace(env.Ctx, &provider.DeleteStorageSpaceRequest{
+			Expect(env.Fs.DeleteStorageSpace(env.Ctx, &provider.DeleteStorageSpaceRequest{Id: spaceID})).Error().To(Succeed())
+			_, err = env.Fs.DeleteStorageSpace(env.Ctx, &provider.DeleteStorageSpaceRequest{
 				Id: spaceID,
 				Opaque: &typesv1beta1.Opaque{Map: map[string]*typesv1beta1.OpaqueEntry{
 					"purge": {Decoder: "plain", Value: []byte("true")},

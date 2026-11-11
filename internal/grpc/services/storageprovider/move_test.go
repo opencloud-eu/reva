@@ -41,15 +41,14 @@ func TestMoveResultPropagation(t *testing.T) {
 		{name: "internal error", err: errors.New("move failed"), code: rpc.Code_CODE_INTERNAL},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			slot := &storagespace.MoveResultSlot{}
-			ctx := storagespace.ContextRegisterMoveResultSlot(context.Background(), slot)
+			ctx := storagespace.ContextRegisterMoveResultSlot(context.Background())
 			s := &Service{Storage: moveStorage{result: tt.result, err: tt.err}}
 
 			response, err := s.Move(ctx, &provider.MoveRequest{})
 
 			require.NoError(t, err)
 			require.Equal(t, tt.code, response.Status.Code)
-			require.Same(t, tt.want, slot.Result)
+			require.Same(t, tt.want, storagespace.ContextGetMoveResult(ctx))
 		})
 	}
 }
