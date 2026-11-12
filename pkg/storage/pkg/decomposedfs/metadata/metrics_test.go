@@ -25,9 +25,6 @@ var _ = Describe("Metrics", func() {
 		{"messagepack", func(tmpdir, table string) metadata.Backend {
 			return metadata.NewMessagePackBackend(cache.Config{Database: tmpdir, Table: table})
 		}},
-		{"xattrs", func(tmpdir, table string) metadata.Backend {
-			return metadata.NewXattrsBackend(cache.Config{Database: tmpdir, Table: table})
-		}},
 		{"hybrid", func(tmpdir, table string) metadata.Backend {
 			return metadata.NewHybridBackend(1024, func(n metadata.MetadataNode) string {
 				return n.InternalPath() + ".meta"
