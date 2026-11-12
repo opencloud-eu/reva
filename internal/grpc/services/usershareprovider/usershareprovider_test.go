@@ -1220,6 +1220,22 @@ var _ = Describe("user share provider service", func() {
 				manager.AssertNumberOfCalls(GinkgoT(), "UpdateShare", 1)
 			})
 
+			It("does not check when the update mask does not include the expiration", func() {
+				updateShareResponse, err := provider.UpdateShare(ctx, &collaborationpb.UpdateShareRequest{
+					Ref: updateShareRef,
+					Share: &collaborationpb.Share{
+						Permissions: &collaborationpb.SharePermissions{Permissions: managerPerms},
+						Expiration:  utils.TimeToTS(time.Now().Add(24 * time.Hour)),
+					},
+					UpdateMask: &fieldmaskpb.FieldMask{Paths: []string{"permissions"}},
+				})
+
+				Expect(err).ToNot(HaveOccurred())
+				Expect(updateShareResponse.Status.Code).To(Equal(rpcpb.Code_CODE_OK))
+				manager.AssertNumberOfCalls(GinkgoT(), "ListShares", 0)
+				manager.AssertNumberOfCalls(GinkgoT(), "UpdateShare", 1)
+			})
+
 			It("returns internal error when listing shares fails", func() {
 				manager.On("ListShares", mock.Anything, mock.Anything).Return(nil, errors.New("storage error"))
 
