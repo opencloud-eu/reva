@@ -21,6 +21,7 @@ package jsoncs3_test
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
@@ -42,6 +43,7 @@ import (
 	"github.com/opencloud-eu/reva/v2/pkg/share/manager/jsoncs3/sharecache"
 	"github.com/opencloud-eu/reva/v2/pkg/share/manager/jsoncs3/shareid"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/metadata"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/metadata/locks"
 	"github.com/opencloud-eu/reva/v2/pkg/utils"
 	"github.com/opencloud-eu/reva/v2/tests/cs3mocks/mocks"
 	"github.com/stretchr/testify/mock"
@@ -104,7 +106,7 @@ var _ = Describe("Jsoncs3", func() {
 				},
 			},
 		}
-		storage metadata.Storage
+		storage metadata.LockingStorage
 		client  *mocks.GatewayAPIClient
 		tmpdir  string
 		m       *jsoncs3.Manager
@@ -156,7 +158,7 @@ var _ = Describe("Jsoncs3", func() {
 		err = os.MkdirAll(tmpdir, 0755)
 		Expect(err).ToNot(HaveOccurred())
 
-		storage, err = metadata.NewDiskStorage(tmpdir)
+		storage, err = metadata.NewDiskStorage(tmpdir, metadata.WithLocker(locks.NewDiskLocker(tmpdir)))
 		Expect(err).ToNot(HaveOccurred())
 
 		pool.RemoveSelector("GatewaySelector" + "eu.opencloud.api.gateway")
@@ -227,6 +229,130 @@ var _ = Describe("Jsoncs3", func() {
 
 			Expect(err).ToNot(HaveOccurred())
 			Expect(s.ResourceId.OpaqueId).To(Equal(share.ResourceId.OpaqueId))
+		})
+	})
+
+	Describe("Dump", func() {
+		It("exports all shares from the provider cache", func() {
+			// Create a share on the source manager.
+			_, err := m.Share(ctx, sharedResource, grant)
+			Expect(err).ToNot(HaveOccurred())
+
+			sharesChan := make(chan *collaboration.Share, 16)
+			receivedChan := make(chan sharespkg.ReceivedShareWithUser, 16)
+
+			dumpWG := sync.WaitGroup{}
+			dumpWG.Add(1)
+			go func() {
+				defer dumpWG.Done()
+				Expect(m.Dump(ctx, sharesChan, receivedChan)).To(Succeed())
+			}()
+			dumpWG.Wait()
+			close(sharesChan)
+			close(receivedChan)
+
+			var dumped []*collaboration.Share
+			for s := range sharesChan {
+				dumped = append(dumped, s)
+			}
+			Expect(len(dumped)).To(BeNumerically(">", 0))
+
+			// The created share must be among the dumped shares.
+			found := false
+			for _, s := range dumped {
+				if s.GetResourceId().GetOpaqueId() == sharedResource.Id.OpaqueId {
+					found = true
+					break
+				}
+			}
+			Expect(found).To(BeTrue())
+		})
+	})
+
+	Describe("Dump and Load", func() {
+		It("moves shares, received states and group shares to another manager", func() {
+			userShare, err := m.Share(ctx, sharedResource, grant)
+			Expect(err).ToNot(HaveOccurred())
+			groupShare, err := m.Share(ctx, sharedResource2, groupGrant)
+			Expect(err).ToNot(HaveOccurred())
+
+			// the grantee accepted the user share and mounted it
+			ssid := sharedResource.Id.StorageId + shareid.IDDelimiter + sharedResource.Id.SpaceId
+			granteeID := utils.NewFSSafeUserID(grantee.GetId())
+			Expect(m.UserReceivedStates.Add(ctx, granteeID, ssid, &collaboration.ReceivedShare{
+				Share:      userShare,
+				State:      collaboration.ShareState_SHARE_STATE_ACCEPTED,
+				MountPoint: &provider.Reference{Path: "mounted"},
+				Hidden:     true,
+			})).To(Succeed())
+
+			targetDir := GinkgoT().TempDir()
+			targetStorage, err := metadata.NewDiskStorage(targetDir, metadata.WithLocker(locks.NewDiskLocker(targetDir)))
+			Expect(err).ToNot(HaveOccurred())
+			target, err := jsoncs3.New(targetStorage, nil, nil, 0, nil, 0)
+			Expect(err).ToNot(HaveOccurred())
+			target.SkipMigrations()
+
+			sharesChan := make(chan *collaboration.Share)
+			receivedChan := make(chan sharespkg.ReceivedShareWithUser)
+			loaded := make(chan error, 1)
+			go func() { loaded <- target.Load(ctx, sharesChan, receivedChan) }()
+			Expect(m.Dump(ctx, sharesChan, receivedChan)).To(Succeed())
+			close(sharesChan)
+			close(receivedChan)
+			Eventually(loaded).Should(Receive(BeNil()))
+
+			for _, s := range []*collaboration.Share{userShare, groupShare} {
+				got, err := target.Cache.Get(ctx, s.ResourceId.StorageId, s.ResourceId.SpaceId, s.Id.OpaqueId, false)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(got).To(BeComparableTo(s, protocmp.Transform()))
+			}
+
+			state, err := target.UserReceivedStates.Get(ctx, granteeID, ssid, userShare.Id.OpaqueId)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(state).ToNot(BeNil())
+			Expect(state.State).To(Equal(collaboration.ShareState_SHARE_STATE_ACCEPTED))
+			Expect(state.MountPoint.GetPath()).To(Equal("mounted"))
+			Expect(state.Hidden).To(BeTrue())
+
+			groupShares, err := target.GroupReceivedCache.List(ctx, utils.FSSafeGroupID{ID: groupGrant.Grantee.GetGroupId()})
+			Expect(err).ToNot(HaveOccurred())
+			gssid := sharedResource2.Id.StorageId + shareid.IDDelimiter + sharedResource2.Id.SpaceId
+			Expect(groupShares).To(HaveKey(gssid))
+			Expect(groupShares[gssid].IDs).To(HaveKey(groupShare.Id.OpaqueId))
+		})
+	})
+
+	Describe("concurrent adds", func() {
+		It("does not lose updates when many shares target the same space", func() {
+			const n = 20
+			var wg sync.WaitGroup
+			wg.Add(n)
+			for i := 0; i < n; i++ {
+				i := i
+				go func() {
+					defer wg.Done()
+					// Each goroutine shares a distinct resource in the same
+					// space, exercising concurrent read-modify-write of the
+					// per-space JSON file.
+					res := &providerv1beta1.ResourceInfo{
+						Id: &providerv1beta1.ResourceId{
+							StorageId: "storageid",
+							SpaceId:   "spaceid",
+							OpaqueId:  fmt.Sprintf("opaque%d", i),
+						},
+					}
+					if _, err := m.Share(ctx, res, grant); err != nil {
+						Fail(fmt.Sprintf("share %d failed: %v", i, err))
+					}
+				}()
+			}
+			wg.Wait()
+
+			// All n shares must be present in the space.
+			shares, err := m.Cache.ListSpace(ctx, "storageid", "spaceid")
+			Expect(err).ToNot(HaveOccurred())
+			Expect(len(shares.Shares)).To(Equal(n))
 		})
 	})
 
@@ -1211,7 +1337,7 @@ var _ = Describe("CleanupStaleShares", func() {
 		Expect(err).ToNot(HaveOccurred())
 		DeferCleanup(os.RemoveAll, tmpdir)
 
-		storage, err := metadata.NewDiskStorage(tmpdir)
+		storage, err := metadata.NewDiskStorage(tmpdir, metadata.WithLocker(locks.NewDiskLocker(tmpdir)))
 		Expect(err).ToNot(HaveOccurred())
 		m, err := jsoncs3.New(storage, nil, nil, 0, nil, 0)
 		Expect(err).ToNot(HaveOccurred())
