@@ -8,9 +8,10 @@ when:
     branch:
       - ${CI_REPO_DEFAULT_BRANCH}
       - feature/*
+      - stable-*
   - event: pull_request
   - event: cron
-    cron: nightly
+    cron: nightly*
 
 depends_on:
   - build
