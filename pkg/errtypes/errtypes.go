@@ -99,9 +99,11 @@ func (e PreconditionFailed) IsPreconditionFailed() {}
 // AlreadyExists is the error to use when a resource something is not found.
 type AlreadyExists string
 
+// ERR_ALREADY_EXISTS is the prefix of every AlreadyExists error message, for callers
+// that only see the message (e.g. a status message passed through grpc).
 const ERR_ALREADY_EXISTS = "error: already exists:"
 
-func (e AlreadyExists) Error() string { return ERR_ALREADY_EXISTS + string(e) }
+func (e AlreadyExists) Error() string { return ERR_ALREADY_EXISTS + " " + string(e) }
 
 // IsAlreadyExists implements the IsAlreadyExists interface.
 func (e AlreadyExists) IsAlreadyExists() {}
