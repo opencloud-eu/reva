@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.52.3](https://github.com/opencloud-eu/reva/releases/tag/v2.52.3) - 2026-11-12
+
+### ❤️ Thanks to all contributors! ❤️
+
+@aduffeck, @butonic
+
+### 🐛 Bug Fixes
+
+- Don't reset main-queue settings on startup [[#984](https://github.com/opencloud-eu/reva/pull/984)]
+- Fix files stuck in processing after an interrupted synchronous upload [[#976](https://github.com/opencloud-eu/reva/pull/976)]
+- storage: return typed results from write operations [[#986](https://github.com/opencloud-eu/reva/pull/986)]
+
 ## [2.52.2](https://github.com/opencloud-eu/reva/releases/tag/v2.52.2) - 2026-11-10
 
 ### ❤️ Thanks to all contributors! ❤️
