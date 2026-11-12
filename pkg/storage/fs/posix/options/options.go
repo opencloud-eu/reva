@@ -48,6 +48,8 @@ type Options struct {
 
 	NatsWatcher NatsWatcherConfig `mapstructure:"natswatcher"`
 
+	KafkaWatcher KafkaWatcherConfig `mapstructure:"kafkawatcher"`
+
 	// InotifyWatcher specific options
 	InotifyStatsFrequency time.Duration `mapstructure:"inotify_stats_frequency"`
 }
@@ -65,6 +67,18 @@ type NatsWatcherConfig struct {
 	AuthPassword         string        `mapstructure:"password"`
 	MaxAckPending        int           `mapstructure:"max-ack-pending"`
 	AckWait              time.Duration `mapstructure:"ack-wait"`
+}
+
+// KafkaWatcherConfig configures the connection of the kafka based watchers
+// (currently cephfs) to the brokers in WatchNotificationBrokers.
+type KafkaWatcherConfig struct {
+	EnableTLS            bool   `mapstructure:"enable-tls"`
+	TLSInsecure          bool   `mapstructure:"tls-insecure"`
+	TLSRootCACertificate string `mapstructure:"tls-root-ca-cert"`
+	// SASLMechanism is one of PLAIN, SCRAM-SHA-256 or SCRAM-SHA-512. Empty disables SASL.
+	SASLMechanism string `mapstructure:"sasl-mechanism"`
+	Username      string `mapstructure:"username"`
+	Password      string `mapstructure:"password"`
 }
 
 // New returns a new Options instance for the given configuration
