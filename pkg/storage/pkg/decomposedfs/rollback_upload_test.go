@@ -72,7 +72,7 @@ var _ = Describe("RollbackUpload", func() {
 
 	Context("versioning enabled, existing node, session owns node", func() {
 		It("restores previous version, removes version file, reverts size propagation", func() {
-			err := env.Fs.TouchFile(env.Ctx, ref, false, "")
+			_, err := env.Fs.TouchFile(env.Ctx, ref, false, "")
 			Expect(err).ToNot(HaveOccurred())
 
 			_, err = env.Fs.PrepareUpload(env.Ctx, ref, "session-init", storage.UploadInfo{
@@ -118,7 +118,7 @@ var _ = Describe("RollbackUpload", func() {
 		})
 
 		It("keeps the node and reports that there is no revision to restore", func() {
-			err := env.Fs.TouchFile(env.Ctx, ref, false, "")
+			_, err := env.Fs.TouchFile(env.Ctx, ref, false, "")
 			Expect(err).ToNot(HaveOccurred())
 
 			_, err = env.Fs.PrepareUpload(env.Ctx, ref, "session-init", storage.UploadInfo{
@@ -151,7 +151,7 @@ var _ = Describe("RollbackUpload", func() {
 
 	Context("session guard: another session owns the node", func() {
 		It("is a no-op and does not touch the node", func() {
-			err := env.Fs.TouchFile(env.Ctx, ref, false, "")
+			_, err := env.Fs.TouchFile(env.Ctx, ref, false, "")
 			Expect(err).ToNot(HaveOccurred())
 
 			_, err = env.Fs.PrepareUpload(env.Ctx, ref, "session-a", storage.UploadInfo{
@@ -183,7 +183,7 @@ var _ = Describe("RollbackUpload", func() {
 			parentInfoBefore, err := env.Fs.GetMD(env.Ctx, parentRef, []string{}, []string{})
 			Expect(err).ToNot(HaveOccurred())
 
-			Expect(env.Fs.TouchFile(env.Ctx, ref, false, "")).To(Succeed())
+			Expect(env.Fs.TouchFile(env.Ctx, ref, false, "")).Error().To(Succeed())
 			result, err := env.Fs.PrepareUpload(env.Ctx, ref, "session-new", storage.UploadInfo{
 				NodeExisted: false,
 				Size:        10,
@@ -224,7 +224,7 @@ var _ = Describe("RollbackUpload", func() {
 			env.Blobstore.On("UploadFromReader", mock.Anything, mock.Anything, mock.Anything).Return(nil)
 			env.Blobstore.On("Delete", mock.Anything).Return(nil)
 
-			Expect(env.Fs.TouchFile(env.Ctx, ref, false, "")).To(Succeed())
+			Expect(env.Fs.TouchFile(env.Ctx, ref, false, "")).Error().To(Succeed())
 			_, err := env.Fs.PrepareUpload(env.Ctx, ref, "session-init", storage.UploadInfo{Size: 10})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(env.Fs.MarkProcessing(env.Ctx, ref, false, "session-init")).To(Succeed())
@@ -325,7 +325,7 @@ var _ = Describe("RollbackUpload", func() {
 			dir1Ref = &provider.Reference{ResourceId: env.SpaceRootRes, Path: "/dir1"}
 			sizeBefore := parentSize()
 
-			Expect(env.Fs.TouchFile(env.Ctx, ref, false, "")).To(Succeed())
+			Expect(env.Fs.TouchFile(env.Ctx, ref, false, "")).Error().To(Succeed())
 
 			n, err := env.Lookup.NodeFromResource(env.Ctx, ref)
 			Expect(err).ToNot(HaveOccurred())

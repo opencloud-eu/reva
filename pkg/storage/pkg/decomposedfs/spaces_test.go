@@ -150,7 +150,7 @@ var _ = Describe("Spaces", func() {
 				Expect(string(resp[0].Opaque.GetMap()["spaceAlias"].Value)).To(Equal("personal/username"))
 				Expect(resp[0].Name).To(Equal("username"))
 				Expect(resp[0].SpaceType).To(Equal("personal"))
-				err = env.Fs.DeleteStorageSpace(ctx, &provider.DeleteStorageSpaceRequest{
+				_, err = env.Fs.DeleteStorageSpace(ctx, &provider.DeleteStorageSpaceRequest{
 					Id: resp[0].GetId(),
 				})
 				Expect(err).To(HaveOccurred())
@@ -163,7 +163,7 @@ var _ = Describe("Spaces", func() {
 				Expect(string(resp[0].Opaque.GetMap()["spaceAlias"].Value)).To(Equal("personal/username"))
 				Expect(resp[0].Name).To(Equal("username"))
 				Expect(resp[0].SpaceType).To(Equal("personal"))
-				err = env.Fs.DeleteStorageSpace(ctx, &provider.DeleteStorageSpaceRequest{
+				_, err = env.Fs.DeleteStorageSpace(ctx, &provider.DeleteStorageSpaceRequest{
 					Id: resp[0].GetId(),
 				})
 				Expect(err).To(Not(HaveOccurred()))
@@ -176,7 +176,7 @@ var _ = Describe("Spaces", func() {
 				Expect(string(resp[0].Opaque.GetMap()["spaceAlias"].Value)).To(Equal("personal/username"))
 				Expect(resp[0].Name).To(Equal("username"))
 				Expect(resp[0].SpaceType).To(Equal("personal"))
-				err = env.Fs.DeleteStorageSpace(ctx, &provider.DeleteStorageSpaceRequest{
+				_, err = env.Fs.DeleteStorageSpace(ctx, &provider.DeleteStorageSpaceRequest{
 					Id: resp[0].GetId(),
 				})
 				Expect(err).To(HaveOccurred())
@@ -191,7 +191,7 @@ var _ = Describe("Spaces", func() {
 				Expect(resp.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
 				Expect(resp.StorageSpace).ToNot(Equal(nil))
 				spaceID := resp.StorageSpace.GetId()
-				err = env.Fs.DeleteStorageSpace(env.Ctx, &provider.DeleteStorageSpaceRequest{
+				_, err = env.Fs.DeleteStorageSpace(env.Ctx, &provider.DeleteStorageSpaceRequest{
 					Id: spaceID,
 				})
 				Expect(err).To(Not(HaveOccurred()))
@@ -209,34 +209,51 @@ var _ = Describe("Spaces", func() {
 			})
 			It("fails as a unprivileged user", func() {
 				ctx := ctxpkg.ContextSetUser(context.Background(), env.Users[1])
-				err := env.Fs.DeleteStorageSpace(ctx, delReq)
+				_, err := env.Fs.DeleteStorageSpace(ctx, delReq)
 				Expect(err).To(HaveOccurred())
 			})
 			It("fails as a user with 'delete-all-home-spaces privilege", func() {
 				ctx := ctxpkg.ContextSetUser(context.Background(), env.DeleteHomeSpacesUser)
-				err := env.Fs.DeleteStorageSpace(ctx, delReq)
+				_, err := env.Fs.DeleteStorageSpace(ctx, delReq)
 				Expect(err).To(HaveOccurred())
 			})
 			It("returns not found when a non-member disables an active space", func() {
 				resp, err := env.Fs.CreateStorageSpace(env.Ctx, &provider.CreateStorageSpaceRequest{Name: "Hidden", Type: "project"})
 				Expect(err).ToNot(HaveOccurred())
 				ctx := ctxpkg.ContextSetUser(context.Background(), env.Users[1])
-				err = env.Fs.DeleteStorageSpace(ctx, &provider.DeleteStorageSpaceRequest{Id: resp.StorageSpace.GetId()})
+				_, err = env.Fs.DeleteStorageSpace(ctx, &provider.DeleteStorageSpaceRequest{Id: resp.StorageSpace.GetId()})
 				Expect(err).To(BeAssignableToTypeOf(errtypes.NotFound("")))
 			})
 			It("keeps permission denied when a non-member purges a disabled space", func() {
 				ctx := ctxpkg.ContextSetUser(context.Background(), env.Users[1])
-				err := env.Fs.DeleteStorageSpace(ctx, delReq)
+				_, err := env.Fs.DeleteStorageSpace(ctx, delReq)
 				Expect(err).To(BeAssignableToTypeOf(errtypes.PermissionDenied("")))
 			})
 			It("succeeds as a user with 'delete-all-spaces privilege", func() {
 				ctx := ctxpkg.ContextSetUser(context.Background(), env.DeleteAllSpacesUser)
-				err := env.Fs.DeleteStorageSpace(ctx, delReq)
+				_, err := env.Fs.DeleteStorageSpace(ctx, delReq)
 				Expect(err).To(Not(HaveOccurred()))
+			})
+			It("returns the space name and the final members when purging", func() {
+				ctx := ctxpkg.ContextSetUser(context.Background(), env.DeleteAllSpacesUser)
+				res, err := env.Fs.DeleteStorageSpace(ctx, delReq)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(res).ToNot(BeNil())
+				Expect(res.SpaceName).To(Equal("Mission to Venus"))
+				Expect(res.FinalMembers).To(HaveKey(helpers.OwnerID))
+			})
+			It("returns an empty result when disabling", func() {
+				resp, err := env.Fs.CreateStorageSpace(env.Ctx, &provider.CreateStorageSpaceRequest{Name: "Disable me", Type: "project"})
+				Expect(err).ToNot(HaveOccurred())
+				res, err := env.Fs.DeleteStorageSpace(env.Ctx, &provider.DeleteStorageSpaceRequest{Id: resp.StorageSpace.GetId()})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(res).ToNot(BeNil())
+				Expect(res.SpaceName).To(BeEmpty())
+				Expect(res.FinalMembers).To(BeEmpty())
 			})
 			It("fails as a space manager", func() {
 				ctx := ctxpkg.ContextSetUser(context.Background(), env.SpaceManager)
-				err := env.Fs.DeleteStorageSpace(ctx, delReq)
+				_, err := env.Fs.DeleteStorageSpace(ctx, delReq)
 				Expect(err).To(HaveOccurred())
 			})
 			It("succeeds at disabling as a space manager", func() {
@@ -247,7 +264,7 @@ var _ = Describe("Spaces", func() {
 				resp, err := env.Fs.CreateStorageSpace(env.Ctx, &provider.CreateStorageSpaceRequest{Name: "Manager Disables", Type: "project"})
 				Expect(err).ToNot(HaveOccurred())
 				ctx := ctxpkg.ContextSetUser(context.Background(), env.SpaceManager)
-				err = env.Fs.DeleteStorageSpace(ctx, &provider.DeleteStorageSpaceRequest{Id: resp.StorageSpace.GetId()})
+				_, err = env.Fs.DeleteStorageSpace(ctx, &provider.DeleteStorageSpaceRequest{Id: resp.StorageSpace.GetId()})
 				Expect(err).To(Not(HaveOccurred()))
 			})
 			// Reproducer for opencloud-eu/opencloud#2985: purging a space must
@@ -274,7 +291,7 @@ var _ = Describe("Spaces", func() {
 				Expect(loadOwnerIndex()).To(HaveKey(spaceID))
 
 				// purge as the space admin
-				Expect(env.Fs.DeleteStorageSpace(ctx, delReq)).To(Succeed())
+				Expect(env.Fs.DeleteStorageSpace(ctx, delReq)).Error().To(Succeed())
 
 				// the by-user-id index entry must be gone after the purge
 				Expect(loadOwnerIndex()).ToNot(HaveKey(spaceID))
@@ -339,11 +356,11 @@ var _ = Describe("Spaces", func() {
 
 				// disable, then purge as the space admin
 				ctx := ctxpkg.ContextSetUser(context.Background(), env.DeleteAllSpacesUser)
-				Expect(env.Fs.DeleteStorageSpace(ctx, &provider.DeleteStorageSpaceRequest{Id: sid})).To(Succeed())
+				Expect(env.Fs.DeleteStorageSpace(ctx, &provider.DeleteStorageSpaceRequest{Id: sid})).Error().To(Succeed())
 				Expect(env.Fs.DeleteStorageSpace(ctx, &provider.DeleteStorageSpaceRequest{
 					Opaque: &typesv1beta1.Opaque{Map: map[string]*typesv1beta1.OpaqueEntry{"purge": {Decoder: "plain", Value: []byte("true")}}},
 					Id:     sid,
-				})).To(Succeed())
+				})).Error().To(Succeed())
 
 				// the grantee index entries must be gone after the purge
 				Expect(load("by-user-id", userGrantee)).ToNot(HaveKey(spaceID))
@@ -359,7 +376,7 @@ var _ = Describe("Spaces", func() {
 				env.Blobstore.On("Delete", mock.AnythingOfType("*node.Node")).Return(nil)
 
 				ctx := ctxpkg.ContextSetUser(context.Background(), env.DeleteAllSpacesUser)
-				Expect(env.Fs.DeleteStorageSpace(ctx, delReq)).To(Succeed())
+				Expect(env.Fs.DeleteStorageSpace(ctx, delReq)).Error().To(Succeed())
 
 				env.Blobstore.AssertCalled(GinkgoT(), "Delete", mock.MatchedBy(func(n *node.Node) bool {
 					return n.BlobID == "file1-blobid" && n.SpaceID == spaceID
@@ -376,7 +393,7 @@ var _ = Describe("Spaces", func() {
 				env.Blobstore.On("Delete", mock.AnythingOfType("*node.Node")).Return(nil)
 
 				ctx := ctxpkg.ContextSetUser(context.Background(), env.DeleteAllSpacesUser)
-				Expect(env.Fs.DeleteStorageSpace(ctx, delReq)).To(Succeed())
+				Expect(env.Fs.DeleteStorageSpace(ctx, delReq)).Error().To(Succeed())
 
 				env.Blobstore.AssertCalled(GinkgoT(), "Delete", mock.MatchedBy(func(n *node.Node) bool {
 					return n.BlobID == "backup-blobid"
@@ -401,7 +418,7 @@ var _ = Describe("Spaces", func() {
 				Expect(loadOwnerIndex()).To(HaveKey(purgedID))
 				Expect(loadOwnerIndex()).To(HaveKey(siblingID))
 				ctx := ctxpkg.ContextSetUser(context.Background(), env.DeleteAllSpacesUser)
-				Expect(env.Fs.DeleteStorageSpace(ctx, delReq)).To(Succeed())
+				Expect(env.Fs.DeleteStorageSpace(ctx, delReq)).Error().To(Succeed())
 				after := loadOwnerIndex()
 				Expect(after).ToNot(HaveKey(purgedID))
 				Expect(after).To(HaveKey(siblingID))

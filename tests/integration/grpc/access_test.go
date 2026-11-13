@@ -148,7 +148,7 @@ var _ = Describe("Access to shared resources", func() {
 		Expect(err).ToNot(HaveOccurred())
 		Expect(r.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
 
-		err = fs.CreateDir(ctx, parentPathRef)
+		_, err = fs.CreateDir(ctx, parentPathRef)
 		Expect(err).ToNot(HaveOccurred())
 		n, err := fs.GetMD(ctx, parentPathRef, []string{}, []string{})
 		Expect(err).ToNot(HaveOccurred())
@@ -157,7 +157,7 @@ var _ = Describe("Access to shared resources", func() {
 			Path:       ".",
 		}
 
-		err = fs.CreateDir(ctx, sharePathRef)
+		_, err = fs.CreateDir(ctx, sharePathRef)
 		Expect(err).ToNot(HaveOccurred())
 
 		err = helpers.Upload(ctx, fs, childPathRef, []byte("1234567890"))
