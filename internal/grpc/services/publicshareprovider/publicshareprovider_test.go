@@ -729,6 +729,41 @@ var _ = Describe("PublicShareProvider", func() {
 			Expect(res.GetStatus().GetMessage()).To(Equal("error persisting public share:transport error"))
 		})
 	})
+	Describe("Listing PublicShares", func() {
+		It("returns the shares", func() {
+			manager.
+				EXPECT().
+				ListPublicShares(mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+				Return([]*link.PublicShare{{Id: &link.PublicShareId{OpaqueId: "share-id"}}}, nil)
+
+			res, err := provider.ListPublicShares(ctx, &link.ListPublicSharesRequest{})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(res.GetStatus().GetCode()).To(Equal(rpc.Code_CODE_OK))
+			Expect(res.GetShare()).To(HaveLen(1))
+		})
+		It("does not fail when the share manager reports an already exists error", func() {
+			manager.
+				EXPECT().
+				ListPublicShares(mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+				Return(nil, errtypes.AlreadyExists("user service-user does not have access to metadata space jsoncs3-public-share-manager-metadata, but it exists"))
+
+			res, err := provider.ListPublicShares(ctx, &link.ListPublicSharesRequest{})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(res.GetStatus().GetCode()).To(Equal(rpc.Code_CODE_OK))
+			Expect(res.GetShare()).To(BeEmpty())
+		})
+		It("returns internal server error with the error message when the share manager fails", func() {
+			manager.
+				EXPECT().
+				ListPublicShares(mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+				Return(nil, errors.New("transport error"))
+
+			res, err := provider.ListPublicShares(ctx, &link.ListPublicSharesRequest{})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(res.GetStatus().GetCode()).To(Equal(rpc.Code_CODE_INTERNAL))
+			Expect(res.GetStatus().GetMessage()).To(Equal("transport error"))
+		})
+	})
 	Describe("Removing a PublicShare", func() {
 		BeforeEach(func() {
 			createdLink.Id = &link.PublicShareId{

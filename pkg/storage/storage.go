@@ -20,19 +20,71 @@ package storage
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net/url"
+	"time"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	registry "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
-	tusd "github.com/tus/tusd/v2/pkg/handler"
 )
 
 type MoveResult struct {
 	SpaceOwner   *userpb.UserId
 	OldReference *provider.Reference
 	NewReference *provider.Reference
+}
+
+type UploadChecksums struct {
+	SHA1    []byte
+	MD5     []byte
+	Adler32 []byte
+}
+
+// ErrSourceNotStored is wrapped by the error PrepareUpload returns when it could
+// not store UploadInfo.Source. The node is unchanged and the staged bytes are
+// still the only copy of the upload.
+var ErrSourceNotStored = errors.New("could not store the upload source")
+
+type UploadInfo struct {
+	NodeExisted       bool // true when the target node existed before the upload started
+	Size              int64
+	MTime             time.Time
+	Checksums         UploadChecksums
+	IfMatch           string
+	IfNoneMatch       string
+	IfUnmodifiedSince time.Time
+	// Where a new file goes, for a driver whose PrepareUpload creates it. Empty
+	// leaves a missing node NotFound.
+	ParentID string
+	Name     string
+	// Source carries the staged bytes when the upload is finished right away,
+	// without postprocessing. A driver that can store them before the node
+	// points to them does so, leaves the node unmarked and reports Committed.
+	// Any other driver ignores it and gets CommitUpload as usual.
+	Source *UploadSource
+}
+
+type PrepareUploadResult struct {
+	VersionCreated bool
+	SizeDiff       int64
+	SpaceOwner     *userpb.UserId // the space owner or a manager, for a new node; nil keeps the one already known
+	// Committed reports that PrepareUpload stored UploadInfo.Source: the upload
+	// is complete, and neither CommitUpload nor MarkProcessing must follow.
+	Committed bool
+}
+
+// RollbackInfo carries what a driver needs to undo PrepareUpload. NodeID and
+// ParentID come from the upload session rather than the node, so a rollback can
+// still release the quota of a node whose own metadata has become unreadable.
+type RollbackInfo struct {
+	NodeExisted bool // true when the target node had a prior version; drivers with nothing to undo for new nodes may no-op
+	SizeDiff    int64
+	NodeID      string
+	ParentID    string
+	Filename    string
+	Size        int64
 }
 
 type CreateDirResult struct {
@@ -100,7 +152,7 @@ type FS interface {
 	// CreateDir creates a resource of type container
 	CreateDir(ctx context.Context, ref *provider.Reference) (*CreateDirResult, error)
 	// TouchFile sets the mtime of a resource, creating an empty file if it does not exist
-	// FIXME(OCISDEV-900) remove markprocessing bool: coordinator calls MarkProcessing(true) explicitly after TouchFile
+	// FIXME(OCISDEV-900) remove markprocessing bool: PrepareUpload marks the node the coordinator touched
 	// FIXME the mtime should either be a time.Time or a CS3 Timestamp, not a string
 	TouchFile(ctx context.Context, ref *provider.Reference, markprocessing bool, mtime string) (*TouchFileResult, error)
 	// Delete deletes a resource.
@@ -111,15 +163,24 @@ type FS interface {
 	// space owner for event publication. Drivers without this metadata may return
 	// a nil result on success.
 	Move(ctx context.Context, oldRef, newRef *provider.Reference) (*MoveResult, error)
-	// InitiateUpload returns a list of protocols with urls that can be used to append bytes to a new upload session
-	InitiateUpload(ctx context.Context, ref *provider.Reference, uploadLength int64, metadata map[string]string) (map[string]string, error)
-	// Upload creates or updates a resource of type file with a new revision
-	Upload(ctx context.Context, req UploadRequest, uploadFunc UploadFinishedFunc) (*provider.ResourceInfo, error)
 	// MarkProcessing toggles a processing flag on the resource.
 	MarkProcessing(ctx context.Context, ref *provider.Reference, processing bool, sessionID string) error
 	// CommitUpload writes the staged bytes from source to the resource at ref.
-	// Caller owns source.Body and must close it after CommitUpload returns.
+	// source carries a Body, a Path or both. Caller owns source.Body and must close it
+	// after CommitUpload returns.
 	CommitUpload(ctx context.Context, ref *provider.Reference, sessionID string, source UploadSource) error
+	// PrepareUpload is called after all bytes are received and before postprocessing begins.
+	// Implementations may lock the target node, snapshot the previous version, write new metadata,
+	// mark the node as processing for sessionID, and propagate size changes. Drivers that do not
+	// require any of these steps may return immediately.
+	PrepareUpload(ctx context.Context, ref *provider.Reference, sessionID string, info UploadInfo) (*PrepareUploadResult, error)
+	// RollbackUpload reverts node state after a failed or aborted postprocessing run.
+	// It is the inverse of PrepareUpload: restores previous metadata and reverts the optimistic
+	// size propagation. The caller (coordinator) is responsible for unmarking the processing flag
+	// and deleting the upload session files. Drivers that performed no work in PrepareUpload may return nil.
+	// Callers must keep the session on a returned error: the rollback is retryable and info
+	// carries state the driver cannot recover once the session files are gone.
+	RollbackUpload(ctx context.Context, ref *provider.Reference, sessionID string, info RollbackInfo) error
 
 	// Revisions
 
@@ -210,6 +271,14 @@ type SpaceDisabledListableFS interface {
 type UploadSource struct {
 	Body   io.ReadCloser
 	Length int64
+	// Path is the staged file, if the caller has one. Drivers may move it into
+	// place instead of copying Body; the file is gone after a successful commit.
+	Path string
+
+	// ScanResult is the antivirus verdict: empty means clean.
+	ScanResult string
+	// ScanDate is zero when the upload was not scanned.
+	ScanDate time.Time
 }
 
 // DeleteResult is returned by FS.Delete on success. It carries the data the
@@ -235,10 +304,44 @@ type DeleteStorageSpaceResult struct {
 // UnscopeFunc is a function that unscopes a user
 type UnscopeFunc func()
 
-// Composable is the interface that a struct needs to implement
-// to be composable, so that it can support the TUS methods
-type ComposableFS interface {
-	UseIn(composer *tusd.StoreComposer)
+// CapabilitiesOpaqueKey is the StorageSpace/ProviderInfo Opaque key under which
+// a provider's Capabilities are carried as JSON up to the OCS capabilities handler.
+const CapabilitiesOpaqueKey = "storage-capabilities"
+
+// Capabilities is a storage driver's self-declaration of the write-shaped
+// actions it supports. A false key means unsupported: no merge, no inheritance.
+type Capabilities struct {
+	Upload            bool
+	CreateContainer   bool
+	Delete            bool
+	Move              bool
+	Versioning        bool
+	Trash             bool
+	Locking           bool
+	Sharing           bool
+	ArbitraryMetadata bool
+}
+
+// FullCapabilities is the default for drivers that do not implement
+// CapabilityProvider, so existing drivers keep their current behavior.
+func FullCapabilities() Capabilities {
+	return Capabilities{
+		Upload:            true,
+		CreateContainer:   true,
+		Delete:            true,
+		Move:              true,
+		Versioning:        true,
+		Trash:             true,
+		Locking:           true,
+		Sharing:           true,
+		ArbitraryMetadata: true,
+	}
+}
+
+// CapabilityProvider is an optional interface a storage.FS may implement to
+// declare its capabilities.
+type CapabilityProvider interface {
+	Capabilities(ctx context.Context) Capabilities
 }
 
 // Registry is the interface that storage registries implement

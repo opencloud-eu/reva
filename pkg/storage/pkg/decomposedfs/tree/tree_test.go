@@ -19,23 +19,40 @@
 package tree_test
 
 import (
+	"context"
+	"errors"
 	"os"
 	"path"
 	"path/filepath"
 	"strings"
+	"syscall"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/google/uuid"
+	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
+	"github.com/opencloud-eu/reva/v2/pkg/storage"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/timemanager"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/lookup"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata/prefixes"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/node"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/permissions"
 	helpers "github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/testhelpers"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/tree"
+	"github.com/opencloud-eu/reva/v2/pkg/store"
+	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/mock"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
+
+// renameFailBackend wraps a metadata.Backend and injects a failure on Rename
+type renameFailBackend struct{ metadata.Backend }
+
+func (b renameFailBackend) Rename(_, _ metadata.MetadataNode) error {
+	return errors.New("injected rename error")
+}
 
 var _ = Describe("Tree", func() {
 	var (
@@ -134,6 +151,86 @@ var _ = Describe("Tree", func() {
 
 				It("does not delete the blob from the blobstore", func() {
 					env.Blobstore.AssertNotCalled(GinkgoT(), "Delete", mock.AnythingOfType("*node.Node"))
+				})
+			})
+
+			Context("when MetadataBackend.Rename fails", func() {
+				It("rolls back the trash symlink", func() {
+					lu := lookup.New(renameFailBackend{env.Lookup.MetadataBackend()}, env.Options, &timemanager.Manager{})
+					failTree := tree.New(lu, env.Blobstore, env.Options, permissions.Permissions{}, store.Create(), &zerolog.Logger{})
+
+					file, err := lu.NodeFromResource(env.Ctx, &provider.Reference{
+						ResourceId: env.SpaceRootRes,
+						Path:       "dir1/file1",
+					})
+					Expect(err).ToNot(HaveOccurred())
+
+					Expect(failTree.Delete(env.Ctx, file)).To(HaveOccurred())
+
+					trashLink := path.Join(env.Root, "spaces", lookup.Pathify(file.SpaceRoot.ID, 1, 2), "trash", lookup.Pathify(file.ID, 4, 2))
+					_, statErr := os.Lstat(trashLink)
+					Expect(os.IsNotExist(statErr)).To(BeTrue())
+
+					_, err = os.Stat(file.InternalPath())
+					Expect(err).ToNot(HaveOccurred())
+				})
+			})
+
+			Context("when os.Rename fails", func() {
+				It("rolls back the trash symlink", func() {
+					oldNode := node.NewBaseNode(n.SpaceID, n.ID, env.Lookup)
+					// Pathify moves the first 8 characters into directories, leaving a 231 character
+					// name. The messagepack temp file (".<name>.mpk<int64>", at most 255 characters)
+					// still fits within NAME_MAX, the trash name ("<name>.T.<RFC3339Nano>") does not.
+					n.ID = strings.Repeat("a", 239)
+					Expect(os.MkdirAll(filepath.Dir(n.InternalPath()), 0o700)).To(Succeed())
+					Expect(os.Rename(oldNode.InternalPath(), n.InternalPath())).To(Succeed())
+					Expect(env.Lookup.MetadataBackend().Rename(oldNode, n)).To(Succeed())
+					entryPath := filepath.Join(n.ParentPath(), n.Name)
+					Expect(os.Remove(entryPath)).To(Succeed())
+					Expect(os.Symlink(n.InternalPath(), entryPath)).To(Succeed())
+
+					err := t.Delete(env.Ctx, n)
+					var renameErr *os.LinkError
+					Expect(errors.As(err, &renameErr)).To(BeTrue())
+					Expect(renameErr.Op).To(Equal("rename"))
+					Expect(renameErr.Old).To(Equal(n.InternalPath()))
+					Expect(errors.Is(err, syscall.ENAMETOOLONG)).To(BeTrue())
+
+					trashLink := path.Join(env.Root, "spaces", lookup.Pathify(n.SpaceRoot.ID, 1, 2), "trash", lookup.Pathify(n.ID, 4, 2))
+					_, statErr := os.Lstat(trashLink)
+					Expect(os.IsNotExist(statErr)).To(BeTrue())
+
+					_, err = os.Stat(n.InternalPath())
+					Expect(err).ToNot(HaveOccurred())
+				})
+			})
+
+			Context("when os.Remove of the parent entry fails", func() {
+				It("rolls back the trash symlink and the node rename", func() {
+					entryPath := filepath.Join(n.ParentPath(), n.Name)
+					Expect(os.Remove(entryPath)).To(Succeed())
+					Expect(os.Mkdir(entryPath, 0o700)).To(Succeed())
+					blockerPath := filepath.Join(entryPath, "blocker")
+					Expect(os.WriteFile(blockerPath, nil, 0o600)).To(Succeed())
+
+					err := t.Delete(env.Ctx, n)
+					var removeErr *os.PathError
+					Expect(errors.As(err, &removeErr)).To(BeTrue())
+					Expect(removeErr.Op).To(Equal("remove"))
+					Expect(removeErr.Path).To(Equal(entryPath))
+
+					trashLink := path.Join(env.Root, "spaces", lookup.Pathify(n.SpaceRoot.ID, 1, 2), "trash", lookup.Pathify(n.ID, 4, 2))
+					_, statErr := os.Lstat(trashLink)
+					Expect(os.IsNotExist(statErr)).To(BeTrue())
+
+					_, err = os.Stat(n.InternalPath())
+					Expect(err).ToNot(HaveOccurred())
+
+					Expect(os.Remove(blockerPath)).To(Succeed())
+					Expect(os.Remove(entryPath)).To(Succeed())
+					Expect(os.Symlink(n.InternalPath(), entryPath)).To(Succeed())
+					Expect(t.Delete(env.Ctx, n)).To(Succeed())
 				})
 			})
 		})
@@ -259,6 +356,94 @@ var _ = Describe("Tree", func() {
 			Expect(err).ToNot(HaveOccurred())
 		})
 
+		Describe("InitNewNode", func() {
+			newNode := func() *node.Node {
+				nn, err := env.Lookup.NodeFromResource(env.Ctx, &provider.Reference{
+					ResourceId: env.SpaceRootRes,
+					Path:       "emptydir/newFile",
+				})
+				Expect(err).ToNot(HaveOccurred())
+				nn.ID = uuid.New().String()
+				return nn
+			}
+			nameLink := func(nn *node.Node) string { return filepath.Join(nn.ParentPath(), nn.Name) }
+			// the lock files stay on disk (https://github.com/opencloud-eu/opencloud/issues/1793),
+			// so check that the lock can be taken again instead
+			lockReleased := func(nn *node.Node) {
+				locked := make(chan error, 1)
+				go func() {
+					unlock, err := env.Lookup.MetadataBackend().Lock(node.NewBaseNode(nn.SpaceID, nn.ID, env.Lookup))
+					if err == nil {
+						err = unlock()
+					}
+					locked <- err
+				}()
+				Eventually(locked).Should(Receive(BeNil()))
+			}
+
+			It("creates the node file and links the name to it", func() {
+				nn := newNode()
+
+				unlock, err := t.InitNewNode(env.Ctx, nn, 0)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(unlock()).To(Succeed())
+
+				Expect(nn.InternalPath()).To(BeAnExistingFile())
+				target, err := os.Readlink(nameLink(nn))
+				Expect(err).ToNot(HaveOccurred())
+				Expect(target).To(HaveSuffix(lookup.Pathify(nn.ID, 4, 2)))
+			})
+
+			Context("when another upload took the name", func() {
+				It("removes its own node file, keeps the other's link and releases the lock", func() {
+					winner := newNode()
+					unlock, err := t.InitNewNode(env.Ctx, winner, 0)
+					Expect(err).ToNot(HaveOccurred())
+					Expect(unlock()).To(Succeed())
+
+					// resolving the name now finds the winner, so race it with the same parent and name
+					loser := node.New(winner.SpaceID, uuid.New().String(), winner.ParentID, winner.Name, 0, "", provider.ResourceType_RESOURCE_TYPE_FILE, nil, env.Lookup)
+					loser.SpaceRoot = winner.SpaceRoot
+					unlock, err = t.InitNewNode(env.Ctx, loser, 0)
+					Expect(err).To(BeAssignableToTypeOf(errtypes.AlreadyExists("")))
+					Expect(unlock).To(BeNil())
+
+					Expect(loser.InternalPath()).ToNot(BeAnExistingFile())
+					lockReleased(loser)
+					Expect(winner.InternalPath()).To(BeAnExistingFile())
+					target, err := os.Readlink(nameLink(winner))
+					Expect(err).ToNot(HaveOccurred())
+					Expect(target).To(HaveSuffix(lookup.Pathify(winner.ID, 4, 2)))
+				})
+			})
+
+			Context("when the quota is exceeded", func() {
+				originalCheckQuota := node.CheckQuota
+
+				BeforeEach(func() {
+					node.CheckQuota = func(context.Context, *node.Node, bool, uint64, uint64) (bool, error) {
+						return false, errtypes.InsufficientStorage("quota exceeded")
+					}
+				})
+				AfterEach(func() {
+					node.CheckQuota = originalCheckQuota
+				})
+
+				It("removes its node file, links nothing and releases the lock", func() {
+					nn := newNode()
+
+					unlock, err := t.InitNewNode(env.Ctx, nn, 1)
+					Expect(err).To(BeAssignableToTypeOf(errtypes.InsufficientStorage("")))
+					Expect(unlock).To(BeNil())
+
+					Expect(nn.InternalPath()).ToNot(BeAnExistingFile())
+					lockReleased(nn)
+					_, err = os.Lstat(nameLink(nn))
+					Expect(os.IsNotExist(err)).To(BeTrue())
+				})
+			})
+		})
+
 		Describe("TouchFile", func() {
 			It("creates a file inside", func() {
 				ref := &provider.Reference{
@@ -275,6 +460,39 @@ var _ = Describe("Tree", func() {
 				existingFile, err := env.Lookup.NodeFromResource(env.Ctx, ref)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(existingFile.Exists).To(BeTrue())
+			})
+
+			// not the etag: it also follows the dir's own mtime, which the child link changes
+			parentTMTime := func() string {
+				dir, err := env.Lookup.NodeFromID(env.Ctx, &provider.ResourceId{SpaceId: n.SpaceID, OpaqueId: n.ID})
+				Expect(err).ToNot(HaveOccurred())
+				tmtime, _ := dir.XattrString(env.Ctx, prefixes.TreeMTimeAttr)
+				return tmtime
+			}
+
+			touch := func(ctx context.Context) {
+				fileToBeCreated, err := env.Lookup.NodeFromResource(env.Ctx, &provider.Reference{
+					ResourceId: env.SpaceRootRes,
+					Path:       "emptydir/newFile",
+				})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(t.TouchFile(ctx, fileToBeCreated, false, "")).Error().To(Succeed())
+			}
+
+			It("propagates the new file to its parent", func() {
+				before := parentTMTime()
+
+				touch(env.Ctx)
+
+				Expect(parentTMTime()).ToNot(Equal(before))
+			})
+
+			It("does not propagate when the context asks it not to", func() {
+				before := parentTMTime()
+
+				touch(storage.ContextSkipTouchPropagation(env.Ctx))
+
+				Expect(parentTMTime()).To(Equal(before))
 			})
 		})
 

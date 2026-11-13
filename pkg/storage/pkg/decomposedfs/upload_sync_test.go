@@ -34,10 +34,10 @@ import (
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/tree"
 	"github.com/opencloud-eu/reva/v2/pkg/storagespace"
 	"github.com/opencloud-eu/reva/v2/pkg/store"
+	uploadcoordinator "github.com/opencloud-eu/reva/v2/pkg/upload"
 	"github.com/opencloud-eu/reva/v2/tests/helpers"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/mock"
-	tusd "github.com/tus/tusd/v2/pkg/handler"
 	"google.golang.org/grpc"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -48,21 +48,28 @@ import (
 type watchedBlobstore struct {
 	*blobstore.Blobstore
 	onUpload func(blob *node.Node)
+	// failUpload makes storing a blob fail
+	failUpload error
 }
 
 func (bs *watchedBlobstore) Upload(n *node.Node, source, copyTarget string) error {
 	if bs.onUpload != nil {
 		bs.onUpload(n)
 	}
+	if bs.failUpload != nil {
+		return bs.failUpload
+	}
 	return bs.Blobstore.Upload(n, source, copyTarget)
 }
 
 // faultyBackend fails writes that switch a node to another blob, either
-// before or after writing. It can also run a hook before the next lock.
+// before or after writing, or the ones that propagate a change up the tree.
+// It can also run a hook before the next lock.
 type faultyBackend struct {
 	metadata.Backend
-	failSwitch string
-	beforeLock func()
+	failSwitch      string
+	failPropagation bool
+	beforeLock      func()
 }
 
 func (b *faultyBackend) Lock(n metadata.MetadataNode) (metadata.UnlockFunc, error) {
@@ -74,6 +81,9 @@ func (b *faultyBackend) Lock(n metadata.MetadataNode) (metadata.UnlockFunc, erro
 }
 
 func (b *faultyBackend) SetMultiple(ctx context.Context, n metadata.MetadataNode, attribs map[string][]byte) error {
+	if _, ok := attribs[prefixes.TreeMTimeAttr]; ok && b.failPropagation {
+		return errors.New("propagation failed")
+	}
 	if _, ok := attribs[prefixes.BlobIDAttr]; !ok || b.failSwitch == "" {
 		return b.Backend.SetMultiple(ctx, n, attribs)
 	}
@@ -87,13 +97,14 @@ func (b *faultyBackend) SetMultiple(ctx context.Context, n metadata.MetadataNode
 
 var _ = Describe("Synchronous uploads", func() {
 	var (
-		ctx context.Context
-		ref *provider.Reference
-		fs  storage.FS
-		o   *options.Options
-		lu  *lookup.Lookup
-		bs  *watchedBlobstore
-		mb  *faultyBackend
+		ctx   context.Context
+		ref   *provider.Reference
+		fs    storage.FS
+		coord uploadcoordinator.Coordinator
+		o     *options.Options
+		lu    *lookup.Lookup
+		bs    *watchedBlobstore
+		mb    *faultyBackend
 	)
 
 	BeforeEach(func() {
@@ -149,12 +160,11 @@ var _ = Describe("Synchronous uploads", func() {
 		)
 
 		fs, err = decomposedfs.New(o, aspects.Aspects{
-			Lookup:            lu,
-			Tree:              tree.New(lu, bs, o, permissions.Permissions{}, store.Create(), &zerolog.Logger{}),
-			Permissions:       permissions.NewPermissions(pmock, permissionsSelector),
-			Trashbin:          &decomposedfs.DecomposedfsTrashbin{},
-			DisableVersioning: true,
-			SeparateBlobs:     true,
+			Lookup:        lu,
+			Tree:          tree.New(lu, bs, o, permissions.Permissions{}, store.Create(), &zerolog.Logger{}),
+			Permissions:   permissions.NewPermissions(pmock, permissionsSelector),
+			Trashbin:      &decomposedfs.DecomposedfsTrashbin{},
+			SeparateBlobs: true,
 		}, &zerolog.Logger{})
 		Expect(err).ToNot(HaveOccurred())
 
@@ -164,6 +174,15 @@ var _ = Describe("Synchronous uploads", func() {
 		spaceID, err := storagespace.ParseID(resp.StorageSpace.Id.OpaqueId)
 		Expect(err).ToNot(HaveOccurred())
 		ref = &provider.Reference{ResourceId: &spaceID, Path: "/shares.json"}
+
+		// no postprocessing is started, so the coordinator finishes uploads inline
+		sessionStore := uploadcoordinator.NewFileStore(o.UploadDirectory, uploadcoordinator.TokenOptions{
+			DownloadEndpoint:     "http://localhost/data",
+			TransferSharedSecret: "transfer-secret",
+			TransferExpires:      60,
+		}, &zerolog.Logger{})
+		Expect(sessionStore.Setup()).To(Succeed())
+		coord = uploadcoordinator.NewCoordinator(fs, sessionStore, "", nil)
 	})
 
 	AfterEach(func() {
@@ -173,11 +192,11 @@ var _ = Describe("Synchronous uploads", func() {
 	})
 
 	upload := func(content string, metadata map[string]string) (string, error) {
-		ids, err := fs.InitiateUpload(ctx, ref, int64(len(content)), metadata)
+		ids, err := coord.InitiateUpload(ctx, ref, int64(len(content)), metadata)
 		if err != nil {
 			return "", err
 		}
-		_, err = fs.Upload(ctx, storage.UploadRequest{
+		_, err = coord.Upload(ctx, uploadcoordinator.Request{
 			Ref:    &provider.Reference{Path: "/" + ids["simple"]},
 			Body:   io.NopCloser(strings.NewReader(content)),
 			Length: int64(len(content)),
@@ -202,7 +221,7 @@ var _ = Describe("Synchronous uploads", func() {
 	}
 
 	uploadFiles := func() []string {
-		entries, err := os.ReadDir(filepath.Join(o.Root, "uploads"))
+		entries, err := os.ReadDir(o.UploadDirectory)
 		Expect(err).ToNot(HaveOccurred())
 		names := []string{}
 		for _, e := range entries {
@@ -231,6 +250,36 @@ var _ = Describe("Synchronous uploads", func() {
 		Expect(uploadFiles()).ToNot(ContainElement(HavePrefix(id)))
 	})
 
+	It("stores the blob of a new file before the file exists", func() {
+		ref = &provider.Reference{ResourceId: ref.ResourceId, Path: "/new.json"}
+
+		stored := false
+		bs.onUpload = func(*node.Node) {
+			// an upload interrupted now must not leave a node without metadata
+			Expect(file().Exists).To(BeFalse())
+			stored = true
+		}
+		_, err := upload("v1", nil)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(stored).To(BeTrue())
+		Expect(download()).To(Equal("v1"))
+	})
+
+	It("keeps the staged upload when the blob cannot be stored", func() {
+		_, err := upload("v1", nil)
+		Expect(err).ToNot(HaveOccurred())
+
+		bs.failUpload = errors.New("blobstore unavailable")
+		id, err := upload("v2", nil)
+		Expect(err).To(MatchError(storage.ErrSourceNotStored))
+		bs.failUpload = nil
+
+		Expect(file().IsProcessing(ctx)).To(BeFalse())
+		Expect(download()).To(Equal("v1"))
+		// the only copy of the upload, the failure may be transient
+		Expect(uploadFiles()).To(ContainElements(id, id+".info"))
+	})
+
 	It("keeps the old content and drops the new blob when the upload is rejected", func() {
 		_, err := upload("v1", nil)
 		Expect(err).ToNot(HaveOccurred())
@@ -243,16 +292,20 @@ var _ = Describe("Synchronous uploads", func() {
 		Expect(bs.Path(&node.Node{BaseNode: node.BaseNode{SpaceID: ref.ResourceId.SpaceId}, BlobID: id})).ToNot(BeAnExistingFile())
 	})
 
-	It("keeps the new blob when the node was written despite an error", func() {
+	It("restores the old content but keeps the new blob when the node was written despite an error", func() {
 		_, err := upload("v1", nil)
 		Expect(err).ToNot(HaveOccurred())
 
 		mb.failSwitch = "after"
-		_, err = upload("v2", nil)
+		id, err := upload("v2", nil)
 		Expect(err).To(HaveOccurred())
 		mb.failSwitch = ""
 
-		Expect(download()).To(Equal("v2"))
+		// PrepareUpload puts the old metadata back, but had the restore failed
+		// too, the node would point to the new blob
+		Expect(file().IsProcessing(ctx)).To(BeFalse())
+		Expect(download()).To(Equal("v1"))
+		Expect(bs.Path(&node.Node{BaseNode: node.BaseNode{SpaceID: ref.ResourceId.SpaceId}, BlobID: id})).To(BeAnExistingFile())
 	})
 
 	Context("with a node left processing by an interrupted upload", func() {
@@ -274,12 +327,10 @@ var _ = Describe("Synchronous uploads", func() {
 		// interrupt receives content and switches the node over to it the way
 		// older versions did, then stops before the blob is stored
 		interrupt := func(content string) string {
-			ids, err := fs.InitiateUpload(ctx, ref, int64(len(content)), nil)
+			ids, err := coord.InitiateUpload(ctx, ref, int64(len(content)), nil)
 			Expect(err).ToNot(HaveOccurred())
-			session, err := fs.(tusd.DataStore).GetUpload(ctx, ids["tus"])
-			Expect(err).ToNot(HaveOccurred())
-			_, err = session.WriteChunk(ctx, 0, strings.NewReader(content))
-			Expect(err).ToNot(HaveOccurred())
+			// the bytes a client sent so far are staged in the session's bin
+			Expect(os.WriteFile(filepath.Join(o.UploadDirectory, ids["tus"]), []byte(content), 0600)).To(Succeed())
 
 			attrs := node.Attributes{}
 			attrs.SetInt64(prefixes.BlobsizeAttr, int64(len(content)))
@@ -290,7 +341,7 @@ var _ = Describe("Synchronous uploads", func() {
 
 		age := func(id string) {
 			then := time.Now().Add(-time.Hour)
-			Expect(os.Chtimes(filepath.Join(o.Root, "uploads", id+".info"), then, then)).To(Succeed())
+			Expect(os.Chtimes(filepath.Join(o.UploadDirectory, id+".info"), then, then)).To(Succeed())
 		}
 
 		It("finishes the upload when the file is read", func() {
@@ -365,6 +416,38 @@ var _ = Describe("Synchronous uploads", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(file().IsProcessing(ctx)).To(BeFalse())
 			Expect(download()).To(Equal("v3"))
+		})
+
+		It("is not taken for processing by later uploads once it was cleared", func() {
+			interrupt("v2")
+			_, err := upload("v3", nil)
+			Expect(err).ToNot(HaveOccurred())
+
+			bs.onUpload = func(*node.Node) {
+				// versioning is disabled and no upload is processing the node
+				// anymore, so there is nothing to keep for a rollback
+				n := file()
+				revisions, err := filepath.Glob(lu.VersionPath(n.SpaceID, n.ID, "*"))
+				Expect(err).ToNot(HaveOccurred())
+				Expect(revisions).To(BeEmpty())
+			}
+			_, err = upload("v4", nil)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(download()).To(Equal("v4"))
+		})
+
+		It("stays recoverable when the next upload fails to propagate", func() {
+			// the blob was stored, only the marker was left
+			mark(v1BlobID, node.ProcessingStatus+v1BlobID)
+
+			mb.failPropagation = true
+			_, err := upload("v2", nil)
+			Expect(err).To(HaveOccurred())
+			mb.failPropagation = false
+
+			// the node was handed back to the interrupted upload, whose blob
+			// must still be there
+			Expect(download()).To(Equal("v1"))
 		})
 
 		It("stays recoverable when the next upload fails to write the node", func() {

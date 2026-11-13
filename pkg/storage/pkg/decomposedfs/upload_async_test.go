@@ -3,6 +3,7 @@ package decomposedfs
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"io"
 	"os"
 	"path/filepath"
@@ -28,6 +29,7 @@ import (
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/tree"
 	"github.com/opencloud-eu/reva/v2/pkg/storagespace"
 	"github.com/opencloud-eu/reva/v2/pkg/store"
+	uploadcoordinator "github.com/opencloud-eu/reva/v2/pkg/upload"
 	"github.com/opencloud-eu/reva/v2/pkg/utils"
 	"github.com/opencloud-eu/reva/v2/tests/helpers"
 	"github.com/rs/zerolog"
@@ -74,6 +76,7 @@ var _ = Describe("Async file uploads", Ordered, func() {
 		uploadID string
 
 		fs                   storage.FS
+		coordinator          uploadcoordinator.Coordinator
 		o                    *options.Options
 		lu                   *lookup.Lookup
 		pmock                *mocks.PermissionsChecker
@@ -137,7 +140,6 @@ var _ = Describe("Async file uploads", Ordered, func() {
 
 		o, err = options.New(map[string]interface{}{
 			"root":                tmpRoot,
-			"asyncfileuploads":    true,
 			"treetime_accounting": true,
 			"treesize_accounting": true,
 			"filemetadatacache": map[string]interface{}{
@@ -198,6 +200,17 @@ var _ = Describe("Async file uploads", Ordered, func() {
 		Expect(err).ToNot(HaveOccurred())
 		ref.ResourceId = &resID
 
+		// the upload coordinator drives the upload and consumes the postprocessing results
+		sessionStore := uploadcoordinator.NewFileStore(filepath.Join(tmpRoot, "uploads"), uploadcoordinator.TokenOptions{
+			DownloadEndpoint:     "http://localhost/data",
+			TransferSharedSecret: "transfer-secret",
+			TransferExpires:      60,
+		}, &zerolog.Logger{})
+		Expect(sessionStore.Setup()).To(Succeed())
+		coordinator = uploadcoordinator.NewCoordinator(fs, sessionStore, "", stream.Chan{pub, con})
+		Expect(coordinator.StartPostprocessing(stream.Chan{pub, con}, uploadcoordinator.AsyncConf{ConsumerGroup: "dcfs", NumConsumers: 1})).To(Succeed())
+
+		bs.On("Delete", mock.Anything).Return(nil).Maybe()
 		bs.On("Upload", mock.AnythingOfType("*node.Node"), mock.AnythingOfType("string"), mock.Anything).
 			Return(nil).
 			Run(func(args mock.Arguments) {
@@ -209,7 +222,7 @@ var _ = Describe("Async file uploads", Ordered, func() {
 			})
 
 		// start upload of a file
-		uploadIds, err := fs.InitiateUpload(ctx, ref, 10, map[string]string{})
+		uploadIds, err := coordinator.InitiateUpload(ctx, ref, 10, map[string]string{})
 		Expect(err).ToNot(HaveOccurred())
 		Expect(len(uploadIds)).To(Equal(2))
 		Expect(uploadIds["simple"]).ToNot(BeEmpty())
@@ -217,7 +230,7 @@ var _ = Describe("Async file uploads", Ordered, func() {
 
 		uploadRef := &provider.Reference{Path: "/" + uploadIds["simple"]}
 
-		_, err = fs.Upload(ctx, storage.UploadRequest{
+		_, err = coordinator.Upload(ctx, uploadcoordinator.Request{
 			Ref:    uploadRef,
 			Body:   io.NopCloser(bytes.NewReader(firstContent)),
 			Length: int64(len(firstContent)),
@@ -298,6 +311,98 @@ var _ = Describe("Async file uploads", Ordered, func() {
 			Expect(err).ToNot(BeNil())
 		})
 
+		// orphanNode simulates an orphaned node: the node file is still there but
+		// its metadata is gone, e.g. because an ancestor was trashed while the
+		// upload was in flight. Reading the node then fails. It purges instead of
+		// removing the metadata file directly, so the cached attributes go as well.
+		orphanNode := func() string {
+			// node is created and the optimistic size has been propagated
+			resources, err := fs.ListFolder(ctx, rootRef, []string{}, []string{})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(len(resources)).To(Equal(1))
+			Expect(parentSize()).To(Equal(len(firstContent)))
+
+			spaceID, nodeID := ref.GetResourceId().GetSpaceId(), resources[0].GetId().GetOpaqueId()
+			nodePath := lu.InternalPath(spaceID, nodeID)
+			n, err := node.ReadNode(ctx, lu, spaceID, nodeID, "", false, nil, true)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(lu.MetadataBackend().Purge(ctx, n)).To(Succeed())
+			_, err = node.ReadNode(ctx, lu, spaceID, nodeID, "", false, nil, true)
+			Expect(err).To(MatchError(node.ErrMissingParentID), "node should be orphaned after purging its metadata")
+			return nodePath
+		}
+		sessionSizeDiff := func() (string, bool) {
+			data, err := os.ReadFile(filepath.Join(o.Root, "uploads", uploadID+".info"))
+			Expect(err).ToNot(HaveOccurred())
+			info := struct{ MetaData map[string]string }{}
+			Expect(json.Unmarshal(data, &info)).To(Succeed())
+			sizeDiff, ok := info.MetaData["sizeDiff"]
+			return sizeDiff, ok
+		}
+
+		It("releases the quota and removes the node and bytes of an orphaned upload when instructed", func() {
+			nodePath := orphanNode()
+
+			failPostprocessing(uploadID, events.PPOutcomeDelete)
+
+			_, err := os.Stat(filepath.Join(o.Root, "uploads", uploadID))
+			Expect(err).To(HaveOccurred(), "the upload bytes should be cleaned up")
+			_, err = os.Stat(filepath.Join(o.Root, "uploads", uploadID+".info"))
+			Expect(err).To(HaveOccurred(), "the upload info should be cleaned up")
+
+			// the blob was never written
+			bs.AssertNumberOfCalls(GinkgoT(), "Upload", 0)
+
+			// the orphaned node is gone ...
+			_, err = os.Stat(nodePath)
+			Expect(err).ToNot(BeNil())
+
+			// ... and most importantly the quota has been released
+			Expect(parentSize()).To(Equal(0))
+		})
+
+		It("releases the quota of an orphaned upload that cannot be committed once and keeps its bytes", func() {
+			nodePath := orphanNode()
+			sizeDiff, ok := sessionSizeDiff()
+			Expect(ok).To(BeTrue())
+			Expect(sizeDiff).To(Equal("10"))
+
+			// the commit cannot resolve the node, so the upload is rolled back
+			failPostprocessing(uploadID, events.PPOutcomeContinue)
+
+			_, err := os.Stat(nodePath)
+			Expect(err).To(HaveOccurred(), "the orphaned node should be removed")
+			Expect(parentSize()).To(Equal(0))
+
+			// the size diff has been cleared, so a repeated cleanup does not
+			// release the quota a second time
+			sizeDiff, _ = sessionSizeDiff()
+			Expect(sizeDiff).To(Equal("0"))
+
+			// the bytes and the info are kept for a restart
+			_, err = os.Stat(filepath.Join(o.Root, "uploads", uploadID))
+			Expect(err).ToNot(HaveOccurred())
+			_, err = os.Stat(filepath.Join(o.Root, "uploads", uploadID+".info"))
+			Expect(err).ToNot(HaveOccurred())
+			bs.AssertNumberOfCalls(GinkgoT(), "Upload", 0)
+		})
+
+		It("releases the quota of an orphaned upload but keeps a node that has content", func() {
+			nodePath := orphanNode()
+			// something outside of us wrote the file, e.g. an editor saving atomically
+			Expect(os.WriteFile(nodePath, []byte("user data"), 0600)).To(Succeed())
+
+			failPostprocessing(uploadID, events.PPOutcomeDelete)
+
+			_, err := os.Stat(filepath.Join(o.Root, "uploads", uploadID))
+			Expect(err).To(HaveOccurred(), "the upload bytes should be cleaned up")
+			Expect(parentSize()).To(Equal(0))
+
+			data, err := os.ReadFile(nodePath)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(string(data)).To(Equal("user data"))
+		})
+
 		It("deletes node and keeps the bytes when instructed", func() {
 			// node is created
 			resources, err := fs.ListFolder(ctx, rootRef, []string{}, []string{})
@@ -338,7 +443,7 @@ var _ = Describe("Async file uploads", Ordered, func() {
 			Expect(len(revs)).To(Equal(0))
 
 			// upload again
-			uploadIds, err := fs.InitiateUpload(ctx, ref, 10, map[string]string{})
+			uploadIds, err := coordinator.InitiateUpload(ctx, ref, 10, map[string]string{})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(len(uploadIds)).To(Equal(2))
 			Expect(uploadIds["simple"]).ToNot(BeEmpty())
@@ -346,7 +451,7 @@ var _ = Describe("Async file uploads", Ordered, func() {
 
 			uploadRef := &provider.Reference{Path: "/" + uploadIds["simple"]}
 
-			_, err = fs.Upload(ctx, storage.UploadRequest{
+			_, err = coordinator.Upload(ctx, uploadcoordinator.Request{
 				Ref:    uploadRef,
 				Body:   io.NopCloser(bytes.NewReader(firstContent)),
 				Length: int64(len(firstContent)),
@@ -407,13 +512,34 @@ var _ = Describe("Async file uploads", Ordered, func() {
 			bs.AssertNumberOfCalls(GinkgoT(), "Upload", 1)
 		})
 
+		It("keeps the existing node when its metadata is gone", func() {
+			ri, err := fs.GetMD(ctx, ref, []string{}, []string{})
+			Expect(err).ToNot(HaveOccurred())
+			spaceID, nodeID := ref.GetResourceId().GetSpaceId(), ri.GetId().GetOpaqueId()
+			nodePath := lu.InternalPath(spaceID, nodeID)
+			n, err := node.ReadNode(ctx, lu, spaceID, nodeID, "", false, nil, true)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(lu.MetadataBackend().Purge(ctx, n)).To(Succeed())
+			_, err = node.ReadNode(ctx, lu, spaceID, nodeID, "", false, nil, true)
+			Expect(err).To(MatchError(node.ErrMissingParentID), "node should be orphaned after purging its metadata")
+
+			failPostprocessing(uploadID, events.PPOutcomeDelete)
+
+			_, err = os.Stat(filepath.Join(o.Root, "uploads", uploadID))
+			Expect(err).To(HaveOccurred(), "the upload bytes should be cleaned up")
+
+			// the node held the previous version, so it must not be removed
+			_, err = os.Stat(nodePath)
+			Expect(err).ToNot(HaveOccurred())
+		})
+
 	})
 	When("Two uploads are processed in parallel", func() {
 		var secondUploadID string
 
 		JustBeforeEach(func() {
 			// upload again
-			uploadIds, err := fs.InitiateUpload(ctx, ref, 20, map[string]string{})
+			uploadIds, err := coordinator.InitiateUpload(ctx, ref, 20, map[string]string{})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(len(uploadIds)).To(Equal(2))
 			Expect(uploadIds["simple"]).ToNot(BeEmpty())
@@ -421,7 +547,7 @@ var _ = Describe("Async file uploads", Ordered, func() {
 
 			uploadRef := &provider.Reference{Path: "/" + uploadIds["simple"]}
 
-			_, err = fs.Upload(ctx, storage.UploadRequest{
+			_, err = coordinator.Upload(ctx, uploadcoordinator.Request{
 				Ref:    uploadRef,
 				Body:   io.NopCloser(bytes.NewReader(secondContent)),
 				Length: int64(len(secondContent)),
@@ -652,23 +778,19 @@ var _ = Describe("Async file uploads", Ordered, func() {
 
 			failPostprocessing(secondUploadID, events.PPOutcomeDelete)
 
-			// check file has been removed
-			// if all uploads have been processed with outcome delete -> delete the file
-			// exists, _, _ := fileStatus()
-			// FIXME this should be false, but we are not deleting the resource
-			// Expect(exists).To(BeFalse())
-
-			// parent size should be 0
-			// FIXME we are not correctly reverting the sizediff
-			// Expect(parentSize()).To(Equal(0))
+			// the first upload created the file and is gone, so the file is removed
+			resources, err := fs.ListFolder(ctx, rootRef, []string{}, []string{})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(resources).To(BeEmpty())
+			Expect(parentSize()).To(Equal(0))
 		})
 
 		It("the first can fail after the second fails", func() {
 			failPostprocessing(secondUploadID, events.PPOutcomeDelete)
 
 			_, status, size := fileStatus()
-			// check processing status has been removed because the most recent upload finished and can be downloaded
-			Expect(status).To(Equal(""))
+			// the file is handed back to the first upload, which is still processing
+			Expect(status).To(Equal("processing"))
 			// size should match the first upload
 			Expect(size).To(Equal(len(firstContent)))
 
@@ -677,15 +799,11 @@ var _ = Describe("Async file uploads", Ordered, func() {
 
 			failPostprocessing(uploadID, events.PPOutcomeDelete)
 
-			// check file has been removed
-			// if all uploads have been processed with outcome delete -> delete the file
-			// exists, _, _ := fileStatus()
-			// FIXME this should be false, but we are not deleting the resource
-			// Expect(exists).To(BeFalse())
-
-			// parent size should be 0
-			// FIXME we are not correctly reverting the sizediff
-			// Expect(parentSize()).To(Equal(0))
+			// the first upload created the file, so failing it removes the file
+			resources, err := fs.ListFolder(ctx, rootRef, []string{}, []string{})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(resources).To(BeEmpty())
+			Expect(parentSize()).To(Equal(0))
 		})
 	})
 })

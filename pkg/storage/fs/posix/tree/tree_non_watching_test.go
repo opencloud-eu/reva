@@ -1,6 +1,7 @@
 package tree_test
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -9,8 +10,10 @@ import (
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
+	"github.com/opencloud-eu/reva/v2/pkg/storage"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/lookup"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/timemanager"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata/prefixes"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/node"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -37,6 +40,47 @@ var _ = Describe("Non-watching tree", func() {
 		Expect(err).ToNot(HaveOccurred())
 		err = non_watching_env.Tree.CreateDir(non_watching_env.Ctx, child)
 		Expect(err).ToNot(HaveOccurred())
+	})
+
+	Describe("TouchFile", func() {
+		// the propagated attribute, not GetTMTime: that falls back to the dir's own
+		// mtime, which creating the file changes
+		parentTMTime := func() string {
+			parent, err := non_watching_env.Lookup.NodeFromResource(non_watching_env.Ctx, &provider.Reference{
+				ResourceId: non_watching_env.SpaceRootRes,
+				Path:       subtree,
+			})
+			Expect(err).ToNot(HaveOccurred())
+			tmtime, _ := parent.XattrString(non_watching_env.Ctx, prefixes.TreeMTimeAttr)
+			return tmtime
+		}
+
+		touch := func(ctx context.Context) {
+			n, err := non_watching_env.Lookup.NodeFromResource(non_watching_env.Ctx, &provider.Reference{
+				ResourceId: non_watching_env.SpaceRootRes,
+				Path:       subtree + "/newFile",
+			})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(non_watching_env.Tree.TouchFile(ctx, n, false, "")).To(Succeed())
+		}
+
+		It("propagates the new file to its parent", func() {
+			before := parentTMTime()
+			time.Sleep(10 * time.Millisecond)
+
+			touch(non_watching_env.Ctx)
+
+			Expect(parentTMTime()).ToNot(Equal(before))
+		})
+
+		It("does not propagate when the context asks it not to", func() {
+			before := parentTMTime()
+			time.Sleep(10 * time.Millisecond)
+
+			touch(storage.ContextSkipTouchPropagation(non_watching_env.Ctx))
+
+			Expect(parentTMTime()).To(Equal(before))
+		})
 	})
 
 	It("updates treesize after ListFolder on subdirectory with new file", func() {
