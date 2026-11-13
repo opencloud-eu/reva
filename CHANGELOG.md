@@ -1,12 +1,22 @@
 # Changelog
 
-## [2.52.4](https://github.com/opencloud-eu/reva/releases/tag/v2.52.4) - 2026-11-13
+## [3.0.0](https://github.com/opencloud-eu/reva/releases/tag/v3.0.0) - 2026-11-13
 
 ### ❤️ Thanks to all contributors! ❤️
 
-@aduffeck
+@aduffeck, @butonic, @dragonchaser
 
+### 💥 Breaking changes
 
+- Merge Workpackages back to main [[#957](https://github.com/opencloud-eu/reva/pull/957)]
+
+### 🐛 Bug Fixes
+
+- fix(publicshareprovider): do not fail listing public shares when the metadata space is not accessible [[#996](https://github.com/opencloud-eu/reva/pull/996)]
+
+### 📈 Enhancement
+
+- feat(spaces): allow managing spaces through the server [[#994](https://github.com/opencloud-eu/reva/pull/994)]
 
 ## [2.52.3](https://github.com/opencloud-eu/reva/releases/tag/v2.52.3) - 2026-11-11
 
