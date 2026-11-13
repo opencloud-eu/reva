@@ -347,7 +347,7 @@ var _ = Describe("File uploads", func() {
 			}
 
 			BeforeEach(func() {
-				Expect(fs.TouchFile(ctx, ref, false, "")).To(Succeed())
+				Expect(fs.TouchFile(ctx, ref, false, "")).Error().To(Succeed())
 			})
 
 			It("writes the staged bytes to the node prepared for the session", func() {
@@ -533,7 +533,7 @@ var _ = Describe("File uploads", func() {
 
 		Describe("MarkProcessing", func() {
 			BeforeEach(func() {
-				Expect(fs.TouchFile(ctx, ref, false, "")).To(Succeed())
+				Expect(fs.TouchFile(ctx, ref, false, "")).Error().To(Succeed())
 			})
 
 			processingID := func() string {
@@ -611,7 +611,7 @@ var _ = Describe("File uploads", func() {
 				Stat:               true,
 				InitiateFileUpload: true,
 			}, nil).Once()
-			Expect(fs.TouchFile(ctx, ref, false, "")).To(Succeed())
+			Expect(fs.TouchFile(ctx, ref, false, "")).Error().To(Succeed())
 
 			Expect(fs.MarkProcessing(ctx, ref, true, "session-1")).To(Succeed())
 			Expect(fs.MarkProcessing(ctx, ref, false, "session-2")).To(Succeed())
@@ -630,7 +630,7 @@ var _ = Describe("File uploads", func() {
 				Stat:               true,
 				InitiateFileUpload: true,
 			}, nil).Once()
-			Expect(fs.TouchFile(ctx, ref, false, "")).To(Succeed())
+			Expect(fs.TouchFile(ctx, ref, false, "")).Error().To(Succeed())
 
 			Expect(fs.MarkProcessing(ctx, ref, true, "session-1")).To(Succeed())
 			Expect(fs.MarkProcessing(ctx, ref, true, "session-2")).To(Succeed())

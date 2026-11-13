@@ -373,9 +373,9 @@ func (c *coordinator) touchNode(ctx context.Context, session Session) error {
 		Path: session.Filename(),
 	}
 	// PrepareUpload marks and propagates the node, so TouchFile need not.
-	err := c.fs.TouchFile(storage.ContextSkipTouchPropagation(ctx), pathRef, false, session.Metadata()["mtime"])
+	_, err := c.fs.TouchFile(storage.ContextSkipTouchPropagation(ctx), pathRef, false, session.Metadata()["mtime"])
 	if err == nil {
-		// TouchFile does not report the node it created, read it back.
+		// Not every driver reports the node it created, read it back.
 		var ri *provider.ResourceInfo
 		ri, err = c.fs.GetMD(ctx, pathRef, nil, nil)
 		if err == nil {

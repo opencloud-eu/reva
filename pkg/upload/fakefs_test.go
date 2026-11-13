@@ -103,15 +103,15 @@ func (f *fakeFS) GetPathByID(_ context.Context, _ *provider.ResourceId) (string,
 	return f.pathByID, f.pathByIDErr
 }
 
-func (f *fakeFS) TouchFile(ctx context.Context, ref *provider.Reference, markprocessing bool, mtime string) error {
+func (f *fakeFS) TouchFile(ctx context.Context, ref *provider.Reference, markprocessing bool, mtime string) (*storage.TouchFileResult, error) {
 	f.record("TouchFile(markprocessing=%v)", markprocessing)
 	f.touchMtime = mtime
 	f.touchSkippedPropagation = storage.SkipTouchPropagation(ctx)
 	if f.touchErr != nil {
-		return f.touchErr
+		return nil, f.touchErr
 	}
 	f.touchRef = ref
-	return nil
+	return &storage.TouchFileResult{}, nil
 }
 
 func (f *fakeFS) MarkProcessing(_ context.Context, _ *provider.Reference, processing bool, _ string) error {
@@ -159,9 +159,9 @@ func (f *fakeFS) RollbackUpload(_ context.Context, _ *provider.Reference, _ stri
 	return f.rollbackErr
 }
 
-func (f *fakeFS) Delete(_ context.Context, _ *provider.Reference) error {
+func (f *fakeFS) Delete(_ context.Context, _ *provider.Reference) (*storage.DeleteResult, error) {
 	f.record("Delete")
-	return nil
+	return &storage.DeleteResult{}, nil
 }
 
 // fakePublisher is an events.Publisher test double keeping the published events.

@@ -159,7 +159,7 @@ var _ = Describe("Nextcloud", func() {
 				},
 				Path: "/some/path",
 			}
-			err := nc.CreateDir(ctx, ref)
+			_, err := nc.CreateDir(ctx, ref)
 			Expect(err).ToNot(HaveOccurred())
 			checkCalled(called, `POST /apps/sciencemesh/~tester/api/storage/CreateDir {"resource_id":{"storage_id":"storage-id","opaque_id":"opaque-id"},"path":"/some/path"}`)
 		})
@@ -177,7 +177,7 @@ var _ = Describe("Nextcloud", func() {
 				},
 				Path: "some/file/path.txt",
 			}
-			err := nc.TouchFile(ctx, ref, false, "1234567890")
+			_, err := nc.TouchFile(ctx, ref, false, "1234567890")
 			Expect(err).ToNot(HaveOccurred())
 			Expect(len(*called)).To(Equal(1))
 			Expect((*called)[0]).To(Equal(`POST /apps/sciencemesh/~tester/api/storage/TouchFile {"ref":{"resource_id":{"storage_id":"storage-id","opaque_id":"opaque-id"},"path":"some/file/path.txt"},"markprocessing":false,"mtime":"1234567890"}`))
@@ -197,7 +197,7 @@ var _ = Describe("Nextcloud", func() {
 				},
 				Path: "/some/path",
 			}
-			err := nc.Delete(ctx, ref)
+			_, err := nc.Delete(ctx, ref)
 			Expect(err).ToNot(HaveOccurred())
 			checkCalled(called, `POST /apps/sciencemesh/~tester/api/storage/Delete {"resource_id":{"storage_id":"storage-id","opaque_id":"opaque-id"},"path":"/some/path"}`)
 		})
@@ -544,7 +544,7 @@ var _ = Describe("Nextcloud", func() {
 				Path: "some/file/path.txt",
 			}
 			key := "asdf"
-			err := nc.RestoreRevision(ctx, ref, key)
+			_, err := nc.RestoreRevision(ctx, ref, key)
 			Expect(err).ToNot(HaveOccurred())
 			checkCalled(called, `POST /apps/sciencemesh/~tester/api/storage/RestoreRevision {"ref":{"resource_id":{"storage_id":"storage-id","opaque_id":"opaque-id"},"path":"some/file/path.txt"},"key":"asdf"}`)
 		})
@@ -589,7 +589,7 @@ var _ = Describe("Nextcloud", func() {
 			}
 			path := "original/location/when/deleted.txt"
 			key := "asdf"
-			err := nc.RestoreRecycleItem(ctx, nil, key, path, restoreRef)
+			_, err := nc.RestoreRecycleItem(ctx, nil, key, path, restoreRef)
 			Expect(err).ToNot(HaveOccurred())
 			checkCalled(called, `POST /apps/sciencemesh/~tester/api/storage/RestoreRecycleItem {"key":"asdf","path":"original/location/when/deleted.txt","restoreRef":{"resource_id":{"storage_id":"storage-id","opaque_id":"opaque-id"},"path":"some/file/path.txt"}}`)
 		})

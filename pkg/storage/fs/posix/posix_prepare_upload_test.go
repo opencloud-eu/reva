@@ -43,7 +43,7 @@ var _ = Describe("PrepareUpload on posix", func() {
 			&provider.ResourcePermissions{Stat: true, InitiateFileUpload: true}, nil)
 
 		ref = &provider.Reference{ResourceId: env.SpaceRootRes, Path: "./target.txt"}
-		Expect(env.Fs.TouchFile(env.Ctx, ref, false, "")).To(Succeed())
+		Expect(env.Fs.TouchFile(env.Ctx, ref, false, "")).Error().To(Succeed())
 
 		// the file's content as it was before the upload
 		n, err := env.Lookup.NodeFromResource(env.Ctx, ref)
@@ -225,7 +225,7 @@ var _ = Describe("PrepareUpload on posix", func() {
 		})
 
 		It("leaves a file that took the name meanwhile alone", func() {
-			Expect(env.Fs.TouchFile(env.Ctx, &provider.Reference{ResourceId: env.SpaceRootRes, Path: "./new.txt"}, false, "")).To(Succeed())
+			Expect(env.Fs.TouchFile(env.Ctx, &provider.Reference{ResourceId: env.SpaceRootRes, Path: "./new.txt"}, false, "")).Error().To(Succeed())
 			other := byName()
 
 			_, err := env.Fs.PrepareUpload(env.Ctx, createRef, "session-new", info)
@@ -283,7 +283,7 @@ var _ = Describe("PrepareUpload on posix", func() {
 
 	It("removes a file the upload created on rollback", func() {
 		newRef := &provider.Reference{ResourceId: env.SpaceRootRes, Path: "./new.txt"}
-		Expect(env.Fs.TouchFile(env.Ctx, newRef, false, "")).To(Succeed())
+		Expect(env.Fs.TouchFile(env.Ctx, newRef, false, "")).Error().To(Succeed())
 		created, err := env.Lookup.NodeFromResource(env.Ctx, newRef)
 		Expect(err).ToNot(HaveOccurred())
 
@@ -305,7 +305,7 @@ var _ = Describe("PrepareUpload on posix", func() {
 
 	It("removes a file whose metadata became unreadable on rollback", func() {
 		newRef := &provider.Reference{ResourceId: env.SpaceRootRes, Path: "./orphan.txt"}
-		Expect(env.Fs.TouchFile(env.Ctx, newRef, false, "")).To(Succeed())
+		Expect(env.Fs.TouchFile(env.Ctx, newRef, false, "")).Error().To(Succeed())
 		created, err := env.Lookup.NodeFromResource(env.Ctx, newRef)
 		Expect(err).ToNot(HaveOccurred())
 		rootBefore, err := env.Fs.GetMD(env.Ctx, &provider.Reference{ResourceId: env.SpaceRootRes}, nil, nil)

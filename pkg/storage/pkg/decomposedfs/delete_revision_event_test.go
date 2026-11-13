@@ -165,7 +165,7 @@ var _ = Describe("DeleteRevision event", func() {
 		ref.ResourceId = &resID
 
 		// create a file and resolve its resource id
-		Expect(fs.TouchFile(ctx, ref, false, "")).To(Succeed())
+		Expect(fs.TouchFile(ctx, ref, false, "")).Error().To(Succeed())
 		n, err := lu.NodeFromResource(ctx, ref)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(n.Exists).To(BeTrue())

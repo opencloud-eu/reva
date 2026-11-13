@@ -53,7 +53,7 @@ var _ = Describe("PrepareUpload", func() {
 				Stat:               true,
 				ListFileVersions:   true,
 			}, nil)
-		err := env.Fs.TouchFile(env.Ctx, ref, false, "")
+		_, err := env.Fs.TouchFile(env.Ctx, ref, false, "")
 		Expect(err).ToNot(HaveOccurred())
 	}
 
@@ -198,7 +198,7 @@ var _ = Describe("PrepareUpload", func() {
 
 		Context("when another upload took the name meanwhile", func() {
 			It("returns AlreadyExists and leaves the other file alone", func() {
-				err := env.Fs.TouchFile(env.Ctx, ref, false, "")
+				_, err := env.Fs.TouchFile(env.Ctx, ref, false, "")
 				Expect(err).ToNot(HaveOccurred())
 				other := byName()
 
@@ -413,7 +413,7 @@ var _ = Describe("PrepareUpload", func() {
 					Stat:               true,
 					ListFileVersions:   true,
 				}, nil)
-			err = env.Fs.TouchFile(env.Ctx, ref, false, "")
+			_, err = env.Fs.TouchFile(env.Ctx, ref, false, "")
 			Expect(err).ToNot(HaveOccurred())
 		})
 

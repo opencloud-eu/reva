@@ -101,4 +101,17 @@ var _ = Describe("Posix", func() {
 			Expect(nc.PrepareCreatesNode()).To(BeTrue())
 		})
 	})
+
+	Describe("NewDefault", func() {
+		It("fails right away when the id cache is not nats-js-kv", func() {
+			_, err := posix.NewDefault(map[string]interface{}{
+				"root": tmpRoot,
+				"idcache": map[string]interface{}{
+					"cache_store": "redis-sentinel",
+					"cache_nodes": []string{"127.0.0.1:1/mymaster"},
+				},
+			}, nil, &zerolog.Logger{})
+			Expect(err).To(MatchError(ContainSubstring("requires a nats-js-kv id cache")))
+		})
+	})
 })

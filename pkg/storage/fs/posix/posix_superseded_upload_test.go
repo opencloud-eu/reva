@@ -51,7 +51,7 @@ var _ = Describe("a newer upload supersedes one still processing on posix", func
 		env.Blobstore.On("Delete", mock.Anything).Return(nil).Maybe()
 
 		ref = &provider.Reference{ResourceId: env.SpaceRootRes, Path: "./target.txt"}
-		Expect(env.Fs.TouchFile(env.Ctx, ref, false, "")).To(Succeed())
+		Expect(env.Fs.TouchFile(env.Ctx, ref, false, "")).Error().To(Succeed())
 		n, err := env.Lookup.NodeFromResource(env.Ctx, ref)
 		Expect(err).ToNot(HaveOccurred())
 		if withOlderVersion {

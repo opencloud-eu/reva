@@ -476,7 +476,7 @@ var _ = Describe("Tree", func() {
 					Path:       "emptydir/newFile",
 				})
 				Expect(err).ToNot(HaveOccurred())
-				Expect(t.TouchFile(ctx, fileToBeCreated, false, "")).To(Succeed())
+				Expect(t.TouchFile(ctx, fileToBeCreated, false, "")).Error().To(Succeed())
 			}
 
 			It("propagates the new file to its parent", func() {
