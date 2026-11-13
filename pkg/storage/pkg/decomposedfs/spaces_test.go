@@ -32,6 +32,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/opencloud-eu/reva/v2/internal/grpc/services/storageprovider"
+	"github.com/opencloud-eu/reva/v2/pkg/conversions"
 	ctxpkg "github.com/opencloud-eu/reva/v2/pkg/ctx"
 	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/lookup"
@@ -513,9 +514,9 @@ var _ = Describe("Spaces", func() {
 					case manager.GetId().GetOpaqueId():
 						return node.OwnerPermissions() // id of owner/admin
 					case editor.GetId().GetOpaqueId():
-						return &provider.ResourcePermissions{InitiateFileUpload: true} // mock editor
+						return conversions.NewSpaceEditorRole().CS3ResourcePermissions() // mock editor
 					case viewer.GetId().GetOpaqueId():
-						return &provider.ResourcePermissions{Stat: true} // mock viewer
+						return conversions.NewSpaceViewerRole().CS3ResourcePermissions() // mock viewer
 					default:
 						return node.NoPermissions()
 					}

@@ -1,7 +1,7 @@
 // Copyright 2026 OpenCloud GmbH <mail@opencloud.eu>
 // SPDX-License-Identifier: Apache-2.0
 
-package upload
+package decomposedfs
 
 import (
 	"context"
@@ -23,24 +23,27 @@ import (
 // running on an instance that does not write blobs first yet.
 const interruptedUploadAge = 10 * time.Minute
 
-// RecoverInterruptedUpload finishes a synchronous upload that was interrupted
+// recoverInterruptedUpload finishes a synchronous upload that was interrupted
 // after its node had been switched to the new blob, e.g. by a crash. Older
 // versions marked the node as processing for that time, and as nothing
 // postprocesses synchronous uploads, the marker stayed forever. It reports
 // whether the node is no longer processing.
-func (store DecomposedFsStore) RecoverInterruptedUpload(ctx context.Context, n *node.Node) bool {
-	if !store.separateBlobs || store.async {
+//
+// The upload sessions are the coordinator's, which keeps the same layout as
+// the session store of older versions: <upload dir>/<id> and <id>.info.
+func (fs *Decomposedfs) recoverInterruptedUpload(ctx context.Context, n *node.Node) bool {
+	if !fs.separateBlobs || fs.o.AsyncFileUploads {
 		// processing markers are expected here, postprocessing removes them
 		return false
 	}
 	log := appctx.GetLogger(ctx).With().Str("spaceid", n.SpaceID).Str("nodeid", n.ID).Logger()
 
-	unlock, err := store.lu.MetadataBackend().Lock(n)
+	unlock, err := fs.lu.MetadataBackend().Lock(n)
 	if err != nil {
 		log.Error().Err(err).Msg("could not lock node to recover an interrupted upload")
 		return false
 	}
-	done, recovered := store.finishInterruptedUpload(ctx, n, log)
+	done, recovered := fs.finishInterruptedUpload(ctx, n, log)
 	_ = unlock()
 
 	// Let clients see the change, once the node is unlocked like finished
@@ -48,17 +51,17 @@ func (store DecomposedFsStore) RecoverInterruptedUpload(ctx context.Context, n *
 	// if the upload started while the store was async, so the tree size is
 	// left as it is.
 	if recovered {
-		if err := store.tp.Propagate(ctx, n, 0); err != nil {
+		if err := fs.tp.Propagate(ctx, n, 0); err != nil {
 			log.Error().Err(err).Msg("could not propagate a recovered upload")
 		}
 	}
 	return done
 }
 
-// finishInterruptedUpload does the work of RecoverInterruptedUpload with the
+// finishInterruptedUpload does the work of recoverInterruptedUpload with the
 // node locked. Besides whether the node is no longer processing, it reports
 // whether it recovered the upload itself.
-func (store DecomposedFsStore) finishInterruptedUpload(ctx context.Context, n *node.Node, log zerolog.Logger) (done, recovered bool) {
+func (fs *Decomposedfs) finishInterruptedUpload(ctx context.Context, n *node.Node, log zerolog.Logger) (done, recovered bool) {
 	// the node might have changed while waiting for the lock
 	n.ResetXattrsCache()
 	attrs, err := n.Xattrs(ctx)
@@ -80,20 +83,20 @@ func (store DecomposedFsStore) finishInterruptedUpload(ctx context.Context, n *n
 	}
 	log = log.With().Str("uploadid", uploadID).Logger()
 
-	infoPath := sessionPath(store.root, uploadID)
-	binPath := filepath.Join(store.root, "uploads", uploadID)
+	binPath := filepath.Join(fs.o.UploadDirectory, uploadID)
+	infoPath := binPath + ".info"
 	if info, err := os.Stat(infoPath); err == nil && time.Since(info.ModTime()) < interruptedUploadAge {
 		return false, false
 	}
 
 	if _, err := os.Stat(binPath); err == nil {
 		// the upload stopped before its blob was stored
-		if err := store.tp.WriteBlob(n, binPath); err != nil {
+		if err := fs.tp.WriteBlob(n, binPath); err != nil {
 			log.Error().Err(err).Msg("could not store the blob of an interrupted upload")
 			return false, false
 		}
 	}
-	blob, err := store.tp.ReadBlob(n)
+	blob, err := fs.tp.ReadBlob(n)
 	if err != nil {
 		log.Error().Err(err).Msg("the blob of an interrupted upload is missing, the node stays marked as processing")
 		return false, false

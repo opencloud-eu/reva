@@ -26,5 +26,9 @@ providers = "fixtures/ocm-providers.demo.json"
 
 [http.services.dataprovider]
 driver = "ocmreceived"
+# shared with the storageprovider in cesnetgw, which creates the upload sessions
+upload_directory = "{{cesnetgw_root}}/uploads"
 
 [http.services.dataprovider.drivers.ocmreceived]
+service_account_id = "ocm-sa"
+service_account_secret = "ocm-sa-secret"
