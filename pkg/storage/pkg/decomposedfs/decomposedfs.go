@@ -1292,6 +1292,32 @@ func (fs *Decomposedfs) Download(ctx context.Context, ref *provider.Reference, o
 	}
 	var reader io.ReadCloser
 	if openReaderFunc(ri) {
+		// Hold the node's metadata lock until the blob is opened, so that a concurrent
+		// upload finalization cannot delete the blob between resolving and opening it.
+		// The lock is released on return, i.e. before the caller starts streaming.
+		lockedNode, unlock, err := node.LockAndReadNode(ctx, fs.lu, n.SpaceID, n.ID, "", true, n.SpaceRoot, false)
+		if err != nil {
+			return nil, nil, err
+		}
+		defer func() {
+			_ = unlock()
+		}()
+
+		// the node might have been changed while waiting for the lock.
+		// With synchronous uploads the node stays locked until the upload is finalized, so
+		// getting the lock means the new blob is ready; the processing flag is only cleared
+		// after the lock is released, so it must not be checked for sync stores.
+		if fs.o.AsyncFileUploads && lockedNode.IsProcessing(ctx) {
+			return nil, nil, errtypes.TooEarly("file is still being processed")
+		}
+		if lockedNode.BlobID != n.BlobID {
+			ri, err = lockedNode.AsResourceInfo(ctx, rp, nil, []string{"size", "mimetype", "etag"}, true)
+			if err != nil {
+				return nil, nil, err
+			}
+		}
+		n = lockedNode
+
 		reader, err = fs.tp.ReadBlob(n)
 		if err != nil {
 			return nil, nil, errors.Wrap(err, "Decomposedfs: error download blob '"+n.ID+"'")

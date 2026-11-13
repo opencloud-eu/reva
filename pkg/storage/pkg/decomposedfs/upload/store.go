@@ -188,7 +188,9 @@ type Session interface {
 // CreateNodeForUpload will create the target node for the Upload
 // TODO move this to the node package as NodeFromUpload?
 // should we in InitiateUpload create the node first? and then the upload?
-func (store DecomposedFsStore) CreateNodeForUpload(ctx context.Context, session *DecomposedFsSession, initAttrs node.Attributes) (*node.Node, error) {
+// When keepLocked is true the metadata lock of the node is not released on success but returned to the caller,
+// who has to release it. On errors the lock is always released.
+func (store DecomposedFsStore) CreateNodeForUpload(ctx context.Context, session *DecomposedFsSession, initAttrs node.Attributes, keepLocked bool) (*node.Node, metadata.UnlockFunc, error) {
 	ctx, span := tracer.Start(session.Context(ctx), "CreateNodeForUpload")
 	defer span.End()
 	n := node.New(
@@ -205,12 +207,12 @@ func (store DecomposedFsStore) CreateNodeForUpload(ctx context.Context, session 
 	var err error
 	n.SpaceRoot, err = node.ReadNode(ctx, store.lu, session.SpaceID(), session.SpaceID(), "", false, nil, false)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	// check lock
 	if err := n.CheckLock(ctx); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	var unlock metadata.UnlockFunc
@@ -241,9 +243,13 @@ func (store DecomposedFsStore) CreateNodeForUpload(ctx context.Context, session 
 		}
 		session.info.MetaData["sizeDiff"] = strconv.FormatInt(session.Size(), 10)
 	}
+	handedOver := false
 	defer func() {
 		if unlock == nil {
 			appctx.GetLogger(ctx).Info().Msg("did not get a unlockfunc, not unlocking")
+			return
+		}
+		if handedOver {
 			return
 		}
 
@@ -252,7 +258,7 @@ func (store DecomposedFsStore) CreateNodeForUpload(ctx context.Context, session 
 		}
 	}()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	// overwrite technical information
@@ -272,23 +278,27 @@ func (store DecomposedFsStore) CreateNodeForUpload(ctx context.Context, session 
 	}
 	err = store.lu.TimeManager().OverrideMtime(ctx, n, &initAttrs, mtime)
 	if err != nil {
-		return nil, errors.Wrap(err, "Decomposedfs: failed to set the mtime")
+		return nil, nil, errors.Wrap(err, "Decomposedfs: failed to set the mtime")
 	}
 
 	// update node metadata with new blobid etc
 	err = n.SetXattrsWithContext(ctx, initAttrs)
 	if err != nil {
-		return nil, errors.Wrap(err, "Decomposedfs: could not write metadata")
+		return nil, nil, errors.Wrap(err, "Decomposedfs: could not write metadata")
 	}
 
 	err = store.um.RunInBaseScope(func() error {
 		return session.Persist(ctx)
 	})
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	return n, nil
+	if keepLocked {
+		handedOver = true
+		return n, unlock, nil
+	}
+	return n, nil, nil
 }
 
 func (store DecomposedFsStore) updateExistingNode(ctx context.Context, session *DecomposedFsSession, n *node.Node, spaceID string, fsize uint64) (metadata.UnlockFunc, error) {

@@ -205,7 +205,10 @@ func (session *DecomposedFsSession) FinishUploadDecomposed(ctx context.Context) 
 		}
 	}
 
-	n, err := session.store.CreateNodeForUpload(ctx, session, attrs)
+	// if the upload is finalized right away, the node stays locked until it is finalized,
+	// so that downloads never see the node pointing to a blob that has not been written yet.
+	finalizeNow := !session.store.async || session.info.Size == 0
+	n, unlock, err := session.store.CreateNodeForUpload(ctx, session, attrs, finalizeNow)
 	if err != nil {
 		session.SetStatus(SessionStatusFailed, err.Error())
 		if perr := session.Persist(ctx); perr != nil {
@@ -213,6 +216,17 @@ func (session *DecomposedFsSession) FinishUploadDecomposed(ctx context.Context) 
 		}
 		return err
 	}
+
+	releaseLock := func() {
+		if unlock == nil {
+			return
+		}
+		if uerr := unlock(); uerr != nil {
+			log.Error().Err(uerr).Str("nodeid", n.ID).Msg("could not close lock")
+		}
+		unlock = nil
+	}
+	defer releaseLock()
 
 	session.SetStatus(SessionStatusProcessing, "")
 	if err = session.Persist(ctx); err != nil {
@@ -255,9 +269,11 @@ func (session *DecomposedFsSession) FinishUploadDecomposed(ctx context.Context) 
 
 	// if the upload is synchronous or the upload is empty, finalize it now
 	// for 0-byte uploads we take a shortcut and finalize isn't called elsewhere
-	if !session.store.async || session.info.Size == 0 {
+	if finalizeNow {
 		// handle postprocessing synchronously
-		err = session.Finalize(ctx)
+		err = session.finalize(ctx, true)
+		// Cleanup needs the lock
+		releaseLock()
 		session.Cleanup(err != nil, err == nil, true, true)
 		if err != nil {
 			log.Error().Err(err).Msg("failed to upload")
@@ -315,6 +331,12 @@ func (session *DecomposedFsSession) ConcatUploads(_ context.Context, uploads []t
 
 // Finalize finalizes the upload (eg moves the file to the internal destination)
 func (session *DecomposedFsSession) Finalize(ctx context.Context) (err error) {
+	return session.finalize(ctx, false)
+}
+
+// finalize finalizes the upload. When lockHeld is true the calling goroutine already holds the
+// metadata lock of the node, which is not acquired again and is left to the caller to release.
+func (session *DecomposedFsSession) finalize(ctx context.Context, lockHeld bool) (err error) {
 	ctx, span := tracer.Start(session.Context(ctx), "Finalize")
 	defer span.End()
 
@@ -336,13 +358,18 @@ func (session *DecomposedFsSession) Finalize(ctx context.Context) (err error) {
 	}
 
 	// lock the node before reading its metadata and writing the blob
-	unlock, err := session.store.lu.MetadataBackend().Lock(n)
-	if err != nil {
-		return err
+	if lockHeld {
+		n.SetLockHeld(true)
+		defer n.SetLockHeld(false)
+	} else {
+		unlock, err := session.store.lu.MetadataBackend().Lock(n)
+		if err != nil {
+			return err
+		}
+		defer func() {
+			_ = unlock()
+		}()
 	}
-	defer func() {
-		_ = unlock()
-	}()
 
 	// Read the node attributes while holding the lock acquired above.
 	attribs, err := n.Xattrs(ctx)

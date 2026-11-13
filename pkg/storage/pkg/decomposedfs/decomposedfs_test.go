@@ -20,6 +20,10 @@ package decomposedfs_test
 
 import (
 	"context"
+	"io"
+	"os"
+	"strings"
+	"time"
 
 	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
 	"github.com/stretchr/testify/mock"
@@ -27,6 +31,7 @@ import (
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata/prefixes"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/node"
 	nodemocks "github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/node/mocks"
 	helpers "github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/testhelpers"
@@ -312,6 +317,164 @@ var _ = Describe("Decomposed", func() {
 				Expect(err).ToNot(HaveOccurred())
 				env.Blobstore.AssertNotCalled(GinkgoT(), "Delete", mock.AnythingOfType("string"))
 			})
+		})
+	})
+
+	Describe("Download", func() {
+		var (
+			fileRef *provider.Reference
+
+			deletedBlobs map[string]bool
+			openReader   = func(*provider.ResourceInfo) bool { return true }
+		)
+
+		// updateBlob changes the blob of the file like a finished upload does
+		updateBlob := func(blobID string, blobSize int64) {
+			n, err := env.Lookup.NodeFromResource(env.Ctx, fileRef)
+			Expect(err).ToNot(HaveOccurred())
+			attribs := node.Attributes{}
+			attribs.SetString(prefixes.BlobIDAttr, blobID)
+			attribs.SetInt64(prefixes.BlobsizeAttr, blobSize)
+			Expect(n.SetXattrsWithContext(env.Ctx, attribs)).To(Succeed())
+		}
+
+		expectLockReleased := func() {
+			n, err := env.Lookup.NodeFromResource(env.Ctx, fileRef)
+			Expect(err).ToNot(HaveOccurred())
+			locked := make(chan struct{})
+			go func() {
+				defer GinkgoRecover()
+				unlock, err := env.Lookup.MetadataBackend().Lock(n)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(unlock()).To(Succeed())
+				close(locked)
+			}()
+			Eventually(locked).Should(BeClosed())
+		}
+
+		JustBeforeEach(func() {
+			fileRef = &provider.Reference{ResourceId: env.SpaceRootRes, Path: "/dir1/file1"}
+			mockPermissionsByName(map[string]*provider.ResourcePermissions{
+				"file1": {Stat: true, InitiateFileDownload: true},
+			})
+
+			deletedBlobs = map[string]bool{}
+			env.Blobstore.On("Download", mock.Anything).Return(
+				func(n *node.Node) (io.ReadCloser, error) {
+					if deletedBlobs[n.BlobID] {
+						return nil, os.ErrNotExist
+					}
+					return io.NopCloser(strings.NewReader(n.BlobID)), nil
+				}, nil)
+		})
+
+		It("waits for the metadata lock of the node", func() {
+			n, err := env.Lookup.NodeFromResource(env.Ctx, fileRef)
+			Expect(err).ToNot(HaveOccurred())
+			unlock, err := env.Lookup.MetadataBackend().Lock(n)
+			Expect(err).ToNot(HaveOccurred())
+
+			done := make(chan error, 1)
+			go func() {
+				defer GinkgoRecover()
+				_, reader, err := env.Fs.Download(env.Ctx, fileRef, openReader)
+				if reader != nil {
+					_ = reader.Close()
+				}
+				done <- err
+			}()
+			Consistently(done, 300*time.Millisecond).ShouldNot(Receive())
+
+			Expect(unlock()).To(Succeed())
+			var downloadErr error
+			Eventually(done).Should(Receive(&downloadErr))
+			Expect(downloadErr).ToNot(HaveOccurred())
+		})
+
+		It("releases the metadata lock after returning the reader", func() {
+			ri, reader, err := env.Fs.Download(env.Ctx, fileRef, openReader)
+
+			Expect(err).ToNot(HaveOccurred())
+			Expect(ri.Size).To(Equal(uint64(1234)))
+			Expect(reader).ToNot(BeNil())
+			defer reader.Close()
+			expectLockReleased()
+		})
+
+		It("releases the metadata lock when the blob cannot be opened", func() {
+			deletedBlobs["file1-blobid"] = true
+
+			_, reader, err := env.Fs.Download(env.Ctx, fileRef, openReader)
+
+			Expect(err).To(HaveOccurred())
+			Expect(reader).To(BeNil())
+			expectLockReleased()
+		})
+
+		It("does not open a reader when it is not requested", func() {
+			ri, reader, err := env.Fs.Download(env.Ctx, fileRef, func(*provider.ResourceInfo) bool { return false })
+
+			Expect(err).ToNot(HaveOccurred())
+			Expect(ri).ToNot(BeNil())
+			Expect(reader).To(BeNil())
+			env.Blobstore.AssertNotCalled(GinkgoT(), "Download", mock.Anything)
+		})
+
+		It("returns too early when the node is already processing with synchronous uploads", func() {
+			n, err := env.Lookup.NodeFromResource(env.Ctx, fileRef)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(n.SetXattrString(env.Ctx, prefixes.StatusPrefix, node.ProcessingStatus+"upload-id")).To(Succeed())
+
+			_, reader, err := env.Fs.Download(env.Ctx, fileRef, openReader)
+
+			Expect(err).To(MatchError(errtypes.TooEarly("file is still being processed")))
+			Expect(reader).To(BeNil())
+		})
+
+		It("ignores the processing status set while resolving the node with synchronous uploads", func() {
+			_, reader, err := env.Fs.Download(env.Ctx, fileRef, func(*provider.ResourceInfo) bool {
+				n, err := env.Lookup.NodeFromResource(env.Ctx, fileRef)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(n.SetXattrString(env.Ctx, prefixes.StatusPrefix, node.ProcessingStatus+"upload-id")).To(Succeed())
+				return true
+			})
+
+			Expect(err).ToNot(HaveOccurred())
+			Expect(reader).ToNot(BeNil())
+			defer reader.Close()
+			expectLockReleased()
+		})
+
+		It("returns too early when the node started processing while resolving it with asynchronous uploads", func() {
+			env.Options.AsyncFileUploads = true
+			_, reader, err := env.Fs.Download(env.Ctx, fileRef, func(*provider.ResourceInfo) bool {
+				n, err := env.Lookup.NodeFromResource(env.Ctx, fileRef)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(n.SetXattrString(env.Ctx, prefixes.StatusPrefix, node.ProcessingStatus+"upload-id")).To(Succeed())
+				return true
+			})
+
+			Expect(err).To(MatchError(errtypes.TooEarly("file is still being processed")))
+			Expect(reader).To(BeNil())
+			env.Blobstore.AssertNotCalled(GinkgoT(), "Download", mock.Anything)
+			expectLockReleased()
+		})
+
+		It("serves the new blob when the blob was replaced and deleted while resolving the node", func() {
+			ri, reader, err := env.Fs.Download(env.Ctx, fileRef, func(*provider.ResourceInfo) bool {
+				updateBlob("new-blobid", 9)
+				deletedBlobs["file1-blobid"] = true
+				return true
+			})
+
+			Expect(err).ToNot(HaveOccurred())
+			Expect(ri.Size).To(Equal(uint64(9)))
+			Expect(reader).ToNot(BeNil())
+			defer reader.Close()
+			content, err := io.ReadAll(reader)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(string(content)).To(Equal("new-blobid"))
+			expectLockReleased()
 		})
 	})
 })

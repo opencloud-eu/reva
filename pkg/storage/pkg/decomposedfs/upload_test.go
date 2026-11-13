@@ -25,6 +25,9 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"path/filepath"
+	"sync"
+	"time"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	cs3permissions "github.com/cs3org/go-cs3apis/cs3/permissions/v1beta1"
@@ -611,6 +614,249 @@ var _ = Describe("File uploads", func() {
 				bs.AssertCalled(GinkgoT(), "Delete", mock.MatchedBy(func(n *node.Node) bool {
 					return n.BlobID == firstBlobID
 				}))
+			})
+
+			Context("with a download that resolved the file before it was overwritten", func() {
+				type downloadResult struct {
+					content string
+					err     error
+				}
+
+				var (
+					deletedLock  sync.Mutex
+					deletedBlobs map[string]bool
+
+					// the blob that is written while the node lock is held
+					blockedBlobID string
+					uploadErr     error
+					uploadEntered chan struct{}
+					uploadRelease chan struct{}
+
+					oldBlobID string
+					download  func(openReader func(*provider.ResourceInfo) bool) downloadResult
+				)
+
+				// newSession initiates an upload for the file and writes its content
+				newSession := func(async bool) *upload.DecomposedFsSession {
+					uploadTree := tree.New(lu, bs, o, permissions.Permissions{}, store.Create(), &zerolog.Logger{})
+					sessionStore := upload.NewSessionStore(fs, aspects.Aspects{
+						Lookup:            lu,
+						Tree:              uploadTree,
+						Permissions:       permissions.NewPermissions(pmock, permissionsSelector),
+						Trashbin:          &decomposedfs.DecomposedfsTrashbin{},
+						DisableVersioning: true,
+						UserMapper:        &usermapper.NullMapper{},
+					}, o.Root, async, o.Tokens, &zerolog.Logger{})
+
+					uploadIds, err := fs.InitiateUpload(ctx, ref, int64(len(fileContent)), map[string]string{})
+					Expect(err).ToNot(HaveOccurred())
+					session, err := sessionStore.Get(ctx, uploadIds["simple"])
+					Expect(err).ToNot(HaveOccurred())
+					_, err = session.WriteChunk(ctx, 0, bytes.NewReader(fileContent))
+					Expect(err).ToNot(HaveOccurred())
+					return session
+				}
+
+				// startDownload starts a download that resolved the node, but did not open the blob yet.
+				// The returned function lets it open the blob.
+				startDownload := func() (chan downloadResult, func()) {
+					downloadResolved := make(chan struct{})
+					downloadProceed := make(chan struct{})
+					downloadDone := make(chan downloadResult, 1)
+					go func() {
+						defer GinkgoRecover()
+						downloadDone <- download(func(*provider.ResourceInfo) bool {
+							close(downloadResolved)
+							<-downloadProceed
+							return true
+						})
+					}()
+					Eventually(downloadResolved).Should(BeClosed())
+					return downloadDone, func() { close(downloadProceed) }
+				}
+
+				expectLockReleased := func() {
+					n, err := lu.NodeFromResource(ctx, ref)
+					Expect(err).ToNot(HaveOccurred())
+					locked := make(chan struct{})
+					go func() {
+						defer GinkgoRecover()
+						unlock, err := lu.MetadataBackend().Lock(n)
+						Expect(err).ToNot(HaveOccurred())
+						Expect(unlock()).To(Succeed())
+						close(locked)
+					}()
+					Eventually(locked).Should(BeClosed())
+				}
+
+				BeforeEach(func() {
+					deletedBlobs = map[string]bool{}
+					blockedBlobID = ""
+					uploadErr = nil
+					uploadEntered = make(chan struct{})
+					uploadRelease = make(chan struct{})
+
+					bs.On("Upload", mock.Anything, mock.Anything, mock.Anything).Return(
+						func(n *node.Node, _, _ string) error {
+							if blockedBlobID == "" || n.BlobID != blockedBlobID {
+								return nil
+							}
+							close(uploadEntered)
+							<-uploadRelease
+							return uploadErr
+						})
+					bs.On("Delete", mock.Anything).Return(nil).
+						Run(func(args mock.Arguments) {
+							deletedLock.Lock()
+							defer deletedLock.Unlock()
+							deletedBlobs[args.Get(0).(*node.Node).BlobID] = true
+						})
+					bs.On("Download", mock.Anything).Return(
+						func(n *node.Node) (io.ReadCloser, error) {
+							deletedLock.Lock()
+							defer deletedLock.Unlock()
+							if deletedBlobs[n.BlobID] {
+								return nil, os.ErrNotExist
+							}
+							return io.NopCloser(bytes.NewReader([]byte(n.BlobID))), nil
+						}, nil)
+
+					pmock.On("AssemblePermissions", mock.Anything, mock.Anything).Unset()
+					pmock.On("AssemblePermissions", mock.Anything, mock.Anything).Return(&provider.ResourcePermissions{
+						Stat:                 true,
+						GetQuota:             true,
+						InitiateFileUpload:   true,
+						InitiateFileDownload: true,
+						ListContainer:        true,
+					}, nil)
+
+					download = func(openReader func(*provider.ResourceInfo) bool) downloadResult {
+						_, reader, err := fs.Download(ctx, ref, openReader)
+						if err != nil {
+							return downloadResult{err: err}
+						}
+						defer reader.Close()
+						content, err := io.ReadAll(reader)
+						return downloadResult{content: string(content), err: err}
+					}
+
+					// create the file so there is an old blob to supersede
+					uploadFile()
+					oldNode, err := lu.NodeFromResource(ctx, ref)
+					Expect(err).ToNot(HaveOccurred())
+					oldBlobID = oldNode.BlobID
+					Expect(oldBlobID).ToNot(BeEmpty())
+				})
+
+				When("the upload is finalized synchronously", func() {
+					It("serves the new blob to a download that waited for the upload", func() {
+						session := newSession(false)
+						blockedBlobID = session.ID()
+						downloadDone, proceed := startDownload()
+
+						// the upload blocks in the blobstore while holding the node lock
+						uploadDone := make(chan error, 1)
+						go func() {
+							defer GinkgoRecover()
+							uploadDone <- session.FinishUploadDecomposed(ctx)
+						}()
+						Eventually(uploadEntered).Should(BeClosed())
+
+						// the download wants to open the blob now and has to wait for the lock
+						proceed()
+						Consistently(downloadDone, 300*time.Millisecond).ShouldNot(Receive())
+						bs.AssertNotCalled(GinkgoT(), "Download", mock.Anything)
+
+						// finishing the upload deletes the old blob and releases the lock
+						close(uploadRelease)
+						var uploadResult error
+						Eventually(uploadDone).Should(Receive(&uploadResult))
+						Expect(uploadResult).ToNot(HaveOccurred())
+						bs.AssertCalled(GinkgoT(), "Delete", mock.MatchedBy(func(n *node.Node) bool {
+							return n.BlobID == oldBlobID
+						}))
+
+						// the download is served the new blob, it neither reads the deleted blob nor has to wait for Cleanup
+						var result downloadResult
+						Eventually(downloadDone).Should(Receive(&result))
+						Expect(result.err).ToNot(HaveOccurred())
+						Expect(result.content).To(Equal(session.ID()))
+
+						expectLockReleased()
+					})
+
+					It("releases the node lock when the upload fails", func() {
+						session := newSession(false)
+						blockedBlobID = session.ID()
+						uploadErr = errors.New("upload failed")
+						close(uploadRelease)
+
+						Expect(session.FinishUploadDecomposed(ctx)).To(MatchError(ContainSubstring("upload failed")))
+
+						expectLockReleased()
+					})
+
+					It("releases the node lock when the node cannot be updated for the upload", func() {
+						session := newSession(false)
+
+						// persisting the session after the node has been locked fails
+						infoPath := filepath.Join(o.Root, "uploads", session.ID()+".info")
+						Expect(os.Remove(infoPath)).To(Succeed())
+						Expect(os.MkdirAll(filepath.Join(infoPath, "blocker"), 0700)).To(Succeed())
+
+						Expect(session.FinishUploadDecomposed(ctx)).To(HaveOccurred())
+
+						expectLockReleased()
+					})
+				})
+
+				When("the upload is finalized asynchronously", func() {
+					It("returns too early to a download that waited for the upload while the file is processed", func() {
+						o.AsyncFileUploads = true
+						session := newSession(true)
+						blockedBlobID = session.ID()
+						downloadDone, proceed := startDownload()
+
+						// the upload only updates the node metadata, the lock is released again
+						Expect(session.FinishUploadDecomposed(ctx)).To(Succeed())
+
+						// finalize the upload, it blocks in the blobstore while holding the node lock
+						finalizeDone := make(chan error, 1)
+						go func() {
+							defer GinkgoRecover()
+							finalizeDone <- session.Finalize(ctx)
+						}()
+						Eventually(uploadEntered).Should(BeClosed())
+
+						// the download wants to open the blob now and has to wait for the lock
+						proceed()
+						Consistently(downloadDone, 300*time.Millisecond).ShouldNot(Receive())
+						bs.AssertNotCalled(GinkgoT(), "Download", mock.Anything)
+
+						// finishing the upload deletes the old blob and releases the lock
+						close(uploadRelease)
+						var finalizeErr error
+						Eventually(finalizeDone).Should(Receive(&finalizeErr))
+						Expect(finalizeErr).ToNot(HaveOccurred())
+						bs.AssertCalled(GinkgoT(), "Delete", mock.MatchedBy(func(n *node.Node) bool {
+							return n.BlobID == oldBlobID
+						}))
+
+						// the download neither fails because of the deleted blob nor reads it
+						var result downloadResult
+						Eventually(downloadDone).Should(Receive(&result))
+						Expect(result.err).To(MatchError(errtypes.TooEarly("file is still being processed")))
+						bs.AssertNotCalled(GinkgoT(), "Download", mock.Anything)
+
+						// after postprocessing the new blob is served
+						session.Cleanup(false, true, true, true)
+						result = download(func(*provider.ResourceInfo) bool { return true })
+						Expect(result.err).ToNot(HaveOccurred())
+						Expect(result.content).To(Equal(session.ID()))
+
+						expectLockReleased()
+					})
+				})
 			})
 		})
 	})
