@@ -174,11 +174,9 @@ func (s *service) ForwardInvite(ctx context.Context, req *invitepb.ForwardInvite
 	remoteUser, err := s.ocmClient.InviteAccepted(ctx, ocmEndpoint, &client.InviteAcceptedRequest{
 		Token:             req.InviteToken.GetToken(),
 		RecipientProvider: s.conf.ProviderDomain,
-		// The UserID is only a string here. To not lose the IDP information we use the LocalUserFederatedID encoding
-		// i.e. UserID@IDP
-		UserID: ocmuser.FormatOCMUser(user.GetId()),
-		Email:  user.GetMail(),
-		Name:   user.GetDisplayName(),
+		UserID:            user.GetId().GetOpaqueId(),
+		Email:             user.GetMail(),
+		Name:              user.GetDisplayName(),
 	})
 	if err != nil {
 		switch {
@@ -211,14 +209,12 @@ func (s *service) ForwardInvite(ctx context.Context, req *invitepb.ForwardInvite
 
 	// remoteUser.UserID is the federated ID (just a string), to get a unique CS3 userid
 	// we're using the provider domain as the IDP part of the ID
+	providerDomain := req.GetOriginSystemProvider().Domain
 	remoteUserID := &userpb.UserId{
 		Type:     userpb.UserType_USER_TYPE_FEDERATED,
-		Idp:      req.GetOriginSystemProvider().Domain,
-		OpaqueId: remoteUser.UserID,
+		Idp:      ocmuser.TrimOCMScheme(providerDomain),
+		OpaqueId: ocmuser.NormalizeRemoteUserID(remoteUser.UserID, providerDomain),
 	}
-
-	// we need to use a unique identifier for federated users
-	remoteUserID = ocmuser.LocalUserFederatedID(remoteUserID, "")
 
 	if err := s.repo.AddRemoteUser(ctx, user.Id, &userpb.User{
 		Id:          remoteUserID,
@@ -279,8 +275,7 @@ func (s *service) AcceptInvite(ctx context.Context, req *invitepb.AcceptInviteRe
 	}
 
 	remoteUser := req.GetRemoteUser()
-	// we need to use a unique identifier for federated users
-	remoteUser.Id = ocmuser.LocalUserFederatedID(remoteUser.Id, "")
+	ocmuser.CanonicalizeRemoteUserID(remoteUser.Id)
 
 	if err := s.repo.AddRemoteUser(ctx, token.GetUserId(), remoteUser); err != nil {
 		if !errors.Is(err, invite.ErrUserAlreadyAccepted) {
@@ -331,7 +326,7 @@ func (s *service) GetAcceptedUser(ctx context.Context, req *invitepb.GetAccepted
 	remoteUser, err := s.repo.GetRemoteUser(ctx, user.GetId(), req.GetRemoteUserId())
 	if err != nil {
 		return &invitepb.GetAcceptedUserResponse{
-			Status: status.NewInternal(ctx, "error fetching remote user details"),
+			Status: status.NewStatusFromErrType(ctx, "error fetching remote user details", err),
 		}, nil
 	}
 
