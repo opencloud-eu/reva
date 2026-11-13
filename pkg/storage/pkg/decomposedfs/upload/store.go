@@ -391,6 +391,10 @@ func (store DecomposedFsStore) updateExistingNode(ctx context.Context, session *
 		if err := os.Chtimes(versionPath, oldNodeMtime, oldNodeMtime); err != nil {
 			return unlock, errtypes.InternalError(fmt.Sprintf("failed to change mtime of version node: %s", err))
 		}
+	} else {
+		// with versioning disabled no revision keeps the previous content alive,
+		// remember the blob so it can be deleted once the new content is written
+		session.info.MetaData["oldBlobID"] = old.BlobID
 	}
 
 	session.info.MetaData["sizeDiff"] = strconv.FormatInt((int64(fsize) - old.Blobsize), 10)

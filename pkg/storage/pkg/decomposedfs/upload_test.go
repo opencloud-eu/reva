@@ -46,6 +46,8 @@ import (
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/permissions/mocks"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/timemanager"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/tree"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/upload"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/usermapper"
 	"github.com/opencloud-eu/reva/v2/pkg/storagespace"
 	"github.com/opencloud-eu/reva/v2/pkg/store"
 	"github.com/opencloud-eu/reva/v2/tests/helpers"
@@ -433,5 +435,183 @@ var _ = Describe("File uploads", func() {
 			Expect(file.IsProcessing(ctx)).To(BeFalse())
 		})
 
+	})
+
+	Context("when overwriting a file", func() {
+		var (
+			uploadFile  func()
+			fileContent []byte
+		)
+
+		BeforeEach(func() {
+			pmock.On("AssemblePermissions", mock.Anything, mock.Anything).Return(&provider.ResourcePermissions{
+				Stat:               true,
+				GetQuota:           true,
+				InitiateFileUpload: true,
+				ListContainer:      true,
+			}, nil)
+
+			fileContent = []byte("0123456789")
+			uploadFile = func() {
+				uploadIds, err := fs.InitiateUpload(ctx, ref, int64(len(fileContent)), map[string]string{})
+				Expect(err).ToNot(HaveOccurred())
+
+				_, err = fs.Upload(ctx, storage.UploadRequest{
+					Ref:    &provider.Reference{Path: "/" + uploadIds["simple"]},
+					Body:   io.NopCloser(bytes.NewReader(fileContent)),
+					Length: int64(len(fileContent)),
+				}, nil)
+				Expect(err).ToNot(HaveOccurred())
+			}
+		})
+
+		Context("with versioning enabled", func() {
+			It("keeps the previous blob", func() {
+				bs.On("Upload", mock.Anything, mock.Anything, mock.Anything).Return(nil)
+
+				uploadFile()
+				uploadFile()
+
+				bs.AssertNumberOfCalls(GinkgoT(), "Upload", 2)
+				bs.AssertNotCalled(GinkgoT(), "Delete", mock.Anything)
+			})
+		})
+
+		Context("with versioning disabled", func() {
+			BeforeEach(func() {
+				tree := tree.New(lu, bs, o, permissions.Permissions{}, store.Create(), &zerolog.Logger{})
+				var err error
+				fs, err = decomposedfs.New(o, aspects.Aspects{
+					Lookup:            lu,
+					Tree:              tree,
+					Permissions:       permissions.NewPermissions(pmock, permissionsSelector),
+					Trashbin:          &decomposedfs.DecomposedfsTrashbin{},
+					DisableVersioning: true,
+				}, &zerolog.Logger{})
+				Expect(err).ToNot(HaveOccurred())
+			})
+
+			It("deletes the previous blob", func() {
+				var firstBlobID string
+
+				bs.On("Upload", mock.Anything, mock.Anything, mock.Anything).Return(nil).
+					Run(func(args mock.Arguments) {
+						if firstBlobID == "" {
+							firstBlobID = args.Get(0).(*node.Node).BlobID
+						}
+					})
+				bs.On("Delete", mock.Anything).Return(nil)
+
+				uploadFile()
+				uploadFile()
+
+				Expect(firstBlobID).ToNot(BeEmpty())
+				bs.AssertNumberOfCalls(GinkgoT(), "Upload", 2)
+				bs.AssertCalled(GinkgoT(), "Delete", mock.MatchedBy(func(n *node.Node) bool {
+					return n.BlobID == firstBlobID
+				}))
+			})
+
+			It("keeps the previous blob when finalizing fails", func() {
+				var firstBlobID string
+
+				bs.On("Upload", mock.Anything, mock.Anything, mock.Anything).Return(nil).Once().
+					Run(func(args mock.Arguments) {
+						firstBlobID = args.Get(0).(*node.Node).BlobID
+					})
+
+				uploadFile()
+
+				bs.On("Upload", mock.Anything, mock.Anything, mock.Anything).Return(errors.New("blobstore failure"))
+
+				uploadIds, err := fs.InitiateUpload(ctx, ref, int64(len(fileContent)), map[string]string{})
+				Expect(err).ToNot(HaveOccurred())
+
+				_, err = fs.Upload(ctx, storage.UploadRequest{
+					Ref:    &provider.Reference{Path: "/" + uploadIds["simple"]},
+					Body:   io.NopCloser(bytes.NewReader(fileContent)),
+					Length: int64(len(fileContent)),
+				}, nil)
+				Expect(err).To(HaveOccurred())
+				// the failure comes from writing the new blob, i.e. after the node metadata was updated
+				bs.AssertNumberOfCalls(GinkgoT(), "Upload", 2)
+
+				Expect(firstBlobID).ToNot(BeEmpty())
+				bs.AssertNotCalled(GinkgoT(), "Delete", mock.MatchedBy(func(n *node.Node) bool {
+					return n.BlobID == firstBlobID
+				}))
+			})
+
+			It("does not leave a revision behind when an older upload finalizes after a newer one", func() {
+				var firstBlobID string
+
+				bs.On("Upload", mock.Anything, mock.Anything, mock.Anything).Return(nil).
+					Run(func(args mock.Arguments) {
+						if firstBlobID == "" {
+							firstBlobID = args.Get(0).(*node.Node).BlobID
+						}
+					})
+				bs.On("Delete", mock.Anything).Return(nil)
+
+				// create the file so there is an original blob to supersede
+				uploadFile()
+
+				// the test fs' tree is built with zero-value permissions, so use a tree that can list revisions
+				revpermock := &mocks.PermissionsChecker{}
+				revpermock.On("AssemblePermissions", mock.Anything, mock.Anything).Return(&provider.ResourcePermissions{
+					Stat:             true,
+					ListFileVersions: true,
+				}, nil)
+				uploadTree := tree.New(lu, bs, o, permissions.NewPermissions(revpermock, permissionsSelector), store.Create(), &zerolog.Logger{})
+
+				sessionStore := upload.NewSessionStore(fs, aspects.Aspects{
+					Lookup:            lu,
+					Tree:              uploadTree,
+					Permissions:       permissions.NewPermissions(pmock, permissionsSelector),
+					Trashbin:          &decomposedfs.DecomposedfsTrashbin{},
+					DisableVersioning: true,
+					UserMapper:        &usermapper.NullMapper{},
+				}, o.Root, true, o.Tokens, &zerolog.Logger{})
+
+				// start an async upload that is not finalized yet: it updates the node metadata but does not write the blob
+				startUpload := func() *upload.DecomposedFsSession {
+					uploadIds, err := fs.InitiateUpload(ctx, ref, int64(len(fileContent)), map[string]string{})
+					Expect(err).ToNot(HaveOccurred())
+
+					session, err := sessionStore.Get(ctx, uploadIds["simple"])
+					Expect(err).ToNot(HaveOccurred())
+
+					_, err = session.WriteChunk(ctx, 0, bytes.NewReader(fileContent))
+					Expect(err).ToNot(HaveOccurred())
+
+					Expect(session.FinishUploadDecomposed(ctx)).To(Succeed())
+					return session
+				}
+
+				sessionA := startUpload()
+				sessionB := startUpload()
+
+				// the older upload is superseded by the newer one and must be dropped
+				Expect(sessionA.Finalize(ctx)).To(Succeed())
+				bs.AssertNotCalled(GinkgoT(), "Upload", mock.MatchedBy(func(n *node.Node) bool {
+					return n.BlobID == sessionA.ID()
+				}))
+
+				Expect(sessionB.Finalize(ctx)).To(Succeed())
+
+				revisions, err := uploadTree.ListRevisions(ctx, ref)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(revisions).To(BeEmpty())
+
+				n, err := lu.NodeFromResource(ctx, ref)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(n.BlobID).To(Equal(sessionB.ID()))
+
+				Expect(firstBlobID).ToNot(BeEmpty())
+				bs.AssertCalled(GinkgoT(), "Delete", mock.MatchedBy(func(n *node.Node) bool {
+					return n.BlobID == firstBlobID
+				}))
+			})
+		})
 	})
 })
