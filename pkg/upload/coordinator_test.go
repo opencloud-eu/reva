@@ -3,6 +3,7 @@ package upload
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -254,6 +255,46 @@ var _ = Describe("coordinator", func() {
 			})
 		})
 
+		Context("when PrepareUpload stores the bytes itself", func() {
+			BeforeEach(func() {
+				fs.prepared = &storage.PrepareUploadResult{Committed: true}
+			})
+
+			It("hands PrepareUpload the staged bytes", func() {
+				session := newSession(true)
+
+				_, err := c.finishUpload(ctx, session)
+
+				Expect(err).ToNot(HaveOccurred())
+				Expect(fs.prepareInfo.Source).ToNot(BeNil())
+				Expect(fs.prepareInfo.Source.Path).To(Equal(session.BinPath()))
+				Expect(fs.prepareInfo.Source.Length).To(Equal(int64(bodyLen)))
+			})
+
+			It("neither commits nor unmarks the node", func() {
+				session := newSession(true)
+
+				ri, err := c.finishUpload(ctx, session)
+
+				Expect(err).ToNot(HaveOccurred())
+				Expect(ri.GetEtag()).To(Equal("etag-after-commit"))
+				Expect(fs.calls).To(Equal([]string{
+					"PrepareUpload(size=17)",
+					"GetMD()",
+				}))
+			})
+
+			It("removes the session", func() {
+				session := newSession(true)
+
+				_, err := c.finishUpload(ctx, session)
+				Expect(err).ToNot(HaveOccurred())
+
+				_, err = store.Get(ctx, session.ID())
+				Expect(err).To(HaveOccurred())
+			})
+		})
+
 		// PrepareUpload undoes its own writes, purges a new file's node and marks the
 		// node only on success, so the coordinator has nothing to roll back or unmark.
 		Context("when PrepareUpload fails", func() {
@@ -312,6 +353,24 @@ var _ = Describe("coordinator", func() {
 					"RollbackUpload(nodeExisted=true,sizeDiff=17)",
 					"MarkProcessing(false)",
 				}))
+			})
+		})
+
+		Context("when PrepareUpload cannot store the bytes", func() {
+			// Nothing was written, but the staged bytes are the only copy of the
+			// upload and the failure may be transient, like a failed commit.
+			It("keeps the session and marks it failed", func() {
+				session := newSession(true)
+				fs.prepareErr = fmt.Errorf("%w: blobstore unavailable", storage.ErrSourceNotStored)
+
+				_, err := c.finishUpload(ctx, session)
+
+				Expect(err).To(MatchError(storage.ErrSourceNotStored))
+				Expect(session.BinPath()).To(BeAnExistingFile())
+				kept, getErr := store.Get(ctx, session.ID())
+				Expect(getErr).ToNot(HaveOccurred())
+				Expect(kept.Status()).To(Equal(SessionStatusFailed))
+				Expect(fs.calls).To(Equal([]string{"PrepareUpload(size=17)"}))
 			})
 		})
 

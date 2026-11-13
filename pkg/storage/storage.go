@@ -20,6 +20,7 @@ package storage
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net/url"
 	"time"
@@ -41,6 +42,11 @@ type UploadChecksums struct {
 	Adler32 []byte
 }
 
+// ErrSourceNotStored is wrapped by the error PrepareUpload returns when it could
+// not store UploadInfo.Source. The node is unchanged and the staged bytes are
+// still the only copy of the upload.
+var ErrSourceNotStored = errors.New("could not store the upload source")
+
 type UploadInfo struct {
 	NodeExisted       bool // true when the target node existed before the upload started
 	Size              int64
@@ -53,12 +59,20 @@ type UploadInfo struct {
 	// leaves a missing node NotFound.
 	ParentID string
 	Name     string
+	// Source carries the staged bytes when the upload is finished right away,
+	// without postprocessing. A driver that can store them before the node
+	// points to them does so, leaves the node unmarked and reports Committed.
+	// Any other driver ignores it and gets CommitUpload as usual.
+	Source *UploadSource
 }
 
 type PrepareUploadResult struct {
 	VersionCreated bool
 	SizeDiff       int64
 	SpaceOwner     *userpb.UserId // the space owner or a manager, for a new node; nil keeps the one already known
+	// Committed reports that PrepareUpload stored UploadInfo.Source: the upload
+	// is complete, and neither CommitUpload nor MarkProcessing must follow.
+	Committed bool
 }
 
 // RollbackInfo carries what a driver needs to undo PrepareUpload. NodeID and
