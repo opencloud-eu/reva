@@ -131,3 +131,22 @@ func assertPanic(t *testing.T, f func()) {
 	}()
 	f()
 }
+
+func TestGlob(t *testing.T) {
+	for tpl, want := range map[string]string{
+		"users/{{.User.Id.OpaqueId}}":                                           "users/*",
+		"{{.SpaceType}}/{{.SpaceName}}/{{.SpaceId}}":                            "*/*/*",
+		"{{.SpaceType}}/{{.User.Username}}-{{.SpaceId}}":                        "*/*",
+		`shared/{{.SpaceName | replace " " "-" | lower}}`:                       "shared/*",
+		"users/[old]/{{.User.Username}}?":                                       `users/\[old]/*`,
+		"users/{{if .User.Mail}}mail-{{else}}user-{{end}}{{.User.Id.OpaqueId}}": "users/*",
+		`{{.SpaceType}}/{{.SpaceName | replace "/" "-"}}`:                       "*/*",
+		"users/[old]/x?": `users/\[old]/x\?`,
+		"/storage/users": "/storage/users",
+		"users/{{.User.Username}}/../{{.User.Id.OpaqueId}}": "users/*",
+	} {
+		if got := Glob(tpl); got != want {
+			t.Errorf("Glob(%q) = %q, want %q", tpl, got, want)
+		}
+	}
+}
