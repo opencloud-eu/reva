@@ -1771,6 +1771,25 @@ func (n *Node) deleteRevision(ctx context.Context, revisionID string) (string, e
 	return blobID, nil
 }
 
+// PurgeOnRestoreAttr marks a revision kept for an upload that created the file and was
+// rolled back while a newer upload was processing: restoring it removes the file.
+var PurgeOnRestoreAttr = prefixes.OcPrefix + "purgeonrestore"
+
+// UploadSnapshotAttr marks a revision PrepareUpload kept with versioning disabled, only so
+// that a rollback can hand the node back to the upload it superseded. It is not a version.
+var UploadSnapshotAttr = prefixes.OcPrefix + "uploadsnapshot"
+
+// KeptForRollback reports whether a revision exists only for a rollback, rather than as a
+// version (see PurgeOnRestoreAttr and UploadSnapshotAttr).
+func KeptForRollback(ctx context.Context, backend metadata.Backend, revision metadata.MetadataNode) bool {
+	for _, attr := range []string{PurgeOnRestoreAttr, UploadSnapshotAttr} {
+		if _, err := backend.Get(ctx, revision, attr); err == nil {
+			return true
+		}
+	}
+	return false
+}
+
 // RevertLatestRevision reverts the upload that created the node's latest
 // revision: the revision is restored onto the node and removed. Unlike
 // DeleteRevision it neither purges the node when there is no revision nor

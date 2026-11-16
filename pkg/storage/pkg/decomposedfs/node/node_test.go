@@ -21,6 +21,7 @@ package node_test
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
@@ -89,6 +90,26 @@ var _ = Describe("Node", func() {
 			n, err := node.ReadNode(env.Ctx, env.Lookup, lookupNode.SpaceID, lookupNode.ID, "", false, nil, false)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(n.BlobID).To(Equal("file1-blobid"))
+		})
+	})
+
+	Describe("KeptForRollback", func() {
+		It("tells revisions kept only for a rollback from versions", func() {
+			file, err := env.Lookup.NodeFromResource(env.Ctx, &provider.Reference{ResourceId: env.SpaceRootRes, Path: "./dir1/file1"})
+			Expect(err).ToNot(HaveOccurred())
+			backend := env.Lookup.MetadataBackend()
+			for i, attr := range []string{"", node.UploadSnapshotAttr, node.PurgeOnRestoreAttr} {
+				key := fmt.Sprintf("2024-01-0%dT00:00:00Z", i+1)
+				_, err := env.Tree.CreateRevision(env.Ctx, file, key)
+				Expect(err).ToNot(HaveOccurred())
+				revision := node.NewBaseNode(file.SpaceID, file.ID+node.RevisionIDDelimiter+key, env.Lookup)
+				if attr == "" {
+					Expect(node.KeptForRollback(env.Ctx, backend, revision)).To(BeFalse(), "a version")
+					continue
+				}
+				Expect(backend.Set(env.Ctx, revision, attr, []byte("1"))).To(Succeed())
+				Expect(node.KeptForRollback(env.Ctx, backend, revision)).To(BeTrue(), attr)
+			}
 		})
 	})
 
