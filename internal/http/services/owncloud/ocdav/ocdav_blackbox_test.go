@@ -1136,6 +1136,7 @@ var _ = Describe("ocdav", func() {
 				handler.Handler().ServeHTTP(rr, req)
 				Expect(rr).To(HaveHTTPStatus(http.StatusForbidden))
 				Expect(rr.Body.String()).To(ContainSubstring("Sabre\\DAV\\Exception\\Forbidden"))
+				client.AssertNotCalled(GinkgoT(), "InitiateFileUpload", mock.Anything, mock.Anything)
 			})
 
 			It("answers 425 without a body while the source is still being processed", func() {
@@ -1144,6 +1145,7 @@ var _ = Describe("ocdav", func() {
 				handler.Handler().ServeHTTP(rr, req)
 				Expect(rr).To(HaveHTTPStatus(http.StatusTooEarly))
 				Expect(rr.Body.String()).To(BeEmpty())
+				client.AssertNotCalled(GinkgoT(), "InitiateFileUpload", mock.Anything, mock.Anything)
 			})
 
 			It("fails with 500 on other download errors", func() {
@@ -1220,6 +1222,7 @@ var _ = Describe("ocdav", func() {
 				Expect(rr.Body.String()).To(BeEmpty())
 				Expect(downloads.Load()).To(Equal(int32(1)))
 				client.AssertNumberOfCalls(GinkgoT(), "InitiateFileDownload", 1)
+				client.AssertNotCalled(GinkgoT(), "InitiateFileUpload", mock.Anything, mock.Anything)
 			})
 		})
 	})
@@ -1430,6 +1433,7 @@ var _ = Describe("ocdav", func() {
 				handler.Handler().ServeHTTP(rr, req)
 				Expect(rr).To(HaveHTTPStatus(http.StatusForbidden))
 				Expect(rr.Body.String()).To(ContainSubstring("Sabre\\DAV\\Exception\\Forbidden"))
+				client.AssertNotCalled(GinkgoT(), "InitiateFileUpload", mock.Anything, mock.Anything)
 			})
 
 			It("answers 425 without a body while the source is still being processed", func() {
@@ -1438,6 +1442,7 @@ var _ = Describe("ocdav", func() {
 				handler.Handler().ServeHTTP(rr, req)
 				Expect(rr).To(HaveHTTPStatus(http.StatusTooEarly))
 				Expect(rr.Body.String()).To(BeEmpty())
+				client.AssertNotCalled(GinkgoT(), "InitiateFileUpload", mock.Anything, mock.Anything)
 			})
 		})
 
@@ -1508,6 +1513,7 @@ var _ = Describe("ocdav", func() {
 				Expect(rr.Body.String()).To(BeEmpty())
 				Expect(downloads.Load()).To(Equal(int32(1)))
 				client.AssertNumberOfCalls(GinkgoT(), "InitiateFileDownload", 1)
+				client.AssertNotCalled(GinkgoT(), "InitiateFileUpload", mock.Anything, mock.Anything)
 			})
 		})
 	})

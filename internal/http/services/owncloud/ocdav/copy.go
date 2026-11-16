@@ -252,7 +252,38 @@ func (s *svc) executePathCopy(ctx context.Context, selector pool.Selectable[gate
 			}
 		}
 
-		// 2. get upload url
+		// 2. do download
+
+		httpDownloadReq, err := rhttp.NewRequest(ctx, "GET", downloadEP, nil)
+		if err != nil {
+			return err
+		}
+		httpDownloadReq.Header.Set(datagateway.TokenTransportHeader, downloadToken)
+
+		httpDownloadRes, err := s.client.Do(httpDownloadReq)
+		if err != nil {
+			return err
+		}
+		defer httpDownloadRes.Body.Close()
+		switch httpDownloadRes.StatusCode {
+		case http.StatusForbidden:
+			w.WriteHeader(http.StatusForbidden)
+			b, err := errors.Marshal(http.StatusForbidden, http.StatusText(http.StatusForbidden), "", strconv.Itoa(http.StatusForbidden))
+			errors.HandleWebdavError(log, w, b, err)
+			return errResponseWritten
+		case http.StatusTooEarly:
+			// the file is still being processed and can't be copied yet; like GET, MOVE
+			// and DELETE in that case, answer with the status only
+			w.WriteHeader(http.StatusTooEarly)
+			return errResponseWritten
+		case http.StatusOK:
+			// ok
+		default:
+			return fmt.Errorf("status code %d", httpDownloadRes.StatusCode)
+		}
+
+		// 3. get upload url, only once the download succeeded, so that a failed
+		// download leaves no unused upload session behind
 
 		uReq := &provider.InitiateFileUploadRequest{
 			Ref: cp.destination,
@@ -295,36 +326,6 @@ func (s *svc) executePathCopy(ctx context.Context, selector pool.Selectable[gate
 			if p.Protocol == "tus" {
 				uploadEP, uploadToken = p.UploadEndpoint, p.Token
 			}
-		}
-
-		// 3. do download
-
-		httpDownloadReq, err := rhttp.NewRequest(ctx, "GET", downloadEP, nil)
-		if err != nil {
-			return err
-		}
-		httpDownloadReq.Header.Set(datagateway.TokenTransportHeader, downloadToken)
-
-		httpDownloadRes, err := s.client.Do(httpDownloadReq)
-		if err != nil {
-			return err
-		}
-		defer httpDownloadRes.Body.Close()
-		switch httpDownloadRes.StatusCode {
-		case http.StatusForbidden:
-			w.WriteHeader(http.StatusForbidden)
-			b, err := errors.Marshal(http.StatusForbidden, http.StatusText(http.StatusForbidden), "", strconv.Itoa(http.StatusForbidden))
-			errors.HandleWebdavError(log, w, b, err)
-			return errResponseWritten
-		case http.StatusTooEarly:
-			// the file is still being processed and can't be copied yet; like GET, MOVE
-			// and DELETE in that case, answer with the status only
-			w.WriteHeader(http.StatusTooEarly)
-			return errResponseWritten
-		case http.StatusOK:
-			// ok
-		default:
-			return fmt.Errorf("status code %d", httpDownloadRes.StatusCode)
 		}
 
 		// 4. do upload
@@ -479,7 +480,39 @@ func (s *svc) executeSpacesCopy(ctx context.Context, w http.ResponseWriter, sele
 				downloadEP, downloadToken = p.DownloadEndpoint, p.Token
 			}
 		}
-		// 2. get upload url
+		// 2. do download
+		httpDownloadReq, err := rhttp.NewRequest(ctx, http.MethodGet, downloadEP, nil)
+		if err != nil {
+			return err
+		}
+		if downloadToken != "" {
+			httpDownloadReq.Header.Set(datagateway.TokenTransportHeader, downloadToken)
+		}
+
+		httpDownloadRes, err := s.client.Do(httpDownloadReq)
+		if err != nil {
+			return err
+		}
+		defer httpDownloadRes.Body.Close()
+		switch httpDownloadRes.StatusCode {
+		case http.StatusForbidden:
+			w.WriteHeader(http.StatusForbidden)
+			b, err := errors.Marshal(http.StatusForbidden, http.StatusText(http.StatusForbidden), "", strconv.Itoa(http.StatusForbidden))
+			errors.HandleWebdavError(log, w, b, err)
+			return errResponseWritten
+		case http.StatusTooEarly:
+			// the file is still being processed and can't be copied yet; like GET, MOVE
+			// and DELETE in that case, answer with the status only
+			w.WriteHeader(http.StatusTooEarly)
+			return errResponseWritten
+		case http.StatusOK:
+			// ok
+		default:
+			return fmt.Errorf("status code %d", httpDownloadRes.StatusCode)
+		}
+
+		// 3. get upload url, only once the download succeeded, so that a failed
+		// download leaves no unused upload session behind
 		uReq := &provider.InitiateFileUploadRequest{
 			Ref: cp.destination,
 			Opaque: &typespb.Opaque{
@@ -522,37 +555,6 @@ func (s *svc) executeSpacesCopy(ctx context.Context, w http.ResponseWriter, sele
 			if p.Protocol == "tus" {
 				uploadEP, uploadToken = p.UploadEndpoint, p.Token
 			}
-		}
-
-		// 3. do download
-		httpDownloadReq, err := rhttp.NewRequest(ctx, http.MethodGet, downloadEP, nil)
-		if err != nil {
-			return err
-		}
-		if downloadToken != "" {
-			httpDownloadReq.Header.Set(datagateway.TokenTransportHeader, downloadToken)
-		}
-
-		httpDownloadRes, err := s.client.Do(httpDownloadReq)
-		if err != nil {
-			return err
-		}
-		defer httpDownloadRes.Body.Close()
-		switch httpDownloadRes.StatusCode {
-		case http.StatusForbidden:
-			w.WriteHeader(http.StatusForbidden)
-			b, err := errors.Marshal(http.StatusForbidden, http.StatusText(http.StatusForbidden), "", strconv.Itoa(http.StatusForbidden))
-			errors.HandleWebdavError(log, w, b, err)
-			return errResponseWritten
-		case http.StatusTooEarly:
-			// the file is still being processed and can't be copied yet; like GET, MOVE
-			// and DELETE in that case, answer with the status only
-			w.WriteHeader(http.StatusTooEarly)
-			return errResponseWritten
-		case http.StatusOK:
-			// ok
-		default:
-			return fmt.Errorf("status code %d", httpDownloadRes.StatusCode)
 		}
 
 		// 4. do upload
