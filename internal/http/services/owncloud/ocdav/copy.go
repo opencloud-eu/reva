@@ -20,6 +20,7 @@ package ocdav
 
 import (
 	"context"
+	stderrors "errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -52,6 +53,12 @@ type copy struct {
 	depth       net.Depth
 	successCode int
 }
+
+// errResponseWritten is returned by executePathCopy and executeSpacesCopy when they
+// have already written the error response, e.g. a 425 for a file that is still being
+// processed. It stops the copy of the remaining children of a folder, and tells the
+// handler not to write a status of its own.
+var errResponseWritten = stderrors.New("copy: error response already written")
 
 func (s *svc) handlePathCopy(w http.ResponseWriter, r *http.Request, ns string) {
 	ctx, span := appctx.GetTracerProvider(r.Context()).Tracer(tracerName).Start(r.Context(), "copy")
@@ -134,8 +141,11 @@ func (s *svc) handlePathCopy(w http.ResponseWriter, r *http.Request, ns string) 
 	}
 
 	if err := s.executePathCopy(ctx, s.gatewaySelector, w, r, cp); err != nil {
-		sublog.Error().Err(err).Str("depth", cp.depth.String()).Msg("error executing path copy")
-		w.WriteHeader(http.StatusInternalServerError)
+		if !stderrors.Is(err, errResponseWritten) {
+			sublog.Error().Err(err).Str("depth", cp.depth.String()).Msg("error executing path copy")
+			w.WriteHeader(http.StatusInternalServerError)
+		}
+		return
 	}
 	w.WriteHeader(cp.successCode)
 }
@@ -166,6 +176,7 @@ func (s *svc) executePathCopy(ctx context.Context, selector pool.Selectable[gate
 				m := fmt.Sprintf("Permission denied to create %v", createReq.Ref.Path)
 				b, err := errors.Marshal(http.StatusForbidden, m, "", "")
 				errors.HandleWebdavError(log, w, b, err)
+				return errResponseWritten
 			}
 			return nil
 		}
@@ -186,7 +197,7 @@ func (s *svc) executePathCopy(ctx context.Context, selector pool.Selectable[gate
 		}
 		if res.Status.Code != rpc.Code_CODE_OK {
 			w.WriteHeader(http.StatusInternalServerError)
-			return nil
+			return errResponseWritten
 		}
 
 		for i := range res.Infos {
@@ -273,10 +284,10 @@ func (s *svc) executePathCopy(ctx context.Context, selector pool.Selectable[gate
 				m := fmt.Sprintf("Permissions denied to create %v", uReq.Ref.Path)
 				b, err := errors.Marshal(http.StatusForbidden, m, "", "")
 				errors.HandleWebdavError(log, w, b, err)
-				return nil
+				return errResponseWritten
 			}
 			errors.HandleErrorStatus(log, w, uRes.Status)
-			return nil
+			return errResponseWritten
 		}
 
 		var uploadEP, uploadToken string
@@ -304,12 +315,12 @@ func (s *svc) executePathCopy(ctx context.Context, selector pool.Selectable[gate
 			w.WriteHeader(http.StatusForbidden)
 			b, err := errors.Marshal(http.StatusForbidden, http.StatusText(http.StatusForbidden), "", strconv.Itoa(http.StatusForbidden))
 			errors.HandleWebdavError(log, w, b, err)
-			return nil
+			return errResponseWritten
 		case http.StatusTooEarly:
 			// the file is still being processed and can't be copied yet; like GET, MOVE
 			// and DELETE in that case, answer with the status only
 			w.WriteHeader(http.StatusTooEarly)
-			return nil
+			return errResponseWritten
 		case http.StatusOK:
 			// ok
 		default:
@@ -369,8 +380,11 @@ func (s *svc) handleSpacesCopy(w http.ResponseWriter, r *http.Request, spaceID s
 
 	err = s.executeSpacesCopy(ctx, w, s.gatewaySelector, cp)
 	if err != nil {
-		sublog.Error().Err(err).Str("depth", cp.depth.String()).Msg("error descending directory")
-		w.WriteHeader(http.StatusInternalServerError)
+		if !stderrors.Is(err, errResponseWritten) {
+			sublog.Error().Err(err).Str("depth", cp.depth.String()).Msg("error descending directory")
+			w.WriteHeader(http.StatusInternalServerError)
+		}
+		return
 	}
 	w.WriteHeader(cp.successCode)
 }
@@ -402,6 +416,7 @@ func (s *svc) executeSpacesCopy(ctx context.Context, w http.ResponseWriter, sele
 				m := fmt.Sprintf("Permission denied to create %v", createReq.Ref.Path)
 				b, err := errors.Marshal(http.StatusForbidden, m, "", "")
 				errors.HandleWebdavError(log, w, b, err)
+				return errResponseWritten
 			}
 			return nil
 		}
@@ -420,7 +435,7 @@ func (s *svc) executeSpacesCopy(ctx context.Context, w http.ResponseWriter, sele
 		}
 		if res.Status.Code != rpc.Code_CODE_OK {
 			w.WriteHeader(http.StatusInternalServerError)
-			return nil
+			return errResponseWritten
 		}
 
 		for i := range res.Infos {
@@ -496,10 +511,10 @@ func (s *svc) executeSpacesCopy(ctx context.Context, w http.ResponseWriter, sele
 				m := fmt.Sprintf("Permissions denied to create %v", uReq.Ref.Path)
 				b, err := errors.Marshal(http.StatusForbidden, m, "", "")
 				errors.HandleWebdavError(log, w, b, err)
-				return nil
+				return errResponseWritten
 			}
 			errors.HandleErrorStatus(log, w, uRes.Status)
-			return nil
+			return errResponseWritten
 		}
 
 		var uploadEP, uploadToken string
@@ -528,12 +543,12 @@ func (s *svc) executeSpacesCopy(ctx context.Context, w http.ResponseWriter, sele
 			w.WriteHeader(http.StatusForbidden)
 			b, err := errors.Marshal(http.StatusForbidden, http.StatusText(http.StatusForbidden), "", strconv.Itoa(http.StatusForbidden))
 			errors.HandleWebdavError(log, w, b, err)
-			return nil
+			return errResponseWritten
 		case http.StatusTooEarly:
 			// the file is still being processed and can't be copied yet; like GET, MOVE
 			// and DELETE in that case, answer with the status only
 			w.WriteHeader(http.StatusTooEarly)
-			return nil
+			return errResponseWritten
 		case http.StatusOK:
 			// ok
 		default:
