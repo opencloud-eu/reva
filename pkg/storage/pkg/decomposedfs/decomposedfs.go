@@ -59,6 +59,7 @@ import (
 	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/node"
 	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/options"
 	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/permissions"
+	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/revisioncleanup"
 	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/spaceidindex"
 	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/timemanager"
 	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/trashbin"
@@ -105,6 +106,10 @@ type Decomposedfs struct {
 	// separateBlobs is set when the blobstore keeps blobs apart from the nodes
 	separateBlobs bool
 
+	// deletes old revisions after uploads and restores created new ones, disabled
+	// without a strategy, see aspects.Aspects.
+	revisionsCleanup *revisioncleanup.Cleaner
+
 	UserCache       *ttlcache.Cache
 	userSpaceIndex  *spaceidindex.Index
 	groupSpaceIndex *spaceidindex.Index
@@ -145,6 +150,13 @@ func NewDefault(m map[string]interface{}, bs node.Blobstore, es events.Stream, l
 	}
 	p := permissions.NewPermissions(node.NewPermissions(lu), permissionsSelector)
 
+	// fail at startup on an invalid strategy rather than silently keeping or deleting
+	// revisions the admin did not expect. The posix driver does the same in tree.New.
+	revisionsCleanup, err := revisioncleanup.New(o.RevisionsCleanupStrategy)
+	if err != nil {
+		return nil, errors.Wrap(err, "invalid revisions cleanup strategy")
+	}
+
 	tp := tree.New(lu, bs, o, p, store.Create(
 		store.Store(o.IDCache.Store),
 		store.TTL(o.IDCache.TTL),
@@ -160,12 +172,13 @@ func NewDefault(m map[string]interface{}, bs node.Blobstore, es events.Stream, l
 	), log)
 
 	aspects := aspects.Aspects{
-		Lookup:        lu,
-		Tree:          tp,
-		Permissions:   p,
-		EventStream:   es,
-		Trashbin:      &DecomposedfsTrashbin{},
-		SeparateBlobs: true,
+		Lookup:           lu,
+		Tree:             tp,
+		Permissions:      p,
+		EventStream:      es,
+		Trashbin:         &DecomposedfsTrashbin{},
+		SeparateBlobs:    true,
+		RevisionsCleanup: revisionsCleanup,
 	}
 
 	return New(o, aspects, log)
@@ -221,20 +234,21 @@ func New(o *options.Options, aspects aspects.Aspects, log *zerolog.Logger) (stor
 	}
 
 	fs := &Decomposedfs{
-		tp:              aspects.Tree,
-		lu:              aspects.Lookup,
-		trashbin:        aspects.Trashbin,
-		o:               o,
-		p:               aspects.Permissions,
-		um:              aspects.UserMapper,
-		stream:          aspects.EventStream,
-		separateBlobs:   aspects.SeparateBlobs,
-		UserCache:       ttlcache.NewCache(),
-		userSpaceIndex:  userSpaceIndex,
-		groupSpaceIndex: groupSpaceIndex,
-		mailSpaceIndex:  mailSpaceIndex,
-		spaceTypeIndex:  spaceTypeIndex,
-		log:             log,
+		tp:               aspects.Tree,
+		lu:               aspects.Lookup,
+		trashbin:         aspects.Trashbin,
+		o:                o,
+		p:                aspects.Permissions,
+		um:               aspects.UserMapper,
+		stream:           aspects.EventStream,
+		separateBlobs:    aspects.SeparateBlobs,
+		UserCache:        ttlcache.NewCache(),
+		revisionsCleanup: aspects.RevisionsCleanup,
+		userSpaceIndex:   userSpaceIndex,
+		groupSpaceIndex:  groupSpaceIndex,
+		mailSpaceIndex:   mailSpaceIndex,
+		spaceTypeIndex:   spaceTypeIndex,
+		log:              log,
 	}
 	if err = fs.trashbin.Setup(fs); err != nil {
 		return nil, err

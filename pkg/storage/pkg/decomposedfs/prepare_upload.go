@@ -76,6 +76,8 @@ func (fs *Decomposedfs) PrepareUpload(ctx context.Context, ref *provider.Referen
 		inline   = info.Source != nil && (info.Source.Path != "" || info.Source.Body != nil) && fs.separateBlobs
 		stored   bool
 		switched bool
+		// set once an upload finished right here created a revision, see below
+		cleanupRevisions bool
 	)
 	blob := node.New(n.SpaceID, n.ID, "", "", info.Size, sessionID, provider.ResourceType_RESOURCE_TYPE_FILE, nil, fs.lu)
 	storeBlob := func() error {
@@ -113,6 +115,16 @@ func (fs *Decomposedfs) PrepareUpload(ctx context.Context, ref *provider.Referen
 		}
 		if err := n.Purge(ctx); err != nil {
 			appctx.GetLogger(ctx).Error().Err(err).Str("nodeid", n.ID).Msg("could not purge new node after failed prepare")
+		}
+	}()
+	// An upload finished right here is never marked as processing, so MarkProcessing, which
+	// triggers the revision cleanup for all other uploads, is not called for it: apply the
+	// revision cleanup strategy (see package revisioncleanup) here instead, if the upload
+	// created a revision. It never fails the upload. Registered before the lock is taken, so
+	// that it runs once the lock is released, for the reasons given in RestoreRevision.
+	defer func() {
+		if cleanupRevisions {
+			fs.revisionsCleanup.Cleanup(ctx, fs.lu, fs.tp, n)
 		}
 	}()
 
@@ -348,6 +360,7 @@ func (fs *Decomposedfs) PrepareUpload(ctx context.Context, ref *provider.Referen
 		// and their blobs are deleted with them.
 		n.BlobID = sessionID
 		fs.removeRevisions(ctx, n)
+		cleanupRevisions = versionCreated
 	}
 
 	result := &storage.PrepareUploadResult{VersionCreated: versionCreated, SizeDiff: sizeDiff, Committed: inline}

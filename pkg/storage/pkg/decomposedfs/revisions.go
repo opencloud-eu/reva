@@ -105,7 +105,16 @@ func (fs *Decomposedfs) RestoreRevision(ctx context.Context, ref *provider.Refer
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = unlock() }()
+	// released before the revision cleanup at the end, or on any return before that
+	unlocked := false
+	unlockNode := func() {
+		if unlocked {
+			return
+		}
+		unlocked = true
+		_ = unlock()
+	}
+	defer unlockNode()
 
 	// move current version to new revision
 	mtime, err := n.GetMTime(ctx)
@@ -115,7 +124,9 @@ func (fs *Decomposedfs) RestoreRevision(ctx context.Context, ref *provider.Refer
 	}
 
 	// create a revision of the current node
-	if _, err := fs.tp.CreateRevision(ctx, n, mtime.UTC().Format(time.RFC3339Nano)); err != nil {
+	// (the version is kept around to protect this revision from the cleanup below)
+	newRevision := mtime.UTC().Format(time.RFC3339Nano)
+	if _, err := fs.tp.CreateRevision(ctx, n, newRevision); err != nil {
 		return nil, err
 	}
 
@@ -151,6 +162,19 @@ func (fs *Decomposedfs) RestoreRevision(ctx context.Context, ref *provider.Refer
 	if err := fs.tp.Propagate(ctx, n, sizeDiff); err != nil {
 		return nil, err
 	}
+
+	// The restore created a new revision from the previous content, so apply the
+	// revision cleanup strategy (see package revisioncleanup). It runs last, once the
+	// restore is complete, and never fails the restore.
+	// The revision holding the state from before the restore is always kept: a restore
+	// is a deliberate user action, and the strategy could otherwise drop the very
+	// content the user just replaced, e.g. the 'auto' strategy thins out revisions
+	// that are close in time.
+	// The node lock is released first: Cleanup takes it itself, and when the cleanup runs
+	// in the background, waiting for it while holding the lock could deadlock with a
+	// worker waiting for the lock.
+	unlockNode()
+	fs.revisionsCleanup.Cleanup(ctx, fs.lu, fs.tp, n, n.ID+node.RevisionIDDelimiter+newRevision)
 	return &storage.RestoreRevisionResult{SpaceOwner: spaceOwner, SpaceID: n.SpaceID}, nil
 }
 

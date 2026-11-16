@@ -31,35 +31,47 @@
 // driver uses. PurgeRevisionUnchecked combines the two. So both the decision about *what* to
 // delete and the deletion itself are made here, once for all drivers.
 // Neither ListRevisionsUnchecked nor PurgeRevisionUnchecked check permissions: this is system
-// housekeeping, which runs e.g. in async postprocessing where there is no suitable
+// housekeeping, which runs e.g. at the end of an upload, where there is no suitable
 // user in the context.
 //
 // # When the cleanup runs
 //
-// Cleaner.Cleanup is meant to be called after a new revision has been created and has
-// settled.
+// Cleaner.Cleanup is called after a new revision has been created and has settled:
+//
+//   - after an upload that replaced a file, once the upload is complete: at the end of
+//     Decomposedfs.PrepareUpload for an upload the upload coordinator (pkg/upload)
+//     finishes right away, which never marks the node as processing, and otherwise when
+//     Decomposedfs.MarkProcessing clears the processing mark of the upload's session,
+//     i.e. after its postprocessing, or after the upload was rolled back,
+//   - in Decomposedfs.CommitUpload, when an upload that a newer one superseded wrote its
+//     content into the revision the newer upload created for it, which makes that revision
+//     a version (see "Overlapping uploads" below),
+//   - after Decomposedfs.RestoreRevision,
+//   - in posix, when a change on disk turned the '.CURRENT' copy into a revision
+//     (assimilation). Those revisions are created by a plain rename and never go
+//     through CreateRevision or the upload code, hence the separate trigger.
 //
 // It deliberately does not run inside Tree.CreateRevision, because revisions are
 // not settled at that point while uploads are in flight:
 //
 //   - An upload whose postprocessing is still pending writes its blob into a
 //     revision node that a newer upload created for it in the meantime
-//     (see DecomposedFsSession.Finalize, "uploading to revision node, that was
-//     created for us by another upload").
-//   - A failed upload rolls back by restoring the revision recorded in its
-//     session's MetaData["versionID"].
+//     (see Decomposedfs.CommitUpload).
+//   - A failed upload rolls back by restoring the revision it created
+//     (see Decomposedfs.RollbackUpload).
 //
 // The 'auto' strategy keeps only one revision per 10 seconds in the last minute,
 // so with rapid uploads a cleanup inside CreateRevision could delete a revision
 // that one of those uploads still needs. Instead, Cleanup does nothing at all
 // while the node is marked as processing.
 //
-// Overlapping uploads: the processing status only tracks the latest upload of a node, so a
-// cleanup triggered by a newer upload doesn't see an older one that is still in
-// postprocessing. That is safe: if the cleanup deletes the revision the older upload writes
-// its content into, the older upload creates it again when it finishes; and the revision
-// the older upload would roll back to after failed postprocessing must not be restored once
-// a newer upload has finished, as that would discard the newer upload's content.
+// Overlapping uploads: the processing mark of a node only tracks its latest upload, so a
+// cleanup triggered by a newer upload runs while an older one may still be in
+// postprocessing. The revision the newer upload created for the older one keeps the older
+// upload's processing mark, and the older upload writes its content into it when it
+// finishes. The cleanup never deletes such a revision, see Cleaner: the older upload would
+// then discard its content. Once the older upload has written its content into it and
+// removed the mark, the revision is a version, and CommitUpload runs the cleanup for it.
 package revisioncleanup
 
 import (
@@ -173,6 +185,8 @@ func deleteBlob(bd BlobDeleter, spaceID, blobID string) error {
 // Enabled. A nil *Cleaner behaves the same, as a safeguard, but New never returns one.
 //
 // It is stateless apart from the parsed strategy and safe for concurrent use.
+// Each driver creates one from the 'revisions_cleanup_strategy' option and passes
+// it on through aspects.Aspects.RevisionsCleanup.
 type Cleaner struct {
 	// nil if the cleanup is disabled
 	strategy revisions.RevisionCleanupStrategy

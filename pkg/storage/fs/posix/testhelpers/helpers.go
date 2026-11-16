@@ -318,6 +318,8 @@ func NewTestEnv(config map[string]interface{}) (*TestEnv, error) {
 		Tree:        tree,
 		Permissions: p,
 		Trashbin:    tb,
+		// the cleanup the tree created, as in posix.New
+		RevisionsCleanup: tree.RevisionsCleanup(),
 	}
 	fs, err := decomposedfs.New(&o.Options, aspects, &logger)
 	if err != nil {

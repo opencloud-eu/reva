@@ -48,11 +48,18 @@ func (fs *Decomposedfs) MarkProcessing(ctx context.Context, ref *provider.Refere
 	if err != nil {
 		return err
 	}
-	defer func() {
+	// released before the revision cleanup, or on any return before that
+	unlocked := false
+	unlockNode := func() {
+		if unlocked {
+			return
+		}
+		unlocked = true
 		if err := unlock(); err != nil {
 			appctx.GetLogger(ctx).Error().Err(err).Str("nodeid", n.ID).Msg("could not close mark-processing lock")
 		}
-	}()
+	}
+	defer unlockNode()
 
 	if !processing {
 		if !n.IsProcessing(ctx) {
@@ -62,7 +69,15 @@ func (fs *Decomposedfs) MarkProcessing(ctx context.Context, ref *provider.Refere
 		if id != sessionID {
 			return nil
 		}
-		return n.RemoveXattr(ctx, prefixes.StatusPrefix)
+		if err := n.RemoveXattr(ctx, prefixes.StatusPrefix); err != nil {
+			return err
+		}
+		// The upload of this session is done: apply the revision cleanup strategy (see package
+		// revisioncleanup), which skipped the node while it was marked. It never fails clearing
+		// the mark. The node lock is released first, for the reasons given in RestoreRevision.
+		unlockNode()
+		fs.revisionsCleanup.Cleanup(ctx, fs.lu, fs.tp, n)
+		return nil
 	}
 
 	// a newer upload takes over the mark, the last writer wins
@@ -100,6 +115,20 @@ func (fs *Decomposedfs) CommitUpload(ctx context.Context, ref *provider.Referenc
 	if err != nil {
 		return err
 	}
+
+	// set once this upload wrote its content into the revision a newer upload created for it
+	cleanupRevisions := false
+	// That revision only becomes a version here, when its processing mark is removed, after the
+	// cleanup triggered by the newer upload left it alone: apply the revision cleanup strategy
+	// (see package revisioncleanup) once more. MarkProcessing, which triggers it for all other
+	// uploads, does nothing for this one, as the processing mark of the node is not its own. It
+	// never fails the upload. Registered before the lock is taken, so that it runs once the locks
+	// are released, for the reasons given in RestoreRevision.
+	defer func() {
+		if cleanupRevisions {
+			fs.revisionsCleanup.Cleanup(ctx, fs.lu, fs.tp, n)
+		}
+	}()
 
 	unlock, err := fs.lu.MetadataBackend().Lock(n)
 	if err != nil {
@@ -159,6 +188,7 @@ func (fs *Decomposedfs) CommitUpload(ctx context.Context, ref *provider.Referenc
 		if err := target.RemoveXattr(ctx, prefixes.StatusPrefix); err != nil && !metadata.IsAttrUnset(err) {
 			appctx.GetLogger(ctx).Error().Err(err).Str("nodeid", target.ID).Msg("could not remove the processing mark from the revision")
 		}
+		cleanupRevisions = true
 	} else {
 		// revisions kept only for a rollback of this upload served their purpose; versions
 		// stay, also the ones created before versioning was disabled
