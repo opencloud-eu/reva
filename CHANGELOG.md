@@ -1,14 +1,18 @@
 # Changelog
 
-## [3.0.0](https://github.com/opencloud-eu/reva/releases/tag/v3.0.0) - 2026-11-13
+## [3.0.0](https://github.com/opencloud-eu/reva/releases/tag/v3.0.0) - 2026-11-16
 
 ### ❤️ Thanks to all contributors! ❤️
 
-@aduffeck, @butonic, @dragonchaser
+@aduffeck, @butonic, @dragonchaser, @pbleser-oc
 
 ### 💥 Breaking changes
 
 - Merge Workpackages back to main [[#957](https://github.com/opencloud-eu/reva/pull/957)]
+
+### ✨ Features
+
+- feat(tags): trim tags and add validation before adding them [[#1005](https://github.com/opencloud-eu/reva/pull/1005)]
 
 ### 🐛 Bug Fixes
 
