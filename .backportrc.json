@@ -1,0 +1,6 @@
+{
+  "repoOwner": "opencloud-eu",
+  "repoName": "reva",
+  "targetBranchChoices": ["main", "stable-2.40", "stable-2.46", "stable-2.52"],
+  "fork": false
+}
