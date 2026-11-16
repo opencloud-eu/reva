@@ -129,6 +129,28 @@ type Options struct {
 	// An invalid value makes the driver fail at startup.
 	RevisionsCleanupStrategy string `mapstructure:"revisions_cleanup_strategy"`
 
+	// RevisionsCleanupAsync runs the revision cleanup in the background instead of as part of
+	// the upload, restore or change on disk that created the new revision, so that those are not
+	// slowed down by it. Defaults to true.
+	RevisionsCleanupAsync bool `mapstructure:"revisions_cleanup_async"`
+	// RevisionsCleanupAsyncWorkers is the number of background workers for the revision cleanup.
+	// 0, the default, determines it automatically: half the available CPUs (which respects
+	// container CPU limits), but at least 2.
+	RevisionsCleanupAsyncWorkers int `mapstructure:"revisions_cleanup_async_workers"`
+	// RevisionsCleanupAsyncQueueSize is the number of nodes that can wait for a background
+	// revision cleanup. 0, the default, determines it automatically from the number of workers.
+	RevisionsCleanupAsyncQueueSize int `mapstructure:"revisions_cleanup_async_queue_size"`
+	// RevisionsCleanupAsyncQueueFull defines what happens when a new revision is created while
+	// the queue is full: "drop" (the default) skips the cleanup of that node and logs it, the
+	// node is cleaned up again when it gets its next revision; "block" waits until there is
+	// room, for at most RevisionsCleanupAsyncQueueFullTimeout, so that no cleanup is skipped
+	// unless the queue stays full that long, at the cost of slowing down writes under heavy
+	// load.
+	RevisionsCleanupAsyncQueueFull string `mapstructure:"revisions_cleanup_async_queue_full"`
+	// RevisionsCleanupAsyncQueueFullTimeout is how long "block" waits for room in a full queue,
+	// before the cleanup of the node is skipped as with "drop". 0 waits as long as it takes.
+	RevisionsCleanupAsyncQueueFullTimeout time.Duration `mapstructure:"revisions_cleanup_async_queue_full_timeout"`
+
 	MountID string `mapstructure:"mount_id"`
 
 	MultiTenantEnabled bool `mapstructure:"multi_tenant_enabled"`
@@ -154,7 +176,12 @@ type TokenOptions struct {
 
 // New returns a new Options instance for the given configuration
 func New(m map[string]interface{}) (*Options, error) {
-	o := &Options{}
+	o := &Options{
+		// defaults for options that are not false/0/"" by default; mapstructure only
+		// overwrites the fields that are present in m
+		RevisionsCleanupAsync:                 true,
+		RevisionsCleanupAsyncQueueFullTimeout: 5 * time.Second,
+	}
 	if err := mapstructure.Decode(m, o); err != nil {
 		err = errors.Wrap(err, "error decoding conf")
 		return nil, err

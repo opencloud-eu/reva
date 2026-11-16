@@ -124,7 +124,7 @@ func (fs *Decomposedfs) PrepareUpload(ctx context.Context, ref *provider.Referen
 	// that it runs once the lock is released, for the reasons given in RestoreRevision.
 	defer func() {
 		if cleanupRevisions {
-			fs.revisionsCleanup.Cleanup(ctx, fs.lu, fs.tp, n)
+			fs.revisionsCleanup.HandleRevisionCreated(ctx, n)
 		}
 	}()
 

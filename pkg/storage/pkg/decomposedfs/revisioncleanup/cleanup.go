@@ -36,7 +36,8 @@
 //
 // # When the cleanup runs
 //
-// Cleaner.Cleanup is called after a new revision has been created and has settled:
+// Service.HandleRevisionCreated is called after a new revision has been created and has
+// settled:
 //
 //   - after an upload that replaced a file, once the upload is complete: at the end of
 //     Decomposedfs.PrepareUpload for an upload the upload coordinator (pkg/upload)
@@ -64,6 +65,16 @@
 // so with rapid uploads a cleanup inside CreateRevision could delete a revision
 // that one of those uploads still needs. Instead, Cleanup does nothing at all
 // while the node is marked as processing.
+//
+// # Running in the background
+//
+// By default (option revisions_cleanup_async) HandleRevisionCreated only queues the node, and
+// background workers run Cleaner.Cleanup, so that the cleanup does not slow down the
+// upload, restore or change on disk that triggered it (see Service). This also
+// shortens the time the node lock is held by those operations. The number of workers,
+// the queue size and what happens when the queue is full (block or drop) are
+// configurable (AsyncOptions). With revisions_cleanup_async disabled, HandleRevisionCreated runs the
+// cleanup right away, in the caller's goroutine.
 //
 // Overlapping uploads: the processing mark of a node only tracks its latest upload, so a
 // cleanup triggered by a newer upload runs while an older one may still be in
@@ -185,8 +196,8 @@ func deleteBlob(bd BlobDeleter, spaceID, blobID string) error {
 // Enabled. A nil *Cleaner behaves the same, as a safeguard, but New never returns one.
 //
 // It is stateless apart from the parsed strategy and safe for concurrent use.
-// Each driver creates one from the 'revisions_cleanup_strategy' option and passes
-// it on through aspects.Aspects.RevisionsCleanup.
+// The storage drivers use it through a Service, created from their options by
+// NewServiceFromOptions and passed on through aspects.Aspects.RevisionsCleanup.
 type Cleaner struct {
 	// nil if the cleanup is disabled
 	strategy revisions.RevisionCleanupStrategy

@@ -6,12 +6,16 @@ package decomposedfs_test
 import (
 	"bytes"
 	"io"
+	"runtime"
+	"strings"
 	"sync"
+	"time"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/mock"
 
+	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs"
 	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/node"
 	helpers "github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/testhelpers"
 	uploadcoordinator "github.com/opencloud-eu/reva/v3/pkg/upload"
@@ -32,12 +36,9 @@ var _ = Describe("Revision cleanup", func() {
 		deleted   []string // the blob ids deleted from the blobstore
 	)
 
-	newEnv := func(strategy string) {
+	newEnvWithOptions := func(options map[string]any) {
 		var err error
-		env, err = helpers.NewTestEnv(map[string]any{
-			"revisions_cleanup_strategy": strategy,
-			"revisions_cleanup_async":    false,
-		})
+		env, err = helpers.NewTestEnv(options)
 		Expect(err).ToNot(HaveOccurred())
 
 		env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything).Unset()
@@ -60,6 +61,16 @@ var _ = Describe("Revision cleanup", func() {
 		file, err = env.Lookup.NodeFromResource(env.Ctx, fileRef)
 		Expect(err).ToNot(HaveOccurred())
 	}
+	newEnvWith := func(strategy string, async bool) {
+		newEnvWithOptions(map[string]any{
+			"revisions_cleanup_strategy": strategy,
+			"revisions_cleanup_async":    async,
+		})
+	}
+
+	// the cleanup runs right away, so that its effect can be checked as soon as the
+	// triggering operation returns
+	newEnv := func(strategy string) { newEnvWith(strategy, false) }
 
 	BeforeEach(func() {
 		deleted = nil
@@ -83,9 +94,9 @@ var _ = Describe("Revision cleanup", func() {
 		return revs
 	}
 
-	// uploads content through the upload coordinator; without postprocessing, it finishes the
-	// upload right in PrepareUpload, which never marks the node as processing
-	upload := func(content []byte) {
+	// uploads content to ref through the upload coordinator; without postprocessing, it
+	// finishes the upload right in PrepareUpload, which never marks the node as processing
+	uploadTo := func(ref *provider.Reference, content []byte) {
 		sessionStore := uploadcoordinator.NewFileStore(env.Options.UploadDirectory, uploadcoordinator.TokenOptions{
 			DownloadEndpoint:     "http://localhost/data",
 			TransferSharedSecret: "transfer-secret",
@@ -94,7 +105,7 @@ var _ = Describe("Revision cleanup", func() {
 		Expect(sessionStore.Setup()).To(Succeed())
 		coord := uploadcoordinator.NewCoordinator(env.Fs, sessionStore, "", nil)
 
-		uploadIds, err := coord.InitiateUpload(env.Ctx, fileRef, int64(len(content)), map[string]string{})
+		uploadIds, err := coord.InitiateUpload(env.Ctx, ref, int64(len(content)), map[string]string{})
 		Expect(err).ToNot(HaveOccurred())
 		_, err = coord.Upload(env.Ctx, uploadcoordinator.Request{
 			Ref:    &provider.Reference{Path: "/" + uploadIds["simple"]},
@@ -103,6 +114,7 @@ var _ = Describe("Revision cleanup", func() {
 		}, nil)
 		Expect(err).ToNot(HaveOccurred())
 	}
+	upload := func(content []byte) { uploadTo(fileRef, content) }
 
 	Describe("uploads", func() {
 		It("keep the revision of the replaced content without a strategy", func() {
@@ -144,6 +156,15 @@ var _ = Describe("Revision cleanup", func() {
 			Expect(revisionsOf(file)).To(BeEmpty())
 			// the blob of the replaced content went with its revision
 			Expect(deletedBlobs()).To(ConsistOf("file1-blobid"))
+		})
+
+		It("trigger the cleanup in the background with revisions_cleanup_async", func() {
+			newEnvWith("0", true)
+
+			upload([]byte("new content"))
+
+			Eventually(func() []*provider.FileVersion { return revisionsOf(file) }).Should(BeEmpty())
+			Eventually(deletedBlobs).Should(ConsistOf("file1-blobid"))
 		})
 	})
 
@@ -187,12 +208,110 @@ var _ = Describe("Revision cleanup", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(restored.BlobID).To(Equal("file1-blobid"))
 		})
+
+		It("don't hold the node lock while waiting for room in the background cleanup's queue", func() {
+			// a single worker and a single queue slot, so that the restore has to wait for room
+			newEnvWithOptions(map[string]any{
+				"revisions_cleanup_strategy":         "0",
+				"revisions_cleanup_async":            true,
+				"revisions_cleanup_async_workers":    1,
+				"revisions_cleanup_async_queue_size": 1,
+				"revisions_cleanup_async_queue_full": "block",
+			})
+			createRevisions()
+			subdir1, err := env.Lookup.NodeFromResource(env.Ctx, &provider.Reference{ResourceId: env.SpaceRootRes, Path: "/dir1/subdir1"})
+			Expect(err).ToNot(HaveOccurred())
+			for _, name := range []string{"busy", "queued"} {
+				_, err := env.CreateTestFile(name, name+"-blobid", subdir1.ID, subdir1.SpaceID, 10)
+				Expect(err).ToNot(HaveOccurred())
+			}
+			// the cleanup of "busy" keeps the only worker busy until released
+			busy, release := make(chan struct{}), make(chan struct{})
+			DeferCleanup(func() {
+				select {
+				case <-release:
+				default:
+					close(release)
+				}
+			})
+			env.Blobstore.ExpectedCalls = nil
+			env.Blobstore.On("Upload", mock.Anything, mock.Anything, mock.Anything).Return(nil)
+			env.Blobstore.On("Delete", mock.Anything).Run(func(args mock.Arguments) {
+				if args.Get(0).(*node.Node).BlobID == "busy-blobid" {
+					close(busy)
+					<-release
+				}
+			}).Return(nil)
+
+			uploadTo(&provider.Reference{ResourceId: env.SpaceRootRes, Path: "/dir1/subdir1/busy"}, []byte("new"))
+			// once the worker is busy with "busy", "queued" fills the only queue slot
+			Eventually(busy).Should(BeClosed())
+			uploadTo(&provider.Reference{ResourceId: env.SpaceRootRes, Path: "/dir1/subdir1/queued"}, []byte("new"))
+
+			restored := make(chan error, 1)
+			go func() {
+				_, err := env.Fs.RestoreRevision(env.Ctx, fileRef, file.ID+node.RevisionIDDelimiter+rev1)
+				restored <- err
+			}()
+			time.Sleep(200 * time.Millisecond) // the restore waits for room in the queue
+			Consistently(restored).ShouldNot(Receive(), "the restore didn't wait for room in the queue")
+
+			// the restore must not hold the lock of the file meanwhile: a worker could be waiting for it
+			locked := make(chan func() error, 1)
+			go func() {
+				n, err := env.Lookup.NodeFromResource(env.Ctx, fileRef)
+				if err != nil {
+					return
+				}
+				if unlock, err := env.Lookup.MetadataBackend().Lock(n); err == nil {
+					locked <- unlock
+				}
+			}()
+			var unlock func() error
+			Eventually(locked).Should(Receive(&unlock), "the restore holds the lock of the file while it waits")
+			Expect(unlock()).To(Succeed())
+
+			close(release)
+			Eventually(restored, 10*time.Second).Should(Receive(Succeed()))
+		})
 	})
 
 	Describe("configuration", func() {
 		It("rejects an invalid strategy at startup", func() {
 			_, err := helpers.NewTestEnv(map[string]any{"revisions_cleanup_strategy": "whenever"})
 			Expect(err).To(HaveOccurred())
+		})
+
+		It("rejects invalid background cleanup settings at startup", func() {
+			for _, config := range []map[string]any{
+				{"revisions_cleanup_strategy": "auto", "revisions_cleanup_async_queue_full": "wait"},
+				{"revisions_cleanup_strategy": "auto", "revisions_cleanup_async_workers": -1},
+				{"revisions_cleanup_strategy": "auto", "revisions_cleanup_async_queue_size": -1},
+			} {
+				_, err := helpers.NewTestEnv(config)
+				Expect(err).To(HaveOccurred(), "%v", config)
+			}
+		})
+
+		It("stops the background workers again when the storage can't be set up", func() {
+			// the cleanup's workers, by their function in the goroutine dump
+			workers := func() int {
+				buf := make([]byte, 1<<22)
+				return strings.Count(string(buf[:runtime.Stack(buf, true)]), "revisioncleanup.(*Service).work(")
+			}
+			before := workers()
+
+			// async uploads need an event stream: New fails after the cleanup has started
+			_, err := decomposedfs.NewDefault(map[string]any{
+				"root":                            GinkgoT().TempDir(),
+				"asyncfileuploads":                true,
+				"revisions_cleanup_strategy":      "auto",
+				"revisions_cleanup_async":         true,
+				"revisions_cleanup_async_workers": 3,
+			}, nil, nil, &zerolog.Logger{})
+			Expect(err).To(MatchError(ContainSubstring("need nats")))
+
+			Eventually(workers).Should(Equal(before))
 		})
 	})
 })

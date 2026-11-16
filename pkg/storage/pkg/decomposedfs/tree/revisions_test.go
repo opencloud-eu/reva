@@ -6,6 +6,7 @@ package tree_test
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -257,19 +258,107 @@ var _ = Describe("Revisions", func() {
 			Expect(err).To(HaveOccurred())
 		})
 	})
+
+	Describe("revisioncleanup.Service", func() {
+		var cleaner *revisioncleanup.Cleaner
+
+		BeforeEach(func() {
+			var err error
+			cleaner, err = revisioncleanup.New("7d, auto, 30d")
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		newService := func(opts revisioncleanup.AsyncOptions) *revisioncleanup.Service {
+			s, err := revisioncleanup.NewService(cleaner, env.Lookup, env.Tree, opts, nil)
+			Expect(err).ToNot(HaveOccurred())
+			DeferCleanup(func() {
+				Expect(s.Shutdown(context.Background())).To(Succeed())
+			})
+			return s
+		}
+
+		It("cleans up right away when not running asynchronously", func() {
+			expectBlobDeletion(blobOfRevision(2))
+			s := newService(revisioncleanup.AsyncOptions{Enabled: false})
+
+			s.HandleRevisionCreated(env.Ctx, n)
+
+			Expect(listKeys()).To(ConsistOf(keys[0], keys[1]))
+			env.Blobstore.AssertExpectations(GinkgoT())
+		})
+
+		It("cleans up in the background when running asynchronously", func() {
+			expectBlobDeletion(blobOfRevision(2))
+			s := newService(revisioncleanup.AsyncOptions{Enabled: true, Workers: 1})
+
+			s.HandleRevisionCreated(env.Ctx, n)
+
+			Eventually(listKeys).Should(ConsistOf(keys[0], keys[1]))
+			Eventually(func() bool { return env.Blobstore.AssertExpectations(&noopT{}) }).Should(BeTrue())
+		})
+
+		It("reads the node switched to the group of its space with a SpaceScoper", func() {
+			st := &scopingTree{Tree: env.Tree}
+			s, err := revisioncleanup.NewService(cleaner, env.Lookup, st, revisioncleanup.AsyncOptions{Enabled: true, Workers: 1}, nil)
+			Expect(err).ToNot(HaveOccurred())
+			DeferCleanup(func() {
+				Expect(s.Shutdown(context.Background())).To(Succeed())
+			})
+
+			// a node that doesn't exist is never cleaned up, but it is read
+			s.HandleRevisionCreatedByID(env.Ctx, n.SpaceID, "does-not-exist")
+
+			Eventually(func() []any {
+				scoped, unscoped := st.calls()
+				return []any{scoped, unscoped}
+			}).Should(Equal([]any{[]string{n.SpaceID}, 1}))
+		})
+
+		It("skips nodes that were deleted before the cleanup ran", func() {
+			expectBlobDeletion(blobOfRevision(2))
+			s := newService(revisioncleanup.AsyncOptions{Enabled: true, Workers: 1})
+			gone := &node.Node{BaseNode: node.BaseNode{SpaceID: n.SpaceID, ID: "does-not-exist"}}
+
+			s.HandleRevisionCreated(env.Ctx, gone)
+			s.HandleRevisionCreated(env.Ctx, n) // processed after gone, by the only worker
+
+			Eventually(listKeys).Should(ConsistOf(keys[0], keys[1]))
+			Eventually(func() bool { return env.Blobstore.AssertExpectations(&noopT{}) }).Should(BeTrue())
+		})
+	})
 })
 
 // scopingTree records the calls of the revision cleanup to switch to the group of a space.
 type scopingTree struct {
 	*tree.Tree
+	mu       sync.Mutex
 	scoped   []string
 	unscoped int
 }
 
 func (t *scopingTree) ScopeToSpace(ctx context.Context, spaceID string) (context.Context, func() error, error) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
 	t.scoped = append(t.scoped, spaceID)
 	return ctx, func() error {
+		t.mu.Lock()
+		defer t.mu.Unlock()
 		t.unscoped++
 		return nil
 	}, nil
 }
+
+// calls returns the spaces switched to, and how often it switched back, for a cleanup that
+// runs in a background worker.
+func (t *scopingTree) calls() ([]string, int) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return append([]string{}, t.scoped...), t.unscoped
+}
+
+// noopT lets mock assertions be polled without failing the test on the first attempt.
+type noopT struct{}
+
+func (noopT) Errorf(string, ...any) {}
+func (noopT) Logf(string, ...any)   {}
+func (noopT) FailNow()              {}
