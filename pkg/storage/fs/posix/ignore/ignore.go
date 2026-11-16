@@ -213,11 +213,22 @@ func (i *Ignorer) isStorageInternal(path string) bool {
 	return i.IsChanges(path) || i.IsIndex(path) || i.IsUpload(path)
 }
 
-// IsPurging checks if the path lies in a space root that was renamed for purging
+// IsPurging checks if the path lies in a space root that was renamed for purging.
+// The renamed space root is a sibling of the old one, so the space path
+// templates match it like any other space root.
 func (i *Ignorer) IsPurging(path string) bool {
-	for _, root := range []string{i.personalSpacesRoot, i.projectSpacesRoot} {
-		if rel, ok := strings.CutPrefix(path, root+string(filepath.Separator)); ok && strings.HasPrefix(rel, lookup.PurgeDirPrefix) {
-			return true
+	rel, ok := strings.CutPrefix(path, i.prefix)
+	if !ok {
+		return false
+	}
+	segments := strings.Split(rel, string(filepath.Separator))
+	for n := 1; n <= len(segments); n++ {
+		spaceRoot, rootPath := i.match(segments[:n])
+		if spaceRoot {
+			return strings.HasPrefix(segments[n-1], lookup.PurgeDirPrefix)
+		}
+		if !rootPath {
+			return false
 		}
 	}
 	return false

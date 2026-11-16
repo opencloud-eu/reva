@@ -86,6 +86,9 @@ var _ = Describe("Ignore", func() {
 			Entry("matches temporary files in a space", "/storage/personal/alice/"+blobstore.TMPDir+"/a", true),
 			Entry("does not match user content in a space", "/storage/project/Team/id1/a.txt", false),
 			Entry("does not match a trash dir below a space root", "/storage/project/Team/id1/a/"+lookup.TrashDir, false),
+			Entry("matches a space root renamed for purging", "/storage/project/Team/"+lookup.PurgeDirPrefix+"id1-x", true),
+			Entry("matches content of a space renamed for purging", "/storage/project/Team/"+lookup.PurgeDirPrefix+"id1-x/a/b", true),
+			Entry("does not match the purge prefix in a space", "/storage/project/Team/id1/"+lookup.PurgeDirPrefix+"a/b", false),
 		)
 
 		DescribeTable("IsRootPath and IsSpaceRoot",
