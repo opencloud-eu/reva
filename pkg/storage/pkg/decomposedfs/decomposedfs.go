@@ -1003,11 +1003,9 @@ func (fs *Decomposedfs) Download(ctx context.Context, ref *provider.Reference, o
 			_ = unlock()
 		}()
 
-		// the node might have been changed while waiting for the lock.
-		// With synchronous uploads the node stays locked until the upload is finalized, so
-		// getting the lock means the new blob is ready; the processing flag is only cleared
-		// after the lock is released, so it must not be checked for sync stores.
-		if fs.o.AsyncFileUploads && lockedNode.IsProcessing(ctx) {
+		// the node might have been changed while waiting for the lock: a newer upload may
+		// have marked it as processing since the first check, and its blob is not written yet.
+		if lockedNode.IsProcessing(ctx) {
 			return nil, nil, errtypes.TooEarly("file is still being processed")
 		}
 		if lockedNode.BlobID != n.BlobID {

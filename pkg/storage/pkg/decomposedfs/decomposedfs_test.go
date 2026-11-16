@@ -453,7 +453,7 @@ var _ = Describe("Decomposed", func() {
 			env.Blobstore.AssertNotCalled(GinkgoT(), "Download", mock.Anything)
 		})
 
-		It("returns too early when the node is already processing with synchronous uploads", func() {
+		It("returns too early when the node is already processing", func() {
 			n, err := env.Lookup.NodeFromResource(env.Ctx, fileRef)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(n.SetXattrString(env.Ctx, prefixes.StatusPrefix, node.ProcessingStatus+"upload-id")).To(Succeed())
@@ -464,22 +464,7 @@ var _ = Describe("Decomposed", func() {
 			Expect(reader).To(BeNil())
 		})
 
-		It("ignores the processing status set while resolving the node with synchronous uploads", func() {
-			_, reader, err := env.Fs.Download(env.Ctx, fileRef, func(*provider.ResourceInfo) bool {
-				n, err := env.Lookup.NodeFromResource(env.Ctx, fileRef)
-				Expect(err).ToNot(HaveOccurred())
-				Expect(n.SetXattrString(env.Ctx, prefixes.StatusPrefix, node.ProcessingStatus+"upload-id")).To(Succeed())
-				return true
-			})
-
-			Expect(err).ToNot(HaveOccurred())
-			Expect(reader).ToNot(BeNil())
-			defer reader.Close()
-			expectLockReleased()
-		})
-
-		It("returns too early when the node started processing while resolving it with asynchronous uploads", func() {
-			env.Options.AsyncFileUploads = true
+		It("returns too early when the node started processing while resolving it", func() {
 			_, reader, err := env.Fs.Download(env.Ctx, fileRef, func(*provider.ResourceInfo) bool {
 				n, err := env.Lookup.NodeFromResource(env.Ctx, fileRef)
 				Expect(err).ToNot(HaveOccurred())
