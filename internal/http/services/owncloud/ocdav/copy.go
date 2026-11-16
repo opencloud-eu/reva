@@ -299,13 +299,20 @@ func (s *svc) executePathCopy(ctx context.Context, selector pool.Selectable[gate
 			return err
 		}
 		defer httpDownloadRes.Body.Close()
-		if httpDownloadRes.StatusCode == http.StatusForbidden {
+		switch httpDownloadRes.StatusCode {
+		case http.StatusForbidden:
 			w.WriteHeader(http.StatusForbidden)
 			b, err := errors.Marshal(http.StatusForbidden, http.StatusText(http.StatusForbidden), "", strconv.Itoa(http.StatusForbidden))
 			errors.HandleWebdavError(log, w, b, err)
 			return nil
-		}
-		if httpDownloadRes.StatusCode != http.StatusOK {
+		case http.StatusTooEarly:
+			// the file is still being processed and can't be copied yet; like GET, MOVE
+			// and DELETE in that case, answer with the status only
+			w.WriteHeader(http.StatusTooEarly)
+			return nil
+		case http.StatusOK:
+			// ok
+		default:
 			return fmt.Errorf("status code %d", httpDownloadRes.StatusCode)
 		}
 
@@ -517,10 +524,15 @@ func (s *svc) executeSpacesCopy(ctx context.Context, w http.ResponseWriter, sele
 		}
 		defer httpDownloadRes.Body.Close()
 		switch httpDownloadRes.StatusCode {
-		case http.StatusForbidden, http.StatusTooEarly:
-			w.WriteHeader(httpDownloadRes.StatusCode)
-			b, err := errors.Marshal(http.StatusForbidden, http.StatusText(httpDownloadRes.StatusCode), "", strconv.Itoa(httpDownloadRes.StatusCode))
+		case http.StatusForbidden:
+			w.WriteHeader(http.StatusForbidden)
+			b, err := errors.Marshal(http.StatusForbidden, http.StatusText(http.StatusForbidden), "", strconv.Itoa(http.StatusForbidden))
 			errors.HandleWebdavError(log, w, b, err)
+			return nil
+		case http.StatusTooEarly:
+			// the file is still being processed and can't be copied yet; like GET, MOVE
+			// and DELETE in that case, answer with the status only
+			w.WriteHeader(http.StatusTooEarly)
 			return nil
 		case http.StatusOK:
 			// ok

@@ -1090,6 +1090,68 @@ var _ = Describe("ocdav", func() {
 				})
 			})
 		})
+
+		Describe("COPY of a file", func() {
+			var (
+				downloadStatus int
+				downloadSvr    *httptest.Server
+			)
+
+			BeforeEach(func() {
+				downloadSvr = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					w.WriteHeader(downloadStatus)
+				}))
+
+				rr = httptest.NewRecorder()
+				req, err = http.NewRequest("COPY", basePath+"/file", strings.NewReader(""))
+				Expect(err).ToNot(HaveOccurred())
+				req = req.WithContext(ctx)
+				req.Header.Set(net.HeaderDestination, basePath+"/newfile")
+
+				mockPathStat("./file", status.NewOK(ctx), &cs3storageprovider.ResourceInfo{
+					Id:   &cs3storageprovider.ResourceId{StorageId: "provider-1", SpaceId: "userspace", OpaqueId: "file"},
+					Type: cs3storageprovider.ResourceType_RESOURCE_TYPE_FILE,
+					Size: 11,
+				})
+				mockPathStat("./newfile", status.NewNotFound(ctx, ""), nil)
+				mockPathStat(".", status.NewOK(ctx), &cs3storageprovider.ResourceInfo{Id: userspace.Root})
+
+				client.On("InitiateFileDownload", mock.Anything, mock.Anything).Return(&cs3gateway.InitiateFileDownloadResponse{
+					Status:    status.NewOK(ctx),
+					Protocols: []*cs3gateway.FileDownloadProtocol{{Protocol: "spaces", DownloadEndpoint: downloadSvr.URL}},
+				}, nil)
+				client.On("InitiateFileUpload", mock.Anything, mock.Anything).Return(&cs3gateway.InitiateFileUploadResponse{
+					Status:    status.NewOK(ctx),
+					Protocols: []*cs3gateway.FileUploadProtocol{{Protocol: "tus", UploadEndpoint: dataSvr.URL}},
+				}, nil)
+			})
+			AfterEach(func() {
+				downloadSvr.Close()
+			})
+
+			It("answers 403 with a WebDAV error if the source may not be downloaded", func() {
+				downloadStatus = http.StatusForbidden
+
+				handler.Handler().ServeHTTP(rr, req)
+				Expect(rr).To(HaveHTTPStatus(http.StatusForbidden))
+				Expect(rr.Body.String()).To(ContainSubstring("Sabre\\DAV\\Exception\\Forbidden"))
+			})
+
+			It("answers 425 without a body while the source is still being processed", func() {
+				downloadStatus = http.StatusTooEarly
+
+				handler.Handler().ServeHTTP(rr, req)
+				Expect(rr).To(HaveHTTPStatus(http.StatusTooEarly))
+				Expect(rr.Body.String()).To(BeEmpty())
+			})
+
+			It("fails with 500 on other download errors", func() {
+				downloadStatus = http.StatusBadGateway
+
+				handler.Handler().ServeHTTP(rr, req)
+				Expect(rr).To(HaveHTTPStatus(http.StatusInternalServerError))
+			})
+		})
 	})
 
 	Context("at the /dav/avatars endpoint", func() {
@@ -1253,6 +1315,61 @@ var _ = Describe("ocdav", func() {
 			})
 		})
 
+		Describe("COPY of a file", func() {
+			var (
+				downloadStatus int
+				downloadSvr    *httptest.Server
+			)
+
+			BeforeEach(func() {
+				downloadSvr = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					w.WriteHeader(downloadStatus)
+				}))
+
+				spaceID := storagespace.FormatResourceID(userspace.Root)
+				rr = httptest.NewRecorder()
+				req, err = http.NewRequest("COPY", basePath+"/"+spaceID+"/file", strings.NewReader(""))
+				Expect(err).ToNot(HaveOccurred())
+				req = req.WithContext(ctx)
+				req.Header.Set(net.HeaderDestination, basePath+"/"+spaceID+"/newfile")
+
+				mockStat(mockReference("userspace", "./file"), status.NewOK(ctx), &cs3storageprovider.ResourceInfo{
+					Id:   &cs3storageprovider.ResourceId{StorageId: "provider-1", SpaceId: "userspace", OpaqueId: "file"},
+					Type: cs3storageprovider.ResourceType_RESOURCE_TYPE_FILE,
+					Size: 11,
+				})
+				mockStat(mockReference("userspace", "./newfile"), status.NewNotFound(ctx, ""), nil)
+				mockStat(mockReference("userspace", "."), status.NewOK(ctx), &cs3storageprovider.ResourceInfo{Id: userspace.Root})
+
+				client.On("InitiateFileDownload", mock.Anything, mock.Anything).Return(&cs3gateway.InitiateFileDownloadResponse{
+					Status:    status.NewOK(ctx),
+					Protocols: []*cs3gateway.FileDownloadProtocol{{Protocol: "spaces", DownloadEndpoint: downloadSvr.URL}},
+				}, nil)
+				client.On("InitiateFileUpload", mock.Anything, mock.Anything).Return(&cs3gateway.InitiateFileUploadResponse{
+					Status:    status.NewOK(ctx),
+					Protocols: []*cs3gateway.FileUploadProtocol{{Protocol: "tus", UploadEndpoint: dataSvr.URL}},
+				}, nil)
+			})
+			AfterEach(func() {
+				downloadSvr.Close()
+			})
+
+			It("answers 403 with a WebDAV error if the source may not be downloaded", func() {
+				downloadStatus = http.StatusForbidden
+
+				handler.Handler().ServeHTTP(rr, req)
+				Expect(rr).To(HaveHTTPStatus(http.StatusForbidden))
+				Expect(rr.Body.String()).To(ContainSubstring("Sabre\\DAV\\Exception\\Forbidden"))
+			})
+
+			It("answers 425 without a body while the source is still being processed", func() {
+				downloadStatus = http.StatusTooEarly
+
+				handler.Handler().ServeHTTP(rr, req)
+				Expect(rr).To(HaveHTTPStatus(http.StatusTooEarly))
+				Expect(rr.Body.String()).To(BeEmpty())
+			})
+		})
 	})
 	Context("at the /dav/public-files endpoint", func() {
 
