@@ -185,7 +185,9 @@ type CapabilitiesGraph struct {
 
 // CapabilitiesGraphTags holds the graph capabilities for tags
 type CapabilitiesGraphTags struct {
-	// MaxTagLength is the maximum number of characters of a single tag
+	// MaxTagLength is the maximum number of characters (Unicode code points) of a
+	// single tag. 0 means no limit, and clients must not check the length then:
+	// the field is always sent, so a server that doesn't set it reports 0.
 	MaxTagLength int `json:"max_tag_length" xml:"max_tag_length" mapstructure:"max_tag_length"`
 }
 
