@@ -35,8 +35,45 @@ var _ = Describe("Watching tree", func() {
 		subtree string
 	)
 
+	// mkdirWatched creates the directory path below the subtree and waits until it is
+	// watched. Files created in a new directory before inotifywait watches it cause no
+	// events at all (see BUGS in inotifywait(1)), and on a busy machine that can take
+	// a while, so a fixed sleep isn't enough.
+	mkdirWatched := func(path string) {
+		Expect(os.Mkdir(root+path, 0700)).To(Succeed())
+
+		// The directory is picked up by the scan that its creation triggers ...
+		Eventually(func(g Gomega) {
+			n, err := env.Lookup.NodeFromResource(env.Ctx, &provider.Reference{
+				ResourceId: env.SpaceRootRes,
+				Path:       subtree + path,
+			})
+			g.Expect(err).ToNot(HaveOccurred())
+			g.Expect(n.Exists).To(BeTrue())
+		}).Should(Succeed())
+
+		// ... but only a file created after that scan shows that it is watched. Each
+		// attempt uses a new file, in case the event for the previous one was missed.
+		// The files are empty, so they don't change the tree sizes the specs check.
+		Eventually(func(g Gomega) {
+			name, err := generateRandomString(10)
+			g.Expect(err).ToNot(HaveOccurred())
+			probe := path + "/probe-" + name
+			g.Expect(os.WriteFile(root+probe, nil, 0600)).To(Succeed())
+
+			g.Eventually(func(g Gomega) {
+				n, err := env.Lookup.NodeFromResource(env.Ctx, &provider.Reference{
+					ResourceId: env.SpaceRootRes,
+					Path:       subtree + probe,
+				})
+				g.Expect(err).ToNot(HaveOccurred())
+				g.Expect(n.Exists).To(BeTrue())
+			}).WithTimeout(2 * time.Second).ProbeEvery(100 * time.Millisecond).Should(Succeed())
+		}).Should(Succeed())
+	}
+
 	BeforeEach(func() {
-		SetDefaultEventuallyTimeout(15 * time.Second)
+		SetDefaultEventuallyTimeout(watchTimeout)
 
 		var err error
 		subtree, err = generateRandomString(10)
@@ -344,8 +381,7 @@ var _ = Describe("Watching tree", func() {
 			})
 
 			It("handles files in directories", func() {
-				Expect(os.Mkdir(root+"/assimilated", 0700)).To(Succeed())
-				time.Sleep(100 * time.Millisecond) // Give it some time to settle down
+				mkdirWatched("/assimilated")
 				Expect(os.WriteFile(root+"/assimilated/file.txt", []byte("hello world"), 0600)).To(Succeed())
 
 				Eventually(func(g Gomega) {
@@ -388,8 +424,7 @@ var _ = Describe("Watching tree", func() {
 			})
 
 			It("finds a child by id after its clean parent is moved on disk", func() {
-				Expect(os.Mkdir(root+"/original", 0700)).To(Succeed())
-				time.Sleep(100 * time.Millisecond) // Give it some time to settle down
+				mkdirWatched("/original")
 				Expect(os.WriteFile(root+"/original/file.txt", []byte("hello world"), 0600)).To(Succeed())
 				fileID := ""
 				Eventually(func(g Gomega) {
@@ -419,8 +454,7 @@ var _ = Describe("Watching tree", func() {
 			})
 
 			It("handles moved directories", func() {
-				Expect(os.Mkdir(root+"/original", 0700)).To(Succeed())
-				time.Sleep(100 * time.Millisecond) // Give it some time to settle down
+				mkdirWatched("/original")
 				Expect(os.WriteFile(root+"/original/file.txt", []byte("hello world"), 0600)).To(Succeed())
 
 				dirId := ""
@@ -464,8 +498,7 @@ var _ = Describe("Watching tree", func() {
 
 			It("keeps the tree size of a sibling when a directory is deleted", func() {
 				for _, dir := range []string{"/kept", "/deleted"} {
-					Expect(os.Mkdir(root+dir, 0700)).To(Succeed())
-					time.Sleep(100 * time.Millisecond) // Give it some time to settle down
+					mkdirWatched(dir)
 					Expect(os.WriteFile(root+dir+"/file.txt", []byte("hello world"), 0600)).To(Succeed())
 				}
 				Eventually(func(g Gomega) {
@@ -489,8 +522,7 @@ var _ = Describe("Watching tree", func() {
 			})
 
 			It("keeps the tree size of a clean directory when it is moved", func() {
-				Expect(os.Mkdir(root+"/original", 0700)).To(Succeed())
-				time.Sleep(100 * time.Millisecond) // Give it some time to settle down
+				mkdirWatched("/original")
 				Expect(os.WriteFile(root+"/original/file.txt", []byte("hello world"), 0600)).To(Succeed())
 				Eventually(func(g Gomega) {
 					g.Expect(treeSize(g, subtree+"/original")).To(Equal(uint64(11)))
@@ -515,8 +547,7 @@ var _ = Describe("Watching tree", func() {
 
 	Describe("propagation", func() {
 		It("propagates new files in a directory", func() {
-			Expect(os.Mkdir(root+"/assimilated", 0700)).To(Succeed())
-			time.Sleep(100 * time.Millisecond) // Give it some time to settle down
+			mkdirWatched("/assimilated")
 			Expect(os.WriteFile(root+"/assimilated/file.txt", []byte("hello world"), 0600)).To(Succeed())
 
 			Eventually(func(g Gomega) {
@@ -550,8 +581,7 @@ var _ = Describe("Watching tree", func() {
 
 		It("propagates new files in a directory to the parent", func() {
 			Expect(env.Tree.WarmupIDCache(env.Root, false, true)).To(Succeed())
-			Expect(os.Mkdir(root+"/assimilated", 0700)).To(Succeed())
-			time.Sleep(100 * time.Millisecond) // Give it some time to settle down
+			mkdirWatched("/assimilated")
 			Expect(os.WriteFile(root+"/assimilated/file.txt", []byte("hello world"), 0600)).To(Succeed())
 
 			Eventually(func(g Gomega) {
