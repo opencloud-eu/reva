@@ -145,7 +145,8 @@ func (fs *Decomposedfs) PrepareUpload(ctx context.Context, ref *provider.Referen
 		unlock metadata.UnlockFunc
 		old    *node.Node
 	)
-	if create {
+	switch {
+	case create:
 		// Before the node exists: an upload interrupted while its blob is written
 		// must not leave a node without metadata behind, which blocks the name.
 		if inline {
@@ -160,7 +161,7 @@ func (fs *Decomposedfs) PrepareUpload(ctx context.Context, ref *provider.Referen
 			return nil, err
 		}
 		purge = true
-	} else if info.NodeExisted {
+	case info.NodeExisted:
 		// read under the lock we take: an unlocked read of a cold cache entry waits for that lock
 		var unlockOld metadata.UnlockFunc
 		old, unlockOld, err = node.LockAndReadNode(ctx, fs.lu, n.SpaceID, n.ID, "", false, n.SpaceRoot, false)
@@ -172,7 +173,7 @@ func (fs *Decomposedfs) PrepareUpload(ctx context.Context, ref *provider.Referen
 			n.SetLockHeld(false)
 			return unlockOld()
 		}
-	} else {
+	default:
 		unlock, err = fs.lu.MetadataBackend().Lock(n)
 		if err != nil {
 			return nil, err
