@@ -19,8 +19,8 @@
 package net
 
 import (
-	"github.com/opencloud-eu/reva/v2/internal/http/services/datagateway"
-	ctxpkg "github.com/opencloud-eu/reva/v2/pkg/ctx"
+	"github.com/opencloud-eu/reva/v3/internal/http/services/datagateway"
+	ctxpkg "github.com/opencloud-eu/reva/v3/pkg/ctx"
 )
 
 type ctxKey int

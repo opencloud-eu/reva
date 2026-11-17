@@ -22,10 +22,10 @@ import (
 	"encoding/hex"
 	"net/http"
 
-	"github.com/opencloud-eu/reva/v2/internal/http/services/owncloud/ocdav/config"
-	"github.com/opencloud-eu/reva/v2/internal/http/services/owncloud/ocdav/net"
-	"github.com/opencloud-eu/reva/v2/pkg/appctx"
-	"github.com/opencloud-eu/reva/v2/pkg/rhttp/router"
+	"github.com/opencloud-eu/reva/v3/internal/http/services/owncloud/ocdav/config"
+	"github.com/opencloud-eu/reva/v3/internal/http/services/owncloud/ocdav/net"
+	"github.com/opencloud-eu/reva/v3/pkg/appctx"
+	"github.com/opencloud-eu/reva/v3/pkg/rhttp/router"
 )
 
 // AvatarsHandler handles avatar requests

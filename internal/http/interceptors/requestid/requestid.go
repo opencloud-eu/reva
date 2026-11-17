@@ -22,7 +22,7 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5/middleware"
-	"github.com/opencloud-eu/reva/v2/pkg/rhttp/global"
+	"github.com/opencloud-eu/reva/v3/pkg/rhttp/global"
 )
 
 const (

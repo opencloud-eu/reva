@@ -22,7 +22,7 @@ import (
 	"context"
 	"runtime"
 
-	"github.com/opencloud-eu/reva/v2/pkg/appctx"
+	"github.com/opencloud-eu/reva/v3/pkg/appctx"
 	"github.com/rs/zerolog"
 	semconv "go.opentelemetry.io/otel/semconv/v1.37.0"
 	"go.opentelemetry.io/otel/trace"

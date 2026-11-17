@@ -20,8 +20,8 @@ package loader
 
 import (
 	// Load core group manager drivers.
-	_ "github.com/opencloud-eu/reva/v2/pkg/group/manager/json"
-	_ "github.com/opencloud-eu/reva/v2/pkg/group/manager/ldap"
-	_ "github.com/opencloud-eu/reva/v2/pkg/group/manager/null"
+	_ "github.com/opencloud-eu/reva/v3/pkg/group/manager/json"
+	_ "github.com/opencloud-eu/reva/v3/pkg/group/manager/ldap"
+	_ "github.com/opencloud-eu/reva/v3/pkg/group/manager/null"
 	// Add your own here
 )

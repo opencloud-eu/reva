@@ -36,10 +36,10 @@ import (
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/go-viper/mapstructure/v2"
 	"github.com/google/uuid"
-	"github.com/opencloud-eu/reva/v2/pkg/appctx"
-	txdriver "github.com/opencloud-eu/reva/v2/pkg/datatx"
-	registry "github.com/opencloud-eu/reva/v2/pkg/datatx/manager/registry"
-	"github.com/opencloud-eu/reva/v2/pkg/rhttp"
+	"github.com/opencloud-eu/reva/v3/pkg/appctx"
+	txdriver "github.com/opencloud-eu/reva/v3/pkg/datatx"
+	registry "github.com/opencloud-eu/reva/v3/pkg/datatx/manager/registry"
+	"github.com/opencloud-eu/reva/v3/pkg/rhttp"
 	"github.com/pkg/errors"
 )
 

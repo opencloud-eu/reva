@@ -20,7 +20,7 @@ package loader
 
 import (
 	// Load core share repository drivers.
-	_ "github.com/opencloud-eu/reva/v2/pkg/ocm/share/repository/json"
-	_ "github.com/opencloud-eu/reva/v2/pkg/ocm/share/repository/nextcloud"
+	_ "github.com/opencloud-eu/reva/v3/pkg/ocm/share/repository/json"
+	_ "github.com/opencloud-eu/reva/v3/pkg/ocm/share/repository/nextcloud"
 	// Add your own here.
 )

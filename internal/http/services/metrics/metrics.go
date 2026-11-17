@@ -26,12 +26,12 @@ import (
 	"os"
 
 	"github.com/go-viper/mapstructure/v2"
-	"github.com/opencloud-eu/reva/v2/pkg/logger"
+	"github.com/opencloud-eu/reva/v3/pkg/logger"
 	"github.com/rs/zerolog"
 
-	"github.com/opencloud-eu/reva/v2/pkg/metrics"
-	"github.com/opencloud-eu/reva/v2/pkg/metrics/config"
-	"github.com/opencloud-eu/reva/v2/pkg/rhttp/global"
+	"github.com/opencloud-eu/reva/v3/pkg/metrics"
+	"github.com/opencloud-eu/reva/v3/pkg/metrics/config"
+	"github.com/opencloud-eu/reva/v3/pkg/rhttp/global"
 )
 
 func init() {

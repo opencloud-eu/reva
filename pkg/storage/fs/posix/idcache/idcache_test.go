@@ -5,9 +5,9 @@ import (
 	"errors"
 
 	"github.com/nats-io/nats.go/jetstream"
-	"github.com/opencloud-eu/reva/v2/pkg/storage/cache"
-	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/idcache"
-	helpers "github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/testhelpers"
+	"github.com/opencloud-eu/reva/v3/pkg/storage/cache"
+	"github.com/opencloud-eu/reva/v3/pkg/storage/fs/posix/idcache"
+	helpers "github.com/opencloud-eu/reva/v3/pkg/storage/fs/posix/testhelpers"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"

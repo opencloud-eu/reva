@@ -19,7 +19,7 @@
 package json
 
 import (
-	"github.com/opencloud-eu/reva/v2/pkg/publicshare"
+	"github.com/opencloud-eu/reva/v3/pkg/publicshare"
 )
 
 // SetStatConcurrency overrides the bounded worker pool size used by

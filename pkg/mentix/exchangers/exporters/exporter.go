@@ -19,8 +19,8 @@
 package exporters
 
 import (
-	"github.com/opencloud-eu/reva/v2/pkg/mentix/exchangers"
-	"github.com/opencloud-eu/reva/v2/pkg/mentix/meshdata"
+	"github.com/opencloud-eu/reva/v3/pkg/mentix/exchangers"
+	"github.com/opencloud-eu/reva/v3/pkg/mentix/meshdata"
 )
 
 // Exporter is the interface that all exporters must implement.

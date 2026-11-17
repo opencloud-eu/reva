@@ -21,7 +21,7 @@ package decomposeds3_test
 import (
 	"github.com/go-viper/mapstructure/v2"
 
-	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/decomposeds3"
+	"github.com/opencloud-eu/reva/v3/pkg/storage/fs/decomposeds3"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"

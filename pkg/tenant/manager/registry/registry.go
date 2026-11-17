@@ -19,7 +19,7 @@
 package registry
 
 import (
-	"github.com/opencloud-eu/reva/v2/pkg/tenant"
+	"github.com/opencloud-eu/reva/v3/pkg/tenant"
 	"github.com/rs/zerolog"
 )
 

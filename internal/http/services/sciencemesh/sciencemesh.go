@@ -24,10 +24,10 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/rs/zerolog"
 
-	"github.com/opencloud-eu/reva/v2/pkg/appctx"
-	"github.com/opencloud-eu/reva/v2/pkg/rhttp/global"
-	"github.com/opencloud-eu/reva/v2/pkg/sharedconf"
-	"github.com/opencloud-eu/reva/v2/pkg/utils/cfg"
+	"github.com/opencloud-eu/reva/v3/pkg/appctx"
+	"github.com/opencloud-eu/reva/v3/pkg/rhttp/global"
+	"github.com/opencloud-eu/reva/v3/pkg/sharedconf"
+	"github.com/opencloud-eu/reva/v3/pkg/utils/cfg"
 )
 
 func init() {

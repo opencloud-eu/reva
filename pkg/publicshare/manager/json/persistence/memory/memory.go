@@ -22,7 +22,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/opencloud-eu/reva/v2/pkg/publicshare/manager/json/persistence"
+	"github.com/opencloud-eu/reva/v3/pkg/publicshare/manager/json/persistence"
 )
 
 type memory struct {

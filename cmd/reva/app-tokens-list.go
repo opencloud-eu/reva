@@ -29,7 +29,7 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/jedib0t/go-pretty/table"
-	scope "github.com/opencloud-eu/reva/v2/pkg/auth/scope"
+	scope "github.com/opencloud-eu/reva/v3/pkg/auth/scope"
 )
 
 func appTokensListCommand() *command {

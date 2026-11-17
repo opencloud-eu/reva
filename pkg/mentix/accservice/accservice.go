@@ -27,8 +27,8 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/opencloud-eu/reva/v2/pkg/mentix/config"
-	"github.com/opencloud-eu/reva/v2/pkg/mentix/utils/network"
+	"github.com/opencloud-eu/reva/v3/pkg/mentix/config"
+	"github.com/opencloud-eu/reva/v3/pkg/mentix/utils/network"
 )
 
 // RequestResponse holds the response of an accounts service query.

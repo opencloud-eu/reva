@@ -17,8 +17,8 @@ import (
 	. "github.com/onsi/gomega"
 	tusd "github.com/tus/tusd/v2/pkg/handler"
 
-	ctxpkg "github.com/opencloud-eu/reva/v2/pkg/ctx"
-	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
+	ctxpkg "github.com/opencloud-eu/reva/v3/pkg/ctx"
+	"github.com/opencloud-eu/reva/v3/pkg/errtypes"
 )
 
 var _ = Describe("tusAdapter", func() {

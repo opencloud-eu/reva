@@ -23,10 +23,10 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/ignore"
+	"github.com/opencloud-eu/reva/v3/pkg/storage/fs/posix/ignore"
 
-	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/options"
-	decomposedoptions "github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/options"
+	"github.com/opencloud-eu/reva/v3/pkg/storage/fs/posix/options"
+	decomposedoptions "github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/options"
 )
 
 var (

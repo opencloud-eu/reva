@@ -5,9 +5,9 @@ import (
 	"strings"
 
 	sprovider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	"github.com/opencloud-eu/reva/v2/internal/http/services/owncloud/ocdav/config"
-	"github.com/opencloud-eu/reva/v2/internal/http/services/owncloud/ocdav/net"
-	"github.com/opencloud-eu/reva/v2/internal/http/services/owncloud/ocdav/propfind"
+	"github.com/opencloud-eu/reva/v3/internal/http/services/owncloud/ocdav/config"
+	"github.com/opencloud-eu/reva/v3/internal/http/services/owncloud/ocdav/net"
+	"github.com/opencloud-eu/reva/v3/internal/http/services/owncloud/ocdav/propfind"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"

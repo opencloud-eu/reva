@@ -27,10 +27,10 @@ import (
 	"sync"
 	"syscall"
 
-	"github.com/opencloud-eu/reva/v2/cmd/revad/internal/config"
-	"github.com/opencloud-eu/reva/v2/cmd/revad/internal/grace"
-	"github.com/opencloud-eu/reva/v2/cmd/revad/runtime"
-	"github.com/opencloud-eu/reva/v2/pkg/sysinfo"
+	"github.com/opencloud-eu/reva/v3/cmd/revad/internal/config"
+	"github.com/opencloud-eu/reva/v3/cmd/revad/internal/grace"
+	"github.com/opencloud-eu/reva/v3/cmd/revad/runtime"
+	"github.com/opencloud-eu/reva/v3/pkg/sysinfo"
 
 	"github.com/google/uuid"
 )

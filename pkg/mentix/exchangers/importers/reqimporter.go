@@ -25,9 +25,9 @@ import (
 
 	"github.com/rs/zerolog"
 
-	"github.com/opencloud-eu/reva/v2/pkg/mentix/config"
-	"github.com/opencloud-eu/reva/v2/pkg/mentix/exchangers"
-	"github.com/opencloud-eu/reva/v2/pkg/mentix/meshdata"
+	"github.com/opencloud-eu/reva/v3/pkg/mentix/config"
+	"github.com/opencloud-eu/reva/v3/pkg/mentix/exchangers"
+	"github.com/opencloud-eu/reva/v3/pkg/mentix/meshdata"
 )
 
 // BaseRequestImporter implements basic importer functionality common to all request importers.

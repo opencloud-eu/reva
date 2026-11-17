@@ -24,9 +24,9 @@ import (
 	"time"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
-	"github.com/opencloud-eu/reva/v2/internal/http/services/owncloud/ocdav"
-	"github.com/opencloud-eu/reva/v2/internal/http/services/owncloud/ocdav/config"
-	"github.com/opencloud-eu/reva/v2/pkg/rgrpc/todo/pool"
+	"github.com/opencloud-eu/reva/v3/internal/http/services/owncloud/ocdav"
+	"github.com/opencloud-eu/reva/v3/internal/http/services/owncloud/ocdav/config"
+	"github.com/opencloud-eu/reva/v3/pkg/rgrpc/todo/pool"
 	"github.com/rs/zerolog"
 	"go-micro.dev/v4/broker"
 	"go.opentelemetry.io/otel/trace"

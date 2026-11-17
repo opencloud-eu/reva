@@ -32,13 +32,13 @@ import (
 	"github.com/stretchr/testify/mock"
 	"google.golang.org/grpc"
 
-	csmocks "github.com/opencloud-eu/reva/v2/tests/cs3mocks/mocks"
+	csmocks "github.com/opencloud-eu/reva/v3/tests/cs3mocks/mocks"
 
-	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
-	"github.com/opencloud-eu/reva/v2/pkg/rgrpc/todo/pool"
-	"github.com/opencloud-eu/reva/v2/pkg/share"
-	shareMocks "github.com/opencloud-eu/reva/v2/pkg/share/mocks"
-	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/metadata"
+	"github.com/opencloud-eu/reva/v3/pkg/errtypes"
+	"github.com/opencloud-eu/reva/v3/pkg/rgrpc/todo/pool"
+	"github.com/opencloud-eu/reva/v3/pkg/share"
+	shareMocks "github.com/opencloud-eu/reva/v3/pkg/share/mocks"
+	"github.com/opencloud-eu/reva/v3/pkg/storage/utils/metadata"
 )
 
 // ── helpers ────────────────────────────────────────────────────────────────────

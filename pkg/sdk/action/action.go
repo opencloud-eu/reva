@@ -21,7 +21,7 @@ package action
 import (
 	"fmt"
 
-	"github.com/opencloud-eu/reva/v2/pkg/sdk"
+	"github.com/opencloud-eu/reva/v3/pkg/sdk"
 )
 
 type action struct {

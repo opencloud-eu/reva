@@ -27,9 +27,9 @@ import (
 	. "github.com/onsi/gomega"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
-	"github.com/opencloud-eu/reva/v2/pkg/share/manager/jsoncs3/sharecache"
-	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/metadata"
-	"github.com/opencloud-eu/reva/v2/pkg/utils"
+	"github.com/opencloud-eu/reva/v3/pkg/share/manager/jsoncs3/sharecache"
+	"github.com/opencloud-eu/reva/v3/pkg/storage/utils/metadata"
+	"github.com/opencloud-eu/reva/v3/pkg/utils"
 )
 
 var _ = Describe("Sharecache", func() {

@@ -15,7 +15,7 @@ import (
 	"github.com/rs/zerolog"
 	tusd "github.com/tus/tusd/v2/pkg/handler"
 
-	"github.com/opencloud-eu/reva/v2/pkg/appctx"
+	"github.com/opencloud-eu/reva/v3/pkg/appctx"
 )
 
 // TokenOptions carries the JWT-signing configuration needed to produce transfer

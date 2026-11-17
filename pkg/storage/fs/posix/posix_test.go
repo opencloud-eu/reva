@@ -23,12 +23,12 @@ import (
 	"os"
 
 	"github.com/nats-io/nats.go/jetstream"
-	"github.com/opencloud-eu/reva/v2/pkg/storage"
-	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix"
-	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/idcache"
-	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/options"
-	posixhelpers "github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/testhelpers"
-	"github.com/opencloud-eu/reva/v2/tests/helpers"
+	"github.com/opencloud-eu/reva/v3/pkg/storage"
+	"github.com/opencloud-eu/reva/v3/pkg/storage/fs/posix"
+	"github.com/opencloud-eu/reva/v3/pkg/storage/fs/posix/idcache"
+	"github.com/opencloud-eu/reva/v3/pkg/storage/fs/posix/options"
+	posixhelpers "github.com/opencloud-eu/reva/v3/pkg/storage/fs/posix/testhelpers"
+	"github.com/opencloud-eu/reva/v3/tests/helpers"
 	"github.com/rs/zerolog"
 
 	. "github.com/onsi/ginkgo/v2"

@@ -22,11 +22,11 @@ import (
 	"log"
 	"time"
 
-	"github.com/opencloud-eu/reva/v2/pkg/events"
-	"github.com/opencloud-eu/reva/v2/pkg/events/example/consumer"
-	"github.com/opencloud-eu/reva/v2/pkg/events/example/publisher"
-	"github.com/opencloud-eu/reva/v2/pkg/events/server"
-	"github.com/opencloud-eu/reva/v2/pkg/events/stream"
+	"github.com/opencloud-eu/reva/v3/pkg/events"
+	"github.com/opencloud-eu/reva/v3/pkg/events/example/consumer"
+	"github.com/opencloud-eu/reva/v3/pkg/events/example/publisher"
+	"github.com/opencloud-eu/reva/v3/pkg/events/server"
+	"github.com/opencloud-eu/reva/v3/pkg/events/stream"
 )
 
 // Simple example of an event workflow

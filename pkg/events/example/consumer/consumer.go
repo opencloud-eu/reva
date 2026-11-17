@@ -23,7 +23,7 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/opencloud-eu/reva/v2/pkg/events"
+	"github.com/opencloud-eu/reva/v3/pkg/events"
 )
 
 // Example consumes events from the queue

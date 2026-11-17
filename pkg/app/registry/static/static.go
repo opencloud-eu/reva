@@ -28,9 +28,9 @@ import (
 
 	registrypb "github.com/cs3org/go-cs3apis/cs3/app/registry/v1beta1"
 	"github.com/go-viper/mapstructure/v2"
-	"github.com/opencloud-eu/reva/v2/pkg/app"
-	"github.com/opencloud-eu/reva/v2/pkg/app/registry/registry"
-	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
+	"github.com/opencloud-eu/reva/v3/pkg/app"
+	"github.com/opencloud-eu/reva/v3/pkg/app/registry/registry"
+	"github.com/opencloud-eu/reva/v3/pkg/errtypes"
 	"github.com/rs/zerolog/log"
 	orderedmap "github.com/wk8/go-ordered-map"
 )

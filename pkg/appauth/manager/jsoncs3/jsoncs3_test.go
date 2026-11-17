@@ -14,14 +14,14 @@ import (
 	"github.com/stretchr/testify/mock"
 
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
-	"github.com/opencloud-eu/reva/v2/pkg/appauth"
-	"github.com/opencloud-eu/reva/v2/pkg/appauth/manager/jsoncs3"
-	"github.com/opencloud-eu/reva/v2/pkg/auth/scope"
-	ctxpkg "github.com/opencloud-eu/reva/v2/pkg/ctx"
-	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
-	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/metadata"
-	mdMock "github.com/opencloud-eu/reva/v2/pkg/storage/utils/metadata/mocks"
-	"github.com/opencloud-eu/reva/v2/pkg/utils"
+	"github.com/opencloud-eu/reva/v3/pkg/appauth"
+	"github.com/opencloud-eu/reva/v3/pkg/appauth/manager/jsoncs3"
+	"github.com/opencloud-eu/reva/v3/pkg/auth/scope"
+	ctxpkg "github.com/opencloud-eu/reva/v3/pkg/ctx"
+	"github.com/opencloud-eu/reva/v3/pkg/errtypes"
+	"github.com/opencloud-eu/reva/v3/pkg/storage/utils/metadata"
+	mdMock "github.com/opencloud-eu/reva/v3/pkg/storage/utils/metadata/mocks"
+	"github.com/opencloud-eu/reva/v3/pkg/utils"
 )
 
 const (

@@ -18,7 +18,7 @@
 
 package registry
 
-import "github.com/opencloud-eu/reva/v2/pkg/auth"
+import "github.com/opencloud-eu/reva/v3/pkg/auth"
 
 // NewTokenFunc is the function that token strategies
 // should register at init time.

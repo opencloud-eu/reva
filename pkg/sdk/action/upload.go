@@ -31,11 +31,11 @@ import (
 	storage "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 
-	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
-	"github.com/opencloud-eu/reva/v2/pkg/sdk"
-	"github.com/opencloud-eu/reva/v2/pkg/sdk/common"
-	"github.com/opencloud-eu/reva/v2/pkg/sdk/common/crypto"
-	"github.com/opencloud-eu/reva/v2/pkg/sdk/common/net"
+	"github.com/opencloud-eu/reva/v3/pkg/errtypes"
+	"github.com/opencloud-eu/reva/v3/pkg/sdk"
+	"github.com/opencloud-eu/reva/v3/pkg/sdk/common"
+	"github.com/opencloud-eu/reva/v3/pkg/sdk/common/crypto"
+	"github.com/opencloud-eu/reva/v3/pkg/sdk/common/net"
 )
 
 // UploadAction is used to upload files through Reva.

@@ -1,7 +1,7 @@
 package tree
 
 import (
-	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
+	"github.com/opencloud-eu/reva/v3/pkg/errtypes"
 )
 
 var ErrUnsupportedWatcher = errtypes.NotSupported("watching the filesystem is not supported on this platform")

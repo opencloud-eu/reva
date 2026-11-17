@@ -17,12 +17,12 @@ import (
 	"github.com/rs/zerolog"
 	eventsapi "go-micro.dev/v4/events"
 
-	"github.com/opencloud-eu/reva/v2/pkg/appctx"
-	ctxpkg "github.com/opencloud-eu/reva/v2/pkg/ctx"
-	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
-	"github.com/opencloud-eu/reva/v2/pkg/events"
-	"github.com/opencloud-eu/reva/v2/pkg/rhttp/datatx/metrics"
-	"github.com/opencloud-eu/reva/v2/pkg/storage"
+	"github.com/opencloud-eu/reva/v3/pkg/appctx"
+	ctxpkg "github.com/opencloud-eu/reva/v3/pkg/ctx"
+	"github.com/opencloud-eu/reva/v3/pkg/errtypes"
+	"github.com/opencloud-eu/reva/v3/pkg/events"
+	"github.com/opencloud-eu/reva/v3/pkg/rhttp/datatx/metrics"
+	"github.com/opencloud-eu/reva/v3/pkg/storage"
 )
 
 // The second half of an async upload: finishUpload staged the bytes and published

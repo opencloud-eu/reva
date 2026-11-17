@@ -27,13 +27,13 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/rs/zerolog"
 
-	"github.com/opencloud-eu/reva/v2/pkg/auth"
-	"github.com/opencloud-eu/reva/v2/pkg/auth/manager/registry"
-	"github.com/opencloud-eu/reva/v2/pkg/auth/scope"
-	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
-	"github.com/opencloud-eu/reva/v2/pkg/rgrpc/todo/pool"
-	"github.com/opencloud-eu/reva/v2/pkg/share"
-	"github.com/opencloud-eu/reva/v2/pkg/utils"
+	"github.com/opencloud-eu/reva/v3/pkg/auth"
+	"github.com/opencloud-eu/reva/v3/pkg/auth/manager/registry"
+	"github.com/opencloud-eu/reva/v3/pkg/auth/scope"
+	"github.com/opencloud-eu/reva/v3/pkg/errtypes"
+	"github.com/opencloud-eu/reva/v3/pkg/rgrpc/todo/pool"
+	"github.com/opencloud-eu/reva/v3/pkg/share"
+	"github.com/opencloud-eu/reva/v3/pkg/utils"
 )
 
 const (

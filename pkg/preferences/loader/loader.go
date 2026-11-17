@@ -20,6 +20,6 @@ package loader
 
 import (
 	// Load preferences drivers.
-	_ "github.com/opencloud-eu/reva/v2/pkg/preferences/memory"
+	_ "github.com/opencloud-eu/reva/v3/pkg/preferences/memory"
 	// Add your own here
 )

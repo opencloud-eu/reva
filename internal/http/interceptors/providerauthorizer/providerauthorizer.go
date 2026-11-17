@@ -26,13 +26,13 @@ import (
 
 	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
 	"github.com/go-viper/mapstructure/v2"
-	"github.com/opencloud-eu/reva/v2/pkg/appctx"
-	ctxpkg "github.com/opencloud-eu/reva/v2/pkg/ctx"
-	"github.com/opencloud-eu/reva/v2/pkg/ocm/provider"
-	"github.com/opencloud-eu/reva/v2/pkg/ocm/provider/authorizer/registry"
-	"github.com/opencloud-eu/reva/v2/pkg/rhttp/global"
-	"github.com/opencloud-eu/reva/v2/pkg/rhttp/router"
-	"github.com/opencloud-eu/reva/v2/pkg/utils"
+	"github.com/opencloud-eu/reva/v3/pkg/appctx"
+	ctxpkg "github.com/opencloud-eu/reva/v3/pkg/ctx"
+	"github.com/opencloud-eu/reva/v3/pkg/ocm/provider"
+	"github.com/opencloud-eu/reva/v3/pkg/ocm/provider/authorizer/registry"
+	"github.com/opencloud-eu/reva/v3/pkg/rhttp/global"
+	"github.com/opencloud-eu/reva/v3/pkg/rhttp/router"
+	"github.com/opencloud-eu/reva/v3/pkg/utils"
 )
 
 type config struct {

@@ -23,7 +23,7 @@ package mocks
 import (
 	context "context"
 
-	metadata "github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata"
+	metadata "github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/metadata"
 	mock "github.com/stretchr/testify/mock"
 
 	time "time"

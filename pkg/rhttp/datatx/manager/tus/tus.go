@@ -33,15 +33,15 @@ import (
 	tusd "github.com/tus/tusd/v2/pkg/handler"
 	"golang.org/x/exp/slog"
 
-	"github.com/opencloud-eu/reva/v2/internal/http/services/owncloud/ocdav/net"
-	"github.com/opencloud-eu/reva/v2/pkg/appctx"
-	"github.com/opencloud-eu/reva/v2/pkg/events"
-	"github.com/opencloud-eu/reva/v2/pkg/rhttp/datatx"
-	"github.com/opencloud-eu/reva/v2/pkg/rhttp/datatx/manager/registry"
-	"github.com/opencloud-eu/reva/v2/pkg/rhttp/datatx/metrics"
-	"github.com/opencloud-eu/reva/v2/pkg/storage"
-	"github.com/opencloud-eu/reva/v2/pkg/storagespace"
-	"github.com/opencloud-eu/reva/v2/pkg/upload"
+	"github.com/opencloud-eu/reva/v3/internal/http/services/owncloud/ocdav/net"
+	"github.com/opencloud-eu/reva/v3/pkg/appctx"
+	"github.com/opencloud-eu/reva/v3/pkg/events"
+	"github.com/opencloud-eu/reva/v3/pkg/rhttp/datatx"
+	"github.com/opencloud-eu/reva/v3/pkg/rhttp/datatx/manager/registry"
+	"github.com/opencloud-eu/reva/v3/pkg/rhttp/datatx/metrics"
+	"github.com/opencloud-eu/reva/v3/pkg/storage"
+	"github.com/opencloud-eu/reva/v3/pkg/storagespace"
+	"github.com/opencloud-eu/reva/v3/pkg/upload"
 )
 
 func init() {

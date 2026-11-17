@@ -23,7 +23,7 @@ import (
 	"sync"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
-	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/ace"
+	"github.com/opencloud-eu/reva/v3/pkg/storage/utils/ace"
 )
 
 // Declare a list of xattr keys

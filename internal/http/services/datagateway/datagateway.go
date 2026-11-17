@@ -29,11 +29,11 @@ import (
 
 	"github.com/go-viper/mapstructure/v2"
 	"github.com/golang-jwt/jwt/v5"
-	"github.com/opencloud-eu/reva/v2/pkg/appctx"
-	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
-	"github.com/opencloud-eu/reva/v2/pkg/rhttp"
-	"github.com/opencloud-eu/reva/v2/pkg/rhttp/global"
-	"github.com/opencloud-eu/reva/v2/pkg/sharedconf"
+	"github.com/opencloud-eu/reva/v3/pkg/appctx"
+	"github.com/opencloud-eu/reva/v3/pkg/errtypes"
+	"github.com/opencloud-eu/reva/v3/pkg/rhttp"
+	"github.com/opencloud-eu/reva/v3/pkg/rhttp/global"
+	"github.com/opencloud-eu/reva/v3/pkg/sharedconf"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	"go.opentelemetry.io/otel"
@@ -44,7 +44,7 @@ import (
 var tracer trace.Tracer
 
 func init() {
-	tracer = otel.Tracer("github.com/opencloud-eu/reva/v2/pkg/storage/utils/decomposedfs/tree")
+	tracer = otel.Tracer("github.com/opencloud-eu/reva/v3/pkg/storage/utils/decomposedfs/tree")
 }
 
 const (

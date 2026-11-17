@@ -30,11 +30,11 @@ import (
 	invitepb "github.com/cs3org/go-cs3apis/cs3/ocm/invite/v1beta1"
 	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
-	"github.com/opencloud-eu/reva/v2/internal/http/services/reqres"
-	"github.com/opencloud-eu/reva/v2/pkg/appctx"
-	ocmuser "github.com/opencloud-eu/reva/v2/pkg/ocm/user"
-	"github.com/opencloud-eu/reva/v2/pkg/rgrpc/todo/pool"
-	"github.com/opencloud-eu/reva/v2/pkg/utils"
+	"github.com/opencloud-eu/reva/v3/internal/http/services/reqres"
+	"github.com/opencloud-eu/reva/v3/pkg/appctx"
+	ocmuser "github.com/opencloud-eu/reva/v3/pkg/ocm/user"
+	"github.com/opencloud-eu/reva/v3/pkg/rgrpc/todo/pool"
+	"github.com/opencloud-eu/reva/v3/pkg/utils"
 )
 
 type invitesHandler struct {

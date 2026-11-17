@@ -27,7 +27,7 @@ import (
 	"reflect"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/opencloud-eu/reva/v2/pkg/appctx"
+	"github.com/opencloud-eu/reva/v3/pkg/appctx"
 )
 
 type key int

@@ -25,8 +25,8 @@ import (
 	"os"
 
 	"github.com/go-ldap/ldap/v3"
-	"github.com/opencloud-eu/reva/v2/pkg/appctx"
-	ldapReconnect "github.com/opencloud-eu/reva/v2/pkg/utils/ldap"
+	"github.com/opencloud-eu/reva/v3/pkg/appctx"
+	ldapReconnect "github.com/opencloud-eu/reva/v3/pkg/utils/ldap"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 )

@@ -30,8 +30,8 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/grants"
-	"github.com/opencloud-eu/reva/v2/pkg/utils"
+	"github.com/opencloud-eu/reva/v3/pkg/storage/utils/grants"
+	"github.com/opencloud-eu/reva/v3/pkg/utils"
 )
 
 const (

@@ -23,7 +23,7 @@ import (
 	"log"
 	"path"
 
-	"github.com/opencloud-eu/reva/v2/pkg/storage/migrate"
+	"github.com/opencloud-eu/reva/v3/pkg/storage/migrate"
 	"github.com/pkg/errors"
 )
 

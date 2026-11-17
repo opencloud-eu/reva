@@ -8,9 +8,9 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/go-viper/mapstructure/v2"
-	"github.com/opencloud-eu/reva/v2/pkg/auth"
-	"github.com/opencloud-eu/reva/v2/pkg/auth/manager/registry"
-	"github.com/opencloud-eu/reva/v2/pkg/auth/scope"
+	"github.com/opencloud-eu/reva/v3/pkg/auth"
+	"github.com/opencloud-eu/reva/v3/pkg/auth/manager/registry"
+	"github.com/opencloud-eu/reva/v3/pkg/auth/scope"
 	"github.com/pkg/errors"
 )
 
