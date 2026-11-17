@@ -105,10 +105,7 @@ func (fs *Decomposedfs) RestoreRevision(ctx context.Context, ref *provider.Refer
 	if err != nil {
 		return nil, err
 	}
-	defer func() {
-		_ = unlock()
-		_ = os.Remove(fs.lu.MetadataBackend().LockfilePath(n))
-	}()
+	defer func() { _ = unlock() }()
 
 	// move current version to new revision
 	mtime, err := n.GetMTime(ctx)

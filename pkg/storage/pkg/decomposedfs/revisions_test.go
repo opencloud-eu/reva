@@ -151,3 +151,36 @@ var _ = Describe("DeleteRevision", func() {
 		Expect(statErr).ToNot(HaveOccurred())
 	})
 })
+
+var _ = Describe("RestoreRevision", func() {
+	var env *helpers.DecomposedTestEnv
+
+	BeforeEach(func() {
+		var err error
+		env, err = helpers.NewTestEnv(nil)
+		Expect(err).ToNot(HaveOccurred())
+	})
+
+	AfterEach(func() {
+		if env != nil {
+			env.Cleanup()
+		}
+	})
+
+	// Removing it would let the next writer lock a new lock file, while whoever waited for
+	// the lock of the restore locks the removed one: both would change the node at once,
+	// see https://github.com/opencloud-eu/opencloud/issues/1793
+	It("keeps the lock file of the node", func() {
+		fileRef := &provider.Reference{ResourceId: env.SpaceRootRes, Path: "/dir1/file1"}
+		n, err := env.Lookup.NodeFromResource(env.Ctx, fileRef)
+		Expect(err).ToNot(HaveOccurred())
+		_, err = env.Tree.CreateRevision(env.Ctx, n, "2024-01-01T00:00:00Z")
+		Expect(err).ToNot(HaveOccurred())
+		env.Blobstore.On("Delete", mock.Anything).Return(nil).Maybe()
+
+		_, err = env.Fs.RestoreRevision(env.Ctx, fileRef, n.ID+node.RevisionIDDelimiter+"2024-01-01T00:00:00Z")
+		Expect(err).ToNot(HaveOccurred())
+
+		Expect(env.Lookup.MetadataBackend().LockfilePath(n)).To(BeAnExistingFile())
+	})
+})
