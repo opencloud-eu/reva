@@ -1,6 +1,6 @@
 # Changelog
 
-## [3.0.0](https://github.com/opencloud-eu/reva/releases/tag/v3.0.0) - 2026-11-16
+## [3.0.0](https://github.com/opencloud-eu/reva/releases/tag/v3.0.0) - 2026-11-17
 
 ### ❤️ Thanks to all contributors! ❤️
 
@@ -16,6 +16,7 @@
 
 ### 🐛 Bug Fixes
 
+- Reject node ids and revision keys that leave the space [[#1014](https://github.com/opencloud-eu/reva/pull/1014)]
 - fix(publicshareprovider): do not fail listing public shares when the metadata space is not accessible [[#996](https://github.com/opencloud-eu/reva/pull/996)]
 
 ### 📈 Enhancement
