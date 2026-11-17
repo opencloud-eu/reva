@@ -6,7 +6,9 @@
 
 @butonic, @dragonchaser
 
+### 🐛 Bug Fixes
 
+- fix: set the share jail root as parent id of listed shares [[#1020](https://github.com/opencloud-eu/reva/pull/1020)]
 
 ## [3.0.1](https://github.com/opencloud-eu/reva/releases/tag/v3.0.1) - 2026-11-17
 
