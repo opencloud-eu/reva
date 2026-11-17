@@ -148,7 +148,7 @@ var _ = Describe("user share provider service", func() {
 		}
 		manager.On("GetShare", mock.Anything, mock.Anything).Return(getShareResponse, nil)
 
-		rgrpcService := usershareprovider.New(gatewaySelector, manager, []*regexp.Regexp{})
+		rgrpcService := usershareprovider.New(gatewaySelector, manager, []*regexp.Regexp{}, false)
 
 		provider = rgrpcService.(collaborationpb.CollaborationAPIServer)
 		Expect(provider).ToNot(BeNil())
@@ -452,7 +452,7 @@ var _ = Describe("user share provider service", func() {
 		})
 		Context("resharing is not allowed", func() {
 			JustBeforeEach(func() {
-				rgrpcService := usershareprovider.New(gatewaySelector, manager, []*regexp.Regexp{})
+				rgrpcService := usershareprovider.New(gatewaySelector, manager, []*regexp.Regexp{}, false)
 
 				provider = rgrpcService.(collaborationpb.CollaborationAPIServer)
 				Expect(provider).ToNot(BeNil())
@@ -527,9 +527,51 @@ var _ = Describe("user share provider service", func() {
 			)
 		})
 
+		Context("new user shares disabled", func() {
+			BeforeEach(func() {
+				rgrpcService := usershareprovider.New(gatewaySelector, manager, []*regexp.Regexp{}, true)
+				provider = rgrpcService.(collaborationpb.CollaborationAPIServer)
+			})
+
+			It("rejects shares on files and folders", func() {
+				statResourceResponse.Info.PermissionSet = conversions.RoleFromName("manager").CS3ResourcePermissions()
+
+				createShareResponse, err := provider.CreateShare(ctx, &collaborationpb.CreateShareRequest{
+					ResourceInfo: statResourceResponse.Info,
+					Grant: &collaborationpb.ShareGrant{
+						Permissions: &collaborationpb.SharePermissions{Permissions: conversions.NewViewerRole().CS3ResourcePermissions()},
+					},
+				})
+
+				Expect(err).ToNot(HaveOccurred())
+				Expect(createShareResponse.Status.Code).To(Equal(rpcpb.Code_CODE_PERMISSION_DENIED))
+				manager.AssertNumberOfCalls(GinkgoT(), "Share", 0)
+			})
+
+			It("still adds space members", func() {
+				spaceRoot := &providerpb.ResourceId{StorageId: "storage1", SpaceId: "space1", OpaqueId: "space1"}
+				statResourceResponse.Info = &providerpb.ResourceInfo{
+					Id:            spaceRoot,
+					Space:         &providerpb.StorageSpace{Root: spaceRoot, SpaceType: "project"},
+					PermissionSet: conversions.RoleFromName("manager").CS3ResourcePermissions(),
+				}
+
+				createShareResponse, err := provider.CreateShare(ctx, &collaborationpb.CreateShareRequest{
+					ResourceInfo: statResourceResponse.Info,
+					Grant: &collaborationpb.ShareGrant{
+						Permissions: &collaborationpb.SharePermissions{Permissions: conversions.NewSpaceViewerRole().CS3ResourcePermissions()},
+					},
+				})
+
+				Expect(err).ToNot(HaveOccurred())
+				Expect(createShareResponse.Status.Code).To(Equal(rpcpb.Code_CODE_OK))
+				manager.AssertNumberOfCalls(GinkgoT(), "Share", 1)
+			})
+		})
+
 		Context("create share with tenant awareness", func() {
 			JustBeforeEach(func() {
-				rgrpcService := usershareprovider.New(gatewaySelector, manager, []*regexp.Regexp{})
+				rgrpcService := usershareprovider.New(gatewaySelector, manager, []*regexp.Regexp{}, false)
 
 				provider = rgrpcService.(collaborationpb.CollaborationAPIServer)
 				Expect(provider).ToNot(BeNil())
