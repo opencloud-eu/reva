@@ -25,12 +25,12 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	httpServer "github.com/go-micro/plugins/v4/server/http"
-	"github.com/opencloud-eu/opencloud/pkg/registry"
 	"github.com/opencloud-eu/reva/v3/internal/http/interceptors/appctx"
 	"github.com/opencloud-eu/reva/v3/internal/http/interceptors/auth"
 	cors2 "github.com/opencloud-eu/reva/v3/internal/http/interceptors/cors"
 	revaLogMiddleware "github.com/opencloud-eu/reva/v3/internal/http/interceptors/log"
 	"github.com/opencloud-eu/reva/v3/internal/http/services/owncloud/ocdav"
+	"github.com/opencloud-eu/reva/v3/pkg/registry"
 	"github.com/opencloud-eu/reva/v3/pkg/rgrpc/todo/pool"
 	"github.com/opencloud-eu/reva/v3/pkg/rhttp/global"
 	rtrace "github.com/opencloud-eu/reva/v3/pkg/trace"
@@ -108,9 +108,17 @@ func Service(opts ...Option) (micro.Service, error) {
 		return nil, err
 	}
 
+	reg := sopts.Registry
+	if reg == nil {
+		reg = registry.GetRegistry()
+	}
+	if reg == nil {
+		return nil, errors.New("no registry configured")
+	}
+
 	service := micro.NewService(
 		micro.Server(srv),
-		micro.Registry(registry.GetRegistry()),
+		micro.Registry(reg),
 	)
 
 	// finally, return the service so it can be Run() by the caller himself

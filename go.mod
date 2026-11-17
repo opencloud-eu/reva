@@ -24,6 +24,7 @@ require (
 	github.com/go-chi/chi/v5 v5.4.0
 	github.com/go-ldap/ldap/v3 v3.4.14
 	github.com/go-micro/plugins/v4/events/natsjs v1.2.2
+	github.com/go-micro/plugins/v4/registry/memory v1.2.0
 	github.com/go-micro/plugins/v4/server/http v1.2.2
 	github.com/go-micro/plugins/v4/store/nats-js v1.2.1
 	github.com/go-micro/plugins/v4/store/nats-js-kv v0.0.0-20240726082623-6831adfdcdc4
@@ -58,7 +59,6 @@ require (
 	github.com/onsi/ginkgo v1.16.5
 	github.com/onsi/ginkgo/v2 v2.32.0
 	github.com/onsi/gomega v1.42.1
-	github.com/opencloud-eu/opencloud v1.1.0
 	github.com/pablodz/inotifywaitgo v0.0.12
 	github.com/pkg/errors v0.9.1
 	github.com/pkg/xattr v0.4.12
@@ -112,6 +112,7 @@ require (
 	github.com/antithesishq/antithesis-sdk-go v0.7.2 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/bitly/go-simplejson v0.5.1 // indirect
+	github.com/bmizerany/pat v0.0.0-20210406213842-e4b6760bdd6f // indirect
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/chigopher/pathlib v0.19.1 // indirect
@@ -137,8 +138,6 @@ require (
 	github.com/go-logfmt/logfmt v0.5.1 // indirect
 	github.com/go-logr/logr v1.4.4 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
-	github.com/go-micro/plugins/v4/logger/zerolog v1.2.0 // indirect
-	github.com/go-micro/plugins/v4/registry/memory v1.2.0 // indirect
 	github.com/go-ole/go-ole v1.2.6 // indirect
 	github.com/go-openapi/errors v0.22.8 // indirect
 	github.com/go-openapi/strfmt v0.27.0 // indirect
@@ -180,7 +179,6 @@ require (
 	github.com/nxadm/tail v1.4.11 // indirect
 	github.com/oklog/run v1.2.0 // indirect
 	github.com/oklog/ulid/v2 v2.1.1 // indirect
-	github.com/opencloud-eu/reva/v2 v2.28.0 // indirect
 	github.com/oxtoacart/bpool v0.0.0-20190530202638-03653db5a59c // indirect
 	github.com/patrickmn/go-cache v2.1.0+incompatible // indirect
 	github.com/pelletier/go-toml/v2 v2.3.1 // indirect
@@ -200,7 +198,6 @@ require (
 	github.com/samber/lo v1.53.0 // indirect
 	github.com/samber/slog-common v0.21.0 // indirect
 	github.com/sergi/go-diff v1.4.0 // indirect
-	github.com/sirupsen/logrus v1.10.2 // indirect
 	github.com/skeema/knownhosts v1.3.3 // indirect
 	github.com/sourcegraph/conc v0.3.0 // indirect
 	github.com/spf13/afero v1.15.0 // indirect
@@ -213,6 +210,7 @@ require (
 	github.com/tinylib/msgp v1.6.1 // indirect
 	github.com/tklauser/go-sysconf v0.3.14 // indirect
 	github.com/tklauser/numcpus v0.8.0 // indirect
+	github.com/tus/tusd v1.10.0 // indirect
 	github.com/urfave/cli/v2 v2.27.7 // indirect
 	github.com/vektra/mockery/v2 v2.53.2 // indirect
 	github.com/vmihailenco/tagparser/v2 v2.0.0 // indirect

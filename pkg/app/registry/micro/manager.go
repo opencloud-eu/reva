@@ -28,10 +28,10 @@ import (
 
 	registrypb "github.com/cs3org/go-cs3apis/cs3/app/registry/v1beta1"
 	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-	oreg "github.com/opencloud-eu/opencloud/pkg/registry"
 	"github.com/opencloud-eu/reva/v3/pkg/app"
 	"github.com/opencloud-eu/reva/v3/pkg/appctx"
 	"github.com/opencloud-eu/reva/v3/pkg/errtypes"
+	oreg "github.com/opencloud-eu/reva/v3/pkg/registry"
 	"github.com/rs/zerolog/log"
 	mreg "go-micro.dev/v4/registry"
 )
@@ -175,6 +175,9 @@ func (m *manager) SetDefaultProviderForMimeType(ctx context.Context, mimeType st
 
 func (m *manager) getProvidersFromMicroRegistry(ctx context.Context) ([]*registrypb.ProviderInfo, error) {
 	reg := oreg.GetRegistry()
+	if reg == nil {
+		return nil, errtypes.InternalError("no service registry configured")
+	}
 	services, err := reg.GetService(m.namespace+".api.app-provider", mreg.GetContext(ctx))
 	if err != nil {
 		log.Warn().Err(err).Msg("getProvidersFromMicroRegistry")

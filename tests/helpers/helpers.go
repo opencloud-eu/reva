@@ -31,7 +31,7 @@ import (
 	"strconv"
 	"syscall"
 
-	"github.com/opencloud-eu/opencloud/services/webdav/pkg/net"
+	"github.com/opencloud-eu/reva/v3/internal/http/services/owncloud/ocdav/net"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	"github.com/studio-b12/gowebdav"

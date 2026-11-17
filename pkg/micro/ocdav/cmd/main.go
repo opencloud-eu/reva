@@ -23,6 +23,7 @@ import (
 
 	"github.com/opencloud-eu/reva/v3/pkg/micro/ocdav"
 	"github.com/rs/zerolog"
+	"go-micro.dev/v4/registry"
 )
 
 // main starts a go micro service that uses the ocdev handler
@@ -33,6 +34,7 @@ func main() {
 
 	s, err := ocdav.Service(
 		ocdav.Logger(logger),
+		ocdav.Registry(registry.NewRegistry()),
 		ocdav.GatewaySvc("127.0.0.1:9142"),
 		ocdav.FilesNamespace("/users/{{.Id.OpaqueId}}"),
 		ocdav.WebdavNamespace("/users/{{.Id.OpaqueId}}"),
