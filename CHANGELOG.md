@@ -10,13 +10,16 @@
 
 - Merge Workpackages back to main [[#957](https://github.com/opencloud-eu/reva/pull/957)]
 
+### 🔒 Security
+
+- Reject node ids and revision keys that leave the space [[#1014](https://github.com/opencloud-eu/reva/pull/1014)]
+
 ### ✨ Features
 
 - feat(tags): trim tags and add validation before adding them [[#1005](https://github.com/opencloud-eu/reva/pull/1005)]
 
 ### 🐛 Bug Fixes
 
-- Reject node ids and revision keys that leave the space [[#1014](https://github.com/opencloud-eu/reva/pull/1014)]
 - fix(publicshareprovider): do not fail listing public shares when the metadata space is not accessible [[#996](https://github.com/opencloud-eu/reva/pull/996)]
 
 ### 📈 Enhancement
