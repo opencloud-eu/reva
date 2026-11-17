@@ -37,13 +37,14 @@ type db struct {
 
 type cs3 struct {
 	initialized bool
-	s           metadata.Storage
+	s           metadata.LockingStorage
 
 	db db
 }
 
-// New returns a new Cache instance
-func New(s metadata.Storage) persistence.Persistence {
+// New returns a new Cache instance. Update uses s.UploadWithLock, so the lock
+// strategy is the one s was configured with.
+func New(s metadata.LockingStorage) persistence.Persistence {
 	return &cs3{
 		s: s,
 		db: db{
@@ -106,6 +107,33 @@ func (p *cs3) Write(ctx context.Context, db persistence.PublicShares) error {
 		Content:           dbAsJSON,
 		Path:              "publicshares.json",
 		IfUnmodifiedSince: p.db.mtime,
+	})
+	return err
+}
+
+// Update atomically reads the current publicshares.json, applies fn, and writes
+// the result back while holding a lock on the file. When the storage supports
+// locking (LockingStorage) this is fully atomic across replicas; otherwise it
+// degrades to an unlocked read-modify-write.
+func (p *cs3) Update(ctx context.Context, fn func(current persistence.PublicShares) (persistence.PublicShares, error)) error {
+	if !p.initialized {
+		return fmt.Errorf("not initialized")
+	}
+
+	const path = "publicshares.json"
+
+	_, err := p.s.UploadWithLock(ctx, metadata.UploadRequest{Path: path}, func(existing []byte) ([]byte, error) {
+		current := persistence.PublicShares{}
+		if len(existing) > 0 {
+			if err := json.Unmarshal(existing, &current); err != nil {
+				return nil, err
+			}
+		}
+		next, err := fn(current)
+		if err != nil {
+			return nil, err
+		}
+		return json.Marshal(next)
 	})
 	return err
 }

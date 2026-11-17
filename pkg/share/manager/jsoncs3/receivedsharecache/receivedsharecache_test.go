@@ -27,6 +27,7 @@ import (
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	"github.com/opencloud-eu/reva/v2/pkg/share/manager/jsoncs3/receivedsharecache"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/metadata"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/metadata/locks"
 	"github.com/opencloud-eu/reva/v2/pkg/utils"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -36,7 +37,7 @@ import (
 var _ = Describe("Cache", func() {
 	var (
 		c       receivedsharecache.Cache
-		storage metadata.Storage
+		storage metadata.LockingStorage
 
 		userID = utils.NewFSSafeUserID(&userpb.UserId{
 			OpaqueId: "userid",
@@ -62,7 +63,7 @@ var _ = Describe("Cache", func() {
 		err = os.MkdirAll(tmpdir, 0755)
 		Expect(err).ToNot(HaveOccurred())
 
-		storage, err = metadata.NewDiskStorage(tmpdir)
+		storage, err = metadata.NewDiskStorage(tmpdir, metadata.WithLocker(locks.NewDiskLocker(tmpdir)))
 		Expect(err).ToNot(HaveOccurred())
 
 		c = receivedsharecache.New(storage, 0*time.Second)
@@ -101,6 +102,22 @@ var _ = Describe("Cache", func() {
 			s, err := c.Get(ctx, userID, spaceID, shareID)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(s).ToNot(BeNil())
+		})
+
+		It("adds to a space whose states are null", func() {
+			Expect(storage.MakeDirIfNotExist(ctx, "/users/"+userID.SafeFilename())).To(Succeed())
+			Expect(storage.SimpleUpload(ctx, "/users/"+userID.SafeFilename()+"/received.json",
+				[]byte(`{"Spaces":{"`+spaceID+`":{"States":null}}}`))).To(Succeed())
+
+			rs := &collaboration.ReceivedShare{
+				Share: share,
+				State: collaboration.ShareState_SHARE_STATE_ACCEPTED,
+			}
+			Expect(c.Add(ctx, userID, spaceID, rs)).To(Succeed())
+
+			s, err := c.Get(ctx, userID, spaceID, shareID)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(s.State).To(Equal(collaboration.ShareState_SHARE_STATE_ACCEPTED))
 		})
 	})
 

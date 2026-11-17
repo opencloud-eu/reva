@@ -39,6 +39,7 @@ import (
 	"github.com/opencloud-eu/reva/v2/pkg/rgrpc/status"
 	"github.com/opencloud-eu/reva/v2/pkg/rgrpc/todo/pool"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/metadata"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/metadata/locks"
 	"github.com/opencloud-eu/reva/v2/pkg/utils"
 	"github.com/opencloud-eu/reva/v2/tests/cs3mocks/mocks"
 	"github.com/stretchr/testify/mock"
@@ -670,7 +671,7 @@ var _ = Describe("Json", func() {
 		var (
 			tmpdir string
 
-			storage metadata.Storage
+			storage metadata.LockingStorage
 		)
 
 		BeforeEach(func() {
@@ -681,7 +682,7 @@ var _ = Describe("Json", func() {
 			err = os.MkdirAll(tmpdir, 0755)
 			Expect(err).ToNot(HaveOccurred())
 
-			storage, err = metadata.NewDiskStorage(tmpdir)
+			storage, err = metadata.NewDiskStorage(tmpdir, metadata.WithLocker(locks.NewDiskLocker(tmpdir)))
 			Expect(err).ToNot(HaveOccurred())
 
 			persistence := cs3.New(storage)
@@ -703,6 +704,37 @@ var _ = Describe("Json", func() {
 				ps, err := m.CreatePublicShare(ctx, user1, sharedResource, grant)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(ps).ToNot(BeNil())
+			})
+
+			It("does not lose updates when creating and revoking concurrently", func() {
+				const n = 30
+				var wg sync.WaitGroup
+				wg.Add(n)
+				for i := 0; i < n; i++ {
+					i := i
+					go func() {
+						defer wg.Done()
+						ps, err := m.CreatePublicShare(ctx, user1, sharedResource, grant)
+						if err != nil {
+							Fail(fmt.Sprintf("create %d failed: %v", i, err))
+						}
+						// Revoke every other share to exercise concurrent deletes.
+						if i%2 == 0 {
+							ref := &link.PublicShareReference{
+								Spec: &link.PublicShareReference_Id{Id: ps.Id},
+							}
+							if err := m.RevokePublicShare(ctx, user1, ref); err != nil {
+								Fail(fmt.Sprintf("revoke %d failed: %v", i, err))
+							}
+						}
+					}()
+				}
+				wg.Wait()
+
+				// Exactly the odd-indexed shares should remain.
+				ps, err := m.ListPublicShares(ctx, user1, []*link.ListPublicSharesRequest_Filter{}, false)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(len(ps)).To(Equal(n / 2))
 			})
 		})
 

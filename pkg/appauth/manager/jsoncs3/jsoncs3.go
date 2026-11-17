@@ -61,6 +61,8 @@ type config struct {
 	// For testing set this -1 to disable automatic updates.
 	UTimeUpdateInterval int `mapstructure:"utime_update_interval_seconds"`
 	UpdateRetryCount    int `mapstructure:"update_retry_count"`
+	// LockConfig selects how writers are serialised, see metadata.LockConfig.
+	metadata.LockConfig `mapstructure:",squash"`
 }
 
 const (
@@ -123,7 +125,11 @@ func New(m map[string]any) (appauth.Manager, error) {
 		return nil, fmt.Errorf("appauth jsoncs3 manager: failed initialize password generator: %w", err)
 	}
 
-	cs3, err := metadata.NewCS3Storage(c.ProviderAddr, c.ProviderAddr, c.ServiceUserID, c.ServiceUserIdp, c.MachineAuthAPIKey)
+	lockOpt, err := metadata.LockerOption(c.LockConfig)
+	if err != nil {
+		return nil, fmt.Errorf("appauth jsoncs3 manager: %w", err)
+	}
+	cs3, err := metadata.NewCS3Storage(c.ProviderAddr, c.ProviderAddr, c.ServiceUserID, c.ServiceUserIdp, c.MachineAuthAPIKey, lockOpt)
 	if err != nil {
 		return nil, err
 	}
@@ -132,11 +138,17 @@ func New(m map[string]any) (appauth.Manager, error) {
 }
 
 func NewWithOptions(mds metadata.Storage, generator PasswordGenerator, uTimeUpdateInterval time.Duration, updateRetries int) (*manager, error) {
+	var locking metadata.LockingStorage
+	if ls, ok := mds.(metadata.LockingStorage); ok {
+		locking = ls
+	}
+
 	store := metadatacache.New(metadatacache.Options[string, map[string]*apppb.AppPassword]{
-		Storage: mds,
-		Path:    func(userID string) string { return userID + ".json" },
-		Retries: updateRetries,
-		Init:    func() map[string]*apppb.AppPassword { return map[string]*apppb.AppPassword{} },
+		Storage:        mds,
+		Path:           func(userID string) string { return userID + ".json" },
+		Retries:        updateRetries,
+		Init:           func() map[string]*apppb.AppPassword { return map[string]*apppb.AppPassword{} },
+		LockingStorage: locking,
 	})
 
 	return &manager{

@@ -21,6 +21,18 @@ import (
 )
 
 func NewNatsKeyValue(c Config, log *zerolog.Logger) (jetstream.KeyValue, error) {
+	js, err := NewNatsJetStream(c, log)
+	if err != nil {
+		return nil, err
+	}
+	return NewNatsKeyValueFromJetStream(c, js)
+}
+
+// NewNatsJetStream connects to the NATS nodes in c, using its auth and TLS
+// settings, and returns a JetStream context. It retries with exponential
+// backoff until the connection succeeds. extra is applied after the default
+// options and can override them.
+func NewNatsJetStream(c Config, log *zerolog.Logger, extra ...nats.Option) (jetstream.JetStream, error) {
 	nodes := strings.Join(c.Nodes, ",")
 	if nodes == "" {
 		return nil, errors.New("at least one node is required")
@@ -69,6 +81,7 @@ func NewNatsKeyValue(c Config, log *zerolog.Logger) (jetstream.KeyValue, error) 
 		}
 		opts = append(opts, nats.Secure(tlsConfig))
 	}
+	opts = append(opts, extra...)
 
 	var js jetstream.JetStream
 	o := func() error {
@@ -85,8 +98,7 @@ func NewNatsKeyValue(c Config, log *zerolog.Logger) (jetstream.KeyValue, error) 
 	if err != nil {
 		return nil, err
 	}
-
-	return NewNatsKeyValueFromJetStream(c, js)
+	return js, nil
 }
 
 func NewNatsKeyValueFromJetStream(c Config, js jetstream.JetStream) (jetstream.KeyValue, error) {

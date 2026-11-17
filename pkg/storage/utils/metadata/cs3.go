@@ -43,6 +43,7 @@ import (
 	ctxpkg "github.com/opencloud-eu/reva/v2/pkg/ctx"
 	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
 	"github.com/opencloud-eu/reva/v2/pkg/rgrpc/todo/pool"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/metadata/locks"
 	"github.com/opencloud-eu/reva/v2/pkg/utils"
 )
 
@@ -63,6 +64,7 @@ type CS3 struct {
 	machineAuthAPIKey string
 
 	dataGatewayClient *http.Client
+	locker            locks.Locker
 }
 
 // NewCS3 returns a new CS3 instance. Use an authenticated context and be sure to define SpaceRoot manually.
@@ -71,12 +73,13 @@ func NewCS3(gwAddr, providerAddr string) (s *CS3) {
 		providerAddr:      providerAddr,
 		gatewayAddr:       gwAddr,
 		dataGatewayClient: http.DefaultClient,
+		locker:            locks.NewNoopLocker(),
 	}
 }
 
 // NewCS3Storage returns a new cs3 storage instance. Context passed to methods is irrelevant as the service user will be used.
 // Be sure to call Init before using the storage.
-func NewCS3Storage(gwAddr, providerAddr, serviceUserID, serviceUserIDP, machineAuthAPIKey string) (s Storage, err error) {
+func NewCS3Storage(gwAddr, providerAddr, serviceUserID, serviceUserIDP, machineAuthAPIKey string, opts ...Option) (*CS3, error) {
 	cs3 := NewCS3(gwAddr, providerAddr)
 
 	cs3.useSystemUser = true
@@ -87,6 +90,7 @@ func NewCS3Storage(gwAddr, providerAddr, serviceUserID, serviceUserIDP, machineA
 			Idp:      serviceUserIDP,
 		},
 	}
+	cs3.locker = applyOptions(opts).locker
 
 	return cs3, nil
 }
@@ -270,6 +274,26 @@ func (cs3 *CS3) Upload(ctx context.Context, req UploadRequest) (*UploadResponse,
 		Etag:   etag,
 		FileID: resp.Header.Get("OC-Fileid"),
 	}, nil
+}
+
+// UploadWithLock performs an atomic read-modify-write on req.Path over the CS3
+// API.
+//
+// Correctness does not depend on the lock: the upload is conditional on the
+// etag that was read (If-Match, or If-None-Match "*" for a new file) and the
+// cycle is retried when another writer got in between, so fn may be called
+// more than once and must only depend on its argument. The configured locker
+// (none by default) only serializes writers that share it, which avoids
+// those retries. fn receives the current content (nil if the file does not
+// exist) and returns the bytes to persist; returning nil from fn skips the
+// write.
+func (cs3 *CS3) UploadWithLock(ctx context.Context, req UploadRequest, fn func(existing []byte) ([]byte, error)) (*UploadResponse, error) {
+	unlock, err := cs3.locker.Lock(ctx, req.Path)
+	if err != nil {
+		return nil, err
+	}
+	defer unlock()
+	return casUpload(ctx, cs3, req, fn)
 }
 
 // Stat returns the metadata for the given path
