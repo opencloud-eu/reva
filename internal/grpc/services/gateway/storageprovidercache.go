@@ -23,10 +23,10 @@ import (
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	registry "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
-	ctxpkg "github.com/opencloud-eu/reva/v2/pkg/ctx"
-	sdk "github.com/opencloud-eu/reva/v2/pkg/sdk/common"
-	"github.com/opencloud-eu/reva/v2/pkg/storage/cache"
-	"github.com/opencloud-eu/reva/v2/pkg/utils"
+	ctxpkg "github.com/opencloud-eu/reva/v3/pkg/ctx"
+	sdk "github.com/opencloud-eu/reva/v3/pkg/sdk/common"
+	"github.com/opencloud-eu/reva/v3/pkg/storage/cache"
+	"github.com/opencloud-eu/reva/v3/pkg/utils"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 )

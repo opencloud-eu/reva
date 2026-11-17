@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/opencloud-eu/reva/v2/pkg/storage"
+	"github.com/opencloud-eu/reva/v3/pkg/storage"
 )
 
 func TestNewProviderCapabilitiesReadOnly(t *testing.T) {

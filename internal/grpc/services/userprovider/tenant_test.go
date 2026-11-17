@@ -8,11 +8,11 @@ import (
 
 	tenantpb "github.com/cs3org/go-cs3apis/cs3/identity/tenant/v1beta1"
 	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
-	"github.com/opencloud-eu/reva/v2/internal/grpc/services/userprovider"
-	"github.com/opencloud-eu/reva/v2/pkg/rgrpc"
-	"github.com/opencloud-eu/reva/v2/pkg/sharedconf"
-	_ "github.com/opencloud-eu/reva/v2/pkg/tenant/manager/loader"
-	_ "github.com/opencloud-eu/reva/v2/pkg/user/manager/loader"
+	"github.com/opencloud-eu/reva/v3/internal/grpc/services/userprovider"
+	"github.com/opencloud-eu/reva/v3/pkg/rgrpc"
+	"github.com/opencloud-eu/reva/v3/pkg/sharedconf"
+	_ "github.com/opencloud-eu/reva/v3/pkg/tenant/manager/loader"
+	_ "github.com/opencloud-eu/reva/v3/pkg/user/manager/loader"
 )
 
 var _ = Describe("the tenant api service", func() {

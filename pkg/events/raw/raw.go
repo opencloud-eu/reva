@@ -13,7 +13,7 @@ import (
 	"github.com/cenkalti/backoff"
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
-	"github.com/opencloud-eu/reva/v2/pkg/events"
+	"github.com/opencloud-eu/reva/v3/pkg/events"
 	"github.com/pkg/errors"
 )
 

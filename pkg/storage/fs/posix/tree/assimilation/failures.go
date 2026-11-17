@@ -10,7 +10,7 @@ import (
 	"github.com/hashicorp/golang-lru/v2/expirable"
 	"github.com/pkg/errors"
 
-	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/timemanager"
+	"github.com/opencloud-eu/reva/v3/pkg/storage/fs/posix/timemanager"
 )
 
 const (

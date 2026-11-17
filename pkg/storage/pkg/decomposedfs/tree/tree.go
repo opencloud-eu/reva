@@ -32,17 +32,17 @@ import (
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/google/uuid"
-	"github.com/opencloud-eu/reva/v2/pkg/appctx"
-	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
-	"github.com/opencloud-eu/reva/v2/pkg/storage"
-	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/lookup"
-	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata"
-	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata/prefixes"
-	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/node"
-	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/options"
-	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/permissions"
-	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/tree/propagator"
-	"github.com/opencloud-eu/reva/v2/pkg/utils"
+	"github.com/opencloud-eu/reva/v3/pkg/appctx"
+	"github.com/opencloud-eu/reva/v3/pkg/errtypes"
+	"github.com/opencloud-eu/reva/v3/pkg/storage"
+	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/lookup"
+	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/metadata"
+	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/metadata/prefixes"
+	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/node"
+	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/options"
+	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/permissions"
+	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/tree/propagator"
+	"github.com/opencloud-eu/reva/v3/pkg/utils"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	"go-micro.dev/v4/store"
@@ -54,7 +54,7 @@ import (
 var tracer trace.Tracer
 
 func init() {
-	tracer = otel.Tracer("github.com/opencloud-eu/reva/v2/pkg/storage/utils/decomposedfs/tree")
+	tracer = otel.Tracer("github.com/opencloud-eu/reva/v3/pkg/storage/utils/decomposedfs/tree")
 }
 
 // Tree manages a hierarchical tree

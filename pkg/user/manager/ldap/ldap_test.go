@@ -21,7 +21,7 @@ package ldap
 import (
 	"testing"
 
-	ldapIdentity "github.com/opencloud-eu/reva/v2/pkg/utils/ldap"
+	ldapIdentity "github.com/opencloud-eu/reva/v3/pkg/utils/ldap"
 )
 
 func TestUserManager(t *testing.T) {

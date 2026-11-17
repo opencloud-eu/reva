@@ -27,7 +27,7 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/rs/zerolog"
 
-	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/metadata"
+	"github.com/opencloud-eu/reva/v3/pkg/storage/utils/metadata"
 )
 
 // fakeMigration is a configurable stub that satisfies the migration interface.

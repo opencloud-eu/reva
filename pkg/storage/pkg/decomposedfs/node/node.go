@@ -38,19 +38,19 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/google/uuid"
-	"github.com/opencloud-eu/reva/v2/internal/grpc/services/storageprovider"
-	"github.com/opencloud-eu/reva/v2/pkg/appctx"
-	"github.com/opencloud-eu/reva/v2/pkg/conversions"
-	ctxpkg "github.com/opencloud-eu/reva/v2/pkg/ctx"
-	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
-	"github.com/opencloud-eu/reva/v2/pkg/mime"
-	"github.com/opencloud-eu/reva/v2/pkg/rhttp/datatx/metrics"
-	"github.com/opencloud-eu/reva/v2/pkg/storage/internal/goroutinelock"
-	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata"
-	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata/prefixes"
-	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/ace"
-	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/grants"
-	"github.com/opencloud-eu/reva/v2/pkg/utils"
+	"github.com/opencloud-eu/reva/v3/internal/grpc/services/storageprovider"
+	"github.com/opencloud-eu/reva/v3/pkg/appctx"
+	"github.com/opencloud-eu/reva/v3/pkg/conversions"
+	ctxpkg "github.com/opencloud-eu/reva/v3/pkg/ctx"
+	"github.com/opencloud-eu/reva/v3/pkg/errtypes"
+	"github.com/opencloud-eu/reva/v3/pkg/mime"
+	"github.com/opencloud-eu/reva/v3/pkg/rhttp/datatx/metrics"
+	"github.com/opencloud-eu/reva/v3/pkg/storage/internal/goroutinelock"
+	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/metadata"
+	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/metadata/prefixes"
+	"github.com/opencloud-eu/reva/v3/pkg/storage/utils/ace"
+	"github.com/opencloud-eu/reva/v3/pkg/storage/utils/grants"
+	"github.com/opencloud-eu/reva/v3/pkg/utils"
 	"github.com/pkg/errors"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
@@ -63,7 +63,7 @@ var tracer trace.Tracer
 var ErrMissingParentID = errtypes.InternalError("Missing parent ID on node")
 
 func init() {
-	tracer = otel.Tracer("github.com/opencloud-eu/reva/v2/pkg/storage/utils/decomposedfs/node")
+	tracer = otel.Tracer("github.com/opencloud-eu/reva/v3/pkg/storage/utils/decomposedfs/node")
 }
 
 // Define keys and values used in the node metadata

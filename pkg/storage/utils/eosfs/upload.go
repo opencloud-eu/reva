@@ -22,8 +22,8 @@ import (
 	"context"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
-	"github.com/opencloud-eu/reva/v2/pkg/storage"
+	"github.com/opencloud-eu/reva/v3/pkg/errtypes"
+	"github.com/opencloud-eu/reva/v3/pkg/storage"
 )
 
 func (fs *eosfs) MarkProcessing(ctx context.Context, ref *provider.Reference, processing bool, sessionID string) error {

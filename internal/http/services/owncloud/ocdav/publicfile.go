@@ -26,11 +26,11 @@ import (
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-	ocdaverrors "github.com/opencloud-eu/reva/v2/internal/http/services/owncloud/ocdav/errors"
-	"github.com/opencloud-eu/reva/v2/internal/http/services/owncloud/ocdav/net"
-	"github.com/opencloud-eu/reva/v2/internal/http/services/owncloud/ocdav/propfind"
-	"github.com/opencloud-eu/reva/v2/pkg/appctx"
-	"github.com/opencloud-eu/reva/v2/pkg/rhttp/router"
+	ocdaverrors "github.com/opencloud-eu/reva/v3/internal/http/services/owncloud/ocdav/errors"
+	"github.com/opencloud-eu/reva/v3/internal/http/services/owncloud/ocdav/net"
+	"github.com/opencloud-eu/reva/v3/internal/http/services/owncloud/ocdav/propfind"
+	"github.com/opencloud-eu/reva/v3/pkg/appctx"
+	"github.com/opencloud-eu/reva/v3/pkg/rhttp/router"
 	"go.opentelemetry.io/otel/codes"
 	semconv "go.opentelemetry.io/otel/semconv/v1.37.0"
 )

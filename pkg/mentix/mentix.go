@@ -26,15 +26,15 @@ import (
 
 	"github.com/rs/zerolog"
 
-	"github.com/opencloud-eu/reva/v2/pkg/appctx"
-	"github.com/opencloud-eu/reva/v2/pkg/mentix/accservice"
-	"github.com/opencloud-eu/reva/v2/pkg/mentix/config"
-	"github.com/opencloud-eu/reva/v2/pkg/mentix/connectors"
-	"github.com/opencloud-eu/reva/v2/pkg/mentix/entity"
-	"github.com/opencloud-eu/reva/v2/pkg/mentix/exchangers"
-	"github.com/opencloud-eu/reva/v2/pkg/mentix/exchangers/exporters"
-	"github.com/opencloud-eu/reva/v2/pkg/mentix/exchangers/importers"
-	"github.com/opencloud-eu/reva/v2/pkg/mentix/meshdata"
+	"github.com/opencloud-eu/reva/v3/pkg/appctx"
+	"github.com/opencloud-eu/reva/v3/pkg/mentix/accservice"
+	"github.com/opencloud-eu/reva/v3/pkg/mentix/config"
+	"github.com/opencloud-eu/reva/v3/pkg/mentix/connectors"
+	"github.com/opencloud-eu/reva/v3/pkg/mentix/entity"
+	"github.com/opencloud-eu/reva/v3/pkg/mentix/exchangers"
+	"github.com/opencloud-eu/reva/v3/pkg/mentix/exchangers/exporters"
+	"github.com/opencloud-eu/reva/v3/pkg/mentix/exchangers/importers"
+	"github.com/opencloud-eu/reva/v3/pkg/mentix/meshdata"
 )
 
 // Mentix represents the main Mentix service object.

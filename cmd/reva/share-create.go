@@ -29,8 +29,8 @@ import (
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/jedib0t/go-pretty/table"
-	"github.com/opencloud-eu/reva/v2/pkg/conversions"
-	"github.com/opencloud-eu/reva/v2/pkg/utils"
+	"github.com/opencloud-eu/reva/v3/pkg/conversions"
+	"github.com/opencloud-eu/reva/v3/pkg/utils"
 	"github.com/pkg/errors"
 )
 

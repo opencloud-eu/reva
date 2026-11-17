@@ -20,10 +20,10 @@ package local
 
 import (
 	"github.com/go-viper/mapstructure/v2"
-	"github.com/opencloud-eu/reva/v2/pkg/events"
-	"github.com/opencloud-eu/reva/v2/pkg/storage"
-	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/registry"
-	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/localfs"
+	"github.com/opencloud-eu/reva/v3/pkg/events"
+	"github.com/opencloud-eu/reva/v3/pkg/storage"
+	"github.com/opencloud-eu/reva/v3/pkg/storage/fs/registry"
+	"github.com/opencloud-eu/reva/v3/pkg/storage/utils/localfs"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 )

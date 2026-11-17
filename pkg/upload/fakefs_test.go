@@ -14,9 +14,9 @@ import (
 	tusd "github.com/tus/tusd/v2/pkg/handler"
 	eventsapi "go-micro.dev/v4/events"
 
-	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
-	"github.com/opencloud-eu/reva/v2/pkg/events"
-	"github.com/opencloud-eu/reva/v2/pkg/storage"
+	"github.com/opencloud-eu/reva/v3/pkg/errtypes"
+	"github.com/opencloud-eu/reva/v3/pkg/events"
+	"github.com/opencloud-eu/reva/v3/pkg/storage"
 )
 
 // fakeFS is a storage.FS test double recording the driver calls in order.

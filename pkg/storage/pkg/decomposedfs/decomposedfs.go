@@ -42,29 +42,29 @@ import (
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/protobuf/proto"
 
-	"github.com/opencloud-eu/reva/v2/pkg/appctx"
-	ctxpkg "github.com/opencloud-eu/reva/v2/pkg/ctx"
-	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
-	"github.com/opencloud-eu/reva/v2/pkg/events"
-	"github.com/opencloud-eu/reva/v2/pkg/rgrpc/todo/pool"
-	"github.com/opencloud-eu/reva/v2/pkg/storage"
-	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/aspects"
-	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/lookup"
-	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata"
-	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata/prefixes"
-	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/node"
-	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/options"
-	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/permissions"
-	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/spaceidindex"
-	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/timemanager"
-	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/trashbin"
-	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/tree"
-	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/usermapper"
-	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/filelocks"
-	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/templates"
-	"github.com/opencloud-eu/reva/v2/pkg/storagespace"
-	"github.com/opencloud-eu/reva/v2/pkg/store"
-	"github.com/opencloud-eu/reva/v2/pkg/utils"
+	"github.com/opencloud-eu/reva/v3/pkg/appctx"
+	ctxpkg "github.com/opencloud-eu/reva/v3/pkg/ctx"
+	"github.com/opencloud-eu/reva/v3/pkg/errtypes"
+	"github.com/opencloud-eu/reva/v3/pkg/events"
+	"github.com/opencloud-eu/reva/v3/pkg/rgrpc/todo/pool"
+	"github.com/opencloud-eu/reva/v3/pkg/storage"
+	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/aspects"
+	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/lookup"
+	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/metadata"
+	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/metadata/prefixes"
+	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/node"
+	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/options"
+	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/permissions"
+	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/spaceidindex"
+	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/timemanager"
+	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/trashbin"
+	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/tree"
+	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/usermapper"
+	"github.com/opencloud-eu/reva/v3/pkg/storage/utils/filelocks"
+	"github.com/opencloud-eu/reva/v3/pkg/storage/utils/templates"
+	"github.com/opencloud-eu/reva/v3/pkg/storagespace"
+	"github.com/opencloud-eu/reva/v3/pkg/store"
+	"github.com/opencloud-eu/reva/v3/pkg/utils"
 )
 
 type CtxKey int
@@ -82,7 +82,7 @@ var (
 )
 
 func init() {
-	tracer = otel.Tracer("github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs")
+	tracer = otel.Tracer("github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs")
 }
 
 type IDCachingTree interface {

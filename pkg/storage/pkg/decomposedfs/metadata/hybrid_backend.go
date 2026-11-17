@@ -16,8 +16,8 @@ import (
 	"github.com/pkg/xattr"
 	"github.com/vmihailenco/msgpack/v5"
 
-	"github.com/opencloud-eu/reva/v2/pkg/storage/cache"
-	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata/prefixes"
+	"github.com/opencloud-eu/reva/v3/pkg/storage/cache"
+	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/metadata/prefixes"
 )
 
 func metadataOffloadedAttr() string { return prefixes.OcPrefix + "metadata_offloaded" }

@@ -26,7 +26,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/watcher"
+	"github.com/opencloud-eu/reva/v3/pkg/storage/fs/posix/watcher"
 	"github.com/rs/zerolog"
 	kafka "github.com/segmentio/kafka-go"
 )

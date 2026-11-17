@@ -19,7 +19,7 @@
 package registry
 
 import (
-	"github.com/opencloud-eu/reva/v2/pkg/datatx"
+	"github.com/opencloud-eu/reva/v3/pkg/datatx"
 )
 
 // NewFunc is the function that datatx implementations

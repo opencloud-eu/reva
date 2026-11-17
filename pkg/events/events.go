@@ -24,7 +24,7 @@ import (
 	"reflect"
 
 	"github.com/google/uuid"
-	ctxpkg "github.com/opencloud-eu/reva/v2/pkg/ctx"
+	ctxpkg "github.com/opencloud-eu/reva/v3/pkg/ctx"
 	"go-micro.dev/v4/events"
 	"go.opentelemetry.io/otel/propagation"
 )

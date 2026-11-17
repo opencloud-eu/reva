@@ -19,9 +19,9 @@
 package exporters
 
 import (
-	"github.com/opencloud-eu/reva/v2/pkg/mentix/config"
-	"github.com/opencloud-eu/reva/v2/pkg/mentix/exchangers/exporters/metrics"
-	"github.com/opencloud-eu/reva/v2/pkg/mentix/meshdata"
+	"github.com/opencloud-eu/reva/v3/pkg/mentix/config"
+	"github.com/opencloud-eu/reva/v3/pkg/mentix/exchangers/exporters/metrics"
+	"github.com/opencloud-eu/reva/v3/pkg/mentix/meshdata"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 )

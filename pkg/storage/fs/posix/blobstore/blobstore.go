@@ -32,9 +32,9 @@ import (
 	"github.com/pkg/errors"
 	"github.com/pkg/xattr"
 
-	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/disk"
-	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata/prefixes"
-	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/node"
+	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/disk"
+	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/metadata/prefixes"
+	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/node"
 )
 
 const (

@@ -12,9 +12,9 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	posixblobstore "github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/blobstore"
-	posixhelpers "github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/testhelpers"
-	"github.com/opencloud-eu/reva/v2/tests/helpers"
+	posixblobstore "github.com/opencloud-eu/reva/v3/pkg/storage/fs/posix/blobstore"
+	posixhelpers "github.com/opencloud-eu/reva/v3/pkg/storage/fs/posix/testhelpers"
+	"github.com/opencloud-eu/reva/v3/tests/helpers"
 )
 
 var _ = Describe("Blobstore with copy fallback", func() {

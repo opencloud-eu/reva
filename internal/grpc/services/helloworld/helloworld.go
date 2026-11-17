@@ -23,8 +23,8 @@ import (
 	"fmt"
 
 	"github.com/go-viper/mapstructure/v2"
-	"github.com/opencloud-eu/reva/v2/internal/grpc/services/helloworld/proto"
-	"github.com/opencloud-eu/reva/v2/pkg/rgrpc"
+	"github.com/opencloud-eu/reva/v3/internal/grpc/services/helloworld/proto"
+	"github.com/opencloud-eu/reva/v3/pkg/rgrpc"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	"google.golang.org/grpc"

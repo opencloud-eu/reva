@@ -21,9 +21,9 @@ package header
 import (
 	"net/http"
 
-	"github.com/opencloud-eu/reva/v2/internal/http/interceptors/auth/tokenwriter/registry"
-	"github.com/opencloud-eu/reva/v2/pkg/auth"
-	ctxpkg "github.com/opencloud-eu/reva/v2/pkg/ctx"
+	"github.com/opencloud-eu/reva/v3/internal/http/interceptors/auth/tokenwriter/registry"
+	"github.com/opencloud-eu/reva/v3/pkg/auth"
+	ctxpkg "github.com/opencloud-eu/reva/v3/pkg/ctx"
 )
 
 func init() {

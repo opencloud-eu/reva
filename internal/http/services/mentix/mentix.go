@@ -22,14 +22,14 @@ import (
 	"net/http"
 
 	"github.com/go-viper/mapstructure/v2"
-	"github.com/opencloud-eu/reva/v2/pkg/mentix/meshdata"
+	"github.com/opencloud-eu/reva/v3/pkg/mentix/meshdata"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 
-	"github.com/opencloud-eu/reva/v2/pkg/mentix"
-	"github.com/opencloud-eu/reva/v2/pkg/mentix/config"
-	"github.com/opencloud-eu/reva/v2/pkg/mentix/exchangers"
-	"github.com/opencloud-eu/reva/v2/pkg/rhttp/global"
+	"github.com/opencloud-eu/reva/v3/pkg/mentix"
+	"github.com/opencloud-eu/reva/v3/pkg/mentix/config"
+	"github.com/opencloud-eu/reva/v3/pkg/mentix/exchangers"
+	"github.com/opencloud-eu/reva/v3/pkg/rhttp/global"
 )
 
 func init() {

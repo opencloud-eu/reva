@@ -25,14 +25,15 @@ import (
 
 	registrypb "github.com/cs3org/go-cs3apis/cs3/app/registry/v1beta1"
 	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	memr "github.com/go-micro/plugins/v4/registry/memory"
 	"github.com/google/uuid"
-	oreg "github.com/opencloud-eu/opencloud/pkg/registry"
+	oreg "github.com/opencloud-eu/reva/v3/pkg/registry"
 	"go-micro.dev/v4/registry"
 	mreg "go-micro.dev/v4/registry"
 )
 
 func init() {
-	_ = oreg.GetRegistry(oreg.Inmemory())
+	_ = oreg.Init(memr.NewRegistry())
 }
 
 func TestFindProviders(t *testing.T) {

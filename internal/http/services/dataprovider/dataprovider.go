@@ -25,15 +25,15 @@ import (
 	"github.com/go-viper/mapstructure/v2"
 	"github.com/rs/zerolog"
 
-	"github.com/opencloud-eu/reva/v2/pkg/appctx"
-	"github.com/opencloud-eu/reva/v2/pkg/events"
-	"github.com/opencloud-eu/reva/v2/pkg/events/stream"
-	datatxregistry "github.com/opencloud-eu/reva/v2/pkg/rhttp/datatx/manager/registry"
-	"github.com/opencloud-eu/reva/v2/pkg/rhttp/global"
-	"github.com/opencloud-eu/reva/v2/pkg/rhttp/router"
-	"github.com/opencloud-eu/reva/v2/pkg/storage"
-	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/registry"
-	"github.com/opencloud-eu/reva/v2/pkg/upload"
+	"github.com/opencloud-eu/reva/v3/pkg/appctx"
+	"github.com/opencloud-eu/reva/v3/pkg/events"
+	"github.com/opencloud-eu/reva/v3/pkg/events/stream"
+	datatxregistry "github.com/opencloud-eu/reva/v3/pkg/rhttp/datatx/manager/registry"
+	"github.com/opencloud-eu/reva/v3/pkg/rhttp/global"
+	"github.com/opencloud-eu/reva/v3/pkg/rhttp/router"
+	"github.com/opencloud-eu/reva/v3/pkg/storage"
+	"github.com/opencloud-eu/reva/v3/pkg/storage/fs/registry"
+	"github.com/opencloud-eu/reva/v3/pkg/upload"
 )
 
 func init() {

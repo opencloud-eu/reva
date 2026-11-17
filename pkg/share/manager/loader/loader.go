@@ -20,7 +20,7 @@ package loader
 
 import (
 	// Load core share manager drivers.
-	_ "github.com/opencloud-eu/reva/v2/pkg/share/manager/jsoncs3"
-	_ "github.com/opencloud-eu/reva/v2/pkg/share/manager/memory"
+	_ "github.com/opencloud-eu/reva/v3/pkg/share/manager/jsoncs3"
+	_ "github.com/opencloud-eu/reva/v3/pkg/share/manager/memory"
 	// Add your own here
 )

@@ -24,12 +24,12 @@ import (
 	"github.com/pkg/errors"
 	tusd "github.com/tus/tusd/v2/pkg/handler"
 
-	"github.com/opencloud-eu/reva/v2/pkg/appctx"
-	ctxpkg "github.com/opencloud-eu/reva/v2/pkg/ctx"
-	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
-	"github.com/opencloud-eu/reva/v2/pkg/storage"
-	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/disk"
-	"github.com/opencloud-eu/reva/v2/pkg/utils"
+	"github.com/opencloud-eu/reva/v3/pkg/appctx"
+	ctxpkg "github.com/opencloud-eu/reva/v3/pkg/ctx"
+	"github.com/opencloud-eu/reva/v3/pkg/errtypes"
+	"github.com/opencloud-eu/reva/v3/pkg/storage"
+	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/disk"
+	"github.com/opencloud-eu/reva/v3/pkg/utils"
 )
 
 const defaultFilePerm = os.FileMode(0664)

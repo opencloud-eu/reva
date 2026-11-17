@@ -23,7 +23,7 @@ import (
 	"maps"
 	"slices"
 
-	"github.com/opencloud-eu/reva/v2/pkg/storage"
+	"github.com/opencloud-eu/reva/v3/pkg/storage"
 )
 
 // ocsBool implements the xml/json Marshaler interface. The OCS API inconsistency require us to parse boolean values

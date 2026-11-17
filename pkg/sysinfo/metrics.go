@@ -29,7 +29,7 @@ import (
 	"go.opencensus.io/stats/view"
 	"go.opencensus.io/tag"
 
-	"github.com/opencloud-eu/reva/v2/pkg/utils"
+	"github.com/opencloud-eu/reva/v3/pkg/utils"
 )
 
 type sysInfoMetricsLabels = map[tag.Key]string

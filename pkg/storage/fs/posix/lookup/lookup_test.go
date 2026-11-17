@@ -8,10 +8,10 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/test-go/testify/mock"
 
-	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
-	mocks "github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/lookup/mocks"
-	helpers "github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/testhelpers"
-	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/node"
+	"github.com/opencloud-eu/reva/v3/pkg/errtypes"
+	mocks "github.com/opencloud-eu/reva/v3/pkg/storage/fs/posix/lookup/mocks"
+	helpers "github.com/opencloud-eu/reva/v3/pkg/storage/fs/posix/testhelpers"
+	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/node"
 )
 
 var _ = Describe("Lookup", func() {

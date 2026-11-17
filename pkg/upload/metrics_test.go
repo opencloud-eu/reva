@@ -11,9 +11,9 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/prometheus/client_golang/prometheus/testutil"
 
-	ctxpkg "github.com/opencloud-eu/reva/v2/pkg/ctx"
-	"github.com/opencloud-eu/reva/v2/pkg/rhttp/datatx/metrics"
-	"github.com/opencloud-eu/reva/v2/pkg/storage"
+	ctxpkg "github.com/opencloud-eu/reva/v3/pkg/ctx"
+	"github.com/opencloud-eu/reva/v3/pkg/rhttp/datatx/metrics"
+	"github.com/opencloud-eu/reva/v3/pkg/storage"
 )
 
 // Every upload that increments the gauge has to decrement it again.

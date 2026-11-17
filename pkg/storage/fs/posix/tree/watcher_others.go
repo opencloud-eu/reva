@@ -8,7 +8,7 @@ package tree
 import (
 	"github.com/rs/zerolog"
 
-	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/options"
+	"github.com/opencloud-eu/reva/v3/pkg/storage/fs/posix/options"
 )
 
 // NewWatcher returns a NoopWatcher on unsupported platforms

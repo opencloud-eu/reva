@@ -5,7 +5,7 @@
 
 package usermapper
 
-import "github.com/opencloud-eu/reva/v2/pkg/errtypes"
+import "github.com/opencloud-eu/reva/v3/pkg/errtypes"
 
 // NewUnixMapper returns a new user mapper
 func NewUnixMapper() (*NullMapper, error) {

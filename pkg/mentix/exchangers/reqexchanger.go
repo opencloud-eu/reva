@@ -26,8 +26,8 @@ import (
 
 	"github.com/rs/zerolog"
 
-	"github.com/opencloud-eu/reva/v2/pkg/mentix/config"
-	"github.com/opencloud-eu/reva/v2/pkg/mentix/meshdata"
+	"github.com/opencloud-eu/reva/v3/pkg/mentix/config"
+	"github.com/opencloud-eu/reva/v3/pkg/mentix/meshdata"
 )
 
 // RequestExchanger is the interface implemented by exchangers that offer an HTTP endpoint.

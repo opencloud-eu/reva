@@ -4,7 +4,7 @@
 package node_test
 
 import (
-	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/node"
+	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/node"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"

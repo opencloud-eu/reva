@@ -23,9 +23,9 @@ import (
 	"context"
 
 	tenantpb "github.com/cs3org/go-cs3apis/cs3/identity/tenant/v1beta1"
-	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
-	"github.com/opencloud-eu/reva/v2/pkg/tenant"
-	"github.com/opencloud-eu/reva/v2/pkg/tenant/manager/registry"
+	"github.com/opencloud-eu/reva/v3/pkg/errtypes"
+	"github.com/opencloud-eu/reva/v3/pkg/tenant"
+	"github.com/opencloud-eu/reva/v3/pkg/tenant/manager/registry"
 	"github.com/rs/zerolog"
 )
 

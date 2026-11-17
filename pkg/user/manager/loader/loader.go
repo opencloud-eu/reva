@@ -20,9 +20,9 @@ package loader
 
 import (
 	// Load core user manager drivers.
-	_ "github.com/opencloud-eu/reva/v2/pkg/user/manager/demo"
-	_ "github.com/opencloud-eu/reva/v2/pkg/user/manager/json"
-	_ "github.com/opencloud-eu/reva/v2/pkg/user/manager/ldap"
-	_ "github.com/opencloud-eu/reva/v2/pkg/user/manager/memory"
+	_ "github.com/opencloud-eu/reva/v3/pkg/user/manager/demo"
+	_ "github.com/opencloud-eu/reva/v3/pkg/user/manager/json"
+	_ "github.com/opencloud-eu/reva/v3/pkg/user/manager/ldap"
+	_ "github.com/opencloud-eu/reva/v3/pkg/user/manager/memory"
 	// Add your own here
 )

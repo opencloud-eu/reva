@@ -23,8 +23,8 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/opencloud-eu/reva/v2/internal/http/services/owncloud/ocdav/propfind"
-	"github.com/opencloud-eu/reva/v2/pkg/appctx"
+	"github.com/opencloud-eu/reva/v3/internal/http/services/owncloud/ocdav/propfind"
+	"github.com/opencloud-eu/reva/v3/pkg/appctx"
 )
 
 const (

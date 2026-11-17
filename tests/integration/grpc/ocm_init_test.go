@@ -25,7 +25,7 @@ import (
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	invitepb "github.com/cs3org/go-cs3apis/cs3/ocm/invite/v1beta1"
-	"github.com/opencloud-eu/reva/v2/tests/helpers"
+	"github.com/opencloud-eu/reva/v3/tests/helpers"
 
 	. "github.com/onsi/gomega"
 )

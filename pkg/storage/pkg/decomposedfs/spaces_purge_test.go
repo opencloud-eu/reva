@@ -7,7 +7,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/lookup"
+	"github.com/opencloud-eu/reva/v3/pkg/storage/fs/posix/lookup"
 )
 
 var _ = Describe("removeSpaceRoot", func() {

@@ -21,7 +21,7 @@ package entity
 import (
 	"fmt"
 
-	"github.com/opencloud-eu/reva/v2/pkg/mentix/config"
+	"github.com/opencloud-eu/reva/v3/pkg/mentix/config"
 
 	"github.com/rs/zerolog"
 )

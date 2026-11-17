@@ -4,11 +4,11 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/blobstore"
-	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/lookup"
-	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/options"
-	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/tree/propagator"
-	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/templates"
+	"github.com/opencloud-eu/reva/v3/pkg/storage/fs/posix/blobstore"
+	"github.com/opencloud-eu/reva/v3/pkg/storage/fs/posix/lookup"
+	"github.com/opencloud-eu/reva/v3/pkg/storage/fs/posix/options"
+	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/tree/propagator"
+	"github.com/opencloud-eu/reva/v3/pkg/storage/utils/templates"
 	"github.com/rs/zerolog"
 )
 

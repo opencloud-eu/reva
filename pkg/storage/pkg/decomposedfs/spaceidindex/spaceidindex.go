@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/mtimesyncedcache"
+	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/mtimesyncedcache"
 	"github.com/pkg/errors"
 	"github.com/rogpeppe/go-internal/lockedfile"
 	"github.com/vmihailenco/msgpack/v5"

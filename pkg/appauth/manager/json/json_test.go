@@ -34,7 +34,7 @@ import (
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/gdexlab/go-render/render"
 	"github.com/google/go-cmp/cmp"
-	ctxpkg "github.com/opencloud-eu/reva/v2/pkg/ctx"
+	ctxpkg "github.com/opencloud-eu/reva/v3/pkg/ctx"
 	"github.com/sethvargo/go-password/password"
 	"golang.org/x/crypto/bcrypt"
 	"google.golang.org/protobuf/testing/protocmp"

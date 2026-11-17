@@ -12,15 +12,15 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/ignore"
+	"github.com/opencloud-eu/reva/v3/pkg/storage/fs/posix/ignore"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/mock"
 
-	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
-	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/options"
-	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/tree/mocks"
-	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/node"
-	decomposedoptions "github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/options"
+	"github.com/opencloud-eu/reva/v3/pkg/errtypes"
+	"github.com/opencloud-eu/reva/v3/pkg/storage/fs/posix/options"
+	"github.com/opencloud-eu/reva/v3/pkg/storage/fs/posix/tree/mocks"
+	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/node"
+	decomposedoptions "github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/options"
 )
 
 // fakePathLookup is a node.PathLookup that only knows how to answer

@@ -27,7 +27,7 @@ import (
 	"time"
 
 	"github.com/c-bata/go-prompt"
-	"github.com/opencloud-eu/reva/v2/pkg/rhttp"
+	"github.com/opencloud-eu/reva/v3/pkg/rhttp"
 )
 
 var (

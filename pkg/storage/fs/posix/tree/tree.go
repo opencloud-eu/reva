@@ -41,26 +41,26 @@ import (
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 
-	"github.com/opencloud-eu/reva/v2/pkg/appctx"
-	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
-	"github.com/opencloud-eu/reva/v2/pkg/events"
-	"github.com/opencloud-eu/reva/v2/pkg/storage"
-	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/idcache"
-	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/ignore"
-	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/lookup"
-	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/options"
-	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/trashbin"
-	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/tree/assimilation"
-	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/watcher/natswatcher"
-	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs"
-	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata"
-	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata/prefixes"
-	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/node"
-	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/permissions"
-	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/tree/propagator"
-	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/usermapper"
-	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/templates"
-	"github.com/opencloud-eu/reva/v2/pkg/utils"
+	"github.com/opencloud-eu/reva/v3/pkg/appctx"
+	"github.com/opencloud-eu/reva/v3/pkg/errtypes"
+	"github.com/opencloud-eu/reva/v3/pkg/events"
+	"github.com/opencloud-eu/reva/v3/pkg/storage"
+	"github.com/opencloud-eu/reva/v3/pkg/storage/fs/posix/idcache"
+	"github.com/opencloud-eu/reva/v3/pkg/storage/fs/posix/ignore"
+	"github.com/opencloud-eu/reva/v3/pkg/storage/fs/posix/lookup"
+	"github.com/opencloud-eu/reva/v3/pkg/storage/fs/posix/options"
+	"github.com/opencloud-eu/reva/v3/pkg/storage/fs/posix/trashbin"
+	"github.com/opencloud-eu/reva/v3/pkg/storage/fs/posix/tree/assimilation"
+	"github.com/opencloud-eu/reva/v3/pkg/storage/fs/posix/watcher/natswatcher"
+	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs"
+	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/metadata"
+	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/metadata/prefixes"
+	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/node"
+	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/permissions"
+	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/tree/propagator"
+	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/usermapper"
+	"github.com/opencloud-eu/reva/v3/pkg/storage/utils/templates"
+	"github.com/opencloud-eu/reva/v3/pkg/utils"
 )
 
 var (
@@ -71,7 +71,7 @@ var (
 )
 
 func init() {
-	tracer = otel.Tracer("github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/tree")
+	tracer = otel.Tracer("github.com/opencloud-eu/reva/v3/pkg/storage/fs/posix/tree")
 }
 
 // Blobstore defines an interface for storing blobs in a blobstore

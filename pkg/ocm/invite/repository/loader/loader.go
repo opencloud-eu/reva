@@ -20,7 +20,7 @@ package loader
 
 import (
 	// Load core share manager drivers.
-	_ "github.com/opencloud-eu/reva/v2/pkg/ocm/invite/repository/json"
-	_ "github.com/opencloud-eu/reva/v2/pkg/ocm/invite/repository/memory"
+	_ "github.com/opencloud-eu/reva/v3/pkg/ocm/invite/repository/json"
+	_ "github.com/opencloud-eu/reva/v3/pkg/ocm/invite/repository/memory"
 	// Add your own here.
 )

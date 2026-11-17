@@ -19,7 +19,7 @@
 package registry
 
 import (
-	"github.com/opencloud-eu/reva/v2/pkg/ocm/provider"
+	"github.com/opencloud-eu/reva/v3/pkg/ocm/provider"
 )
 
 // NewFunc is the function that provider authorizers

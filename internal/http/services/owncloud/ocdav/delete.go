@@ -26,12 +26,12 @@ import (
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	"github.com/opencloud-eu/reva/v2/internal/http/services/owncloud/ocdav/net"
-	"github.com/opencloud-eu/reva/v2/internal/http/services/owncloud/ocdav/spacelookup"
-	"github.com/opencloud-eu/reva/v2/pkg/appctx"
-	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
-	rstatus "github.com/opencloud-eu/reva/v2/pkg/rgrpc/status"
-	"github.com/opencloud-eu/reva/v2/pkg/utils"
+	"github.com/opencloud-eu/reva/v3/internal/http/services/owncloud/ocdav/net"
+	"github.com/opencloud-eu/reva/v3/internal/http/services/owncloud/ocdav/spacelookup"
+	"github.com/opencloud-eu/reva/v3/pkg/appctx"
+	"github.com/opencloud-eu/reva/v3/pkg/errtypes"
+	rstatus "github.com/opencloud-eu/reva/v3/pkg/rgrpc/status"
+	"github.com/opencloud-eu/reva/v3/pkg/utils"
 )
 
 func (s *svc) handlePathDelete(w http.ResponseWriter, r *http.Request, ns string) (status int, err error) {

@@ -29,9 +29,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/opencloud-eu/reva/v2/internal/http/services/ocmd"
-	"github.com/opencloud-eu/reva/v2/internal/http/services/reqres"
-	"github.com/opencloud-eu/reva/v2/pkg/appctx"
+	"github.com/opencloud-eu/reva/v3/internal/http/services/ocmd"
+	"github.com/opencloud-eu/reva/v3/internal/http/services/reqres"
+	"github.com/opencloud-eu/reva/v3/pkg/appctx"
 )
 
 type wayfHandler struct {

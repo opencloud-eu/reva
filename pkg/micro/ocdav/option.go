@@ -24,11 +24,12 @@ import (
 	"time"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
-	"github.com/opencloud-eu/reva/v2/internal/http/services/owncloud/ocdav"
-	"github.com/opencloud-eu/reva/v2/internal/http/services/owncloud/ocdav/config"
-	"github.com/opencloud-eu/reva/v2/pkg/rgrpc/todo/pool"
+	"github.com/opencloud-eu/reva/v3/internal/http/services/owncloud/ocdav"
+	"github.com/opencloud-eu/reva/v3/internal/http/services/owncloud/ocdav/config"
+	"github.com/opencloud-eu/reva/v3/pkg/rgrpc/todo/pool"
 	"github.com/rs/zerolog"
 	"go-micro.dev/v4/broker"
+	mRegistry "go-micro.dev/v4/registry"
 	"go.opentelemetry.io/otel/trace"
 )
 
@@ -39,6 +40,7 @@ type Option func(o *Options)
 type Options struct {
 	TLSConfig *tls.Config
 	Broker    broker.Broker
+	Registry  mRegistry.Registry
 	Address   string
 	Logger    zerolog.Logger
 	Context   context.Context
@@ -79,6 +81,14 @@ func newOptions(opts ...Option) Options {
 	}
 
 	return opt
+}
+
+// Registry provides a function to set the Registry option. If unset, the
+// registry passed to pkg/registry.Init is used.
+func Registry(r mRegistry.Registry) Option {
+	return func(o *Options) {
+		o.Registry = r
+	}
 }
 
 // TLSConfig provides a function to set the TLSConfig option.

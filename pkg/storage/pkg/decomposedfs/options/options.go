@@ -24,9 +24,9 @@ import (
 	"time"
 
 	"github.com/go-viper/mapstructure/v2"
-	"github.com/opencloud-eu/reva/v2/pkg/rgrpc/todo/pool"
-	"github.com/opencloud-eu/reva/v2/pkg/sharedconf"
-	"github.com/opencloud-eu/reva/v2/pkg/storage/cache"
+	"github.com/opencloud-eu/reva/v3/pkg/rgrpc/todo/pool"
+	"github.com/opencloud-eu/reva/v3/pkg/sharedconf"
+	"github.com/opencloud-eu/reva/v3/pkg/storage/cache"
 	"github.com/pkg/errors"
 )
 

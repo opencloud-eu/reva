@@ -31,17 +31,17 @@ import (
 
 	tenantpb "github.com/cs3org/go-cs3apis/cs3/identity/tenant/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
-	"github.com/opencloud-eu/reva/v2/pkg/appctx"
-	revactx "github.com/opencloud-eu/reva/v2/pkg/ctx"
-	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
-	"github.com/opencloud-eu/reva/v2/pkg/plugin"
-	"github.com/opencloud-eu/reva/v2/pkg/rgrpc"
-	"github.com/opencloud-eu/reva/v2/pkg/rgrpc/status"
-	"github.com/opencloud-eu/reva/v2/pkg/sharedconf"
-	"github.com/opencloud-eu/reva/v2/pkg/tenant"
-	tenantRegistry "github.com/opencloud-eu/reva/v2/pkg/tenant/manager/registry"
-	"github.com/opencloud-eu/reva/v2/pkg/user"
-	userRegistry "github.com/opencloud-eu/reva/v2/pkg/user/manager/registry"
+	"github.com/opencloud-eu/reva/v3/pkg/appctx"
+	revactx "github.com/opencloud-eu/reva/v3/pkg/ctx"
+	"github.com/opencloud-eu/reva/v3/pkg/errtypes"
+	"github.com/opencloud-eu/reva/v3/pkg/plugin"
+	"github.com/opencloud-eu/reva/v3/pkg/rgrpc"
+	"github.com/opencloud-eu/reva/v3/pkg/rgrpc/status"
+	"github.com/opencloud-eu/reva/v3/pkg/sharedconf"
+	"github.com/opencloud-eu/reva/v3/pkg/tenant"
+	tenantRegistry "github.com/opencloud-eu/reva/v3/pkg/tenant/manager/registry"
+	"github.com/opencloud-eu/reva/v3/pkg/user"
+	userRegistry "github.com/opencloud-eu/reva/v3/pkg/user/manager/registry"
 )
 
 func init() {

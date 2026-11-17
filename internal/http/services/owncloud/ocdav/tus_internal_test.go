@@ -16,12 +16,12 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/mock"
 
-	"github.com/opencloud-eu/reva/v2/internal/http/services/owncloud/ocdav/config"
-	"github.com/opencloud-eu/reva/v2/internal/http/services/owncloud/ocdav/net"
-	"github.com/opencloud-eu/reva/v2/pkg/rgrpc/status"
-	"github.com/opencloud-eu/reva/v2/pkg/rgrpc/todo/pool"
-	"github.com/opencloud-eu/reva/v2/pkg/utils"
-	"github.com/opencloud-eu/reva/v2/tests/cs3mocks/mocks"
+	"github.com/opencloud-eu/reva/v3/internal/http/services/owncloud/ocdav/config"
+	"github.com/opencloud-eu/reva/v3/internal/http/services/owncloud/ocdav/net"
+	"github.com/opencloud-eu/reva/v3/pkg/rgrpc/status"
+	"github.com/opencloud-eu/reva/v3/pkg/rgrpc/todo/pool"
+	"github.com/opencloud-eu/reva/v3/pkg/utils"
+	"github.com/opencloud-eu/reva/v3/tests/cs3mocks/mocks"
 )
 
 type gatewayStub struct {

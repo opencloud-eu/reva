@@ -4,44 +4,44 @@ dir: "{{.InterfaceDir}}/mocks"
 mockname: "{{.InterfaceName}}"
 outpkg: "mocks"
 packages:
-    github.com/opencloud-eu/reva/v2/pkg/events:
+    github.com/opencloud-eu/reva/v3/pkg/events:
         interfaces:
             Stream:
-    github.com/opencloud-eu/reva/v2/pkg/events/raw:
+    github.com/opencloud-eu/reva/v3/pkg/events/raw:
         interfaces:
             Stream:
-    github.com/opencloud-eu/reva/v2/pkg/publicshare/manager/owncloudsql:
+    github.com/opencloud-eu/reva/v3/pkg/publicshare/manager/owncloudsql:
         interfaces:
             UserConverter:
-    github.com/opencloud-eu/reva/v2/pkg/publicshare:
+    github.com/opencloud-eu/reva/v3/pkg/publicshare:
         interfaces:
             Manager:
-    github.com/opencloud-eu/reva/v2/pkg/share:
+    github.com/opencloud-eu/reva/v3/pkg/share:
         interfaces:
             Manager:
-    github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/permissions:
+    github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/permissions:
         interfaces:
             PermissionsChecker:
             CS3PermissionsClient:
-    github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/node:
+    github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/node:
         interfaces:
             Blobstore:
-    github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/lookup:
+    github.com/opencloud-eu/reva/v3/pkg/storage/fs/posix/lookup:
         interfaces:
             IDCache:
-    github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/tree:
+    github.com/opencloud-eu/reva/v3/pkg/storage/fs/posix/tree:
         interfaces:
             IDResolver:
-    github.com/opencloud-eu/reva/v2/pkg/storage/registry/spaces:
+    github.com/opencloud-eu/reva/v3/pkg/storage/registry/spaces:
         interfaces:
             StorageProviderClient:
-    github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata:
+    github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/metadata:
       interfaces:
         Backend:
-    github.com/opencloud-eu/reva/v2/pkg/storage/utils/metadata:
+    github.com/opencloud-eu/reva/v3/pkg/storage/utils/metadata:
         interfaces:
             Storage:
-    github.com/opencloud-eu/reva/v2/tests/cs3mocks:
+    github.com/opencloud-eu/reva/v3/tests/cs3mocks:
         interfaces:
             GatewayAPIClient:
             CollaborationAPIClient:

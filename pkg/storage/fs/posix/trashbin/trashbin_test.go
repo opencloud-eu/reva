@@ -12,15 +12,15 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 
-	"github.com/opencloud-eu/reva/v2/pkg/storage/cache"
-	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/idcache"
-	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/lookup"
-	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/options"
-	posixhelpers "github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/testhelpers"
-	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/trashbin"
-	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata"
-	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata/mocks"
-	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata/prefixes"
+	"github.com/opencloud-eu/reva/v3/pkg/storage/cache"
+	"github.com/opencloud-eu/reva/v3/pkg/storage/fs/posix/idcache"
+	"github.com/opencloud-eu/reva/v3/pkg/storage/fs/posix/lookup"
+	"github.com/opencloud-eu/reva/v3/pkg/storage/fs/posix/options"
+	posixhelpers "github.com/opencloud-eu/reva/v3/pkg/storage/fs/posix/testhelpers"
+	"github.com/opencloud-eu/reva/v3/pkg/storage/fs/posix/trashbin"
+	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/metadata"
+	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/metadata/mocks"
+	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/metadata/prefixes"
 )
 
 func TestTrashbin_RestoreRecycleItem(t *testing.T) {

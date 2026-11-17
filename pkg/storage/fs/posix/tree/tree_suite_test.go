@@ -11,7 +11,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	helpers "github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/testhelpers"
+	helpers "github.com/opencloud-eu/reva/v3/pkg/storage/fs/posix/testhelpers"
 	"github.com/shirou/gopsutil/process"
 )
 

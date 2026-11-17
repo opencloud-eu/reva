@@ -28,8 +28,8 @@ import (
 
 	"github.com/cenkalti/backoff"
 	"github.com/nats-io/nats.go/jetstream"
-	"github.com/opencloud-eu/reva/v2/pkg/appctx"
-	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
+	"github.com/opencloud-eu/reva/v3/pkg/appctx"
+	"github.com/opencloud-eu/reva/v3/pkg/errtypes"
 )
 
 type IDCache struct {

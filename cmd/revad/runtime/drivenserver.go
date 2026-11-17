@@ -8,7 +8,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/opencloud-eu/reva/v2/pkg/registry"
+	"github.com/opencloud-eu/reva/v3/pkg/registry"
 	"github.com/rs/zerolog"
 )
 

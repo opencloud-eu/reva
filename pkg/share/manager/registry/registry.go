@@ -19,7 +19,7 @@
 package registry
 
 import (
-	"github.com/opencloud-eu/reva/v2/pkg/share"
+	"github.com/opencloud-eu/reva/v3/pkg/share"
 	"github.com/rs/zerolog"
 )
 
