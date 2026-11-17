@@ -320,7 +320,7 @@ var _ = Describe("storage providers", func() {
 				Permissions: &storagep.ResourcePermissions{
 					Stat:                 true,
 					Move:                 true,
-					Delete:               false,
+					Delete:               true,
 					InitiateFileDownload: true,
 				},
 			}
@@ -335,7 +335,7 @@ var _ = Describe("storage providers", func() {
 			readGrant := listRes.Grants[0]
 			Expect(readGrant.Permissions.Stat).To(BeTrue())
 			Expect(readGrant.Permissions.Move).To(BeTrue())
-			Expect(readGrant.Permissions.Delete).To(BeFalse())
+			Expect(readGrant.Permissions.Delete).To(BeTrue())
 			Expect(readGrant.Permissions.InitiateFileDownload).To(BeTrue())
 
 			By("updating the grant")
