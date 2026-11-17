@@ -13,6 +13,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/opencloud-eu/reva/v3/internal/grpc/services/publicshareprovider"
+	"github.com/opencloud-eu/reva/v3/pkg/conversions"
 	ctxpkg "github.com/opencloud-eu/reva/v3/pkg/ctx"
 	"github.com/opencloud-eu/reva/v3/pkg/errtypes"
 	"github.com/opencloud-eu/reva/v3/pkg/permission"
@@ -764,6 +765,94 @@ var _ = Describe("PublicShareProvider", func() {
 			Expect(res.GetStatus().GetMessage()).To(Equal("transport error"))
 		})
 	})
+	Describe("with new public links disabled", func() {
+		var internalLink, viewerLink *link.PublicShare
+
+		BeforeEach(func() {
+			revaConfig["disable_new_public_links"] = true
+			var err error
+			provider, err = createPublicShareProvider(revaConfig, gatewaySelector, manager)
+			Expect(err).ToNot(HaveOccurred())
+
+			gatewayClient.EXPECT().Stat(mock.Anything, mock.Anything).Return(statResourceResponse, nil).Maybe()
+
+			internalLink = &link.PublicShare{
+				Id:          &link.PublicShareId{OpaqueId: "share-id"},
+				Permissions: &link.PublicSharePermissions{Permissions: &providerpb.ResourcePermissions{}},
+				Creator:     user.GetId(),
+			}
+			viewerLink = &link.PublicShare{
+				Id:          &link.PublicShareId{OpaqueId: "share-id"},
+				Permissions: &link.PublicSharePermissions{Permissions: conversions.NewViewerRole().CS3ResourcePermissions()},
+				Creator:     user.GetId(),
+			}
+		})
+
+		updateRequest := func(permissions *providerpb.ResourcePermissions) *link.UpdatePublicShareRequest {
+			return &link.UpdatePublicShareRequest{
+				Update: &link.UpdatePublicShareRequest_Update{
+					Type:  link.UpdatePublicShareRequest_Update_TYPE_PERMISSIONS,
+					Grant: &link.Grant{Permissions: &link.PublicSharePermissions{Permissions: permissions}},
+				},
+				Ref: &link.PublicShareReference{
+					Spec: &link.PublicShareReference_Id{Id: &link.PublicShareId{OpaqueId: "share-id"}},
+				},
+			}
+		}
+
+		It("rejects creating a public link", func() {
+			res, err := provider.CreatePublicShare(ctx, &link.CreatePublicShareRequest{
+				ResourceInfo: &providerpb.ResourceInfo{Path: "./NewFolder/file.txt"},
+				Grant: &link.Grant{
+					Permissions: &link.PublicSharePermissions{Permissions: linkPermissions},
+					Password:    "SecretPassw0rd!",
+				},
+			})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(res.GetStatus().GetCode()).To(Equal(rpc.Code_CODE_PERMISSION_DENIED))
+			manager.AssertNotCalled(GinkgoT(), "CreatePublicShare", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+		})
+
+		It("still creates internal links", func() {
+			manager.EXPECT().
+				CreatePublicShare(mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+				Return(internalLink, nil)
+
+			res, err := provider.CreatePublicShare(ctx, &link.CreatePublicShareRequest{
+				ResourceInfo: &providerpb.ResourceInfo{Path: "./NewFolder/file.txt"},
+				Grant: &link.Grant{
+					Permissions: &link.PublicSharePermissions{Permissions: &providerpb.ResourcePermissions{}},
+				},
+			})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(res.GetStatus().GetCode()).To(Equal(rpc.Code_CODE_OK))
+		})
+
+		It("rejects turning an internal link into a public link", func() {
+			manager.EXPECT().
+				GetPublicShare(mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+				Once().Return(internalLink, nil)
+
+			res, err := provider.UpdatePublicShare(ctx, updateRequest(conversions.NewViewerRole().CS3ResourcePermissions()))
+			Expect(err).ToNot(HaveOccurred())
+			Expect(res.GetStatus().GetCode()).To(Equal(rpc.Code_CODE_PERMISSION_DENIED))
+			manager.AssertNotCalled(GinkgoT(), "UpdatePublicShare", mock.Anything, mock.Anything, mock.Anything)
+		})
+
+		It("still downgrades a public link to an internal link", func() {
+			manager.EXPECT().
+				GetPublicShare(mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+				Once().Return(viewerLink, nil)
+			manager.EXPECT().
+				UpdatePublicShare(mock.Anything, mock.Anything, mock.Anything).
+				Once().Return(internalLink, nil)
+
+			res, err := provider.UpdatePublicShare(ctx, updateRequest(&providerpb.ResourcePermissions{}))
+			Expect(err).ToNot(HaveOccurred())
+			Expect(res.GetStatus().GetCode()).To(Equal(rpc.Code_CODE_OK))
+		})
+	})
+
 	Describe("Removing a PublicShare", func() {
 		BeforeEach(func() {
 			createdLink.Id = &link.PublicShareId{
