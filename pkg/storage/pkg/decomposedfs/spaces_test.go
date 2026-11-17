@@ -36,6 +36,7 @@ import (
 	ctxpkg "github.com/opencloud-eu/reva/v3/pkg/ctx"
 	"github.com/opencloud-eu/reva/v3/pkg/errtypes"
 	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/lookup"
+	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/metadata/prefixes"
 	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/node"
 	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/spaceidindex"
 	helpers "github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/testhelpers"
@@ -753,7 +754,7 @@ var _ = Describe("Spaces", func() {
 		})
 
 		disableSpace := func(u *userv1beta1.User, id *provider.StorageSpaceId) {
-			err := env.Fs.DeleteStorageSpace(ctxpkg.ContextSetUser(context.Background(), u), &provider.DeleteStorageSpaceRequest{Id: id})
+			_, err := env.Fs.DeleteStorageSpace(ctxpkg.ContextSetUser(context.Background(), u), &provider.DeleteStorageSpaceRequest{Id: id})
 			Expect(err).ToNot(HaveOccurred())
 		}
 
