@@ -1,5 +1,15 @@
 # Changelog
 
+## [2.40.6](https://github.com/opencloud-eu/reva/releases/tag/v2.40.6) - 2026-11-17
+
+### ❤️ Thanks to all contributors! ❤️
+
+@aduffeck
+
+### 🔒 Security
+
+- [stable-2.40] Reject node ids and revision keys that leave the space [[#1026](https://github.com/opencloud-eu/reva/pull/1026)]
+
 ## [2.40.5](https://github.com/opencloud-eu/reva/releases/tag/v2.40.5) - 2026-06-17
 
 ### ❤️ Thanks to all contributors! ❤️
