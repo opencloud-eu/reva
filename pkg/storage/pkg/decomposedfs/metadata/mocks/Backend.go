@@ -585,6 +585,65 @@ func (_c *Backend_Purge_Call) RunAndReturn(run func(context.Context, metadata.Me
 	return _c
 }
 
+// Reload provides a mock function with given fields: ctx, n
+func (_m *Backend) Reload(ctx context.Context, n metadata.MetadataNode) (map[string][]byte, error) {
+	ret := _m.Called(ctx, n)
+
+	if len(ret) == 0 {
+		panic("no return value specified for Reload")
+	}
+
+	var r0 map[string][]byte
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, metadata.MetadataNode) (map[string][]byte, error)); ok {
+		return rf(ctx, n)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, metadata.MetadataNode) map[string][]byte); ok {
+		r0 = rf(ctx, n)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(map[string][]byte)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, metadata.MetadataNode) error); ok {
+		r1 = rf(ctx, n)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// Backend_Reload_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Reload'
+type Backend_Reload_Call struct {
+	*mock.Call
+}
+
+// Reload is a helper method to define mock.On call
+//   - ctx context.Context
+//   - n metadata.MetadataNode
+func (_e *Backend_Expecter) Reload(ctx interface{}, n interface{}) *Backend_Reload_Call {
+	return &Backend_Reload_Call{Call: _e.mock.On("Reload", ctx, n)}
+}
+
+func (_c *Backend_Reload_Call) Run(run func(ctx context.Context, n metadata.MetadataNode)) *Backend_Reload_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(metadata.MetadataNode))
+	})
+	return _c
+}
+
+func (_c *Backend_Reload_Call) Return(_a0 map[string][]byte, _a1 error) *Backend_Reload_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *Backend_Reload_Call) RunAndReturn(run func(context.Context, metadata.MetadataNode) (map[string][]byte, error)) *Backend_Reload_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // Remove provides a mock function with given fields: ctx, n, key
 func (_m *Backend) Remove(ctx context.Context, n metadata.MetadataNode, key string) error {
 	ret := _m.Called(ctx, n, key)

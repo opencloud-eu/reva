@@ -143,6 +143,21 @@ func (b HybridBackend) All(ctx context.Context, n MetadataNode) (map[string][]by
 	return b.getAll(ctx, n, false)
 }
 
+// Reload reads all extended attributes for a node from storage, never from the cache,
+// and updates the cache with them. It acquires a shared file lock unless the caller
+// already holds the node's metadata lock (n.LockHeld()).
+func (b HybridBackend) Reload(ctx context.Context, n MetadataNode) (map[string][]byte, error) {
+	if !n.LockHeld() {
+		unlock, err := b.Lock(n)
+		if err != nil {
+			return nil, err
+		}
+		defer func() { _ = unlock() }()
+	}
+
+	return b.getAll(ctx, n, false)
+}
+
 func (b HybridBackend) getAll(ctx context.Context, n MetadataNode, skipOffloaded bool) (map[string][]byte, error) {
 	b.metrics.reads.Inc()
 	attribs := map[string][]byte{}

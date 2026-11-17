@@ -128,6 +128,23 @@ func (b XattrsBackend) All(ctx context.Context, n MetadataNode) (map[string][]by
 	return b.getAll(ctx, n, false, !n.LockHeld())
 }
 
+// Reload reads all extended attributes for a node from storage, never from the cache,
+// and updates the cache with them. It acquires a shared file lock unless the caller
+// already holds the node's metadata lock (n.LockHeld()).
+func (b XattrsBackend) Reload(ctx context.Context, n MetadataNode) (map[string][]byte, error) {
+	attribs, err := b.getAll(ctx, n, true, !n.LockHeld())
+	if err != nil {
+		return nil, err
+	}
+	if len(attribs) == 0 {
+		// getAll doesn't cache a node without attributes, so the stale entry would stay
+		if err := b.metaCache.PushToCache(b.cacheKey(n), attribs); err != nil {
+			return nil, err
+		}
+	}
+	return attribs, nil
+}
+
 func (b XattrsBackend) getAll(ctx context.Context, n MetadataNode, skipCache, acquireLock bool) (map[string][]byte, error) {
 	attribs := map[string][]byte{}
 
