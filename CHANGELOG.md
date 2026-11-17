@@ -6,7 +6,7 @@
 
 @aduffeck
 
-### 🐛 Bug Fixes
+### 🔒 Security
 
 - [stable-2.52] Reject node ids and revision keys that leave the space [[#1015](https://github.com/opencloud-eu/reva/pull/1015)]
 
