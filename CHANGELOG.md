@@ -1,5 +1,15 @@
 # Changelog
 
+## [3.0.1](https://github.com/opencloud-eu/reva/releases/tag/v3.0.1) - 2026-11-17
+
+### ❤️ Thanks to all contributors! ❤️
+
+@aduffeck
+
+### 🐛 Bug Fixes
+
+- Change module path to github.com/opencloud-eu/reva/v3 [[#1019](https://github.com/opencloud-eu/reva/pull/1019)]
+
 ## [3.0.0](https://github.com/opencloud-eu/reva/releases/tag/v3.0.0) - 2026-11-17
 
 ### ❤️ Thanks to all contributors! ❤️
