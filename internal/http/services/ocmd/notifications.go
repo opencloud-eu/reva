@@ -103,21 +103,28 @@ func (h *notifHandler) Notifications(w http.ResponseWriter, r *http.Request) {
 	log.Debug().Msgf("Received OCM notification: %+v", req)
 
 	var status *rpc.Status
-	if req.Notification.Grantee == "" {
+	if req.Notification == nil || req.Notification.Grantee == "" {
 		renderErrorBadRequest(w, r, http.StatusBadRequest, "grantee is required")
+		return
 	}
 	switch req.NotificationType {
 	case SHARE_UNSHARED:
 		status, err = h.handleShareUnshared(ctx, req)
 		if err != nil {
-			log.Err(err).Any("notificationRequest", req).Msg("error getting gateway client")
-			renderErrorBadRequest(w, r, http.StatusInternalServerError, status.GetMessage())
+			log.Err(err).Any("notificationRequest", req).Msg("error handling the share unshared notification")
+			w.WriteHeader(http.StatusInternalServerError)
+			return
 		}
 	case SHARE_CHANGE_PERMISSION:
+		if req.Notification.Protocols == nil {
+			renderErrorBadRequest(w, r, http.StatusBadRequest, "protocol is required")
+			return
+		}
 		status, err = h.handleShareChangePermission(ctx, req)
 		if err != nil {
-			log.Err(err).Any("notificationRequest", req).Msg("error getting gateway client")
-			renderErrorBadRequest(w, r, http.StatusInternalServerError, status.GetMessage())
+			log.Err(err).Any("notificationRequest", req).Msg("error handling the share change permission notification")
+			w.WriteHeader(http.StatusInternalServerError)
+			return
 		}
 	default:
 		renderErrorBadRequest(w, r, http.StatusBadRequest, "NotificationType "+req.NotificationType+" is not supported")
@@ -127,6 +134,9 @@ func (h *notifHandler) Notifications(w http.ResponseWriter, r *http.Request) {
 	switch status.GetCode() {
 	case rpc.Code_CODE_OK:
 		w.WriteHeader(http.StatusCreated)
+		return
+	case rpc.Code_CODE_NOT_FOUND:
+		w.WriteHeader(http.StatusNotFound)
 		return
 	case rpc.Code_CODE_INVALID_ARGUMENT:
 		renderErrorBadRequest(w, r, http.StatusBadRequest, status.GetMessage())
@@ -188,15 +198,17 @@ func (h *notifHandler) handleShareChangePermission(ctx context.Context, req *not
 
 func getNotification(r *http.Request) (*notificationRequest, error) {
 	contentType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
-	if err == nil && contentType == "application/json" {
-		n := &notificationRequest{}
-		err := json.NewDecoder(r.Body).Decode(&n)
-		if err != nil {
-			return nil, err
-		}
-		return n, nil
+	if err != nil {
+		return nil, err
 	}
-	return nil, err
+	if contentType != "application/json" {
+		return nil, fmt.Errorf("unsupported content type %q", contentType)
+	}
+	n := &notificationRequest{}
+	if err := json.NewDecoder(r.Body).Decode(n); err != nil {
+		return nil, err
+	}
+	return n, nil
 }
 
 func renderJSON(w http.ResponseWriter, r *http.Request, statusCode int, resp any) {
@@ -214,5 +226,5 @@ func renderErrorBadRequest(w http.ResponseWriter, r *http.Request, statusCode in
 			},
 		},
 	}
-	renderJSON(w, r, http.StatusBadRequest, resp)
+	renderJSON(w, r, statusCode, resp)
 }

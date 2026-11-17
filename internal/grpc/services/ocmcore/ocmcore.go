@@ -242,6 +242,12 @@ func (s *service) DeleteOCMCoreShare(ctx context.Context, req *ocmcore.DeleteOCM
 		},
 	})
 	if err != nil {
+		var notFound errtypes.NotFound
+		if errors.As(err, &notFound) {
+			return &ocmcore.DeleteOCMCoreShareResponse{
+				Status: status.NewNotFound(ctx, "remote ocm share not found"),
+			}, nil
+		}
 		return nil, errtypes.InternalError("unable to get share details")
 	}
 
