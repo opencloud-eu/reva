@@ -87,8 +87,7 @@ func newTestSvc(
 			StorageRegistryEndpoint:   providerAddr,
 			UserShareProviderEndpoint: providerAddr,
 		},
-		providerCache:            cache.GetProviderCache(cache.Config{Store: "noop"}),
-		createPersonalSpaceCache: cache.GetCreatePersonalSpaceCache(cache.Config{Store: "memory"}),
+		providerCache: cache.GetProviderCache(cache.Config{Store: "noop"}),
 	}
 }
 
