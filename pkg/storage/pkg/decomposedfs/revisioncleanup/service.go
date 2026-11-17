@@ -18,6 +18,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 
 	"github.com/opencloud-eu/reva/v3/pkg/appctx"
+	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/metadata"
 	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/node"
 	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/options"
 )
@@ -534,6 +535,11 @@ func (s *Service) work() {
 
 // cleanupNode reads the node again and cleans it up, it runs in a worker.
 func (s *Service) cleanupNode(ctx context.Context, spaceID, nodeID string, keep []string) {
+	if s.dryRun {
+		// also reading the node must not create lock files, see Cleaner.DryRun; a worker's
+		// context doesn't carry the marker of the request, see detach
+		ctx = metadata.WithReadOnly(ctx)
+	}
 	// Reading the node needs the group of its space just as cleaning it up does, see
 	// SpaceScoper. Nothing has switched to it for a worker; the Cleaner switches once more.
 	ctx, unscope, err := scopeToSpace(ctx, s.rs, spaceID)

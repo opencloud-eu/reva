@@ -272,9 +272,9 @@ func (c *Cleaner) Cleanup(ctx context.Context, lu node.PathLookup, rs RevisionSt
 // DryRun decides like Cleanup, but deletes nothing: the Result tells which revisions would
 // be deleted, kept or protected, and why. It neither counts metrics nor logs purges.
 //
-// It doesn't lock n, so that it doesn't create its lock file: its decisions are a snapshot,
-// which an upload to n may change meanwhile. Metadata backends that lock to read, like the
-// one of posix, may still create the lock file when the metadata isn't cached.
+// It changes nothing on disk: it doesn't lock n, and reads its metadata under
+// metadata.WithReadOnly, so that no lock file is created. Its decisions are a snapshot, which
+// an upload to n may change meanwhile.
 //
 // Like Cleanup, it checks no permissions.
 func (c *Cleaner) DryRun(ctx context.Context, lu node.PathLookup, rs RevisionStore, n *node.Node, keep ...string) Result {
@@ -288,6 +288,10 @@ func (c *Cleaner) run(ctx context.Context, lu node.PathLookup, rs RevisionStore,
 		return Result{DryRun: dryRun, Skipped: "the revision cleanup is disabled"}
 	}
 	result = Result{SpaceID: n.SpaceID, NodeID: n.ID, DryRun: dryRun}
+	if dryRun {
+		// also the backends that lock to read must not create lock files
+		ctx = metadata.WithReadOnly(ctx)
+	}
 	log := appctx.GetLogger(ctx).With().Str("spaceid", n.SpaceID).Str("nodeid", n.ID).Logger()
 
 	ctx, unscope, err := scopeToSpace(ctx, rs, n.SpaceID)

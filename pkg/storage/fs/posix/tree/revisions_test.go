@@ -133,6 +133,54 @@ var _ = Describe("Revisions", func() {
 			Expect(listKeys()).To(BeEmpty())
 		})
 
+		It("creates no lock files in a dry run", func() {
+			env := non_watching_env
+			locks := filepath.Dir(env.Lookup.MetadataBackend().LockfilePath(n))
+			lockfiles := func() []string {
+				files, err := filepath.Glob(filepath.Join(locks, "*.mlock"))
+				Expect(err).ToNot(HaveOccurred())
+				return files
+			}
+			// as for files created on disk and assimilated, which were never locked
+			for _, f := range lockfiles() {
+				Expect(os.Remove(f)).To(Succeed())
+			}
+
+			req := revisioncleanup.Request{SpaceIDs: []string{env.SpaceRootRes.SpaceId}, Strategy: "0", DryRun: true}
+			var results []revisioncleanup.Result
+			Expect(env.Fs.CleanupRevisionsUnchecked(context.Background(), req, func(r revisioncleanup.Result) { results = append(results, r) })).To(Succeed())
+			Expect(results).ToNot(BeEmpty())
+			Expect(lockfiles()).To(BeEmpty())
+			Expect(listKeys()).To(ConsistOf(keys))
+		})
+
+		// The background workers read each node again, and miss the cache e.g. when its entry
+		// expired, or with no cache at all, as here.
+		It("creates no lock files in a dry run in the background, also when reading misses the cache", func() {
+			env, err := helpers.NewTestEnv(map[string]any{
+				"watch_fs":                false,
+				"revisions_cleanup_async": true,
+				"filemetadatacache":       map[string]any{"cache_store": "noop"},
+			})
+			Expect(err).ToNot(HaveOccurred())
+			DeferCleanup(env.Cleanup)
+
+			root, err := env.Lookup.NodeFromResource(env.Ctx, &provider.Reference{ResourceId: env.SpaceRootRes})
+			Expect(err).ToNot(HaveOccurred())
+			// as for files created on disk and assimilated, which were never locked
+			locks := filepath.Dir(env.Lookup.MetadataBackend().LockfilePath(root))
+			Expect(os.RemoveAll(locks)).To(Succeed())
+
+			req := revisioncleanup.Request{SpaceIDs: []string{env.SpaceRootRes.SpaceId}, Strategy: "0", DryRun: true}
+			var results []revisioncleanup.Result
+			Expect(env.Fs.CleanupRevisionsUnchecked(context.Background(), req, func(r revisioncleanup.Result) { results = append(results, r) })).To(Succeed())
+			Expect(results).ToNot(BeEmpty())
+			for _, r := range results {
+				Expect(r.Err).ToNot(HaveOccurred())
+			}
+			Expect(locks).ToNot(BeADirectory())
+		})
+
 		It("finds files and folders by their path on disk", func() {
 			env := non_watching_env
 			spaceID := env.SpaceRootRes.SpaceId

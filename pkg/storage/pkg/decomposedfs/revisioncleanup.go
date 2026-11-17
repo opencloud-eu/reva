@@ -16,6 +16,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/opencloud-eu/reva/v3/pkg/errtypes"
+	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/metadata"
 	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/node"
 	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/revisioncleanup"
 )
@@ -43,6 +44,10 @@ func (fs *Decomposedfs) CleanupRevisionsUnchecked(ctx context.Context, req revis
 	}
 	if req.FSPath != "" {
 		return errtypes.NotSupported("cleaning up revisions by a path on disk, only the posix driver supports it")
+	}
+	if req.DryRun {
+		// a dry run changes nothing on disk, not even the lock files of what it reads
+		ctx = metadata.WithReadOnly(ctx)
 	}
 	w, ok := fs.tp.(revisioncleanup.Walker)
 	if !ok {

@@ -287,6 +287,10 @@ func (fs *posixFS) CleanupRevisionsUnchecked(ctx context.Context, req revisioncl
 	if fs.revisions == nil {
 		return errtypes.NotSupported("on-demand revision cleanup")
 	}
+	if req.DryRun {
+		// a dry run changes nothing on disk, not even the lock files of what it reads
+		ctx = metadata.WithReadOnly(ctx)
+	}
 	if req.FSPath != "" {
 		if err := req.Validate(); err != nil {
 			return err

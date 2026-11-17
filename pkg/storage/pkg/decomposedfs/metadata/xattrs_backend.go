@@ -107,17 +107,26 @@ func (b XattrsBackend) list(ctx context.Context, n MetadataNode, acquireLock boo
 
 	// listing xattrs failed, try again, either with lock or without
 	if acquireLock {
-		f, err := lockFile(n, filePath+filelocks.LockFileSuffix, os.O_CREATE|os.O_WRONLY, b.metrics)
+		lockPath := filePath + filelocks.LockFileSuffix
+		var f *heldLock
+		locked := true
+		if IsReadOnly(ctx) {
+			// lock only an existing lock file, and don't lock without one
+			f, locked, err = lockExisting(n, lockPath, os.O_WRONLY, b.metrics)
+		} else {
+			f, err = lockFile(n, lockPath, os.O_CREATE|os.O_WRONLY, b.metrics)
+		}
 		if err != nil {
 			return nil, err
 		}
-		n.SetLockHeld(true)
-		// Warning: do not remove the lockfile or we may lock the same file more than once, https://github.com/opencloud-eu/opencloud/issues/1793
-		defer func() {
-			n.SetLockHeld(false)
-			_ = f.Close()
-		}()
-
+		if locked {
+			n.SetLockHeld(true)
+			// Warning: do not remove the lockfile or we may lock the same file more than once, https://github.com/opencloud-eu/opencloud/issues/1793
+			defer func() {
+				n.SetLockHeld(false)
+				_ = f.Close()
+			}()
+		}
 	}
 	return listXattr(ctx, filePath)
 }
