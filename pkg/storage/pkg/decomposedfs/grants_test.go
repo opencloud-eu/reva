@@ -60,7 +60,7 @@ var _ = Describe("Grants", func() {
 			Permissions: &provider.ResourcePermissions{
 				Stat:                 true,
 				Move:                 true,
-				Delete:               false,
+				Delete:               true,
 				InitiateFileDownload: true,
 			},
 			Creator: &userpb.UserId{
@@ -139,7 +139,7 @@ var _ = Describe("Grants", func() {
 				Expect(err).ToNot(HaveOccurred())
 				attr, err := n.XattrString(env.Ctx, prefixes.GrantUserAcePrefix+grant.Grantee.GetUserId().OpaqueId)
 				Expect(err).ToNot(HaveOccurred())
-				Expect(attr).To(Equal(fmt.Sprintf("\x00t=A:f=:p=trw:c=%s:e=0\n", o.GetOpaqueId()))) // NOTE: this tests ace package
+				Expect(attr).To(Equal(fmt.Sprintf("\x00t=A:f=:p=trwd:c=%s:e=0\n", o.GetOpaqueId()))) // NOTE: this tests ace package
 			})
 
 			It("creates a storage space per created grant", func() {
@@ -165,7 +165,7 @@ var _ = Describe("Grants", func() {
 				Expect(g.Grantee.GetUserId().OpaqueId).To(Equal(grant.Grantee.GetUserId().OpaqueId))
 				Expect(g.Permissions.Stat).To(BeTrue())
 				Expect(g.Permissions.Move).To(BeTrue())
-				Expect(g.Permissions.Delete).To(BeFalse())
+				Expect(g.Permissions.Delete).To(BeTrue())
 			})
 		})
 
