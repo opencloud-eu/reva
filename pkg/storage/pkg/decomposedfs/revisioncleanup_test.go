@@ -18,6 +18,7 @@ import (
 	"github.com/opencloud-eu/reva/v3/pkg/storage"
 	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs"
 	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/node"
+	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/revisioncleanup"
 	helpers "github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/testhelpers"
 	uploadcoordinator "github.com/opencloud-eu/reva/v3/pkg/upload"
 
@@ -221,6 +222,27 @@ var _ = Describe("Revision cleanup", func() {
 			restored, err := env.Lookup.NodeFromResource(env.Ctx, fileRef)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(restored.BlobID).To(Equal("file1-blobid"))
+		})
+
+		It("keep that revision for every cleanup, until the file gets other content", func() {
+			newEnv("0")
+			createRevisions()
+			_, err := env.Fs.RestoreRevision(env.Ctx, fileRef, file.ID+node.RevisionIDDelimiter+rev1)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(revisionsOf(file)).To(HaveLen(1))
+
+			By("keeping it for a cleanup the restore didn't trigger, e.g. one on demand in another process")
+			other, err := revisioncleanup.New("0")
+			Expect(err).ToNot(HaveOccurred())
+			restored, err := env.Lookup.NodeFromResource(env.Ctx, fileRef)
+			Expect(err).ToNot(HaveOccurred())
+			other.Cleanup(env.Ctx, env.Lookup, env.Tree, restored)
+			Expect(revisionsOf(file)).To(HaveLen(1))
+
+			By("deleting it like any other revision once an upload replaced the restored content")
+			upload([]byte("new content"))
+			Expect(revisionsOf(file)).To(BeEmpty())
+			Expect(deletedBlobs()).To(ConsistOf("second-blobid", "current-blobid", "file1-blobid"))
 		})
 
 		It("don't hold the node lock while waiting for room in the background cleanup's queue", func() {

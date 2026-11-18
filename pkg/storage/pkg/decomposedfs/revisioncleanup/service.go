@@ -113,11 +113,10 @@ func (o AsyncOptions) resolve() (workers int, queueSize int, policy QueueFullPol
 // per goroutine and its cached attributes go stale.
 //
 // Requests are de-duplicated per node: a node that is already waiting in the queue is not
-// queued again (the revisions to keep are merged into the waiting request). A node whose
-// cleanup is already running is not queued either, as another worker would only wait for
-// the node lock: when that cleanup is done, the node is queued once more, at the end of the
-// queue, as new revisions may have been created in the meantime, with the revisions to keep
-// of all the requests that came in until then. A node therefore never occupies more than
+// queued again. A node whose cleanup is already running is not queued either, as another
+// worker would only wait for the node lock: when that cleanup is done, the node is queued
+// once more, at the end of the queue, as new revisions may have been created in the meantime.
+// A node therefore never occupies more than
 // one worker, and a single busy file can't keep the workers from the others.
 type Service struct {
 	cleaner *Cleaner
@@ -139,7 +138,7 @@ type Service struct {
 
 	async   bool
 	policy  QueueFullPolicy
-	process func(ctx context.Context, spaceID, nodeID string, keep []string)
+	process func(ctx context.Context, spaceID, nodeID string)
 	queue   chan *request
 	done    chan struct{}
 	wg      sync.WaitGroup
@@ -170,20 +169,10 @@ type request struct {
 	link    trace.Link
 	spaceID string
 	nodeID  string
-	keep    []string
 }
 
 func (r *request) key() string {
 	return r.spaceID + "/" + r.nodeID
-}
-
-// merge adds the revisions to keep of other to r, s.mu must be held.
-func (r *request) merge(other *request) {
-	for _, k := range other.keep {
-		if !slices.Contains(r.keep, k) {
-			r.keep = append(r.keep, k)
-		}
-	}
 }
 
 // NewServiceFromOptions creates the Service of a storage driver from its options: the cleanup
@@ -256,7 +245,7 @@ func (s *Service) Enabled() bool {
 
 // startWorkers switches the Service to asynchronous mode. process does the work for one
 // node; it is a parameter so that tests can observe the queueing without a storage.
-func (s *Service) startWorkers(workers, queueSize int, policy QueueFullPolicy, process func(ctx context.Context, spaceID, nodeID string, keep []string)) {
+func (s *Service) startWorkers(workers, queueSize int, policy QueueFullPolicy, process func(ctx context.Context, spaceID, nodeID string)) {
 	s.async = true
 	s.policy = policy
 	s.process = process
@@ -277,8 +266,8 @@ func (s *Service) startWorkers(workers, queueSize int, policy QueueFullPolicy, p
 }
 
 // HandleRevisionCreated handles the event that a new revision of n was created and has
-// settled: it cleans up the old revisions of n according to the strategy, never deleting
-// the revisions with a key in keep. In asynchronous mode it only queues n and returns,
+// settled: it cleans up the old revisions of n according to the strategy. In asynchronous
+// mode it only queues n and returns,
 // see Service and AsyncOptions.
 // Errors are logged, never returned: a failed cleanup must not fail the operation that
 // triggered it.
@@ -288,11 +277,11 @@ func (s *Service) startWorkers(workers, queueSize int, policy QueueFullPolicy, p
 // file as skipped.
 //
 // It checks no permissions, see Cleaner.Cleanup.
-func (s *Service) HandleRevisionCreated(ctx context.Context, n *node.Node, keep ...string) {
+func (s *Service) HandleRevisionCreated(ctx context.Context, n *node.Node) {
 	if !s.Enabled() || n == nil {
 		return
 	}
-	s.handle(ctx, n.SpaceID, n.ID, n, keep)
+	s.handle(ctx, n.SpaceID, n.ID, n)
 }
 
 // HandleRevisionCreatedByID is HandleRevisionCreated for a node given by its ids, for callers
@@ -301,31 +290,31 @@ func (s *Service) HandleRevisionCreated(ctx context.Context, n *node.Node, keep 
 // asynchronous mode only in the worker, which reads the node anyway.
 //
 // It checks no permissions, see Cleaner.Cleanup.
-func (s *Service) HandleRevisionCreatedByID(ctx context.Context, spaceID, nodeID string, keep ...string) {
+func (s *Service) HandleRevisionCreatedByID(ctx context.Context, spaceID, nodeID string) {
 	if !s.Enabled() {
 		return
 	}
-	s.handle(ctx, spaceID, nodeID, nil, keep)
+	s.handle(ctx, spaceID, nodeID, nil)
 }
 
 // handle cleans up the node right away in synchronous mode, n if given, otherwise read by its
 // ids, and queues it in asynchronous mode.
-func (s *Service) handle(ctx context.Context, spaceID, nodeID string, n *node.Node, keep []string) {
+func (s *Service) handle(ctx context.Context, spaceID, nodeID string, n *node.Node) {
 	if !s.async {
 		if s.onDemand {
 			// don't leave a file half cleaned up, the run stops before the next one
 			ctx = context.WithoutCancel(ctx)
 		}
 		if n == nil {
-			s.cleanupNode(ctx, spaceID, nodeID, keep)
+			s.cleanupNode(ctx, spaceID, nodeID)
 			return
 		}
-		s.clean(ctx, n, keep)
+		s.clean(ctx, n)
 		return
 	}
 	// the cleanup outlives the request that triggered it, see detach
 	detached, link := detach(ctx)
-	s.enqueue(ctx, &request{ctx: detached, link: link, spaceID: spaceID, nodeID: nodeID, keep: slices.Clone(keep)})
+	s.enqueue(ctx, &request{ctx: detached, link: link, spaceID: spaceID, nodeID: nodeID})
 }
 
 // detach returns the context for a cleanup in the background, which outlives the request that
@@ -366,9 +355,8 @@ func (s *Service) enqueue(ctx context.Context, r *request) {
 		log.Debug().Msg("revision cleanup: shutting down, not scheduling cleanup")
 		return
 	}
-	if waiting, ok := s.queued[key]; ok {
+	if _, ok := s.queued[key]; ok {
 		// already waiting in the queue, it will see the new revision as well
-		waiting.merge(r)
 		s.mu.Unlock()
 		return
 	}
@@ -378,8 +366,6 @@ func (s *Service) enqueue(ctx context.Context, r *request) {
 			s.running[key] = r
 			s.addPending()
 			s.m().queueLength.Inc()
-		} else {
-			again.merge(r)
 		}
 		s.mu.Unlock()
 		return
@@ -506,11 +492,10 @@ func (s *Service) work() {
 				s.m().queueLength.Dec()
 			}
 			s.running[r.key()] = nil
-			keep := slices.Clone(r.keep)
 			s.mu.Unlock()
 			s.m().running.Inc()
 			ctx, span := startSpan(r)
-			s.process(ctx, r.spaceID, r.nodeID, keep)
+			s.process(ctx, r.spaceID, r.nodeID)
 			span.End()
 			s.m().running.Dec()
 			s.mu.Lock()
@@ -534,7 +519,7 @@ func (s *Service) work() {
 }
 
 // cleanupNode reads the node again and cleans it up, it runs in a worker.
-func (s *Service) cleanupNode(ctx context.Context, spaceID, nodeID string, keep []string) {
+func (s *Service) cleanupNode(ctx context.Context, spaceID, nodeID string) {
 	if s.dryRun {
 		// also reading the node must not create lock files, see Cleaner.DryRun; a worker's
 		// context doesn't carry the marker of the request, see detach
@@ -568,16 +553,16 @@ func (s *Service) cleanupNode(ctx context.Context, spaceID, nodeID string, keep 
 		s.reportResult(Result{SpaceID: spaceID, NodeID: nodeID, DryRun: s.dryRun, Skipped: "the space is disabled"})
 		return
 	}
-	s.clean(ctx, n, keep)
+	s.clean(ctx, n)
 }
 
 // clean runs the cleanup of n, or only decides about it in a dry run, and reports the Result.
-func (s *Service) clean(ctx context.Context, n *node.Node, keep []string) {
+func (s *Service) clean(ctx context.Context, n *node.Node) {
 	var result Result
 	if s.dryRun {
-		result = s.cleaner.DryRun(ctx, s.lu, s.rs, n, keep...)
+		result = s.cleaner.DryRun(ctx, s.lu, s.rs, n)
 	} else {
-		result = s.cleaner.Cleanup(ctx, s.lu, s.rs, n, keep...)
+		result = s.cleaner.Cleanup(ctx, s.lu, s.rs, n)
 	}
 	s.reportResult(result)
 }

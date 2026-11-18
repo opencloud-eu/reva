@@ -1804,6 +1804,11 @@ var PurgeOnRestoreAttr = prefixes.OcPrefix + "purgeonrestore"
 // that a rollback can hand the node back to the upload it superseded. It is not a version.
 var UploadSnapshotAttr = prefixes.OcPrefix + "uploadsnapshot"
 
+// KeepAfterRestoreAttr marks the revision a restore created of the content it replaced. Its
+// value is the blob id of the restored content: while the file still has it, the revision
+// cleanup keeps the revision, so that the content the user just replaced can't be lost.
+var KeepAfterRestoreAttr = prefixes.OcPrefix + "keepafterrestore"
+
 // KeptForRollback reports whether a revision exists only for a rollback, rather than as a
 // version (see PurgeOnRestoreAttr and UploadSnapshotAttr).
 func KeptForRollback(ctx context.Context, backend metadata.Backend, revision metadata.MetadataNode) bool {

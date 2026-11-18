@@ -92,11 +92,6 @@ func testNode(id string) *node.Node {
 	return &node.Node{BaseNode: node.BaseNode{SpaceID: "space", ID: id}}
 }
 
-type processed struct {
-	nodeID string
-	keep   []string
-}
-
 // testService is a Service whose workers record the processed nodes. Each node
 // blocks its worker until it is released, so that tests can control what is running
 // and what is waiting in the queue.
@@ -106,7 +101,7 @@ type testService struct {
 	started   chan string
 	release   chan struct{}
 	mu        sync.Mutex
-	processed []processed
+	processed []string
 }
 
 func newTestService(t *testing.T, workers, queueSize int, policy QueueFullPolicy) *testService {
@@ -119,11 +114,11 @@ func newTestService(t *testing.T, workers, queueSize int, policy QueueFullPolicy
 		started: make(chan string, 100),
 		release: make(chan struct{}),
 	}
-	ts.startWorkers(workers, queueSize, policy, func(ctx context.Context, spaceID, nodeID string, keep []string) {
+	ts.startWorkers(workers, queueSize, policy, func(ctx context.Context, spaceID, nodeID string) {
 		ts.started <- nodeID
 		<-ts.release
 		ts.mu.Lock()
-		ts.processed = append(ts.processed, processed{nodeID, keep})
+		ts.processed = append(ts.processed, nodeID)
 		ts.mu.Unlock()
 	})
 	t.Cleanup(func() {
@@ -178,10 +173,10 @@ func (ts *testService) releaseOne() {
 	ts.release <- struct{}{}
 }
 
-func (ts *testService) processedNodes() []processed {
+func (ts *testService) processedNodes() []string {
 	ts.mu.Lock()
 	defer ts.mu.Unlock()
-	return append([]processed{}, ts.processed...)
+	return append([]string{}, ts.processed...)
 }
 
 func TestServiceDeduplicatesWaitingNodes(t *testing.T) {
@@ -191,10 +186,9 @@ func TestServiceDeduplicatesWaitingNodes(t *testing.T) {
 	ts.HandleRevisionCreated(ctx, testNode("a"))
 	ts.waitStarted("a") // a is running, the worker is busy
 
-	ts.HandleRevisionCreated(ctx, testNode("b"), "k1")
-	ts.HandleRevisionCreated(ctx, testNode("b"), "k2") // merged into the waiting request
-	ts.HandleRevisionCreated(ctx, testNode("b"), "k1") // no duplicate keep key
-	ts.HandleRevisionCreated(ctx, testNode("a"))       // a is running, not waiting: queued again
+	ts.HandleRevisionCreated(ctx, testNode("b"))
+	ts.HandleRevisionCreated(ctx, testNode("b")) // already waiting: not queued again
+	ts.HandleRevisionCreated(ctx, testNode("a")) // a is running, not waiting: queued again
 
 	ts.releaseOne()
 	ts.waitStarted("b")
@@ -203,24 +197,20 @@ func TestServiceDeduplicatesWaitingNodes(t *testing.T) {
 	ts.releaseOne()
 
 	require.Eventually(t, func() bool { return len(ts.processedNodes()) == 3 }, 5*time.Second, 10*time.Millisecond)
-	require.Equal(t, []processed{
-		{"a", nil},
-		{"b", []string{"k1", "k2"}},
-		{"a", nil},
-	}, ts.processedNodes())
+	require.Equal(t, []string{"a", "b", "a"}, ts.processedNodes())
 }
 
 // A node that gets new revisions while it is being cleaned up occupies no other worker: it is
-// cleaned up once more afterwards, with the revisions to keep of all those requests, and the
-// other nodes get the other workers.
+// cleaned up once more afterwards, once for all those requests, and the other nodes get the
+// other workers.
 func TestServiceRunsANodeOnOneWorkerAtATime(t *testing.T) {
 	ts := newTestService(t, 3, 10, QueueFullBlock)
 	ctx := context.Background()
 
 	ts.HandleRevisionCreated(ctx, testNode("busy"))
 	ts.waitStarted("busy")
-	for _, k := range []string{"k1", "k2", "k1"} {
-		ts.HandleRevisionCreated(ctx, testNode("busy"), k)
+	for range 3 {
+		ts.HandleRevisionCreated(ctx, testNode("busy"))
 	}
 	ts.HandleRevisionCreated(ctx, testNode("other"))
 	ts.waitStarted("other") // a free worker takes the other node
@@ -237,11 +227,7 @@ func TestServiceRunsANodeOnOneWorkerAtATime(t *testing.T) {
 
 	require.Eventually(t, func() bool { return len(ts.processedNodes()) == 3 }, 5*time.Second, 10*time.Millisecond)
 	require.Never(t, func() bool { return len(ts.processedNodes()) > 3 }, 200*time.Millisecond, 10*time.Millisecond)
-	require.ElementsMatch(t, []processed{
-		{"busy", nil},
-		{"other", nil},
-		{"busy", []string{"k1", "k2"}},
-	}, ts.processedNodes())
+	require.ElementsMatch(t, []string{"busy", "other", "busy"}, ts.processedNodes())
 }
 
 // A node given by its ids is queued like one given as a node, and only the worker reads it.
@@ -249,20 +235,17 @@ func TestServiceQueuesANodeGivenByItsIDs(t *testing.T) {
 	ts := newTestService(t, 1, 10, QueueFullBlock)
 	ctx := context.Background()
 
-	ts.HandleRevisionCreatedByID(ctx, "space", "a", "k1")
+	ts.HandleRevisionCreatedByID(ctx, "space", "a")
 	ts.waitStarted("a")
 	ts.HandleRevisionCreatedByID(ctx, "space", "b")
-	ts.HandleRevisionCreated(ctx, testNode("b"), "k2") // the same node: merged into the waiting request
+	ts.HandleRevisionCreated(ctx, testNode("b")) // the same node: not queued again
 
 	ts.releaseOne()
 	ts.waitStarted("b")
 	ts.releaseOne()
 
 	require.Eventually(t, func() bool { return len(ts.processedNodes()) == 2 }, 5*time.Second, 10*time.Millisecond)
-	require.Equal(t, []processed{
-		{"a", []string{"k1"}},
-		{"b", []string{"k2"}},
-	}, ts.processedNodes())
+	require.Equal(t, []string{"a", "b"}, ts.processedNodes())
 }
 
 // A node collected to be cleaned up once more goes to the end of the queue, so that a node
@@ -278,7 +261,7 @@ func TestServiceDetachesTheCleanupFromTheRequest(t *testing.T) {
 	require.NoError(t, err)
 	s := &Service{cleaner: cleaner, log: &zerolog.Logger{}}
 	workerCtx := make(chan context.Context, 1)
-	s.startWorkers(1, 1, QueueFullBlock, func(ctx context.Context, spaceID, nodeID string, keep []string) {
+	s.startWorkers(1, 1, QueueFullBlock, func(ctx context.Context, spaceID, nodeID string) {
 		workerCtx <- ctx
 	})
 	t.Cleanup(func() { _ = s.Shutdown(context.Background()) })
@@ -344,8 +327,8 @@ func TestServiceDropsWhenQueueIsFull(t *testing.T) {
 
 	require.Eventually(t, func() bool { return len(ts.processedNodes()) == 2 }, 5*time.Second, 10*time.Millisecond)
 	require.Never(t, func() bool { return len(ts.processedNodes()) > 2 }, 200*time.Millisecond, 10*time.Millisecond)
-	require.Equal(t, "a", ts.processedNodes()[0].nodeID)
-	require.Equal(t, "b", ts.processedNodes()[1].nodeID)
+	require.Equal(t, "a", ts.processedNodes()[0])
+	require.Equal(t, "b", ts.processedNodes()[1])
 
 	// c was forgotten, so it can be scheduled again
 	ts.HandleRevisionCreated(ctx, testNode("c"))
@@ -450,7 +433,7 @@ func TestServiceShutdown(t *testing.T) {
 
 	// b was abandoned, and nothing is scheduled anymore after the shutdown
 	ts.HandleRevisionCreated(ctx, testNode("d"))
-	require.Equal(t, []processed{{"a", nil}}, ts.processedNodes())
+	require.Equal(t, []string{"a"}, ts.processedNodes())
 	require.NoError(t, ts.Shutdown(ctx), "a second Shutdown is a no-op")
 }
 
@@ -659,7 +642,7 @@ func TestServiceOnDemandStopsWithTheContext(t *testing.T) {
 		{SpaceID: "space", NodeID: "c", Skipped: skippedStopped},
 		{SpaceID: "space", NodeID: "b", Skipped: skippedStopped},
 	}, results())
-	require.Equal(t, []processed{{"a", nil}}, ts.processedNodes())
+	require.Equal(t, []string{"a"}, ts.processedNodes())
 }
 
 // The Service of a storage driver never gives up on a full queue with policy "block", even

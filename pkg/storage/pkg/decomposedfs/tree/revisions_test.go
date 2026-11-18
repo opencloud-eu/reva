@@ -20,6 +20,7 @@ import (
 	"github.com/stretchr/testify/mock"
 
 	"github.com/opencloud-eu/reva/v3/pkg/appctx"
+	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/metadata"
 	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/metadata/prefixes"
 	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/node"
 	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/revisioncleanup"
@@ -202,11 +203,32 @@ var _ = Describe("Revisions", func() {
 			Expect(counterValue(bytesDeleted)).To(Equal(bytes))
 		})
 
-		It("never purges revisions it was asked to keep", func() {
-			cleaner.Cleanup(env.Ctx, env.Lookup, env.Tree, n, keys[2])
+		It("never purges the revision a restore marked while the file has the restored content", func() {
+			// keys[2] holds the content a restore replaced with the current one
+			Expect(env.Lookup.MetadataBackend().Set(env.Ctx, revisionNode(keys[2]), node.KeepAfterRestoreAttr, []byte("file1-blobid"))).To(Succeed())
+
+			cleaner.Cleanup(env.Ctx, env.Lookup, env.Tree, n)
 
 			Expect(listKeys()).To(ConsistOf(keys))
 			env.Blobstore.AssertNotCalled(GinkgoT(), "Delete", mock.Anything)
+		})
+
+		It("drops the mark of a restore once the file has other content", func() {
+			// keys[1] is kept by the strategy anyway, keys[2] is not: both were marked by restores
+			// whose content the file no longer has
+			Expect(env.Lookup.MetadataBackend().Set(env.Ctx, revisionNode(keys[1]), node.KeepAfterRestoreAttr, []byte("restored-blobid"))).To(Succeed())
+			Expect(env.Lookup.MetadataBackend().Set(env.Ctx, revisionNode(keys[2]), node.KeepAfterRestoreAttr, []byte("restored-blobid"))).To(Succeed())
+
+			By("leaving the marks in a dry run")
+			cleaner.DryRun(env.Ctx, env.Lookup, env.Tree, n)
+			Expect(env.Lookup.MetadataBackend().Get(env.Ctx, revisionNode(keys[1]), node.KeepAfterRestoreAttr)).To(Equal([]byte("restored-blobid")))
+
+			By("removing them, and treating the revisions like any other")
+			expectBlobDeletion(blobOfRevision(2))
+			cleaner.Cleanup(env.Ctx, env.Lookup, env.Tree, n)
+			Expect(listKeys()).To(ConsistOf(keys[0], keys[1]))
+			_, err := env.Lookup.MetadataBackend().Get(env.Ctx, revisionNode(keys[1]), node.KeepAfterRestoreAttr)
+			Expect(metadata.IsAttrUnset(err)).To(BeTrue(), "%v", err)
 		})
 
 		It("does nothing while the node is processing", func() {
@@ -417,11 +439,13 @@ var _ = Describe("Revisions", func() {
 			Expect(count).To(BeZero())
 		})
 
-		It("reports revisions kept on request as protected", func() {
-			result := cleaner.Cleanup(env.Ctx, env.Lookup, env.Tree, n, keys[2])
+		It("reports the revision a restore keeps as protected", func() {
+			Expect(env.Lookup.MetadataBackend().Set(env.Ctx, revisionNode(keys[2]), node.KeepAfterRestoreAttr, []byte("file1-blobid"))).To(Succeed())
+
+			result := cleaner.Cleanup(env.Ctx, env.Lookup, env.Tree, n)
 
 			Expect(result.Revisions[2].Decision).To(Equal(revisioncleanup.Protected))
-			Expect(result.Revisions[2].Reason).To(HavePrefix("protected: kept on request"))
+			Expect(result.Revisions[2].Reason).To(HavePrefix("protected: holds the content a restore replaced"))
 			Expect(listKeys()).To(ConsistOf(keys))
 		})
 

@@ -243,12 +243,12 @@ func (c *Cleaner) Enabled() bool {
 	return c != nil && c.strategy != nil
 }
 
-// keptOnRequest is the reason for revisions that the operation triggering the cleanup asked
-// to keep, see Cleanup.
-const keptOnRequest = "protected: kept on request of the operation that triggered the cleanup (e.g. the state from before a restore)"
+// keptAfterRestore is the reason for the revisions a restore keeps, see keptAfterRestoreKeys.
+const keptAfterRestore = "protected: holds the content a restore replaced, as long as the file has the restored content"
 
 // Cleanup deletes the revisions of n that the strategy does not want to keep.
-// Revisions with a key in keep are never deleted.
+// The revision a restore created of the content it replaced is never deleted as long as the
+// file has the restored content, see node.KeepAfterRestoreAttr.
 //
 // It locks the metadata of n (the lock is reentrant, callers may already hold it)
 // and does nothing while an upload to n is still being processed, as that upload
@@ -264,8 +264,8 @@ const keptOnRequest = "protected: kept on request of the operation that triggere
 // It checks no permissions: it is housekeeping on behalf of the system, e.g. after async
 // postprocessing, where there is no suitable user in the context. Callers decide which nodes
 // to clean up.
-func (c *Cleaner) Cleanup(ctx context.Context, lu node.PathLookup, rs RevisionStore, n *node.Node, keep ...string) Result {
-	return c.run(ctx, lu, rs, n, false, keep)
+func (c *Cleaner) Cleanup(ctx context.Context, lu node.PathLookup, rs RevisionStore, n *node.Node) Result {
+	return c.run(ctx, lu, rs, n, false)
 }
 
 // DryRun decides like Cleanup, but deletes nothing: the Result tells which revisions would
@@ -276,13 +276,13 @@ func (c *Cleaner) Cleanup(ctx context.Context, lu node.PathLookup, rs RevisionSt
 // an upload to n may change meanwhile.
 //
 // Like Cleanup, it checks no permissions.
-func (c *Cleaner) DryRun(ctx context.Context, lu node.PathLookup, rs RevisionStore, n *node.Node, keep ...string) Result {
-	return c.run(ctx, lu, rs, n, true, keep)
+func (c *Cleaner) DryRun(ctx context.Context, lu node.PathLookup, rs RevisionStore, n *node.Node) Result {
+	return c.run(ctx, lu, rs, n, true)
 }
 
 // The result is named, so that the deletion of the blobs, which runs deferred, can report its
 // errors in it.
-func (c *Cleaner) run(ctx context.Context, lu node.PathLookup, rs RevisionStore, n *node.Node, dryRun bool, keep []string) (result Result) {
+func (c *Cleaner) run(ctx context.Context, lu node.PathLookup, rs RevisionStore, n *node.Node, dryRun bool) (result Result) {
 	if !c.Enabled() || n == nil {
 		return Result{DryRun: dryRun, Skipped: "the revision cleanup is disabled"}
 	}
@@ -396,9 +396,10 @@ func (c *Cleaner) run(ctx context.Context, lu node.PathLookup, rs RevisionStore,
 		log.Debug().Str("revision", sk.version.Key).Str("reason", sk.reason).Msg("revision cleanup: leaving a revision alone that is not a version")
 	}
 	if len(versions) == 0 {
-		result.Revisions = revisionResults(nil, nil, keep, nil, skipped)
+		result.Revisions = revisionResults(nil, nil, nil, nil, skipped)
 		return result
 	}
+	keep := keptAfterRestoreKeys(ctx, lu, n, versions, currentBlobID, dryRun)
 
 	revs := make([]revisions.Revision, len(versions))
 	for i, v := range versions {
@@ -492,11 +493,43 @@ func revisionResults(revs []revisions.Revision, plan revisions.Plan, keep []stri
 		}
 		if r.Decision == Deleted && slices.Contains(keep, rev.Key()) {
 			r.Decision = Protected
-			r.Reason = keptOnRequest
+			r.Reason = keptAfterRestore
 		}
 		results = append(results, r)
 	}
 	return results
+}
+
+// keptAfterRestoreKeys returns the keys of the versions of n that a restore keeps: the ones
+// marked with node.KeepAfterRestoreAttr, as long as n still has the content the restore put in
+// place, i.e. while its blob id is the value of the mark. The next upload or restore of n, or a
+// change on disk with posix, gives n a new blob id: from then on such a revision is a version
+// like any other, and the mark is removed, but in a dry run, which changes nothing.
+//
+// The mark is on disk rather than in the request for the cleanup, so that it holds also when
+// the request is dropped or merged with another, for a cleanup by another instance of the
+// driver in the same process, and for a cleanup on demand in a process of its own.
+func keptAfterRestoreKeys(ctx context.Context, lu node.PathLookup, n *node.Node, versions []*provider.FileVersion, currentBlobID string, dryRun bool) []string {
+	backend := lu.MetadataBackend()
+	var keep []string
+	for _, v := range versions {
+		revision := node.NewBaseNode(n.SpaceID, v.Key, lu)
+		restoredBlobID, err := backend.Get(ctx, revision, node.KeepAfterRestoreAttr)
+		if err != nil {
+			continue
+		}
+		if currentBlobID != "" && string(restoredBlobID) == currentBlobID {
+			keep = append(keep, v.Key)
+			continue
+		}
+		if dryRun {
+			continue
+		}
+		if err := backend.Remove(ctx, revision, node.KeepAfterRestoreAttr); err != nil && !metadata.IsAttrUnset(err) {
+			appctx.GetLogger(ctx).Warn().Err(err).Str("revision", v.Key).Msg("revision cleanup: could not remove the mark of a restore that the file no longer has")
+		}
+	}
+	return keep
 }
 
 // skippedRevision is a revision the cleanup leaves alone, see notAVersion.

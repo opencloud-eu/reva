@@ -139,8 +139,13 @@ func (fs *Decomposedfs) RestoreRevision(ctx context.Context, ref *provider.Refer
 		return nil, err
 	}
 
+	// the blob id the node gets back, for the mark of the revision created below
+	restoredBlobID, err := fs.lu.MetadataBackend().Get(ctx, revisionNode, prefixes.BlobIDAttr)
+	if err != nil {
+		log.Warn().Err(err).Interface("ref", ref).Str("revisionKey", revisionKey).Msg("could not read the blob id of the revision, the revision of the replaced content won't be protected from the revision cleanup")
+	}
+
 	// create a revision of the current node
-	// (the version is kept around to protect this revision from the cleanup below)
 	// It is named after the mtime of the content it preserves, not after the time it is
 	// created; the revision cleanup takes the age of a revision from this name (see
 	// revisioncleanup.revisionTime).
@@ -163,6 +168,19 @@ func (fs *Decomposedfs) RestoreRevision(ctx context.Context, ref *provider.Refer
 		return nil, err
 	}
 
+	// A restore is a deliberate user action: the revision cleanup must not drop the content the
+	// user just replaced, e.g. because its revision is older than the strategy allows, or as the
+	// 'auto' strategy thins out revisions that are close in time. Marked on disk, while the
+	// node is still locked, so that every cleanup sees it, see node.KeepAfterRestoreAttr. Not
+	// marking it doesn't fail the restore, which is done by now: the revision is only protected
+	// less.
+	if len(restoredBlobID) > 0 {
+		newRevisionNode := node.NewBaseNode(spaceID, n.ID+node.RevisionIDDelimiter+newRevision, fs.lu)
+		if err := fs.lu.MetadataBackend().Set(ctx, newRevisionNode, node.KeepAfterRestoreAttr, restoredBlobID); err != nil {
+			log.Error().Err(err).Interface("ref", ref).Str("revision", newRevisionNode.ID).Msg("could not mark the revision of the replaced content, the revision cleanup may delete it")
+		}
+	}
+
 	// drop old revision
 	if err := os.Remove(restoredRevisionPath); err != nil {
 		log.Warn().Err(err).Interface("ref", ref).Str("originalnode", kp[0]).Str("revisionKey", revisionKey).Msg("could not delete old revision, continuing")
@@ -183,16 +201,12 @@ func (fs *Decomposedfs) RestoreRevision(ctx context.Context, ref *provider.Refer
 
 	// The restore created a new revision from the previous content, so apply the
 	// revision cleanup strategy (see package revisioncleanup). It runs last, once the
-	// restore is complete, and never fails the restore.
-	// The revision holding the state from before the restore is always kept: a restore
-	// is a deliberate user action, and the strategy could otherwise drop the very
-	// content the user just replaced, e.g. the 'auto' strategy thins out revisions
-	// that are close in time.
+	// restore is complete, and never fails the restore. It keeps the revision marked above.
 	// The node lock is released first: the cleanup takes it itself, and when it runs in the
 	// background, waiting for room in its queue while holding the lock could deadlock with
 	// a worker waiting for the lock.
 	unlockNode()
-	fs.revisionsCleanup.HandleRevisionCreated(ctx, n, n.ID+node.RevisionIDDelimiter+newRevision)
+	fs.revisionsCleanup.HandleRevisionCreated(ctx, n)
 	return &storage.RestoreRevisionResult{SpaceOwner: spaceOwner, SpaceID: n.SpaceID}, nil
 }
 

@@ -83,7 +83,7 @@ To always keep the most recent versions of a file regardless of their age, combi
 The cleanup of a file runs after the file got a new revision:
 
 - after an upload replaced an existing file, once the upload is complete (with async postprocessing: once postprocessing finished),
-- after a revision was restored; the revision holding the content from before the restore is always kept,
+- after a revision was restored; the revision holding the content from before the restore is kept by every cleanup, as long as the file still has the restored content: the next upload or restore, or a change on disk with posix, makes it a revision like any other. Until then, the strategy doesn't apply to it, also not an age limit like `30d`: a file that isn't changed again after a restore keeps this one revision, however old it gets,
 - with posix and `enable_fs_revisions`, after a change on disk created a revision.
 
 The cleanup skips a file while an upload to it is still being processed, as that upload may still need its revisions.

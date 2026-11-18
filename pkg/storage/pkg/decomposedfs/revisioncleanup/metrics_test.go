@@ -165,7 +165,7 @@ func TestMetricsShutdownAbandons(t *testing.T) {
 	requireDelta(t, mCapacity, capacity, 0)
 	ts.releaseOne()
 	require.NoError(t, <-stopped)
-	require.Equal(t, []processed{{"a", nil}}, ts.processedNodes(), "b and c were abandoned")
+	require.Equal(t, []string{"a"}, ts.processedNodes(), "b and c were abandoned")
 }
 
 // A node to clean up once more, as it got new revisions while it was being cleaned up, counts
