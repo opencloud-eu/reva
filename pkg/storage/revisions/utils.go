@@ -27,7 +27,7 @@ import (
 // one under the plain key. The plain key is therefore the newest, followed by the suffixed
 // ones from the highest N down.
 func CompareNewestFirst[T Revision](a, b T) int {
-	if c := b.LastModificationTime().Compare(a.LastModificationTime()); c != 0 {
+	if c := b.CreationTime().Compare(a.CreationTime()); c != 0 {
 		return c
 	}
 	if c := cmp.Compare(collisionRank(b.Key()), collisionRank(a.Key())); c != 0 {
@@ -270,15 +270,15 @@ func formatTime(t time.Time) string {
 // withFutureDates points out the revisions dated in the future in the reasons of plan, and
 // logs a warning about each of them.
 //
-// A revision's time is the modification time of its content, which clients and changes on disk
-// can set to any time, e.g. a client with a wrong clock. A revision dated in the future counts
-// as the newest one: it takes the first places of a number of versions to keep, and no
-// duration deletes it before its date has passed. That is kept as it is, but made visible, so
-// that the admin can look into the client or the clock.
+// For the storage drivers, a revision's time is when it was created, by the clock of the server
+// (see revisioncleanup.revisionTimes), so this only happens when that clock was set back, e.g.
+// after it was ahead. A revision dated in the future counts as the newest one: it takes the
+// first places of a number of versions to keep, and no duration deletes it before its date has
+// passed. That is kept as it is, but made visible, so that the admin can look into the clock.
 func withFutureDates(plan Plan, revs []Revision, now time.Time, logger *zerolog.Logger) Plan {
 	future := map[string]time.Time{}
 	for _, rev := range revs {
-		if t := rev.LastModificationTime(); t.After(now) {
+		if t := rev.CreationTime(); t.After(now) {
 			future[rev.Key()] = t
 			if logger != nil {
 				logger.Warn().Str("revision", rev.Key()).Time("time", t).

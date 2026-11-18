@@ -53,6 +53,8 @@ var _ = Describe("On-demand revision cleanup", func() {
 			Expect(err).ToNot(HaveOccurred())
 			rev := node.NewBaseNode(n.SpaceID, n.ID+node.RevisionIDDelimiter+version, env.Lookup)
 			Expect(env.Lookup.MetadataBackend().Set(env.Ctx, rev, prefixes.BlobIDAttr, fmt.Appendf(nil, "%s-rev-%d", n.Name, i))).To(Succeed())
+			// the age is the time a revision was created, which CreateRevision sets to now
+			Expect(node.SetRevisionCreated(env.Ctx, env.Lookup.MetadataBackend(), rev, time.Now().Add(-age))).To(Succeed())
 		}
 	}
 	revisionCount := func(n *node.Node) int {

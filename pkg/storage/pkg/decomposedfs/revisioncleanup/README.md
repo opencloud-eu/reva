@@ -45,7 +45,7 @@ Each `X` is either
 
 Rules worth knowing:
 
-- **`auto` thins out revisions** by keeping one revision per time slot. The slots get longer the older the revisions are:
+- **`auto` thins out revisions** by keeping one revision per time slot, the oldest one: it holds the content the file had when the slot began. The slots get longer the older the revisions are:
 
   | Age of the revision | Kept |
   |---|---|
@@ -63,20 +63,24 @@ Rules worth knowing:
 
 ## How the age of a revision is measured
 
-A revision's age is the time **its content was written**, i.e. the modification time the file had before it was changed.
-That is also the time the revision is named after on disk, and the date the version list shows for it.
-It is **not** the time the file was changed, which turned that content into a revision; that time is not recorded anywhere.
-Revisions are never modified after they were created; the point is only which of the two times the cleanup looks at.
+A revision's age is the time **it was created**, i.e. when the file was changed and its previous content became the revision, by the clock of the server.
+The revisions are also ordered by it, e.g. for a number of revisions to keep.
+It is recorded in an attribute of the revision (`user.oc.revision.created`) when the revision is created: by an upload, by a restore, or with `posix` by a change on disk.
 
-For files that change often, both dates are close together. For files that sit unchanged for a long time, they are far apart:
+It is **not** the time the content of the revision was written, i.e. the modification time the file had before it was changed.
+That time is what the revision is named after on disk, and the date the version list shows for it, but whoever writes the file can choose it, e.g. with the `X-OC-Mtime` header of an upload.
+If the cleanup went by it, a client could date revisions such that the cleanup deletes other ones: a revision dated just after an existing one would push that one out of its slot of `auto`, and revisions dated years ahead would take the places of a number of revisions to keep, so that every new version would be deleted, also after the client lost access to the file.
+
+For files that sit unchanged for a long time, the two times are far apart:
 
 1. On August 14, a document is saved.
 2. Nobody touches it for two months.
-3. On October 14, it is changed. A revision is created to keep the previous content, dated August 14.
-4. The cleanup runs right after the change. The revision counts as 61 days old.
+3. On October 14, it is changed. A revision is created to keep the previous content. The version list shows it as August 14.
+4. The cleanup runs right after the change. The revision counts as created on October 14, a few seconds ago.
 
-With a strategy that deletes by duration, e.g. `30d`, `auto, 30d` or `7d, 30d`, that revision is deleted right away, and the content the document had until that morning is gone.
-To always keep the most recent versions of a file regardless of their age, combine the duration with a number of revisions, e.g. `5, 30d`, or use `auto`, which keeps one revision per week even for old content.
+So `30d` keeps that revision until November 13, 30 days after it was replaced.
+
+Revisions created before the attribute was introduced don't have it. Their time is estimated as the time they were replaced: the content time of the next newer revision, or the modification time of the file for the newest one, but never later than the current time.
 
 ## When the cleanup runs
 
@@ -143,8 +147,8 @@ increase(reva_revision_cleanup_purge_failures_total[1h]) > 0
 - Every deleted revision is logged at debug level (`revision cleanup: purged revision`), with its `size` and the `reason`: which rule of the strategy deleted it, and the boundary it was evaluated with. This is particularly useful to understand the time slots of `auto`. Examples:
   - `deleted by "30d": older than 2026-09-14T10:00:00Z`
   - `deleted by "10": beyond the 10 newest, counting the 3 protected ones`
-  - `deleted by "auto" (last hour): its slot of 1 minute starting 2026-10-14T09:05:00Z already keeps a newer revision`
-- A revision dated in the future is logged as a warning (`revision cleanup: revision dated in the future, it counts as the newest one`), every time its file is cleaned up, and its reason ends in `dated in the future (...), so it counts as the newest`. Its time is the modification time of its content, which comes from the client or from the change on disk, e.g. a client with a wrong clock. Such a revision takes the first places of a number of revisions to keep, and no duration deletes it before its date has passed, which can make the cleanup delete the actual newest revisions instead: check the client or the clock.
+  - `deleted by "auto" (last hour): its slot of 1 minute starting 2026-10-14T09:05:00Z already keeps an older revision`
+- A revision dated in the future is logged as a warning (`revision cleanup: revision dated in the future, it counts as the newest one`), every time its file is cleaned up, and its reason ends in `dated in the future (...), so it counts as the newest`. Its time is when it was created, by the clock of the server, so this only happens when that clock was set back. Such a revision takes the first places of a number of revisions to keep, and no duration deletes it before its date has passed, which can make the cleanup delete the actual newest revisions instead: check the clock of the server.
 - With `drop`, or when `block` gives up after its timeout, a skipped cleanup is logged as a warning; on shutdown, the number of abandoned queued cleanups is logged.
 
 ## Limitations

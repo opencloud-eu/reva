@@ -12,9 +12,9 @@ import (
 )
 
 type plainRevision struct {
-	key   string
-	mtime time.Time
-	size  uint64
+	key     string
+	created time.Time
+	size    uint64
 }
 
 var _ Revision = &plainRevision{}
@@ -22,18 +22,18 @@ var _ Revision = &plainRevision{}
 func (p plainRevision) Key() string {
 	return p.key
 }
-func (p plainRevision) LastModificationTime() time.Time {
-	return p.mtime
+func (p plainRevision) CreationTime() time.Time {
+	return p.created
 }
 func (p plainRevision) Size() uint64 {
 	return p.size
 }
 
-func newPlainRevision(key string, mtime time.Time, size int) Revision {
+func newPlainRevision(key string, created time.Time, size int) Revision {
 	return &plainRevision{
-		key:   key,
-		mtime: mtime,
-		size:  uint64(size),
+		key:     key,
+		created: created,
+		size:    uint64(size),
 	}
 }
 
@@ -60,8 +60,8 @@ func checkRevs(t *testing.T, revs []Revision) {
 
 	// ensure they are in decreasingly sorted order
 	isDecreasing := slices.IsSortedFunc(revs, func(a, b Revision) int {
-		aTime := a.LastModificationTime()
-		bTime := b.LastModificationTime()
+		aTime := a.CreationTime()
+		bTime := b.CreationTime()
 
 		if aTime.After(bTime) {
 			return -1

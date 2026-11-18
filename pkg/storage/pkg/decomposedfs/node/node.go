@@ -1808,6 +1808,32 @@ var UploadSnapshotAttr = prefixes.OcPrefix + "uploadsnapshot"
 // cleanup keeps the revision, so that the content the user just replaced can't be lost.
 var KeepAfterRestoreAttr = prefixes.OcPrefix + "keepafterrestore"
 
+// RevisionCreatedAttr records when a revision was created, i.e. when the content it holds was
+// replaced, as the time of the server in RFC 3339 format with nanoseconds (UTC). The name of a
+// revision is the modification time of its content instead, which whoever writes the file can
+// choose (X-OC-Mtime, or the mtime of a change on disk with posix). The revision cleanup orders
+// revisions and measures their age by this attribute, so that nobody can date a revision such
+// that the cleanup deletes other ones. Revisions created before it was introduced don't have it,
+// see revisioncleanup.
+// Write and read it with SetRevisionCreated and RevisionCreated, which decide how the time is
+// stored.
+var RevisionCreatedAttr = prefixes.OcPrefix + "revision.created"
+
+// SetRevisionCreated records t as the time revision was created, see RevisionCreatedAttr.
+func SetRevisionCreated(ctx context.Context, backend metadata.Backend, revision metadata.MetadataNode, t time.Time) error {
+	return backend.Set(ctx, revision, RevisionCreatedAttr, []byte(t.UTC().Format(time.RFC3339Nano)))
+}
+
+// RevisionCreated returns the time revision was created, see RevisionCreatedAttr. It fails for
+// a revision created before that time was recorded.
+func RevisionCreated(ctx context.Context, backend metadata.Backend, revision metadata.MetadataNode) (time.Time, error) {
+	created, err := backend.Get(ctx, revision, RevisionCreatedAttr)
+	if err != nil {
+		return time.Time{}, err
+	}
+	return time.Parse(time.RFC3339Nano, string(created))
+}
+
 // KeptForRollback reports whether a revision exists only for a rollback, rather than as a
 // version (see PurgeOnRestoreAttr and UploadSnapshotAttr).
 func KeptForRollback(ctx context.Context, backend metadata.Backend, revision metadata.MetadataNode) bool {

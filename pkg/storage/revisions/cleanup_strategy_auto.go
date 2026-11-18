@@ -6,6 +6,7 @@ package revisions
 import (
 	"context"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/rs/zerolog"
@@ -89,7 +90,7 @@ func evaluateRetention(revisions []Revision, policies []bucketPolicy, now time.T
 	// One bucket (of revisions) corresponds to one bucketPolicy.
 	bucket := make(map[string][]Revision)
 	for _, rev := range revisions {
-		t := rev.LastModificationTime()
+		t := rev.CreationTime()
 		age := now.Sub(t)
 
 		matched := false
@@ -151,12 +152,18 @@ func evaluateRetention(revisions []Revision, policies []bucketPolicy, now time.T
 			// just as a performance improvement to avoid using time.Duration objects
 			slotCounts := make(map[int64]int)
 
-			for _, rev := range items {
-				// we take the revision's mtime, but truncate it to the interval for this
+			// The oldest revisions of each slot are kept, so the revisions are visited oldest
+			// first. The time of a revision is when it was created, i.e. when its content was
+			// replaced: the oldest revision of a slot holds the content the file had when the
+			// slot began. Keeping the newest instead would delete a version that was current
+			// for months as soon as the file is saved twice within the same slot, keeping only
+			// the content of the few seconds in between.
+			for _, rev := range slices.Backward(items) {
+				// we take the revision's time, but truncate it to the interval for this
 				// bucket (e.g. 1m or 1h), in order to count how many revisions we have
 				// in each slot within the bucket; note that we also transform the
 				// time.Duration into an int64 to use that as the key in the slot map
-				slotKey := rev.LastModificationTime().Truncate(policy.interval).UnixNano()
+				slotKey := rev.CreationTime().Truncate(policy.interval).UnixNano()
 				slot := fmt.Sprintf("its slot of %s starting %s", humanDuration(policy.interval), formatTime(time.Unix(0, slotKey).UTC()))
 
 				count := slotCounts[slotKey]
@@ -169,17 +176,17 @@ func evaluateRetention(revisions []Revision, policies []bucketPolicy, now time.T
 					// then we also keep this revision
 					slotCounts[slotKey] = count + 1
 					if policy.maxKeep == 1 {
-						plan.Retain(kept+"the newest in "+slot, rev)
+						plan.Retain(kept+"the oldest in "+slot, rev)
 					} else {
-						plan.Retain(kept+fmt.Sprintf("one of the %d newest in %s", policy.maxKeep, slot), rev)
+						plan.Retain(kept+fmt.Sprintf("one of the %d oldest in %s", policy.maxKeep, slot), rev)
 					}
 				default:
 					// if maxKeep is set (>0) and the count of revisions within its assigned
 					// slot is higher than maxKeep, then the revision must be deleted
 					if policy.maxKeep == 1 {
-						plan.Delete(deleted+slot+" already keeps a newer revision", rev)
+						plan.Delete(deleted+slot+" already keeps an older revision", rev)
 					} else {
-						plan.Delete(deleted+fmt.Sprintf("%s already keeps %d newer revisions", slot, policy.maxKeep), rev)
+						plan.Delete(deleted+fmt.Sprintf("%s already keeps %d older revisions", slot, policy.maxKeep), rev)
 					}
 				}
 			}

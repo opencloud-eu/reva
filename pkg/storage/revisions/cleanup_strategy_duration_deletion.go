@@ -58,7 +58,7 @@ func (s *durationDeletionRevisionCleanupStrategy) Cleanup(now time.Time, revs []
 	retained := fmt.Sprintf("kept by %q: not older than %s", spec, formatTime(cutoff))
 	plan := NewSimplePlan()
 	for _, rev := range revs {
-		if rev.LastModificationTime().Before(cutoff) {
+		if rev.CreationTime().Before(cutoff) {
 			plan.Delete(deleted, rev)
 		} else {
 			plan.Retain(retained, rev)

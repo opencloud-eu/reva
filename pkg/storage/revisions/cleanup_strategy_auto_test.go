@@ -55,7 +55,7 @@ func TestEvaluationRetentionOneRevInEachSlotKeepsAll(t *testing.T) {
 	require.Empty(plan.Deleted())
 }
 
-func TestEvaluationRetentionMultipleRevsInFirstBucketKeepsOnlyTheFirst(t *testing.T) {
+func TestEvaluationRetentionMultipleRevsInFirstBucketKeepsOnlyTheOldest(t *testing.T) {
 	require := require.New(t)
 
 	now := rfc3339(t, "2026-09-22T11:00:00.000Z")
@@ -69,8 +69,8 @@ func TestEvaluationRetentionMultipleRevsInFirstBucketKeepsOnlyTheFirst(t *testin
 	plan := evaluateRetention(revs, defaultPolicy, now)
 	explain(t, plan)
 
-	require.ElementsMatch([]Revision{c}, plan.Retained())
-	require.ElementsMatch([]Revision{a, b}, plan.Deleted())
+	require.ElementsMatch([]Revision{a}, plan.Retained())
+	require.ElementsMatch([]Revision{b, c}, plan.Deleted())
 }
 
 func ensureAllWithinRange(t *testing.T, instant time.Time, startOffset time.Duration, endOffset time.Duration, revs ...Revision) {
@@ -82,10 +82,10 @@ func ensureAllWithinRange(t *testing.T, instant time.Time, startOffset time.Dura
 	windowEnd := instant.Add(endOffset)
 
 	for i, rev := range revs {
-		modTime := rev.LastModificationTime()
+		modTime := rev.CreationTime()
 		if modTime.Before(windowStart) || modTime.After(windowEnd) {
 			t.Fatalf(
-				"revision at index %d with LastModificationTime %s falls outside relative window [%s, %s] (instant: %s, offsets: [%v, %v])",
+				"revision at index %d with CreationTime %s falls outside relative window [%s, %s] (instant: %s, offsets: [%v, %v])",
 				i,
 				modTime.Format(time.RFC3339),
 				windowStart.Format(time.RFC3339),
@@ -105,11 +105,11 @@ func ensureWithin(t *testing.T, d time.Duration, revs ...Revision) {
 		return
 	}
 
-	minTime := revs[0].LastModificationTime()
-	maxTime := revs[0].LastModificationTime()
+	minTime := revs[0].CreationTime()
+	maxTime := revs[0].CreationTime()
 
 	for _, rev := range revs[1:] {
-		tm := rev.LastModificationTime()
+		tm := rev.CreationTime()
 		if tm.Before(minTime) {
 			minTime = tm
 		}
@@ -150,9 +150,9 @@ func TestEvaluationRetentionWithThreeRevisionsInEachBucket(t *testing.T) {
 
 	// they are bucketed by groups of 10 seconds.
 	// for each of those buckets, only the newest is retained.
-	ax1 := newPlainRevision("ax1", rfc3339(t, "2026-09-22T10:59:30.000Z"), 1) // within a minute | 10sec bucket x
+	ax1 := newPlainRevision("ax1", rfc3339(t, "2026-09-22T10:59:30.000Z"), 1) // within a minute | 10sec bucket x <-- RETAINED
 	ax2 := newPlainRevision("ax2", rfc3339(t, "2026-09-22T10:59:31.000Z"), 1) // within a minute | 10sec bucket x
-	ax3 := newPlainRevision("ax3", rfc3339(t, "2026-09-22T10:59:32.000Z"), 1) // within a minute | 10sec bucket x <- RETAINED
+	ax3 := newPlainRevision("ax3", rfc3339(t, "2026-09-22T10:59:32.000Z"), 1) // within a minute | 10sec bucket x
 
 	ensureWithin(t, time.Duration(10)*time.Second, ax1, ax2, ax3) // ensure they are all within a 10sec bucket
 
@@ -162,16 +162,16 @@ func TestEvaluationRetentionWithThreeRevisionsInEachBucket(t *testing.T) {
 		ax1, ax2, ax3)
 
 	// this is another bucket with three revisions within the same minute, but in another bucket of 10sec
-	ay1 := newPlainRevision("ay1", rfc3339(t, "2026-09-22T10:59:40.000Z"), 1) // within a minute | 10sec bucket y
+	ay1 := newPlainRevision("ay1", rfc3339(t, "2026-09-22T10:59:40.000Z"), 1) // within a minute | 10sec bucket y <-- RETAINED
 	ay2 := newPlainRevision("ay2", rfc3339(t, "2026-09-22T10:59:41.000Z"), 1) // within a minute | 10sec bucket y
-	ay3 := newPlainRevision("ay3", rfc3339(t, "2026-09-22T10:59:42.000Z"), 1) // within a minute | 10sec bucket y <-- RETAINED
+	ay3 := newPlainRevision("ay3", rfc3339(t, "2026-09-22T10:59:42.000Z"), 1) // within a minute | 10sec bucket y
 	ensureWithin(t, time.Duration(10)*time.Second, ay1, ay2, ay3)
 	ensureAllWithinRange(t, now, -time.Duration(1)*time.Minute, 0, ay1, ay2, ay3)
 
 	// this is another bucket with three revisions within the same minute, but in another bucket of 10sec
-	az1 := newPlainRevision("az1", rfc3339(t, "2026-09-22T10:59:51.000Z"), 1) // within a minute | 10sec bucket z
+	az1 := newPlainRevision("az1", rfc3339(t, "2026-09-22T10:59:51.000Z"), 1) // within a minute | 10sec bucket z <-- RETAINED
 	az2 := newPlainRevision("az2", rfc3339(t, "2026-09-22T10:59:52.000Z"), 1) // within a minute | 10sec bucket z
-	az3 := newPlainRevision("az3", rfc3339(t, "2026-09-22T10:59:53.000Z"), 1) // within a minute | 10sec bucket z <-- RETAINED
+	az3 := newPlainRevision("az3", rfc3339(t, "2026-09-22T10:59:53.000Z"), 1) // within a minute | 10sec bucket z
 	ensureWithin(t, time.Duration(10)*time.Second, az1, az2, az3)
 	ensureAllWithinRange(t, now, -time.Duration(1)*time.Minute, 0, az1, az2, az3)
 
@@ -179,9 +179,9 @@ func TestEvaluationRetentionWithThreeRevisionsInEachBucket(t *testing.T) {
 
 	// they are bucketed by groups of 1 minute.
 	// for each of those buckets, only the newest is retained.
-	bx1 := newPlainRevision("bx1", rfc3339(t, "2026-09-22T10:05:31.000Z"), 1) // within an hour | 1m bucket x
+	bx1 := newPlainRevision("bx1", rfc3339(t, "2026-09-22T10:05:31.000Z"), 1) // within an hour | 1m bucket x <-- RETAINED
 	bx2 := newPlainRevision("bx2", rfc3339(t, "2026-09-22T10:05:41.000Z"), 1) // within an hour | 1m bucket x
-	bx3 := newPlainRevision("bx3", rfc3339(t, "2026-09-22T10:05:51.000Z"), 1) // within an hour | 1m bucket x <-- RETAINED
+	bx3 := newPlainRevision("bx3", rfc3339(t, "2026-09-22T10:05:51.000Z"), 1) // within an hour | 1m bucket x
 
 	ensureWithin(t, time.Duration(1)*time.Minute, bx1, bx2, bx3) // ensure they are all within a 1m bucket
 
@@ -191,16 +191,16 @@ func TestEvaluationRetentionWithThreeRevisionsInEachBucket(t *testing.T) {
 		bx1, bx2, bx3)
 
 	// this is another bucket with three revisions within the same hour, but in another bucket of 1m
-	by1 := newPlainRevision("by1", rfc3339(t, "2026-09-22T10:16:31.000Z"), 1) // within an hour | 1m bucket y
+	by1 := newPlainRevision("by1", rfc3339(t, "2026-09-22T10:16:31.000Z"), 1) // within an hour | 1m bucket y <-- RETAINED
 	by2 := newPlainRevision("by2", rfc3339(t, "2026-09-22T10:16:41.000Z"), 1) // within an hour | 1m bucket y
-	by3 := newPlainRevision("by3", rfc3339(t, "2026-09-22T10:16:51.000Z"), 1) // within an hour | 1m bucket y <-- RETAINED
+	by3 := newPlainRevision("by3", rfc3339(t, "2026-09-22T10:16:51.000Z"), 1) // within an hour | 1m bucket y
 	ensureWithin(t, time.Duration(1)*time.Minute, by1, by2, by3)              // ensure they are all within a 1m bucket
 	ensureAllWithinRange(t, now, -time.Duration(1)*time.Hour, -time.Duration(1)*time.Minute, by1, by2, by3)
 
 	// this is another bucket with three revisions within the same hour, but in another bucket of 1m
-	bz1 := newPlainRevision("bz1", rfc3339(t, "2026-09-22T10:47:31.000Z"), 1) // within an hour | 1m bucket z
+	bz1 := newPlainRevision("bz1", rfc3339(t, "2026-09-22T10:47:31.000Z"), 1) // within an hour | 1m bucket z <-- RETAINED
 	bz2 := newPlainRevision("bz2", rfc3339(t, "2026-09-22T10:47:41.000Z"), 1) // within an hour | 1m bucket z
-	bz3 := newPlainRevision("bz3", rfc3339(t, "2026-09-22T10:47:51.000Z"), 1) // within an hour | 1m bucket z <-- RETAINED
+	bz3 := newPlainRevision("bz3", rfc3339(t, "2026-09-22T10:47:51.000Z"), 1) // within an hour | 1m bucket z
 	ensureWithin(t, time.Duration(1)*time.Minute, bz1, bz2, bz3)              // ensure they are all within a 1m bucket
 	ensureAllWithinRange(t, now, -time.Duration(1)*time.Hour, -time.Duration(1)*time.Minute, bz1, bz2, bz3)
 
@@ -208,9 +208,9 @@ func TestEvaluationRetentionWithThreeRevisionsInEachBucket(t *testing.T) {
 
 	// they are bucketed by groups of 1 hour.
 	// for each of those buckets, only the newest is retained.
-	cx1 := newPlainRevision("cx1", rfc3339(t, "2026-09-21T11:05:30.000Z"), 1) // within 24 hours | 1h bucket x
+	cx1 := newPlainRevision("cx1", rfc3339(t, "2026-09-21T11:05:30.000Z"), 1) // within 24 hours | 1h bucket x <-- RETAINED
 	cx2 := newPlainRevision("cx2", rfc3339(t, "2026-09-21T11:15:30.000Z"), 1) // within 24 hours | 1h bucket x
-	cx3 := newPlainRevision("cx3", rfc3339(t, "2026-09-21T11:25:30.000Z"), 1) // within 24 hours | 1h bucket x <-- RETAINED
+	cx3 := newPlainRevision("cx3", rfc3339(t, "2026-09-21T11:25:30.000Z"), 1) // within 24 hours | 1h bucket x
 
 	ensureWithin(t, time.Duration(1)*time.Hour, cx1, cx2, cx3) // ensure they are all within a 1h bucket
 
@@ -220,16 +220,16 @@ func TestEvaluationRetentionWithThreeRevisionsInEachBucket(t *testing.T) {
 		cx1, cx2, cx3)
 
 	// this is another bucket with three revisions within the same 24 hours, but in another bucket of 1h
-	cy1 := newPlainRevision("cx1", rfc3339(t, "2026-09-21T12:05:30.000Z"), 1) // within 24 hours | 1h bucket y
+	cy1 := newPlainRevision("cx1", rfc3339(t, "2026-09-21T12:05:30.000Z"), 1) // within 24 hours | 1h bucket y <-- RETAINED
 	cy2 := newPlainRevision("cy2", rfc3339(t, "2026-09-21T12:15:30.000Z"), 1) // within 24 hours | 1h bucket y
-	cy3 := newPlainRevision("cy3", rfc3339(t, "2026-09-21T12:25:30.000Z"), 1) // within 24 hours | 1h bucket y <-- RETAINED
+	cy3 := newPlainRevision("cy3", rfc3339(t, "2026-09-21T12:25:30.000Z"), 1) // within 24 hours | 1h bucket y
 	ensureWithin(t, time.Duration(1)*time.Hour, cy1, cy2, cy3)
 	ensureAllWithinRange(t, now, -time.Duration(1)*24*time.Hour, -time.Duration(1)*time.Hour, cy1, cy2, cy3)
 
 	// this is another bucket with three revisions within the same 24 hours, but in another bucket of 1h
-	cz1 := newPlainRevision("cz1", rfc3339(t, "2026-09-21T18:05:30.000Z"), 1) // within 24 hours | 1h bucket z
+	cz1 := newPlainRevision("cz1", rfc3339(t, "2026-09-21T18:05:30.000Z"), 1) // within 24 hours | 1h bucket z <-- RETAINED
 	cz2 := newPlainRevision("cz2", rfc3339(t, "2026-09-21T18:15:30.000Z"), 1) // within 24 hours | 1h bucket z
-	cz3 := newPlainRevision("cz3", rfc3339(t, "2026-09-21T18:25:30.000Z"), 1) // within 24 hours | 1h bucket z <-- RETAINED
+	cz3 := newPlainRevision("cz3", rfc3339(t, "2026-09-21T18:25:30.000Z"), 1) // within 24 hours | 1h bucket z
 	ensureWithin(t, time.Duration(1)*time.Hour, cz1, cz2, cz3)
 	ensureAllWithinRange(t, now, -time.Duration(1)*24*time.Hour, -time.Duration(1)*time.Hour, cz1, cz2, cz3)
 
@@ -237,9 +237,9 @@ func TestEvaluationRetentionWithThreeRevisionsInEachBucket(t *testing.T) {
 
 	// they are bucketed by groups of 1 day.
 	// for each of those buckets, only the newest is retained.
-	dx1 := newPlainRevision("dx1", rfc3339(t, "2026-08-23T11:05:30.000Z"), 1) // within 30 days | 1d bucket x
+	dx1 := newPlainRevision("dx1", rfc3339(t, "2026-08-23T11:05:30.000Z"), 1) // within 30 days | 1d bucket x <-- RETAINED
 	dx2 := newPlainRevision("dx2", rfc3339(t, "2026-08-23T12:05:30.000Z"), 1) // within 30 days | 1d bucket x
-	dx3 := newPlainRevision("dx3", rfc3339(t, "2026-08-23T13:05:30.000Z"), 1) // within 30 days | 1d bucket x <-- RETAINED
+	dx3 := newPlainRevision("dx3", rfc3339(t, "2026-08-23T13:05:30.000Z"), 1) // within 30 days | 1d bucket x
 
 	ensureWithin(t, time.Duration(1)*24*time.Hour, dx1, dx2, dx3) // ensure they are all within a 24h bucket
 
@@ -249,16 +249,16 @@ func TestEvaluationRetentionWithThreeRevisionsInEachBucket(t *testing.T) {
 		dx1, dx2, dx3)
 
 	// this is another bucket with three revisions within the same 30 days, but in another bucket of 24h
-	dy1 := newPlainRevision("dx1", rfc3339(t, "2026-08-24T11:05:30.000Z"), 1) // within 30 days | 1d bucket y
+	dy1 := newPlainRevision("dx1", rfc3339(t, "2026-08-24T11:05:30.000Z"), 1) // within 30 days | 1d bucket y <-- RETAINED
 	dy2 := newPlainRevision("dx2", rfc3339(t, "2026-08-24T12:05:30.000Z"), 1) // within 30 days | 1d bucket y
-	dy3 := newPlainRevision("dx3", rfc3339(t, "2026-08-24T13:05:30.000Z"), 1) // within 30 days | 1d bucket y <-- RETAINED
+	dy3 := newPlainRevision("dx3", rfc3339(t, "2026-08-24T13:05:30.000Z"), 1) // within 30 days | 1d bucket y
 	ensureWithin(t, time.Duration(1)*24*time.Hour, dy1, dy2, dy3)
 	ensureAllWithinRange(t, now, -time.Duration(1)*24*30*time.Hour, -time.Duration(1)*24*time.Hour, dy1, dy2, dy3)
 
 	// this is another bucket with three revisions within the same 30 days, but in another bucket of 24h
-	dz1 := newPlainRevision("dx1", rfc3339(t, "2026-09-20T11:05:30.000Z"), 1) // within 30 days | 1d bucket z
+	dz1 := newPlainRevision("dx1", rfc3339(t, "2026-09-20T11:05:30.000Z"), 1) // within 30 days | 1d bucket z <-- RETAINED
 	dz2 := newPlainRevision("dx2", rfc3339(t, "2026-09-20T12:05:30.000Z"), 1) // within 30 days | 1d bucket z
-	dz3 := newPlainRevision("dx3", rfc3339(t, "2026-09-20T13:05:30.000Z"), 1) // within 30 days | 1d bucket z <-- RETAINED
+	dz3 := newPlainRevision("dx3", rfc3339(t, "2026-09-20T13:05:30.000Z"), 1) // within 30 days | 1d bucket z
 	ensureWithin(t, time.Duration(1)*24*time.Hour, dz1, dz2, dz3)
 	ensureAllWithinRange(t, now, -time.Duration(1)*24*30*time.Hour, -time.Duration(1)*24*time.Hour, dz1, dz2, dz3)
 
@@ -266,9 +266,9 @@ func TestEvaluationRetentionWithThreeRevisionsInEachBucket(t *testing.T) {
 
 	// they are bucketed by groups of 1 week.
 	// for each of those buckets, only the newest is retained.
-	ex1 := newPlainRevision("ex1", rfc3339(t, "2026-07-22T11:00:30.000Z"), 1) // older than 30 days | 1w bucket x
+	ex1 := newPlainRevision("ex1", rfc3339(t, "2026-07-22T11:00:30.000Z"), 1) // older than 30 days | 1w bucket x <-- RETAINED
 	ex2 := newPlainRevision("ex2", rfc3339(t, "2026-07-23T11:00:30.000Z"), 1) // older than 30 days | 1w bucket x
-	ex3 := newPlainRevision("ex3", rfc3339(t, "2026-07-24T11:00:30.000Z"), 1) // older than 30 days | 1w bucket x <-- RETAINED
+	ex3 := newPlainRevision("ex3", rfc3339(t, "2026-07-24T11:00:30.000Z"), 1) // older than 30 days | 1w bucket x
 
 	ensureWithin(t, time.Duration(1)*24*7*time.Hour, ex1, ex2, ex3) // ensure they are all within a 7d bucket bucket
 
@@ -278,16 +278,16 @@ func TestEvaluationRetentionWithThreeRevisionsInEachBucket(t *testing.T) {
 		ex1, ex2, ex3)
 
 	// this is another bucket with three revisions older than 30 days, but in another bucket of 1 week
-	ey1 := newPlainRevision("ey1", rfc3339(t, "2026-06-01T11:00:30.000Z"), 1) // older than 30 days | 1w bucket y
+	ey1 := newPlainRevision("ey1", rfc3339(t, "2026-06-01T11:00:30.000Z"), 1) // older than 30 days | 1w bucket y <-- RETAINED
 	ey2 := newPlainRevision("ey2", rfc3339(t, "2026-06-02T11:00:30.000Z"), 1) // older than 30 days | 1w bucket y
-	ey3 := newPlainRevision("ey3", rfc3339(t, "2026-06-03T11:00:30.000Z"), 1) // older than 30 days | 1w bucket y <-- RETAINED
+	ey3 := newPlainRevision("ey3", rfc3339(t, "2026-06-03T11:00:30.000Z"), 1) // older than 30 days | 1w bucket y
 	ensureWithin(t, time.Duration(1)*24*7*time.Hour, ey1, ey2, ey3)
 	ensureAllWithinRange(t, now, -time.Duration(10000)*24*time.Hour, -time.Duration(1)*24*30*time.Hour, ey1, ey2, ey3)
 
 	// this is another bucket with three revisions older than 30 days, but in another bucket of 1 week
-	ez1 := newPlainRevision("ez1", rfc3339(t, "2026-06-08T11:00:30.000Z"), 1) // older than 30 days | 1w bucket z
+	ez1 := newPlainRevision("ez1", rfc3339(t, "2026-06-08T11:00:30.000Z"), 1) // older than 30 days | 1w bucket z <-- RETAINED
 	ez2 := newPlainRevision("ez2", rfc3339(t, "2026-06-09T11:00:30.000Z"), 1) // older than 30 days | 1w bucket z
-	ez3 := newPlainRevision("ez3", rfc3339(t, "2026-06-10T11:00:30.000Z"), 1) // older than 30 days | 1w bucket z <-- RETAINED
+	ez3 := newPlainRevision("ez3", rfc3339(t, "2026-06-10T11:00:30.000Z"), 1) // older than 30 days | 1w bucket z
 	ensureWithin(t, time.Duration(1)*24*7*time.Hour, ez1, ez2, ez3)
 	ensureAllWithinRange(t, now, -time.Duration(10000)*24*time.Hour, -time.Duration(1)*24*30*time.Hour, ez1, ez2, ez3)
 
@@ -317,18 +317,18 @@ func TestEvaluationRetentionWithThreeRevisionsInEachBucket(t *testing.T) {
 	explain(t, plan)
 
 	require.ElementsMatch([]Revision{
-		ax3, ay3, az3,
-		bx3, by3, bz3,
-		cx3, cy3, cz3,
-		dx3, dy3, dz3,
-		ex3, ey3, ez3,
+		ax1, ay1, az1,
+		bx1, by1, bz1,
+		cx1, cy1, cz1,
+		dx1, dy1, dz1,
+		ex1, ey1, ez1,
 	}, plan.Retained())
 	require.ElementsMatch([]Revision{
-		ax1, ax2, ay1, ay2, az1, az2,
-		bx1, bx2, by1, by2, bz1, bz2,
-		cx1, cx2, cy1, cy2, cz1, cz2,
-		dx1, dx2, dy1, dy2, dz1, dz2,
-		ex1, ex2, ey1, ey2, ez1, ez2,
+		ax2, ax3, ay2, ay3, az2, az3,
+		bx2, bx3, by2, by3, bz2, bz3,
+		cx2, cx3, cy2, cy3, cz2, cz3,
+		dx2, dx3, dy2, dy3, dz2, dz3,
+		ex2, ex3, ey2, ey3, ez2, ez3,
 	}, plan.Deleted())
 
 	{
@@ -342,11 +342,11 @@ func TestEvaluationRetentionWithThreeRevisionsInEachBucket(t *testing.T) {
 		plan, err = strategy.Cleanup(now, r, context.TODO(), &logger)
 		require.NoError(err)
 		require.ElementsMatch([]Revision{
-			ax1, ax2, ay1, ay2, az1, az2,
-			bx1, bx2, by1, by2, bz1, bz2,
-			cx1, cx2, cy1, cy2, cz1, cz2,
-			dx1, dx2, dy1, dy2, dz1, dz2,
-			ex1, ex2, ey1, ey2, ez1, ez2,
+			ax2, ax3, ay2, ay3, az2, az3,
+			bx2, bx3, by2, by3, bz2, bz3,
+			cx2, cx3, cy2, cy3, cz2, cz3,
+			dx2, dx3, dy2, dy3, dz2, dz3,
+			ex2, ex3, ey2, ey3, ez2, ez3,
 		}, plan.Deleted())
 	}
 
@@ -368,7 +368,7 @@ func TestEvaluationRetentionCustomTiers(t *testing.T) {
 		{name: "Recent", description: "recent", ageLimit: time.Hour, interval: 0, maxKeep: 0},
 		// no interval, fewer to keep than there are revisions: the newest are kept
 		{name: "Today", description: "today", ageLimit: 24 * time.Hour, interval: 0, maxKeep: 2},
-		// slots keeping more than one revision
+		// slots keeping more than one revision: the oldest are kept
 		{name: "Week", description: "this week", ageLimit: 7 * 24 * time.Hour, interval: 24 * time.Hour, maxKeep: 2},
 		// slots, maxKeep <= 0: all revisions are kept
 		{name: "Month", description: "this month", ageLimit: 30 * 24 * time.Hour, interval: 24 * time.Hour, maxKeep: 0},
@@ -396,16 +396,16 @@ func TestEvaluationRetentionCustomTiers(t *testing.T) {
 	plan := evaluateRetention(revs, tiers, now)
 	explain(t, plan)
 
-	require.ElementsMatch([]Revision{r1, r2, t1, t2, w1, w2, m1, m2, o1, o2}, plan.Retained())
-	require.ElementsMatch([]Revision{t3, w3}, plan.Deleted())
+	require.ElementsMatch([]Revision{r1, r2, t1, t2, w2, w3, m1, m2, o1, o2}, plan.Retained())
+	require.ElementsMatch([]Revision{t3, w1}, plan.Deleted())
 	require.Empty(plan.Safeguarded())
 
 	for key, reason := range map[string]string{
 		"r1": `kept by "auto" (recent): all revisions are kept`,
 		"t1": `kept by "auto" (today): one of the 2 newest`,
 		"t3": `deleted by "auto" (today): beyond the 2 newest`,
-		"w1": `kept by "auto" (this week): one of the 2 newest in its slot of 1 day starting 2026-09-19T00:00:00Z`,
-		"w3": `deleted by "auto" (this week): its slot of 1 day starting 2026-09-19T00:00:00Z already keeps 2 newer revisions`,
+		"w3": `kept by "auto" (this week): one of the 2 oldest in its slot of 1 day starting 2026-09-19T00:00:00Z`,
+		"w1": `deleted by "auto" (this week): its slot of 1 day starting 2026-09-19T00:00:00Z already keeps 2 older revisions`,
 		"m2": `kept by "auto" (this month): all revisions are kept`,
 		"o1": `kept by "auto" (older): one of the 5 newest`,
 	} {

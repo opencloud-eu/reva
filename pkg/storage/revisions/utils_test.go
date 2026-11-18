@@ -283,7 +283,7 @@ func TestFutureDatesAreVisible(t *testing.T) {
 	// as before: the future ones take the places of the 2 newest
 	require.ElementsMatch(t, []Revision{recent1, recent2}, plan.Deleted())
 	for _, rev := range []Revision{future1, future2} {
-		require.Contains(t, plan.Reason(rev.Key()), "dated in the future ("+formatTime(rev.LastModificationTime())+")")
+		require.Contains(t, plan.Reason(rev.Key()), "dated in the future ("+formatTime(rev.CreationTime())+")")
 	}
 	for _, rev := range []Revision{recent1, recent2} {
 		require.NotEmpty(t, plan.Reason(rev.Key()))

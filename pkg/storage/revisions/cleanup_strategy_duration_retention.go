@@ -58,7 +58,7 @@ func (s *durationRetentionRevisionCleanupStrategy) Cleanup(now time.Time, revs [
 	retained := fmt.Sprintf("not protected by %q: not newer than %s", spec, formatTime(cutoff))
 	plan := NewSimplePlan()
 	for _, rev := range revs {
-		if rev.LastModificationTime().After(cutoff) {
+		if rev.CreationTime().After(cutoff) {
 			// revision is younger than the cutoff time:
 			// do nothing in order to drop the revision from the revisions that
 			// need to be processed by following-up strategies

@@ -68,17 +68,17 @@ var _ = Describe("RevisionCleanupStrategy", func() {
 				Expect(err).NotTo(HaveOccurred())
 			})
 
-			It("deletes all but the newest revision in each bucket", func() {
+			It("deletes all but the oldest revision in each bucket", func() {
 				Expect(keysOf(plan.Deleted())).To(ConsistOf(
-					"a2", "a3", // keeping the youngest in the 1h bucket (a1)
-					"b2", "b3", // keeping the youngest in the 1d bucket (b1)
-					"c2", "c3", // keeping the youngest in the 2d bucket (c1)
-					"d2", "d3", // keeping the youngest in the 3d bucket (d1)
+					"a1", "a2", // keeping the oldest in the 1h bucket (a3)
+					"b1", "b2", // keeping the oldest in the 1d bucket (b3)
+					"c1", "c2", // keeping the oldest in the 2d bucket (c3)
+					"d1", "d2", // keeping the oldest in the 3d bucket (d3)
 				))
 			})
-			It("retains the newest revision in each bucket", func() {
+			It("retains the oldest revision in each bucket", func() {
 				Expect(keysOf(plan.Retained())).To(ConsistOf(
-					"a1", "b1", "c1", "d1",
+					"a3", "b3", "c3", "d3",
 				))
 			})
 			It("does not safeguard any revisions", func() {
@@ -105,15 +105,15 @@ var _ = Describe("RevisionCleanupStrategy", func() {
 					"a1", "a2", "a3", "b1", "b2", "b3",
 				))
 			})
-			It("retains the newest revision in each bucket", func() {
+			It("retains the oldest revision in each bucket", func() {
 				Expect(keysOf(plan.Retained())).To(ConsistOf(
-					"c1", "d1",
+					"c3", "d3",
 				))
 			})
-			It("deletes the revisions that are older than the newest in each bucket", func() {
+			It("deletes the revisions that are newer than the oldest in each bucket", func() {
 				Expect(keysOf(plan.Deleted())).To(ConsistOf(
-					"c2", "c3", // keeping the youngest in the 2d bucket (c1)
-					"d2", "d3", // keeping the youngest in the 3d bucket (d1)
+					"c1", "c2", // keeping the oldest in the 2d bucket (c3)
+					"d1", "d2", // keeping the oldest in the 3d bucket (d3)
 				))
 			})
 		})
@@ -130,7 +130,7 @@ var _ = Describe("RevisionCleanupStrategy", func() {
 			// b1, b2, b3: older than 1d
 			// c1, c2, c3: older than 1d
 			// d1, d2, d3: older than 1d
-			// a2, a3: keep only a1 as the newest in the 1h bucket
+			// a1, a2: keep only a3 as the oldest in the 1h bucket
 
 			var plan Plan
 			It("does not produce an error", func() {
@@ -141,15 +141,15 @@ var _ = Describe("RevisionCleanupStrategy", func() {
 			It("does not safeguard any revision", func() {
 				Expect(plan.Safeguarded()).To(BeEmpty())
 			})
-			It("retains the newest revision in the 1h bucket", func() {
+			It("retains the oldest revision in the 1h bucket", func() {
 				Expect(keysOf(plan.Retained())).To(ConsistOf(
-					"a1",
+					"a3",
 				))
 			})
-			It("deletes the revisions that are older than 1d and older than the newest in each bucket", func() {
+			It("deletes the revisions that are older than 1d and newer than the oldest in each bucket", func() {
 				Expect(keysOf(plan.Deleted())).To(ConsistOf(
 					"b1", "b2", "b3", "c1", "c2", "c3", "d1", "d2", "d3", // older then 1d
-					"a2", "a3", // keeping the youngest in the 1h bucket (a1)
+					"a1", "a2", // keeping the oldest in the 1h bucket (a3)
 				))
 			})
 		})
@@ -165,8 +165,8 @@ var _ = Describe("RevisionCleanupStrategy", func() {
 			// should delete:
 			// c1, c2, c3: older than 2d
 			// d1, d2, d3: older than 2d
-			// a2, a3: keep only a1 as the newest in the 1h bucket
-			// b2, b3: keep only b1 as the newest in the 1d bucket
+			// a1, a2: keep only a3 as the oldest in the 1h bucket
+			// b1, b2: keep only b3 as the oldest in the 1d bucket
 
 			var plan Plan
 			It("does not produce an error", func() {
@@ -177,17 +177,17 @@ var _ = Describe("RevisionCleanupStrategy", func() {
 			It("does not safeguard any revision", func() {
 				Expect(plan.Safeguarded()).To(BeEmpty())
 			})
-			It("retains the newest revision in the 1h and in the 1d buckets", func() {
+			It("retains the oldest revision in the 1h and in the 1d buckets", func() {
 				Expect(keysOf(plan.Retained())).To(ConsistOf(
-					"a1",
-					"b1",
+					"a3",
+					"b3",
 				))
 			})
-			It("deletes the revisions that are older than 2d and older than the newest in each bucket", func() {
+			It("deletes the revisions that are older than 2d and newer than the oldest in each bucket", func() {
 				Expect(keysOf(plan.Deleted())).To(ConsistOf(
 					"c1", "c2", "c3", "d1", "d2", "d3", // older then 1d
-					"a2", "a3", // keeping the youngest in the 1h bucket (a1)
-					"b2", "b3", // keeping the youngest in the 1d bucket (b1)
+					"a1", "a2", // keeping the oldest in the 1h bucket (a3)
+					"b1", "b2", // keeping the oldest in the 1d bucket (b3)
 				))
 			})
 		})
@@ -251,16 +251,16 @@ var _ = Describe("RevisionCleanupStrategy", func() {
 		// "X1, auto, X2"
 		Entry("'1d, auto, 2d' thins out the revisions between 1 and 2 days", "1d, auto, 2d",
 			[]string{"a1", "a2", "a3"},
-			[]string{"b1"},
-			[]string{"b2", "b3", "c1", "c2", "c3", "d1", "d2", "d3"}),
+			[]string{"b3"},
+			[]string{"b1", "b2", "c1", "c2", "c3", "d1", "d2", "d3"}),
 		Entry("'2, auto, 6' thins out the revisions between the 2 newest and the 6 newest", "2, auto, 6",
 			[]string{"a1", "a2"},
-			[]string{"a3", "b1"},
-			[]string{"b2", "b3", "c1", "c2", "c3", "d1", "d2", "d3"}),
+			[]string{"a3", "b3"},
+			[]string{"b1", "b2", "c1", "c2", "c3", "d1", "d2", "d3"}),
 		Entry("'4, auto, 2d' mixes a count and a duration", "4, auto, 2d",
 			[]string{"a1", "a2", "a3", "b1"},
-			[]string{"b2"},
-			[]string{"b3", "c1", "c2", "c3", "d1", "d2", "d3"}),
+			[]string{"b3"},
+			[]string{"b2", "c1", "c2", "c3", "d1", "d2", "d3"}),
 		Entry("'1d, auto, 4' counts the safeguarded revisions towards the limit", "1d, auto, 4",
 			[]string{"a1", "a2", "a3"},
 			[]string{"b1"},
@@ -273,8 +273,8 @@ var _ = Describe("RevisionCleanupStrategy", func() {
 			[]string{"c1", "c2", "c3", "d1", "d2", "d3"}),
 		Entry("'1D, auto, 2D' thins out the revisions of the day before yesterday", "1D, auto, 2D",
 			[]string{"a1", "a2", "a3", "b1", "b2", "b3"},
-			[]string{"c1"},
-			[]string{"c2", "c3", "d1", "d2", "d3"}),
+			[]string{"c3"},
+			[]string{"c1", "c2", "d1", "d2", "d3"}),
 		Entry("'4, 1D' mixes a count and a midnight aligned duration", "4, 1D",
 			[]string{"a1", "a2", "a3", "b1"},
 			[]string{"b2", "b3"},
@@ -288,16 +288,16 @@ var _ = Describe("RevisionCleanupStrategy", func() {
 			[]string{"c1", "c2", "c3", "d1", "d2", "d3"}),
 		Entry("'1d,auto,2d' without spaces", "1d,auto,2d",
 			[]string{"a1", "a2", "a3"},
-			[]string{"b1"},
-			[]string{"b2", "b3", "c1", "c2", "c3", "d1", "d2", "d3"}),
+			[]string{"b3"},
+			[]string{"b1", "b2", "c1", "c2", "c3", "d1", "d2", "d3"}),
 		Entry("' 2 ,auto ,  6 ' with uneven spaces", " 2 ,auto ,  6 ",
 			[]string{"a1", "a2"},
-			[]string{"a3", "b1"},
-			[]string{"b2", "b3", "c1", "c2", "c3", "d1", "d2", "d3"}),
+			[]string{"a3", "b3"},
+			[]string{"b1", "b2", "c1", "c2", "c3", "d1", "d2", "d3"}),
 		Entry("'1D,\tauto,\t2D' with tabs", "1D,\tauto,\t2D",
 			[]string{"a1", "a2", "a3", "b1", "b2", "b3"},
-			[]string{"c1"},
-			[]string{"c2", "c3", "d1", "d2", "d3"}),
+			[]string{"c3"},
+			[]string{"c1", "c2", "d1", "d2", "d3"}),
 	)
 
 	DescribeTable("accepts",
@@ -336,8 +336,8 @@ var _ = Describe("RevisionCleanupStrategy", func() {
 		},
 		Entry("with a duration, a slot of 'auto' and a deletion by duration", "1d, auto, 2d", map[string]string{
 			"a1": `protected by "1d": newer than 2026-09-27T15:00:00Z`,
-			"b1": `kept by "auto" (last 30 days): the newest in its slot of 1 day starting 2026-09-27T00:00:00Z`,
-			"b2": `deleted by "auto" (last 30 days): its slot of 1 day starting 2026-09-27T00:00:00Z already keeps a newer revision`,
+			"b3": `kept by "auto" (last 30 days): the oldest in its slot of 1 day starting 2026-09-27T00:00:00Z`,
+			"b2": `deleted by "auto" (last 30 days): its slot of 1 day starting 2026-09-27T00:00:00Z already keeps an older revision`,
 			"c1": `deleted by "2d": older than 2026-09-26T15:00:00Z`,
 		}),
 		Entry("with a count, counting the protected revisions", "1d, 4", map[string]string{

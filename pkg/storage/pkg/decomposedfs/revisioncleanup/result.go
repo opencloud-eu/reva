@@ -22,7 +22,8 @@ const (
 // RevisionResult is the outcome of a cleanup for one revision.
 type RevisionResult struct {
 	Key string
-	// Time is the time the cleanup takes the age of the revision from, see revisionTime.
+	// Time is the time the revision was created, which the cleanup orders the revisions by and
+	// takes their age from, see revisionTimes.
 	Time time.Time
 	Size uint64
 	// Decision and Reason explain what the strategy decided and why, see revisions.Plan.

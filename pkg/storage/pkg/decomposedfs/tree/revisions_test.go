@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -38,8 +39,9 @@ var _ = Describe("Revisions", func() {
 		now = time.Now()
 		// One revision per age, chosen around the "7d, auto, 30d" strategy used below:
 		// within the 7 day retention, between retention and deletion (where "auto" keeps
-		// it, as it is the only one in its slot), and beyond the 30 day deletion threshold. The ages end up in the revision keys, which is what
-		// the cleanup takes the revision time from.
+		// it, as it is the only one in its slot), and beyond the 30 day deletion threshold. The
+		// cleanup takes the age from the time a revision was created (node.RevisionCreatedAttr),
+		// which the fixture sets to these ages; the keys get the same times.
 		ages = []time.Duration{time.Hour, 10 * 24 * time.Hour, 100 * 24 * time.Hour}
 		keys []string
 	)
@@ -86,6 +88,8 @@ var _ = Describe("Revisions", func() {
 			key := n.ID + node.RevisionIDDelimiter + version
 			// give every revision its own blob, CreateRevision copies the one of the current node
 			Expect(env.Lookup.MetadataBackend().Set(env.Ctx, revisionNode(key), prefixes.BlobIDAttr, []byte(blobOfRevision(i)))).To(Succeed())
+			// CreateRevision records the current time as the time it was created
+			Expect(node.SetRevisionCreated(env.Ctx, env.Lookup.MetadataBackend(), revisionNode(key), now.Add(-age))).To(Succeed())
 			keys = append(keys, key)
 		}
 	})
@@ -99,6 +103,72 @@ var _ = Describe("Revisions", func() {
 	Describe("ListRevisions", func() {
 		It("lists all revisions", func() {
 			Expect(listKeys()).To(ConsistOf(keys))
+		})
+	})
+
+	Describe("the time of a revision", func() {
+		// the times of the revisions, as the cleanup sees them, by key
+		timesOf := func(result revisioncleanup.Result) map[string]time.Time {
+			Expect(result.Err).ToNot(HaveOccurred())
+			times := map[string]time.Time{}
+			for _, rev := range result.Revisions {
+				times[rev.Key] = rev.Time
+			}
+			return times
+		}
+		createRevision := func(version string) string {
+			_, err := env.Tree.CreateRevision(env.Ctx, n, version)
+			Expect(err).ToNot(HaveOccurred())
+			return n.ID + node.RevisionIDDelimiter + version
+		}
+
+		It("is recorded by CreateRevision, whatever the name of the revision", func() {
+			before := time.Now()
+			key := createRevision("2001-01-01T00:00:00Z")
+			t, err := node.RevisionCreated(env.Ctx, env.Lookup.MetadataBackend(), revisionNode(key))
+			Expect(err).ToNot(HaveOccurred())
+			Expect(t).To(BeTemporally(">=", before.Round(0)))
+			Expect(t).To(BeTemporally("<=", time.Now()))
+		})
+
+		It("orders the revisions, not their names", func() {
+			// named a hundred years ahead, as a client can with X-OC-Mtime, but created 200 days ago
+			future := createRevision(now.Add(100 * 365 * 24 * time.Hour).UTC().Format(time.RFC3339Nano))
+			Expect(node.SetRevisionCreated(env.Ctx, env.Lookup.MetadataBackend(), revisionNode(future), now.Add(-200*24*time.Hour))).To(Succeed())
+
+			one, err := revisioncleanup.New("1")
+			Expect(err).ToNot(HaveOccurred())
+			result := one.DryRun(env.Ctx, env.Lookup, env.Tree, n)
+			Expect(result.Err).ToNot(HaveOccurred())
+
+			decisions := map[string]revisioncleanup.Decision{}
+			for _, rev := range result.Revisions {
+				decisions[rev.Key] = rev.Decision
+			}
+			// the newest is the one created an hour ago
+			Expect(decisions).To(HaveKeyWithValue(keys[0], revisioncleanup.Kept))
+			Expect(decisions).To(HaveKeyWithValue(future, revisioncleanup.Deleted))
+		})
+
+		It("is estimated for revisions created before it was recorded, as the time they were replaced", func() {
+			// named a day ahead, the newest by its name
+			future := createRevision(now.Add(24 * time.Hour).UTC().Format(time.RFC3339Nano))
+			for _, key := range append(slices.Clone(keys), future) {
+				Expect(env.Lookup.MetadataBackend().Remove(env.Ctx, revisionNode(key), node.RevisionCreatedAttr)).To(Succeed())
+			}
+			cleaner, err := revisioncleanup.New("7d, auto, 30d")
+			Expect(err).ToNot(HaveOccurred())
+
+			times := timesOf(cleaner.DryRun(env.Ctx, env.Lookup, env.Tree, n))
+
+			// replaced when the content of the next newer revision was written
+			Expect(times[keys[2]]).To(BeTemporally("==", now.Add(-ages[1])))
+			Expect(times[keys[1]]).To(BeTemporally("==", now.Add(-ages[0])))
+			// replaced by content dated in the future, which is capped at now
+			Expect(times[keys[0]]).To(BeTemporally("~", time.Now(), time.Minute))
+			Expect(times[keys[0]]).To(BeTemporally("<=", time.Now()))
+			// the newest, replaced by the current content of the file, never later than now
+			Expect(times[future]).To(BeTemporally("<=", time.Now()))
 		})
 	})
 

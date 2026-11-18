@@ -12,7 +12,10 @@ import (
 
 type Revision interface {
 	Key() string
-	LastModificationTime() time.Time
+	// CreationTime is when the revision was created, i.e. when its content was replaced, not
+	// the modification time of that content: the strategies order the revisions by it and
+	// measure their age from it, see revisioncleanup.revisionTimes.
+	CreationTime() time.Time
 	Size() uint64
 }
 

@@ -834,16 +834,21 @@ assimilate:
 			if err == nil {
 				// Named after the mtime of '.CURRENT', i.e. the time the content it preserves was
 				// copied there, when the previous change was picked up (normally right after that
-				// content was written), not after the time of this change. The revision cleanup
-				// takes the age of a revision from this name (see revisioncleanup.revisionTime);
-				// whether it should rather be the time of this change is discussed in
-				// https://github.com/opencloud-eu/opencloud/issues/3735.
-				revisionPath := t.lookup.VersionPath(n.SpaceID, n.ID, stat.ModTime().UTC().Format(time.RFC3339Nano))
+				// content was written), not after the time of this change.
+				version := stat.ModTime().UTC().Format(time.RFC3339Nano)
+				revisionPath := t.lookup.VersionPath(n.SpaceID, n.ID, version)
 
 				err = os.Rename(currentPath, revisionPath)
 				if err != nil {
 					t.log.Error().Err(err).Str("path", path).Str("revisionPath", revisionPath).Msg("could not create revision")
 					return
+				}
+				// The revision cleanup goes by the time a revision was created, i.e. the time
+				// of this change, not by its name, see node.RevisionCreatedAttr. Without it, the
+				// cleanup estimates that time, so a failure here is only logged.
+				revisionNode := node.NewBaseNode(n.SpaceID, n.ID+node.RevisionIDDelimiter+version, t.lookup)
+				if err := node.SetRevisionCreated(context.Background(), t.lookup.MetadataBackend(), revisionNode, time.Now()); err != nil {
+					t.log.Warn().Err(err).Str("path", path).Str("revisionPath", revisionPath).Msg("could not record when the revision was created")
 				}
 
 				// A change on disk has just created a revision, apply the revision cleanup

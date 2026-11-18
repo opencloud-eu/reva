@@ -67,7 +67,10 @@ var _ = Describe("Revisions", func() {
 			version := now.Add(-age).UTC().Format(time.RFC3339Nano)
 			_, err := env.Tree.CreateRevision(env.Ctx, n, version)
 			Expect(err).ToNot(HaveOccurred())
-			keys = append(keys, n.ID+node.RevisionIDDelimiter+version)
+			key := n.ID + node.RevisionIDDelimiter + version
+			// the cleanup goes by the time a revision was created, which CreateRevision sets to now
+			Expect(node.SetRevisionCreated(env.Ctx, env.Lookup.MetadataBackend(), node.NewBaseNode(n.SpaceID, key, env.Lookup), now.Add(-age))).To(Succeed())
+			keys = append(keys, key)
 		}
 	})
 
@@ -322,16 +325,22 @@ func changesOnDisk(async bool) func() {
 			}
 			return keys
 		}
-		// backdates the copy of the current content, it becomes a revision with that timestamp on the next change:
-		// assimilation names the revision after the mtime of '.CURRENT' when renaming it. This
-		// is the only way to get old revisions from changes on disk without waiting for days.
-		backdateCurrent := func(age time.Duration) string {
-			currentPath := fsEnv.Lookup.CurrentPath(n.SpaceID, n.ID)
-			t := time.Now().Add(-age)
-			Expect(os.Chtimes(currentPath, t, t)).To(Succeed())
-			fi, err := os.Stat(currentPath)
+		// returns the key of the revision the next change creates: assimilation names it after the
+		// mtime of '.CURRENT' when renaming it
+		nextRevisionKey := func() string {
+			fi, err := os.Stat(fsEnv.Lookup.CurrentPath(n.SpaceID, n.ID))
 			Expect(err).ToNot(HaveOccurred())
 			return n.ID + node.RevisionIDDelimiter + fi.ModTime().UTC().Format(time.RFC3339Nano)
+		}
+		// checks that assimilation recorded when the revision was created, and backdates that
+		// time: the cleanup goes by it, and this is the only way to get old revisions from
+		// changes on disk without waiting for days
+		backdateRevision := func(key string, age time.Duration) {
+			rev := node.NewBaseNode(n.SpaceID, key, fsEnv.Lookup)
+			t, err := node.RevisionCreated(fsEnv.Ctx, fsEnv.Lookup.MetadataBackend(), rev)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(t).To(BeTemporally("~", time.Now(), time.Minute))
+			Expect(node.SetRevisionCreated(fsEnv.Ctx, fsEnv.Lookup.MetadataBackend(), rev, time.Now().Add(-age))).To(Succeed())
 		}
 		// changes the file on disk and assimilates it like the watcher would,
 		// then waits for the asynchronous copy of the new content to the current file
@@ -397,12 +406,18 @@ func changesOnDisk(async bool) func() {
 		})
 
 		It("keeps revisions the strategy wants to keep and purges the others", func() {
-			retained := backdateCurrent(10 * 24 * time.Hour)
+			retained := nextRevisionKey()
 			changeAndAssimilate("v2")
 			Expect(listKeys()).To(ContainElement(retained))
+			backdateRevision(retained, 10*24*time.Hour)
 
-			purged := backdateCurrent(100 * 24 * time.Hour)
+			purged := nextRevisionKey()
 			changeAndAssimilate("v3")
+			Expect(listKeys()).To(ContainElement(purged))
+			backdateRevision(purged, 100*24*time.Hour)
+
+			// the next change cleans up the older ones
+			changeAndAssimilate("v4")
 			cleanedUp := And(ContainElement(retained), Not(ContainElement(purged)))
 			// the cleanup runs once the new content has been copied to the current file, and in
 			// the background, a worker runs it eventually

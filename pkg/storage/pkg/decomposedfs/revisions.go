@@ -196,8 +196,8 @@ func (fs *Decomposedfs) RestoreRevision(ctx context.Context, ref *provider.Refer
 
 	// create a revision of the current node
 	// It is named after the mtime of the content it preserves, not after the time it is
-	// created; the revision cleanup takes the age of a revision from this name (see
-	// revisioncleanup.revisionTime).
+	// created; the revision cleanup goes by the time it is created, which CreateRevision
+	// records (see node.RevisionCreatedAttr).
 	newRevision := mtime.UTC().Format(time.RFC3339Nano)
 	if _, err := fs.tp.CreateRevision(ctx, n, newRevision); err != nil {
 		return nil, err

@@ -125,6 +125,11 @@ func (tp *Tree) CreateRevision(ctx context.Context, n *node.Node, version string
 	}); err != nil {
 		return "", err
 	}
+	// the time the revision was created, which the revision cleanup goes by, see
+	// node.RevisionCreatedAttr
+	if err := node.SetRevisionCreated(ctx, tp.lookup.MetadataBackend(), versionNode, time.Now()); err != nil {
+		return "", err
+	}
 
 	return versionPath, nil
 }

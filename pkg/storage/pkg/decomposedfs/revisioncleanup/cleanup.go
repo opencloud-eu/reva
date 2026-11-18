@@ -97,9 +97,12 @@
 package revisioncleanup
 
 import (
+	"cmp"
 	"context"
 	"fmt"
+	"math"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -401,6 +404,12 @@ func (c *Cleaner) run(ctx context.Context, lu node.PathLookup, rs RevisionStore,
 	if blobID, ok := attribs[prefixes.BlobIDAttr]; ok {
 		currentBlobID = string(blobID)
 	}
+	now := time.Now()
+	// when the node got its current content, for the estimate in revisionTimes
+	fileMTime, err := node.Attributes(attribs).Time(prefixes.MTimeAttr)
+	if err != nil {
+		fileMTime = now
+	}
 
 	versions, err := rs.ListRevisions(ctx, n)
 	if err != nil {
@@ -408,6 +417,7 @@ func (c *Cleaner) run(ctx context.Context, lu node.PathLookup, rs RevisionStore,
 		result.Err = fmt.Errorf("could not list revisions: %w", err)
 		return result
 	}
+	times := revisionTimes(ctx, lu, n, versions, fileMTime, now)
 	// The strategy only sees versions: the revisions that are not are neither deleted nor
 	// counted, see notAVersion.
 	versions, skipped := splitOffNotVersions(ctx, lu, n, versions)
@@ -416,7 +426,7 @@ func (c *Cleaner) run(ctx context.Context, lu node.PathLookup, rs RevisionStore,
 	}
 	if len(versions) == 0 {
 		if details {
-			result.Revisions = revisionResults(nil, nil, nil, nil, skipped)
+			result.Revisions = revisionResults(nil, nil, nil, nil, skipped, times)
 		}
 		return result
 	}
@@ -424,7 +434,7 @@ func (c *Cleaner) run(ctx context.Context, lu node.PathLookup, rs RevisionStore,
 
 	revs := make([]revisions.Revision, len(versions))
 	for i, v := range versions {
-		revs[i] = fileVersionRevision{version: v, mtime: revisionTime(v)}
+		revs[i] = fileVersionRevision{version: v, created: times[v.Key]}
 	}
 
 	// All revisions, including the ones in keep, are handed to the strategy, as
@@ -433,7 +443,7 @@ func (c *Cleaner) run(ctx context.Context, lu node.PathLookup, rs RevisionStore,
 	purgeErrs := map[string]error{}
 	purged := 0
 	var purgedBytes uint64
-	plan, err := revisions.ExecuteCleanupStrategy(time.Now(), c.strategy, revs, ctx, &log, func(rev revisions.Revision, reason string) error {
+	plan, err := revisions.ExecuteCleanupStrategy(now, c.strategy, revs, ctx, &log, func(rev revisions.Revision, reason string) error {
 		if dryRun || slices.Contains(keep, rev.Key()) {
 			return nil
 		}
@@ -458,7 +468,7 @@ func (c *Cleaner) run(ctx context.Context, lu node.PathLookup, rs RevisionStore,
 		return result
 	}
 	if details {
-		result.Revisions = revisionResults(revs, plan, keep, purgeErrs, skipped)
+		result.Revisions = revisionResults(revs, plan, keep, purgeErrs, skipped, times)
 	}
 
 	// One summary per node at info level, so that admins can see the cleanup at work
@@ -478,8 +488,9 @@ func (c *Cleaner) run(ctx context.Context, lu node.PathLookup, rs RevisionStore,
 
 // revisionResults turns the plan of the strategy into one RevisionResult per revision, in the
 // order of revs (newest first), together with the revisions that were skipped as they are not
-// versions (reported as protected). plan is nil if the strategy didn't run.
-func revisionResults(revs []revisions.Revision, plan revisions.Plan, keep []string, purgeErrs map[string]error, skipped []skippedRevision) []RevisionResult {
+// versions (reported as protected). plan is nil if the strategy didn't run. times are the times of
+// the revisions, see revisionTimes.
+func revisionResults(revs []revisions.Revision, plan revisions.Plan, keep []string, purgeErrs map[string]error, skipped []skippedRevision, times map[string]time.Time) []RevisionResult {
 	decisions := map[string]Decision{}
 	reasons := map[string]string{}
 	if plan != nil {
@@ -499,7 +510,7 @@ func revisionResults(revs []revisions.Revision, plan revisions.Plan, keep []stri
 
 	sorted := slices.Clone(revs)
 	for _, sk := range skipped {
-		sorted = append(sorted, fileVersionRevision{version: sk.version, mtime: revisionTime(sk.version)})
+		sorted = append(sorted, fileVersionRevision{version: sk.version, created: times[sk.version.Key]})
 		decisions[sk.version.Key] = Protected
 		reasons[sk.version.Key] = "protected: " + sk.reason
 	}
@@ -508,7 +519,7 @@ func revisionResults(revs []revisions.Revision, plan revisions.Plan, keep []stri
 	for _, rev := range sorted {
 		r := RevisionResult{
 			Key:      rev.Key(),
-			Time:     rev.LastModificationTime(),
+			Time:     rev.CreationTime(),
 			Size:     rev.Size(),
 			Decision: decisions[rev.Key()],
 			Reason:   reasons[rev.Key()],
@@ -608,42 +619,93 @@ const (
 	keptForRollback  = "kept only to roll back an upload, it is not a version"
 )
 
-// revisionTime determines when a revision was last modified from the timestamp in its key,
-// '<nodeid>.REV.<RFC3339Nano>' with an optional '.<n>' suffix for colliding revisions.
-// The mtime of the revision file is used as a fallback.
+// revisionTimes returns the time each of the given revisions of n was created, by key: the time
+// the cleanup orders them by and measures their age from.
 //
-// This is the age the strategies work with, and it is the age of the revision's *content*:
-// revisions are named after the mtime of the content they preserve (see
-// Decomposedfs.PrepareUpload, the posix assimilation and RestoreRevision), not after
-// the time the revision was created, i.e. when that content was replaced. The time a revision
-// was created is not recorded anywhere. For a file that was unchanged for two months and is
-// changed today, the new revision therefore counts as two months old, and a strategy deleting
-// by duration, e.g. "30d", deletes it right away. See "How the age of a revision is measured"
-// in README.md.
-// For changes on disk with posix, the name is the time the content was copied to '.CURRENT',
-// when that change was picked up, normally right after the content was written (see the posix
-// assimilation).
-// Whether the age should rather be the time a revision was created, i.e. when its content was
-// replaced, is discussed in https://github.com/opencloud-eu/opencloud/issues/3735.
+// It is the time recorded in node.RevisionCreatedAttr, i.e. when the content the revision holds
+// was replaced, by the clock of the server. The name of a revision is no good for this: it is
+// the modification time of its content (see contentTime), which whoever writes the file can
+// choose, e.g. with X-OC-Mtime. A revision dated just after an existing one would push that one
+// out of its slot of "auto", and revisions dated years ahead would take the places of a number
+// of revisions to keep, e.g. of "5, 30d", so that every new version would be deleted, for as
+// long as they exist.
+//
+// Revisions created before the attribute was introduced don't have it. Their time is estimated
+// as the time they were replaced: the content time of the next newer revision, or fileMTime,
+// the modification time of the file, for the newest one, but never later than now. These come
+// from the client as well, but they only apply to the revisions that exist already, and
+// capping them at now keeps revisions dated in the future from taking the places of the ones
+// created from now on.
+//
+// That the age of a revision is the time it was replaced, rather than the time its content was
+// written, is what https://github.com/opencloud-eu/opencloud/issues/3735 is about.
+func revisionTimes(ctx context.Context, lu node.PathLookup, n *node.Node, all []*provider.FileVersion, fileMTime, now time.Time) map[string]time.Time {
+	backend := lu.MetadataBackend()
+	byContent := slices.Clone(all)
+	slices.SortStableFunc(byContent, compareContentTime)
+	times := make(map[string]time.Time, len(all))
+	for i, v := range byContent {
+		if t, err := node.RevisionCreated(ctx, backend, node.NewBaseNode(n.SpaceID, v.Key, lu)); err == nil {
+			times[v.Key] = t
+			continue
+		}
+		estimate := fileMTime
+		if i+1 < len(byContent) {
+			estimate, _ = contentTime(byContent[i+1])
+		}
+		if estimate.After(now) {
+			estimate = now
+		}
+		times[v.Key] = estimate
+	}
+	return times
+}
+
+// contentTime determines when the content of a revision was last modified from the timestamp
+// in its key, '<nodeid>.REV.<RFC3339Nano>' with an optional '.<n>' suffix for colliding
+// revisions, which is returned as well (0 without one). The mtime of the revision file is used
+// as a fallback.
+//
+// Revisions are named after the mtime of the content they preserve (see
+// Decomposedfs.PrepareUpload, the posix assimilation and RestoreRevision). For changes on disk
+// with posix, the name is the time the content was copied to '.CURRENT', when that change was
+// picked up, normally right after the content was written (see the posix assimilation).
 //
 // The key is preferred over the file mtime because the file mtime is not reliable:
 // the upload code only sets it to the mtime of the old content (os.Chtimes in
 // Decomposedfs.PrepareUpload) after CreateRevision has returned, and the
 // FileVersion.Mtime from ListRevisions has only a precision of seconds.
-// The '.<n>' suffix is appended by CreateRevision when a revision with the same
-// timestamp already exists, it is not part of the timestamp and is stripped.
-func revisionTime(v *provider.FileVersion) time.Time {
+func contentTime(v *provider.FileVersion) (time.Time, int) {
 	if _, ts, ok := strings.Cut(v.Key, node.RevisionIDDelimiter); ok {
 		if t, err := time.Parse(time.RFC3339Nano, ts); err == nil {
-			return t
+			return t, 0
 		}
 		if i := strings.LastIndex(ts, "."); i > 0 {
 			if t, err := time.Parse(time.RFC3339Nano, ts[:i]); err == nil {
-				return t
+				suffix, _ := strconv.Atoi(ts[i+1:])
+				return t, suffix
 			}
 		}
 	}
-	return time.Unix(int64(v.Mtime), 0)
+	return time.Unix(int64(v.Mtime), 0), 0
+}
+
+// compareContentTime orders revisions by their content time, oldest first. Of colliding
+// revisions, the one with the key without a suffix is the newest: CreateRevision renames the
+// existing one to the next free suffix, and gives the new one the key without a suffix.
+func compareContentTime(a, b *provider.FileVersion) int {
+	ta, sa := contentTime(a)
+	tb, sb := contentTime(b)
+	if c := ta.Compare(tb); c != 0 {
+		return c
+	}
+	if sa == 0 {
+		sa = math.MaxInt
+	}
+	if sb == 0 {
+		sb = math.MaxInt
+	}
+	return cmp.Compare(sa, sb)
 }
 
 // fileVersionRevision adapts a CS3 FileVersion, as returned by
@@ -651,11 +713,11 @@ func revisionTime(v *provider.FileVersion) time.Time {
 // cleanup strategies work on.
 type fileVersionRevision struct {
 	version *provider.FileVersion
-	mtime   time.Time
+	created time.Time // see revisionTimes
 }
 
 var _ revisions.Revision = fileVersionRevision{}
 
-func (f fileVersionRevision) Key() string                     { return f.version.Key }
-func (f fileVersionRevision) LastModificationTime() time.Time { return f.mtime }
-func (f fileVersionRevision) Size() uint64                    { return f.version.Size }
+func (f fileVersionRevision) Key() string             { return f.version.Key }
+func (f fileVersionRevision) CreationTime() time.Time { return f.created }
+func (f fileVersionRevision) Size() uint64            { return f.version.Size }
