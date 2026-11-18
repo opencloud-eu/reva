@@ -3,6 +3,8 @@ package lookup_test
 import (
 	"path/filepath"
 
+	cs3permissions "github.com/cs3org/go-cs3apis/cs3/permissions/v1beta1"
+	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	providerv1beta1 "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -117,5 +119,24 @@ var _ = Describe("Lookup", func() {
 				Expect(lockPaths[0]).To(ContainSubstring("/.oc-nodes/no/de/-t/ha/t-does-not-exist.lock"))
 			})
 		})
+	})
+})
+
+var _ = Describe("GenerateSpaceID", func() {
+	It("finds the personal space after the personal space path template changed", func() {
+		env, err := helpers.NewTestEnv(map[string]any{})
+		Expect(err).ToNot(HaveOccurred())
+		DeferCleanup(env.Cleanup)
+
+		env.Options.PersonalSpacePathTemplate = "users/moved/{{.User.Username}}"
+		spaceID, err := env.Lookup.GenerateSpaceID("personal", env.Owner)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(spaceID).To(Equal(env.SpaceRootRes.SpaceId))
+
+		env.PermissionsClient.On("CheckPermission", mock.Anything, mock.Anything, mock.Anything).Return(&cs3permissions.CheckPermissionResponse{
+			Status: &rpcv1beta1.Status{Code: rpcv1beta1.Code_CODE_OK},
+		}, nil)
+		_, err = env.Fs.CreateStorageSpace(env.Ctx, &providerv1beta1.CreateStorageSpaceRequest{Owner: env.Owner, Type: "personal"})
+		Expect(err).To(BeAssignableToTypeOf(errtypes.AlreadyExists("")))
 	})
 })

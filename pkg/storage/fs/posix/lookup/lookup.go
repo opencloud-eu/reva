@@ -38,8 +38,10 @@ import (
 	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/metadata"
 	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/metadata/prefixes"
 	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/node"
+	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/spaceidindex"
 	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/usermapper"
 	"github.com/opencloud-eu/reva/v3/pkg/storage/utils/templates"
+	"github.com/opencloud-eu/reva/v3/pkg/utils"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	"go.opentelemetry.io/otel"
@@ -440,7 +442,8 @@ func (lu *Lookup) GenerateSpaceID(spaceType string, owner *user.User) (string, e
 			spaceID, _, _, _, err := lu.metadataBackend.IdentifyPath(context.TODO(), path)
 			if err != nil {
 				if metadata.IsNotExist(err) || metadata.IsAttrUnset(err) {
-					return uuid.New().String(), nil
+					// the template can render another path than it did when the space was created
+					return lu.existingPersonalSpaceID(context.TODO(), owner)
 				} else {
 					return "", err
 				}
@@ -454,6 +457,29 @@ func (lu *Lookup) GenerateSpaceID(spaceType string, owner *user.User) (string, e
 	default:
 		return "", fmt.Errorf("unsupported space type: %s", spaceType)
 	}
+}
+
+// existingPersonalSpaceID returns the id of the personal space that the owner's
+// space index lists, or a new id if the owner has no personal space
+func (lu *Lookup) existingPersonalSpaceID(ctx context.Context, owner *user.User) (string, error) {
+	index := spaceidindex.New(filepath.Join(lu.Options.Root, IndexesDir), "by-user-id")
+	spaceIDs, err := index.Load(utils.NewFSSafeUserID(owner.GetId()).SafeFilename())
+	if err != nil && !os.IsNotExist(err) {
+		return "", errors.Wrap(err, "error reading user index")
+	}
+	for spaceID := range spaceIDs {
+		if p, err := lu.getSpaceRootPathWithStatus(ctx, spaceID); err != nil || p == "" {
+			continue
+		}
+		root, err := node.ReadNode(ctx, lu, spaceID, spaceID, "", true, nil, false)
+		if err != nil || !root.Exists || !utils.UserIDEqual(root.Owner(), owner.GetId()) {
+			continue
+		}
+		if spaceType, _ := root.XattrString(ctx, prefixes.SpaceTypeAttr); spaceType == _spaceTypePersonal {
+			return spaceID, nil
+		}
+	}
+	return uuid.New().String(), nil
 }
 
 func (lu *Lookup) PurgeNode(n *node.Node) error {
