@@ -138,13 +138,31 @@ type SpaceScoper interface {
 
 // scopeToSpace switches to the group of the space of n if rs is a SpaceScoper, see there. It
 // returns ctx and a no-op otherwise.
+//
+// A goroutine that switched to the group of the space already doesn't switch again: a worker
+// switches before it reads the node, and the Cleaner then runs in the same goroutine. Switching
+// costs a stat of the root of the space and two system calls. The context records the space the
+// goroutine switched to; it must not be handed to another goroutine that should run in the
+// group, which has to switch on its own.
 func scopeToSpace(ctx context.Context, rs any, spaceID string) (context.Context, func() error, error) {
+	noop := func() error { return nil }
 	scoper, ok := rs.(SpaceScoper)
 	if !ok {
-		return ctx, func() error { return nil }, nil
+		return ctx, noop, nil
 	}
-	return scoper.ScopeToSpace(ctx, spaceID)
+	if scoped, _ := ctx.Value(scopedToSpaceKey{}).(string); scoped == spaceID {
+		return ctx, noop, nil
+	}
+	ctx, unscope, err := scoper.ScopeToSpace(ctx, spaceID)
+	if err != nil {
+		return ctx, nil, err
+	}
+	return context.WithValue(ctx, scopedToSpaceKey{}, spaceID), unscope, nil
 }
+
+// scopedToSpaceKey is the context key of the id of the space whose group the current goroutine
+// switched to, see scopeToSpace.
+type scopedToSpaceKey struct{}
 
 // PurgeRevisionUnchecked physically removes the revision of n with the given key, including its
 // blob, metadata and lockfile, without checking permissions. Callers that act on behalf
