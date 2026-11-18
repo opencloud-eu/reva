@@ -46,11 +46,18 @@ type EmitterConfig struct {
 	Nats raw.Config `mapstructure:",squash"`
 }
 
+// ErrNoEndpoint is returned when audit is enabled without a NATS endpoint.
+var ErrNoEndpoint = errors.New("audit is enabled but no events endpoint is configured")
+
 // EmitterFromConfig returns an emitter for the config, one that drops
-// everything when audit is off.
+// everything when audit is off. Audit without an endpoint is an error, not a
+// silent discard.
 func EmitterFromConfig(ctx context.Context, connName string, cfg EmitterConfig, opts Options) (Emitter, error) {
-	if !cfg.Enabled || cfg.Nats.Endpoint == "" {
+	if !cfg.Enabled {
 		return Discard{}, nil
+	}
+	if cfg.Nats.Endpoint == "" {
+		return nil, ErrNoEndpoint
 	}
 	opts.Service.Name = cfg.Service
 	opts.Mode = Mode(cfg.Mode)

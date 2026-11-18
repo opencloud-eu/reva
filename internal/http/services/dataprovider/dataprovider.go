@@ -109,7 +109,10 @@ func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) 
 	}
 
 	var emitter audit.Emitter = audit.Discard{}
-	if conf.AuditEnabled && conf.NatsAddress != "" {
+	if conf.AuditEnabled {
+		if conf.NatsAddress == "" {
+			return nil, fmt.Errorf("dataprovider: %w", audit.ErrNoEndpoint)
+		}
 		e, err := audit.NewNatsEmitter(context.Background(), "dataprovider-audit", raw.Config{
 			Endpoint:             conf.NatsAddress,
 			Cluster:              conf.NatsClusterID,

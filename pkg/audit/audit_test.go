@@ -269,3 +269,16 @@ func TestSubject(t *testing.T) {
 	assert.Equal(t, "audit._.files", Subject("", "files"))
 	assert.Equal(t, "audit.a_b_c_.files", Subject("a.b c*", "files"))
 }
+
+func TestEmitterFromConfig(t *testing.T) {
+	e, err := EmitterFromConfig(context.Background(), "test", EmitterConfig{}, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := e.(Discard); !ok {
+		t.Errorf("audit off: got %T, want Discard", e)
+	}
+	if _, err := EmitterFromConfig(context.Background(), "test", EmitterConfig{Enabled: true}, Options{}); !errors.Is(err, ErrNoEndpoint) {
+		t.Errorf("audit on without endpoint: got %v, want ErrNoEndpoint", err)
+	}
+}
