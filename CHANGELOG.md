@@ -1,6 +1,6 @@
 # Changelog
 
-## [3.0.2](https://github.com/opencloud-eu/reva/releases/tag/v3.0.2) - 2026-11-17
+## [3.0.2](https://github.com/opencloud-eu/reva/releases/tag/v3.0.2) - 2026-11-18
 
 ### ❤️ Thanks to all contributors! ❤️
 
@@ -8,6 +8,7 @@
 
 ### 🐛 Bug Fixes
 
+- fix(ocm): fix wildcard providers and invite error handling [[#1027](https://github.com/opencloud-eu/reva/pull/1027)]
 - fix: set the share jail root as parent id of listed shares [[#1020](https://github.com/opencloud-eu/reva/pull/1020)]
 
 ## [3.0.1](https://github.com/opencloud-eu/reva/releases/tag/v3.0.1) - 2026-11-17
