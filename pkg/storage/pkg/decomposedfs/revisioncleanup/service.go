@@ -135,6 +135,9 @@ type Service struct {
 	// context: a caller blocked on a full queue gives up when its context ends, and a cleanup
 	// in synchronous mode always finishes its file, see HandleRevisionCreated
 	onDemand bool
+	// the bookkeeping of a Service shared by the instances of a storage, nil if it isn't
+	// shared, see shared
+	share *share
 
 	async   bool
 	policy  QueueFullPolicy
@@ -175,16 +178,23 @@ func (r *request) key() string {
 	return r.spaceID + "/" + r.nodeID
 }
 
-// NewServiceFromOptions creates the Service of a storage driver from its options: the cleanup
+// NewServiceFromOptions returns the Service of a storage driver from its options: the cleanup
 // strategy (RevisionsCleanupStrategy) and the RevisionsCleanupAsync* settings.
 // It returns a disabled Service when no strategy is configured, and an error for invalid
 // settings.
+//
+// The instances of the driver for the same storage (Root) in a process share one Service, see
+// shared: only the first one creates it, with its lu and rs. Each instance shuts it down once,
+// see Service.Shutdown.
 func NewServiceFromOptions(o *options.Options, lu node.PathLookup, rs RevisionStore, log *zerolog.Logger) (*Service, error) {
-	cleaner, err := New(o.RevisionsCleanupStrategy)
-	if err != nil {
-		return nil, err
-	}
-	return NewService(cleaner, lu, rs, AsyncOptionsFromOptions(o), log)
+	async := AsyncOptionsFromOptions(o)
+	return sharedService(o.Root, o.RevisionsCleanupStrategy, async, func() (*Service, error) {
+		cleaner, err := New(o.RevisionsCleanupStrategy)
+		if err != nil {
+			return nil, err
+		}
+		return NewService(cleaner, lu, rs, async, log)
+	})
 }
 
 // AsyncOptionsFromOptions returns the AsyncOptions configured in the driver options
@@ -625,13 +635,15 @@ func (s *Service) Wait(ctx context.Context) error {
 	}
 }
 
-// Shutdown stops the background workers. A cleanup that is running is finished, the ones
+// Shutdown stops the background workers. A Service shared by the instances of a storage (see
+// NewServiceFromOptions) only stops when the last of them shuts it down: each instance calls
+// Shutdown once. A cleanup that is running is finished, the ones
 // still waiting in the queue are abandoned (and logged, and reported as skipped in an
 // on-demand Run): they are picked up again when their nodes get their next revision.
 // Blocked callers are released. It returns when the
 // workers have stopped, or with ctx's error if ctx ends first.
 func (s *Service) Shutdown(ctx context.Context) error {
-	if s == nil || !s.async {
+	if s == nil || !s.release() || !s.async {
 		return nil
 	}
 	s.mu.Lock()
