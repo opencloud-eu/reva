@@ -91,7 +91,7 @@ var _ = Describe("Revision cleanup", func() {
 	}
 
 	revisionsOf := func(n *node.Node) []*provider.FileVersion {
-		revs, err := env.Tree.ListRevisionsUnchecked(env.Ctx, n)
+		revs, err := env.Tree.ListRevisions(env.Ctx, n)
 		Expect(err).ToNot(HaveOccurred())
 		return revs
 	}

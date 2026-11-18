@@ -27,11 +27,7 @@ import (
 	"github.com/opencloud-eu/reva/v3/pkg/errtypes"
 	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/metadata/prefixes"
 	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/node"
-	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/permissions"
 	helpers "github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/testhelpers"
-	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/tree"
-	"github.com/opencloud-eu/reva/v3/pkg/store"
-	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/mock"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -260,11 +256,7 @@ var _ = Describe("a revision deleted by another process", func() {
 	It("is not downloaded", func() {
 		env.Blobstore.On("Download", mock.Anything).Return(nil, errors.New("the blob was deleted")).Maybe()
 
-		// the test env's tree checks no permissions (see helpers.NewTestEnv), so download
-		// through a tree that does, with the mocked permissions
-		log := zerolog.Nop()
-		t := tree.New(env.Lookup, env.Blobstore, env.Options, permissions.NewPermissions(env.Permissions, nil), store.Create(), &log)
-		_, _, err := t.DownloadRevision(env.Ctx, fileRef, file.ID+node.RevisionIDDelimiter+rev1,
+		_, _, err := env.Fs.DownloadRevision(env.Ctx, fileRef, file.ID+node.RevisionIDDelimiter+rev1,
 			func(*provider.ResourceInfo) bool { return true })
 		_, notFound := err.(errtypes.IsNotFound)
 		Expect(notFound).To(BeTrue(), "expected a not found error, got %v", err)

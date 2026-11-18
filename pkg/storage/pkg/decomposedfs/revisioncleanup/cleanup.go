@@ -26,11 +26,11 @@
 // driver structure.
 //
 // The shared code only knows node.Tree. Listing revisions is driver specific
-// (node.Tree.ListRevisionsUnchecked), but deleting one is not: Node.DeleteRevisionUnchecked handles
+// (node.Tree.ListRevisions), but deleting one is not: Node.DeleteRevisionUnchecked handles
 // both layouts, and node.Tree.DeleteBlob deletes the blob in whichever blobstore the
 // driver uses. PurgeRevisionUnchecked combines the two. So both the decision about *what* to
 // delete and the deletion itself are made here, once for all drivers.
-// Neither ListRevisionsUnchecked nor PurgeRevisionUnchecked check permissions: this is system
+// Neither ListRevisions nor PurgeRevisionUnchecked check permissions: this is system
 // housekeeping, which runs e.g. at the end of an upload, where there is no suitable
 // user in the context.
 //
@@ -121,7 +121,7 @@ type BlobDeleter interface {
 // It is a separate interface so that the posix tree can pass itself from within
 // its own package without the cleanup depending on the full node.Tree.
 type RevisionStore interface {
-	ListRevisionsUnchecked(ctx context.Context, n *node.Node) ([]*provider.FileVersion, error)
+	ListRevisions(ctx context.Context, n *node.Node) ([]*provider.FileVersion, error)
 	BlobDeleter
 }
 
@@ -383,7 +383,7 @@ func (c *Cleaner) run(ctx context.Context, lu node.PathLookup, rs RevisionStore,
 		currentBlobID = string(blobID)
 	}
 
-	versions, err := rs.ListRevisionsUnchecked(ctx, n)
+	versions, err := rs.ListRevisions(ctx, n)
 	if err != nil {
 		log.Error().Err(err).Msg("revision cleanup: could not list revisions")
 		result.Err = fmt.Errorf("could not list revisions: %w", err)
@@ -606,7 +606,7 @@ const (
 // The key is preferred over the file mtime because the file mtime is not reliable:
 // the upload code only sets it to the mtime of the old content (os.Chtimes in
 // Decomposedfs.PrepareUpload) after CreateRevision has returned, and the
-// FileVersion.Mtime from ListRevisionsUnchecked has only a precision of seconds.
+// FileVersion.Mtime from ListRevisions has only a precision of seconds.
 // The '.<n>' suffix is appended by CreateRevision when a revision with the same
 // timestamp already exists, it is not part of the timestamp and is stripped.
 func revisionTime(v *provider.FileVersion) time.Time {
@@ -624,7 +624,7 @@ func revisionTime(v *provider.FileVersion) time.Time {
 }
 
 // fileVersionRevision adapts a CS3 FileVersion, as returned by
-// node.Tree.ListRevisionsUnchecked, to the revisions.Revision interface the
+// node.Tree.ListRevisions, to the revisions.Revision interface the
 // cleanup strategies work on.
 type fileVersionRevision struct {
 	version *provider.FileVersion

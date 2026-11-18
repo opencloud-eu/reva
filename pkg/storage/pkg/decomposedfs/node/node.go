@@ -147,14 +147,13 @@ type Tree interface {
 	ResolveSpaceIDIndexEntry(spaceID string) (string, error)
 
 	CreateRevision(ctx context.Context, n *Node, version string) (string, error)
-	ListRevisions(ctx context.Context, ref *provider.Reference) ([]*provider.FileVersion, error)
-	DownloadRevision(ctx context.Context, ref *provider.Reference, revisionKey string, openReaderFunc func(md *provider.ResourceInfo) bool) (*provider.ResourceInfo, io.ReadCloser, error)
-	// ListRevisionsUnchecked lists all revisions of n without checking permissions.
-	// ListRevisions performs the permission check for user requests and then
-	// delegates to it. The unchecked variant exists for system housekeeping like
-	// the revision cleanup (see package revisioncleanup), which may run e.g. in
-	// async postprocessing where the context has no user with suitable permissions.
-	ListRevisionsUnchecked(ctx context.Context, n *Node) ([]*provider.FileVersion, error)
+	// ListRevisions and DownloadRevision check no permissions: Decomposedfs checks them for the
+	// requests of users, and the revision cleanup (see package revisioncleanup) lists
+	// revisions on behalf of the system, e.g. in async postprocessing, where the context has
+	// no user with suitable permissions.
+	ListRevisions(ctx context.Context, n *Node) ([]*provider.FileVersion, error)
+	// DownloadRevision gets the permissions of the user on n in rp, for the resource info.
+	DownloadRevision(ctx context.Context, n *Node, revisionKey string, rp *provider.ResourcePermissions, openReaderFunc func(md *provider.ResourceInfo) bool) (*provider.ResourceInfo, io.ReadCloser, error)
 
 	Propagate(ctx context.Context, node *Node, sizeDiff int64) (err error)
 }

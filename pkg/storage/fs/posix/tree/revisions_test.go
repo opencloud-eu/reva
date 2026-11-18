@@ -21,7 +21,6 @@ import (
 	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs"
 	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/metadata/prefixes"
 	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/node"
-	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/permissions"
 	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/revisioncleanup"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -44,7 +43,7 @@ var _ = Describe("Revisions", func() {
 		return node.NewBaseNode(n.SpaceID, key, non_watching_env.Lookup)
 	}
 	listKeys := func() []string {
-		revs, err := non_watching_env.Tree.ListRevisionsUnchecked(non_watching_env.Ctx, n)
+		revs, err := non_watching_env.Tree.ListRevisions(non_watching_env.Ctx, n)
 		Expect(err).ToNot(HaveOccurred())
 		keys := make([]string, len(revs))
 		for i, r := range revs {
@@ -72,7 +71,7 @@ var _ = Describe("Revisions", func() {
 		}
 	})
 
-	Describe("ListRevisionsUnchecked", func() {
+	Describe("ListRevisions", func() {
 		It("lists all revisions", func() {
 			Expect(listKeys()).To(ConsistOf(keys))
 		})
@@ -292,8 +291,7 @@ var _ = Describe("Revisions", func() {
 
 		It("is not downloaded", func() {
 			env := non_watching_env
-			DeferCleanup(env.Tree.SetPermissionsForTest(permissions.NewPermissions(env.Permissions, nil)))
-			_, _, err := env.Tree.DownloadRevision(env.Ctx, ref, keys[2], func(*provider.ResourceInfo) bool { return true })
+			_, _, err := env.Fs.DownloadRevision(env.Ctx, ref, keys[2], func(*provider.ResourceInfo) bool { return true })
 			_, notFound := err.(errtypes.IsNotFound)
 			Expect(notFound).To(BeTrue(), "expected a not found error, got %v", err)
 		})
@@ -316,7 +314,7 @@ func changesOnDisk(async bool) func() {
 		)
 
 		listKeys := func() []string {
-			revs, err := fsEnv.Tree.ListRevisionsUnchecked(fsEnv.Ctx, n)
+			revs, err := fsEnv.Tree.ListRevisions(fsEnv.Ctx, n)
 			Expect(err).ToNot(HaveOccurred())
 			keys := make([]string, len(revs))
 			for i, r := range revs {

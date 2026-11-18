@@ -45,13 +45,68 @@ import (
 // and replace the revision file with a symbolic link in the future, if necessary.
 
 func (fs *Decomposedfs) ListRevisions(ctx context.Context, ref *provider.Reference) (revisions []*provider.FileVersion, err error) {
-	return fs.tp.ListRevisions(ctx, ref)
+	_, span := tracer.Start(ctx, "ListRevisions")
+	defer span.End()
+	n, err := fs.lu.NodeFromResource(ctx, ref)
+	if err != nil {
+		return nil, err
+	}
+	if !n.Exists {
+		return nil, errtypes.NotFound(filepath.Join(n.ParentID, n.Name))
+	}
+
+	rp, err := fs.p.AssemblePermissions(ctx, n)
+	switch {
+	case err != nil:
+		return nil, err
+	case !rp.ListFileVersions:
+		f, _ := storagespace.FormatReference(ref)
+		if rp.Stat {
+			return nil, errtypes.PermissionDenied(f)
+		}
+		return nil, errtypes.NotFound(f)
+	}
+
+	return fs.tp.ListRevisions(ctx, n)
 }
 
 // DownloadRevision returns a reader for the specified revision
 // FIXME the CS3 api should explicitly allow initiating revision and trash download, a related issue is https://github.com/cs3org/reva/issues/1813
 func (fs *Decomposedfs) DownloadRevision(ctx context.Context, ref *provider.Reference, revisionKey string, openReaderFunc func(md *provider.ResourceInfo) bool) (*provider.ResourceInfo, io.ReadCloser, error) {
-	return fs.tp.DownloadRevision(ctx, ref, revisionKey, openReaderFunc)
+	_, span := tracer.Start(ctx, "DownloadRevision")
+	defer span.End()
+	log := appctx.GetLogger(ctx)
+
+	// verify revision key format
+	kp := strings.SplitN(revisionKey, node.RevisionIDDelimiter, 2)
+	if len(kp) != 2 || !node.IsValidID(revisionKey) {
+		log.Error().Str("revisionKey", revisionKey).Msg("malformed revisionKey")
+		return nil, nil, errtypes.NotFound(revisionKey)
+	}
+	log.Debug().Str("revisionKey", revisionKey).Msg("DownloadRevision")
+
+	// check if the node is available and has not been deleted
+	n, err := node.ReadNode(ctx, fs.lu, ref.ResourceId.SpaceId, kp[0], "", false, nil, false)
+	if err != nil {
+		return nil, nil, err
+	}
+	if !n.Exists {
+		return nil, nil, errtypes.NotFound(filepath.Join(n.ParentID, n.Name))
+	}
+
+	rp, err := fs.p.AssemblePermissions(ctx, n)
+	switch {
+	case err != nil:
+		return nil, nil, err
+	case !rp.ListFileVersions || !rp.InitiateFileDownload: // TODO add explicit permission in the CS3 api?
+		f, _ := storagespace.FormatReference(ref)
+		if rp.Stat {
+			return nil, nil, errtypes.PermissionDenied(f)
+		}
+		return nil, nil, errtypes.NotFound(f)
+	}
+
+	return fs.tp.DownloadRevision(ctx, n, revisionKey, rp, openReaderFunc)
 }
 
 // RestoreRevision restores the specified revision of the resource

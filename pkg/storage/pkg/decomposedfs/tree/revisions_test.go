@@ -51,7 +51,7 @@ var _ = Describe("Revisions", func() {
 		return fmt.Sprintf("revision-%d-blobid", i)
 	}
 	listKeys := func() []string {
-		revs, err := env.Tree.ListRevisionsUnchecked(env.Ctx, n)
+		revs, err := env.Tree.ListRevisions(env.Ctx, n)
 		Expect(err).ToNot(HaveOccurred())
 		keys := make([]string, len(revs))
 		for i, r := range revs {
@@ -96,7 +96,7 @@ var _ = Describe("Revisions", func() {
 		}
 	})
 
-	Describe("ListRevisionsUnchecked", func() {
+	Describe("ListRevisions", func() {
 		It("lists all revisions", func() {
 			Expect(listKeys()).To(ConsistOf(keys))
 		})
@@ -149,7 +149,7 @@ var _ = Describe("Revisions", func() {
 
 		It("purges the revisions the strategy wants to delete", func() {
 			expectBlobDeletion(blobOfRevision(2))
-			revs, err := env.Tree.ListRevisionsUnchecked(env.Ctx, n)
+			revs, err := env.Tree.ListRevisions(env.Ctx, n)
 			Expect(err).ToNot(HaveOccurred())
 			var size uint64
 			for _, r := range revs {

@@ -56,7 +56,7 @@ var _ = Describe("On-demand revision cleanup", func() {
 		}
 	}
 	revisionCount := func(n *node.Node) int {
-		revs, err := env.Tree.ListRevisionsUnchecked(env.Ctx, n)
+		revs, err := env.Tree.ListRevisions(env.Ctx, n)
 		Expect(err).ToNot(HaveOccurred())
 		return len(revs)
 	}
@@ -732,12 +732,12 @@ type stoppingTree struct {
 	errs         []error
 }
 
-func (t *stoppingTree) ListRevisionsUnchecked(ctx context.Context, n *node.Node) ([]*provider.FileVersion, error) {
+func (t *stoppingTree) ListRevisions(ctx context.Context, n *node.Node) ([]*provider.FileVersion, error) {
 	err := t.onList(ctx)
 	t.mu.Lock()
 	t.errs = append(t.errs, err)
 	t.mu.Unlock()
-	return t.Tree.ListRevisionsUnchecked(ctx, n)
+	return t.Tree.ListRevisions(ctx, n)
 }
 
 func (t *stoppingTree) ListFolderKnownUnchecked(ctx context.Context, n *node.Node) ([]*node.Node, error) {

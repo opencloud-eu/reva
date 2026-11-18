@@ -282,7 +282,7 @@ For `decomposed` and `decomposeds3`, `NewDefault` returns the `Decomposedfs` dir
 Most `Decomposedfs` methods follow the same pattern: resolve a reference with the lookup, check permissions, then ask the tree to do the work. For example:
 
 - `CreateDir`, `Move`, `Delete`, `ListFolder` → `fs.lu.NodeFromResource` → `fs.p.AssemblePermissions` → `fs.tp.CreateDir/Move/Delete/ListFolder`
-- `ListRevisions`, `DownloadRevision` → `fs.tp.ListRevisions/DownloadRevision`
+- `ListRevisions`, `DownloadRevision` → `fs.lu.NodeFromResource` or `node.ReadNode` → `fs.p.AssemblePermissions` → `fs.tp.ListRevisions/DownloadRevision`
 - `ListRecycle`, `RestoreRecycleItem`, `PurgeRecycleItem`, `EmptyRecycle` → `fs.trashbin`
 - size and etag propagation after changes → `fs.tp.Propagate`
 - uploads → the steps the upload coordinator calls (see [Uploads](#uploads)) → `tp.InitNewNode`, `tp.CreateRevision`, `tp.WriteBlob`
@@ -290,7 +290,8 @@ Most `Decomposedfs` methods follow the same pattern: resolve a reference with th
 The interfaces that define those contracts live in `node/node.go` (`Tree`, `PathLookup`, `Blobstore`), `trashbin/trashbin.go` and `permissions/`.
 They are the place to look when a feature needs driver specific behaviour.
 Typically a method is added to the interface and implemented in both `decomposedfs/tree` and `fs/posix/tree`.
-`Tree.ListRevisionsUnchecked` is a recent example, used by the revision cleanup (see `revisioncleanup`).
+Such methods check no permissions: `Decomposedfs` checks them before it calls the tree, so that other callers can use the tree as well.
+`Tree.ListRevisions` is an example: the revision cleanup (see `revisioncleanup`) calls it on behalf of the system, without a user.
 
 Before adding such a method, check whether the shared code already handles both layouts.
 `Node` methods work through the lookup, so they resolve paths correctly for every driver.
