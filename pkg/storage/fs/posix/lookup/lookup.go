@@ -432,7 +432,8 @@ func (lu *Lookup) GenerateSpaceID(spaceType string, owner *user.User) (string, e
 	case _spaceTypeProject:
 		return uuid.New().String(), nil
 	case _spaceTypePersonal:
-		relPath := templates.WithUser(owner, lu.Options.PersonalSpacePathTemplate)
+		// the space name and id are not known yet
+		relPath := templates.WithSpacePropertiesAndUser(owner, spaceType, "", "", lu.Options.PersonalSpacePathTemplate)
 		path := filepath.Join(lu.Options.Root, relPath)
 
 		// do we already know about this space?

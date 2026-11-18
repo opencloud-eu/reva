@@ -123,12 +123,12 @@ var _ = Describe("Lookup", func() {
 })
 
 var _ = Describe("GenerateSpaceID", func() {
-	It("finds the personal space after the personal space path template changed", func() {
+	DescribeTable("finds the personal space after the personal space path template changed", func(template string) {
 		env, err := helpers.NewTestEnv(map[string]any{})
 		Expect(err).ToNot(HaveOccurred())
 		DeferCleanup(env.Cleanup)
 
-		env.Options.PersonalSpacePathTemplate = "users/moved/{{.User.Username}}"
+		env.Options.PersonalSpacePathTemplate = template
 		spaceID, err := env.Lookup.GenerateSpaceID("personal", env.Owner)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(spaceID).To(Equal(env.SpaceRootRes.SpaceId))
@@ -138,5 +138,8 @@ var _ = Describe("GenerateSpaceID", func() {
 		}, nil)
 		_, err = env.Fs.CreateStorageSpace(env.Ctx, &providerv1beta1.CreateStorageSpaceRequest{Owner: env.Owner, Type: "personal"})
 		Expect(err).To(BeAssignableToTypeOf(errtypes.AlreadyExists("")))
-	})
+	},
+		Entry("to another directory", "users/moved/{{.User.Username}}"),
+		Entry("to one with the space type", "{{.SpaceType}}/{{.User.Username}}"),
+	)
 })

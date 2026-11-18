@@ -89,7 +89,7 @@ func (fs *Decomposedfs) CreateStorageSpace(ctx context.Context, req *provider.Cr
 	switch req.Type {
 	case _spaceTypePersonal:
 		if fs.o.PersonalSpacePathTemplate != "" {
-			rootPath = filepath.Join(fs.o.Root, templates.WithUser(u, fs.o.PersonalSpacePathTemplate))
+			rootPath = filepath.Join(fs.o.Root, templates.WithSpacePropertiesAndUser(u, req.Type, req.Name, spaceID, fs.o.PersonalSpacePathTemplate))
 		}
 	default:
 		if fs.o.GeneralSpacePathTemplate != "" {
