@@ -24,6 +24,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -161,15 +162,8 @@ func (fs *Decomposedfs) RestoreRevision(ctx context.Context, ref *provider.Refer
 		return nil, err
 	}
 	// released before the revision cleanup at the end, or on any return before that
-	unlocked := false
-	unlockNode := func() {
-		if unlocked {
-			return
-		}
-		unlocked = true
-		_ = unlock()
-	}
-	defer unlockNode()
+	unlockNode := sync.OnceValue(unlock)
+	defer func() { _ = unlockNode() }()
 
 	// The revision must still exist on disk. Its metadata may come from a stale cache
 	// entry: another process, e.g. `opencloud storage-users revisions cleanup` with the
@@ -260,7 +254,7 @@ func (fs *Decomposedfs) RestoreRevision(ctx context.Context, ref *provider.Refer
 	// The node lock is released first: the cleanup takes it itself, and when it runs in the
 	// background, waiting for room in its queue while holding the lock could deadlock with
 	// a worker waiting for the lock.
-	unlockNode()
+	_ = unlockNode()
 	fs.revisionsCleanup.HandleRevisionCreated(ctx, n)
 	return &storage.RestoreRevisionResult{SpaceOwner: spaceOwner, SpaceID: n.SpaceID}, nil
 }
