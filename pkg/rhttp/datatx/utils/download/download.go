@@ -275,6 +275,13 @@ func GetOrHeadFile(w http.ResponseWriter, r *http.Request, fs storage.FS, spaceI
 			Name:    path.Base(md.GetPath()),
 			Path:    md.GetPath(),
 		}
+		if audited {
+			// the other file events have the path in the space, the
+			// resource info only has the name
+			if p, err := fs.GetPathByID(ctx, md.GetId()); err == nil && p != "" {
+				target.Path = utils.MakeRelativePath(p)
+			}
+		}
 
 		var c int64
 		c, err = io.CopyN(w, sendContent, sendSize)

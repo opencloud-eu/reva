@@ -5,12 +5,14 @@ import (
 	"testing"
 	"time"
 
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/opencloud-eu/reva/v3/pkg/audit"
+	ctxpkg "github.com/opencloud-eu/reva/v3/pkg/ctx"
 	"github.com/opencloud-eu/reva/v3/pkg/storagespace"
 	"github.com/opencloud-eu/reva/v3/pkg/utils"
 	"github.com/stretchr/testify/assert"
@@ -190,7 +192,7 @@ func TestAuditEvent(t *testing.T) {
 			req:      &provider.MoveRequest{Source: &provider.Reference{ResourceId: root, Path: "./docs/a.txt"}, Destination: &provider.Reference{ResourceId: root, Path: "./docs/b.txt"}},
 			res:      &provider.MoveResponse{Status: ok},
 			itemType: provider.ResourceType_RESOURCE_TYPE_FILE, itemID: &provider.ResourceId{SpaceId: "space", OpaqueId: "node-1"}, itemName: "a.txt",
-			definition: audit.FileRename, outcome: audit.OutcomeSuccess, targetID: "storage$space!node-1", targetName: "b.txt",
+			definition: audit.FileRename, outcome: audit.OutcomeSuccess, targetID: "storage$space!node-1", targetName: "a.txt",
 		},
 		{
 			name:     "file restored, driver reported the node",
@@ -205,6 +207,32 @@ func TestAuditEvent(t *testing.T) {
 			res:      &provider.PurgeRecycleResponse{Status: ok},
 			itemType: provider.ResourceType_RESOURCE_TYPE_CONTAINER, itemID: &provider.ResourceId{SpaceId: "space", OpaqueId: "node-1"}, itemName: "docs",
 			definition: audit.FolderPurge, outcome: audit.OutcomeSuccess, targetID: "storage$space!node-1", targetName: "docs",
+		},
+		{
+			name:       "share updated, with the name of the resource",
+			req:        &collaboration.UpdateShareRequest{Share: &collaboration.Share{Id: &collaboration.ShareId{OpaqueId: "s-1"}}},
+			res:        &collaboration.UpdateShareResponse{Status: ok, Opaque: utils.AppendPlainToOpaque(nil, "resourcename", "report.pdf"), Share: &collaboration.Share{ResourceId: rid}},
+			definition: audit.ShareUpdate, outcome: audit.OutcomeSuccess, targetID: "s-1", targetName: "report.pdf",
+		},
+		{
+			name:       "public link removed, with the name of the resource",
+			req:        &link.RemovePublicShareRequest{Ref: &link.PublicShareReference{Spec: &link.PublicShareReference_Id{Id: &link.PublicShareId{OpaqueId: "l-1"}}}},
+			res:        &link.RemovePublicShareResponse{Status: ok, Opaque: utils.AppendPlainToOpaque(nil, "resourcename", "report.pdf")},
+			definition: audit.PublicLinkDelete, outcome: audit.OutcomeSuccess, targetID: "l-1", targetName: "report.pdf",
+		},
+		{
+			name:       "space renamed, with the name before",
+			req:        &provider.UpdateStorageSpaceRequest{StorageSpace: &provider.StorageSpace{Root: root, Name: "Sales"}},
+			res:        &provider.UpdateStorageSpaceResponse{Status: ok},
+			itemName:   "Marketing",
+			definition: audit.SpaceUpdate, outcome: audit.OutcomeSuccess, targetID: "storage$space", targetName: "Marketing",
+		},
+		{
+			name:       "space disabled, with its name",
+			req:        &provider.DeleteStorageSpaceRequest{Id: &provider.StorageSpaceId{OpaqueId: "storage$space"}},
+			res:        &provider.DeleteStorageSpaceResponse{Status: ok},
+			itemName:   "Marketing",
+			definition: audit.SpaceDisable, outcome: audit.OutcomeSuccess, targetID: "storage$space", targetName: "Marketing",
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -317,4 +345,14 @@ func TestFirstLinkAccessOnlyDropsRepeatedSuccesses(t *testing.T) {
 	assert.True(t, firstLinkAccess(inTrace(2), o, failed), "the next attempt counts")
 	assert.True(t, firstLinkAccess(context.Background(), o, other))
 	assert.True(t, firstLinkAccess(context.Background(), o, other))
+}
+
+func TestAutoAccepted(t *testing.T) {
+	accepted := &collaboration.UpdateReceivedShareResponse{Status: ok}
+	asUser := func(typ userpb.UserType) context.Context {
+		return ctxpkg.ContextSetUser(context.Background(), &userpb.User{Id: &userpb.UserId{OpaqueId: "u", Type: typ}})
+	}
+	assert.True(t, autoAccepted(asUser(userpb.UserType_USER_TYPE_SERVICE), accepted), "the sharing service accepting for the user")
+	assert.False(t, autoAccepted(asUser(userpb.UserType_USER_TYPE_PRIMARY), accepted), "the user accepting")
+	assert.False(t, autoAccepted(asUser(userpb.UserType_USER_TYPE_SERVICE), &collaboration.UpdateShareResponse{Status: ok}), "other calls of a service account")
 }

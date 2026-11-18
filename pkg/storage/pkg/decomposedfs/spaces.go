@@ -669,6 +669,7 @@ func (fs *Decomposedfs) UpdateStorageSpace(ctx context.Context, req *provider.Up
 			Status: &v1beta11.Status{Code: v1beta11.Code_CODE_NOT_FOUND},
 		}, nil
 	}
+	setAuditSpace(ctx, spaceNode)
 
 	sp, err := fs.p.AssemblePermissions(ctx, spaceNode)
 	if err != nil {
@@ -790,6 +791,7 @@ func (fs *Decomposedfs) DeleteStorageSpace(ctx context.Context, req *provider.De
 	if !n.Exists {
 		return nil, errtypes.NotFound(spaceID)
 	}
+	setAuditSpace(ctx, n)
 
 	st, err := n.SpaceRoot.XattrString(ctx, prefixes.SpaceTypeAttr)
 	if err != nil {
@@ -1350,4 +1352,11 @@ func canDeleteSpace(ctx context.Context, spaceID string, typ string, purge bool,
 	}
 
 	return errtypes.PermissionDenied(fmt.Sprintf("user is not allowed to delete space %s", n.GetID()))
+}
+
+// setAuditSpace tells the events middleware the name of the space a call acts
+// on, before it is changed.
+func setAuditSpace(ctx context.Context, n *node.Node) {
+	name, _ := n.SpaceRoot.XattrString(ctx, prefixes.SpaceNameAttr)
+	storagespace.ContextSetItem(ctx, provider.ResourceType_RESOURCE_TYPE_CONTAINER, &provider.ResourceId{SpaceId: n.SpaceID, OpaqueId: n.SpaceID}, name)
 }

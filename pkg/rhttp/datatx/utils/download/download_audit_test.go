@@ -19,11 +19,15 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// fakeFS only implements Download, every other call panics.
+// fakeFS only implements Download and GetPathByID, every other call panics.
 type fakeFS struct {
 	storage.FS
 	content string
 	err     error
+}
+
+func (f fakeFS) GetPathByID(context.Context, *provider.ResourceId) (string, error) {
+	return "/projects/docs/report.pdf", nil
 }
 
 type seekableContent struct{ *strings.Reader }
@@ -84,6 +88,7 @@ func TestDownloadIsAuditedWhenDone(t *testing.T) {
 	assert.Equal(t, audit.OutcomeSuccess, ev.Outcome)
 	assert.Equal(t, "storage$space!item", ev.Target.ID)
 	assert.Equal(t, "report.pdf", ev.Target.Name)
+	assert.Equal(t, "./projects/docs/report.pdf", ev.Target.Path, "the path in the space, like the other file events")
 	assert.Nil(t, ev.Actor)
 }
 

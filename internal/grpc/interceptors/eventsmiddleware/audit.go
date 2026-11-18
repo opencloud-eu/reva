@@ -9,12 +9,14 @@ import (
 	"sync"
 	"time"
 
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/go-viper/mapstructure/v2"
 	"github.com/opencloud-eu/reva/v3/pkg/audit"
+	ctxpkg "github.com/opencloud-eu/reva/v3/pkg/ctx"
 	"github.com/opencloud-eu/reva/v3/pkg/events/raw"
 	"github.com/opencloud-eu/reva/v3/pkg/storagespace"
 	"github.com/opencloud-eu/reva/v3/pkg/utils"
@@ -91,9 +93,6 @@ func auditEvent(req, res interface{}, item *storagespace.ItemTypeSlot) (audit.Ev
 		}
 		ev = audit.Event{Definition: d, Target: refTarget(src, item),
 			Change: &audit.Change{Before: map[string]any{"path": src.GetPath()}, After: map[string]any{"path": dst.GetPath()}}}
-		if n := path.Base(dst.GetPath()); dst.GetPath() != "" && n != "." {
-			ev.Target.Name = n
-		}
 	case *provider.DeleteResponse:
 		d := pick(itemType, audit.FileDelete, audit.FolderDelete)
 		if d == nil {
@@ -139,15 +138,17 @@ func auditEvent(req, res interface{}, item *storagespace.ItemTypeSlot) (audit.Ev
 		// space grant therefore shows up as a failed share.create
 		if utils.ExistsInOpaque(v.GetOpaque(), "spacegrant") {
 			ev = audit.Event{Definition: audit.SpaceMemberAdd, Target: spaceTarget(rid)}
+			ev.Target.Name = utils.ReadPlainFromOpaque(v.GetOpaque(), "resourcename")
 		} else {
 			ev = audit.Event{Definition: audit.ShareCreate, Target: shareTarget(v.GetShare().GetId().GetOpaqueId(), rid, r.GetResourceInfo().GetName())}
 		}
 	case *collaboration.UpdateShareResponse:
 		if utils.ExistsInOpaque(v.GetOpaque(), "spacegrant") {
 			ev = audit.Event{Definition: audit.SpaceMemberUpdate, Target: spaceTarget(v.GetShare().GetResourceId())}
+			ev.Target.Name = utils.ReadPlainFromOpaque(v.GetOpaque(), "resourcename")
 		} else {
 			r := req.(*collaboration.UpdateShareRequest)
-			ev = audit.Event{Definition: audit.ShareUpdate, Target: shareTarget(shareID(r.GetShare().GetId(), r.GetRef()), v.GetShare().GetResourceId(), "")}
+			ev = audit.Event{Definition: audit.ShareUpdate, Target: shareTarget(shareID(r.GetShare().GetId(), r.GetRef()), v.GetShare().GetResourceId(), utils.ReadPlainFromOpaque(v.GetOpaque(), "resourcename"))}
 		}
 	case *collaboration.RemoveShareResponse:
 		r := req.(*collaboration.RemoveShareRequest)
@@ -155,6 +156,7 @@ func auditEvent(req, res interface{}, item *storagespace.ItemTypeSlot) (audit.Ev
 		_ = utils.ReadJSONFromOpaque(v.GetOpaque(), "resourceid", &rid)
 		if utils.ExistsInOpaque(v.GetOpaque(), "spacegrant") {
 			ev = audit.Event{Definition: audit.SpaceMemberRemove, Target: spaceTarget(rid)}
+			ev.Target.Name = utils.ReadPlainFromOpaque(v.GetOpaque(), "resourcename")
 		} else {
 			ev = audit.Event{Definition: audit.ShareDelete, Target: shareTarget(shareID(nil, r.GetRef()), rid, utils.ReadPlainFromOpaque(v.GetOpaque(), "resourcename"))}
 		}
@@ -168,7 +170,10 @@ func auditEvent(req, res interface{}, item *storagespace.ItemTypeSlot) (audit.Ev
 		default:
 			return ev, false
 		}
-		ev.Target = shareTarget(rs.GetShare().GetId().GetOpaqueId(), rs.GetShare().GetResourceId(), "")
+		ev.Target = shareTarget(rs.GetShare().GetId().GetOpaqueId(), rs.GetShare().GetResourceId(), path.Base(rs.GetMountPoint().GetPath()))
+		if ev.Target.Name == "." || ev.Target.Name == "/" {
+			ev.Target.Name = ""
+		}
 
 	case *link.CreatePublicShareResponse:
 		r := req.(*link.CreatePublicShareRequest)
@@ -176,12 +181,14 @@ func auditEvent(req, res interface{}, item *storagespace.ItemTypeSlot) (audit.Ev
 		ev.Target.Type = "public_link"
 	case *link.UpdatePublicShareResponse:
 		r := req.(*link.UpdatePublicShareRequest)
-		ev = audit.Event{Definition: audit.PublicLinkUpdate, Target: shareTarget(r.GetRef().GetId().GetOpaqueId(), v.GetShare().GetResourceId(), "")}
+		ev = audit.Event{Definition: audit.PublicLinkUpdate, Target: shareTarget(r.GetRef().GetId().GetOpaqueId(), v.GetShare().GetResourceId(), utils.ReadPlainFromOpaque(v.GetOpaque(), "resourcename"))}
 	case *link.GetPublicShareByTokenResponse:
 		return publicLinkAccess(req.(*link.GetPublicShareByTokenRequest), v)
 	case *link.RemovePublicShareResponse:
 		r := req.(*link.RemovePublicShareRequest)
-		ev = audit.Event{Definition: audit.PublicLinkDelete, Target: shareTarget(r.GetRef().GetId().GetOpaqueId(), nil, "")}
+		var rid *provider.ResourceId
+		_ = utils.ReadJSONFromOpaque(v.GetOpaque(), "resourceid", &rid)
+		ev = audit.Event{Definition: audit.PublicLinkDelete, Target: shareTarget(r.GetRef().GetId().GetOpaqueId(), rid, utils.ReadPlainFromOpaque(v.GetOpaque(), "resourcename"))}
 
 	case *provider.CreateStorageSpaceResponse:
 		r := req.(*provider.CreateStorageSpaceRequest)
@@ -201,6 +208,8 @@ func auditEvent(req, res interface{}, item *storagespace.ItemTypeSlot) (audit.Ev
 		if ev.Target.ID == "" {
 			ev.Target.ID = r.GetStorageSpace().GetId().GetOpaqueId()
 		}
+		// the name before the update, reported by the driver
+		ev.Target.Name = item.Name
 		switch {
 		case utils.ExistsInOpaque(r.GetOpaque(), "restore"):
 			ev.Definition = audit.SpaceEnable
@@ -215,7 +224,7 @@ func auditEvent(req, res interface{}, item *storagespace.ItemTypeSlot) (audit.Ev
 		}
 	case *provider.DeleteStorageSpaceResponse:
 		r := req.(*provider.DeleteStorageSpaceRequest)
-		ev = audit.Event{Definition: audit.SpaceDisable, Target: audit.Target{ID: r.GetId().GetOpaqueId()}}
+		ev = audit.Event{Definition: audit.SpaceDisable, Target: audit.Target{ID: r.GetId().GetOpaqueId(), Name: item.Name}}
 		if utils.ExistsInOpaque(r.GetOpaque(), "purge") {
 			ev.Definition = audit.SpaceDelete
 		}
@@ -231,6 +240,17 @@ func auditEvent(req, res interface{}, item *storagespace.ItemTypeSlot) (audit.Ev
 		ev.Target.ID = "unknown"
 	}
 	return ev, true
+}
+
+// autoAccepted reports a share accepted by a service account, e.g. the
+// sharing service accepting new shares automatically. Nobody decided anything,
+// the share.create of the sharer is the record that counts.
+func autoAccepted(ctx context.Context, res interface{}) bool {
+	if _, ok := res.(*collaboration.UpdateReceivedShareResponse); !ok {
+		return false
+	}
+	u, ok := ctxpkg.ContextGetUser(ctx)
+	return ok && u.GetId().GetType() == userpb.UserType_USER_TYPE_SERVICE
 }
 
 // publicLinkAccess audits a token lookup. The share ID identifies the link;
