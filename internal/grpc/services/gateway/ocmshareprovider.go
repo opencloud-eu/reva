@@ -194,6 +194,9 @@ func (s *svc) UpdateOCMShare(ctx context.Context, req *ocm.UpdateOCMShareRequest
 	if err != nil {
 		return nil, errors.Wrap(err, "gateway: error calling UpdateOCMShare")
 	}
+	if res.GetStatus().GetCode() != rpc.Code_CODE_OK {
+		return res, nil
+	}
 
 	gRes, err := c.GetOCMShare(ctx, &ocm.GetOCMShareRequest{
 		Ref: req.Ref,
@@ -212,9 +215,15 @@ func (s *svc) UpdateOCMShare(ctx context.Context, req *ocm.UpdateOCMShareRequest
 		return nil, errors.New("gateway: user not found in context")
 	}
 
+	// only webdav access methods carry permissions for the storage grant
+	perms := webdavPermissions(gRes.GetShare().GetAccessMethods())
+	if perms == nil {
+		return res, nil
+	}
+
 	grant := &provider.Grant{
 		Grantee:     gRes.GetShare().GetGrantee(),
-		Permissions: gRes.GetShare().GetAccessMethods()[0].GetWebdavOptions().GetPermissions(),
+		Permissions: perms,
 		Expiration:  gRes.GetShare().GetExpiration(),
 		Creator:     creator.GetId(),
 	}
@@ -229,6 +238,16 @@ func (s *svc) UpdateOCMShare(ctx context.Context, req *ocm.UpdateOCMShareRequest
 	}
 
 	return res, nil
+}
+
+// webdavPermissions returns the permissions of the first webdav access method.
+func webdavPermissions(ams []*ocm.AccessMethod) *provider.ResourcePermissions {
+	for _, am := range ams {
+		if perms := am.GetWebdavOptions().GetPermissions(); perms != nil {
+			return perms
+		}
+	}
+	return nil
 }
 
 func (s *svc) ListReceivedOCMShares(ctx context.Context, req *ocm.ListReceivedOCMSharesRequest) (*ocm.ListReceivedOCMSharesResponse, error) {
