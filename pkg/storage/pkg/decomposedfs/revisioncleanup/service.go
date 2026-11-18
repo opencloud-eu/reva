@@ -568,12 +568,8 @@ func (s *Service) cleanupNode(ctx context.Context, spaceID, nodeID string) {
 
 // clean runs the cleanup of n, or only decides about it in a dry run, and reports the Result.
 func (s *Service) clean(ctx context.Context, n *node.Node) {
-	var result Result
-	if s.dryRun {
-		result = s.cleaner.DryRun(ctx, s.lu, s.rs, n)
-	} else {
-		result = s.cleaner.Cleanup(ctx, s.lu, s.rs, n)
-	}
+	// the details of the revisions only for someone who reads them
+	result := s.cleaner.run(ctx, s.lu, s.rs, n, s.dryRun, s.report != nil)
 	s.reportResult(result)
 }
 

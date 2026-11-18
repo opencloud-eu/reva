@@ -283,7 +283,7 @@ const keptAfterRestore = "protected: holds the content a restore replaced, as lo
 // postprocessing, where there is no suitable user in the context. Callers decide which nodes
 // to clean up.
 func (c *Cleaner) Cleanup(ctx context.Context, lu node.PathLookup, rs RevisionStore, n *node.Node) Result {
-	return c.run(ctx, lu, rs, n, false)
+	return c.run(ctx, lu, rs, n, false, true)
 }
 
 // DryRun decides like Cleanup, but deletes nothing: the Result tells which revisions would
@@ -295,12 +295,13 @@ func (c *Cleaner) Cleanup(ctx context.Context, lu node.PathLookup, rs RevisionSt
 //
 // Like Cleanup, it checks no permissions.
 func (c *Cleaner) DryRun(ctx context.Context, lu node.PathLookup, rs RevisionStore, n *node.Node) Result {
-	return c.run(ctx, lu, rs, n, true)
+	return c.run(ctx, lu, rs, n, true, true)
 }
 
 // The result is named, so that the deletion of the blobs, which runs deferred, can report its
-// errors in it.
-func (c *Cleaner) run(ctx context.Context, lu node.PathLookup, rs RevisionStore, n *node.Node, dryRun bool) (result Result) {
+// errors in it. Without details, it has no Revisions: the background cleanup has no one to report
+// to, and building them, with the reason for every revision, would be wasted on every upload.
+func (c *Cleaner) run(ctx context.Context, lu node.PathLookup, rs RevisionStore, n *node.Node, dryRun, details bool) (result Result) {
 	if !c.Enabled() || n == nil {
 		return Result{DryRun: dryRun, Skipped: "the revision cleanup is disabled"}
 	}
@@ -414,7 +415,9 @@ func (c *Cleaner) run(ctx context.Context, lu node.PathLookup, rs RevisionStore,
 		log.Debug().Str("revision", sk.version.Key).Str("reason", sk.reason).Msg("revision cleanup: leaving a revision alone that is not a version")
 	}
 	if len(versions) == 0 {
-		result.Revisions = revisionResults(nil, nil, nil, nil, skipped)
+		if details {
+			result.Revisions = revisionResults(nil, nil, nil, nil, skipped)
+		}
 		return result
 	}
 	keep := keptAfterRestoreKeys(ctx, lu, n, versions, currentBlobID, dryRun)
@@ -454,7 +457,9 @@ func (c *Cleaner) run(ctx context.Context, lu node.PathLookup, rs RevisionStore,
 		result.Err = err
 		return result
 	}
-	result.Revisions = revisionResults(revs, plan, keep, purgeErrs, skipped)
+	if details {
+		result.Revisions = revisionResults(revs, plan, keep, purgeErrs, skipped)
+	}
 
 	// One summary per node at info level, so that admins can see the cleanup at work
 	// without the per revision debug logging. Nothing is logged when nothing was purged,
