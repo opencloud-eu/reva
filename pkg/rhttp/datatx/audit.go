@@ -17,16 +17,19 @@ import (
 // reported: the proxy marks them with the audit header, writes by OpenCloud
 // itself, e.g. for a copy, don't carry it. executant is the user of the upload
 // session, used when the context has no user, as for tus uploads.
-func EmitUploadAudit(ctx context.Context, auditHeader string, executant *userv1beta1.UserId, ref *provider.Reference, name string) {
+func EmitUploadAudit(ctx context.Context, auditHeader string, executant *userv1beta1.UserId, ref *provider.Reference, id *provider.ResourceId, name string) {
 	if auditHeader == "" {
 		return
 	}
 	ctx = audit.ContextSetRequest(ctx, audit.ParseRequestContext(auditHeader))
 
-	id, _ := storagespace.FormatReference(ref)
+	target := storagespace.FormatResourceID(id)
+	if id.GetOpaqueId() == "" {
+		target, _ = storagespace.FormatReference(ref)
+	}
 	ev := audit.Event{
 		Definition: audit.FileUpload,
-		Target:     audit.Target{ID: id, Path: ref.GetPath(), Name: name},
+		Target:     audit.Target{ID: target, Path: ref.GetPath(), Name: name},
 	}
 	if rid := ref.GetResourceId(); rid != nil {
 		ev.Target.SpaceID = storagespace.FormatStorageID(rid.GetStorageId(), rid.GetSpaceId())

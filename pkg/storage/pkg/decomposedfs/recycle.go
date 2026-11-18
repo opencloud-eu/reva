@@ -38,7 +38,6 @@ import (
 	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/metadata/prefixes"
 	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/node"
 	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/tree"
-	"github.com/opencloud-eu/reva/v3/pkg/storagespace"
 )
 
 type DecomposedfsTrashbin struct {
@@ -366,7 +365,7 @@ func (tb *DecomposedfsTrashbin) RestoreRecycleItem(ctx context.Context, spaceID 
 		}
 		return nil, err
 	}
-	storagespace.ContextSetItemType(ctx, rn.Type(ctx))
+	setAuditItem(ctx, rn)
 
 	// check permissions of deleted node
 	rp, err := tb.fs.p.AssembleTrashPermissions(ctx, rn)
@@ -409,7 +408,7 @@ func (tb *DecomposedfsTrashbin) PurgeRecycleItem(ctx context.Context, spaceID, k
 		}
 		return err
 	}
-	storagespace.ContextSetItemType(ctx, rn.Type(ctx))
+	setAuditItem(ctx, rn)
 
 	// check permissions of deleted node
 	rp, err := tb.fs.p.AssembleTrashPermissions(ctx, rn)

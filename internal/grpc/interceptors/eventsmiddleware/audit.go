@@ -41,6 +41,9 @@ func emitterFromConfig(m map[string]interface{}) (audit.Emitter, error) {
 	if err := mapstructure.Decode(m, &nc); err != nil {
 		return nil, err
 	}
+	if nc.Endpoint == "" {
+		return nil, audit.ErrNoEndpoint
+	}
 	name, _ := m["name"].(string)
 	return audit.NewNatsEmitter(context.Background(), name+"-audit", nc, audit.Options{
 		Service: audit.Service{Name: ac.Service},
@@ -62,12 +65,17 @@ func outcome(s *rpc.Status) (audit.Outcome, string) {
 	}
 }
 
-// auditEvent turns a CS3 call into an audit event. itemType is reported by
-// the storage driver for move, delete, restore and purge; when it is unknown,
+// auditEvent turns a CS3 call into an audit event. item is filled by the
+// storage driver with the type, ID and name of the item the call acts on. The
+// type is needed for move, delete, restore and purge; when it is unknown,
 // e.g. because the item doesn't exist, no event is emitted for these calls.
 //
 //nolint:gocyclo
-func auditEvent(req, res interface{}, itemType provider.ResourceType) (audit.Event, bool) {
+func auditEvent(req, res interface{}, item *storagespace.ItemTypeSlot) (audit.Event, bool) {
+	if item == nil {
+		item = &storagespace.ItemTypeSlot{}
+	}
+	itemType := item.Type
 	var ev audit.Event
 	switch v := res.(type) {
 	case *provider.MoveResponse:
@@ -81,7 +89,7 @@ func auditEvent(req, res interface{}, itemType provider.ResourceType) (audit.Eve
 		if d == nil {
 			return ev, false
 		}
-		ev = audit.Event{Definition: d, Target: refTarget(src),
+		ev = audit.Event{Definition: d, Target: refTarget(src, item),
 			Change: &audit.Change{Before: map[string]any{"path": src.GetPath()}, After: map[string]any{"path": dst.GetPath()}}}
 		if n := path.Base(dst.GetPath()); dst.GetPath() != "" && n != "." {
 			ev.Target.Name = n
@@ -91,23 +99,23 @@ func auditEvent(req, res interface{}, itemType provider.ResourceType) (audit.Eve
 		if d == nil {
 			return ev, false
 		}
-		ev = audit.Event{Definition: d, Target: refTarget(req.(*provider.DeleteRequest).GetRef())}
+		ev = audit.Event{Definition: d, Target: refTarget(req.(*provider.DeleteRequest).GetRef(), item)}
 	case *provider.RestoreRecycleItemResponse:
 		d := pick(itemType, audit.FileRestore, audit.FolderRestore)
 		if d == nil {
 			return ev, false
 		}
 		r := req.(*provider.RestoreRecycleItemRequest)
-		ev = audit.Event{Definition: d, Target: trashTarget(r.GetRef(), r.GetKey())}
+		ev = audit.Event{Definition: d, Target: trashTarget(r.GetRef(), r.GetKey(), item)}
 	case *provider.CreateContainerResponse:
 		r := req.(*provider.CreateContainerRequest)
-		ev = audit.Event{Definition: audit.FolderCreate, Target: refTarget(r.GetRef())}
+		ev = audit.Event{Definition: audit.FolderCreate, Target: refTarget(r.GetRef(), item)}
 	case *provider.SetLockResponse:
-		ev = audit.Event{Definition: audit.FileLock, Target: refTarget(req.(*provider.SetLockRequest).GetRef())}
+		ev = audit.Event{Definition: audit.FileLock, Target: refTarget(req.(*provider.SetLockRequest).GetRef(), item)}
 	case *provider.UnlockResponse:
-		ev = audit.Event{Definition: audit.FileUnlock, Target: refTarget(req.(*provider.UnlockRequest).GetRef())}
+		ev = audit.Event{Definition: audit.FileUnlock, Target: refTarget(req.(*provider.UnlockRequest).GetRef(), item)}
 	case *provider.RestoreFileVersionResponse:
-		ev = audit.Event{Definition: audit.FileVersionRestore, Target: refTarget(req.(*provider.RestoreFileVersionRequest).GetRef())}
+		ev = audit.Event{Definition: audit.FileVersionRestore, Target: refTarget(req.(*provider.RestoreFileVersionRequest).GetRef(), item)}
 	case *provider.PurgeRecycleResponse:
 		r := req.(*provider.PurgeRecycleRequest)
 		id := r.GetRef().GetResourceId()
@@ -116,7 +124,7 @@ func auditEvent(req, res interface{}, itemType provider.ResourceType) (audit.Eve
 			if d == nil {
 				return ev, false
 			}
-			ev = audit.Event{Definition: d, Target: trashTarget(r.GetRef(), r.GetKey())}
+			ev = audit.Event{Definition: d, Target: trashTarget(r.GetRef(), r.GetKey(), item)}
 			break
 		}
 		ev = audit.Event{Definition: audit.TrashPurgeAll, Target: spaceTarget(id)}
@@ -315,18 +323,27 @@ func sameParent(src, dst *provider.Reference) bool {
 		path.Dir(src.GetPath()) == path.Dir(dst.GetPath())
 }
 
-// trashTarget identifies a trash bin item by its key, in the space of ref.
-func trashTarget(ref *provider.Reference, key string) audit.Target {
-	t := audit.Target{ID: key}
+// trashTarget identifies a trash bin item in the space of ref: by the ID the
+// item had before it was deleted, when the driver reported it, else by its
+// trash key.
+func trashTarget(ref *provider.Reference, key string, item *storagespace.ItemTypeSlot) audit.Target {
+	t := audit.Target{ID: key, Name: item.Name}
 	if rid := ref.GetResourceId(); rid != nil {
 		t.SpaceID = storagespace.FormatStorageID(rid.GetStorageId(), rid.GetSpaceId())
+	}
+	if id := itemID(ref, item); id != "" {
+		t.ID = id
 	}
 	return t
 }
 
-func refTarget(ref *provider.Reference) audit.Target {
-	id, _ := storagespace.FormatReference(ref)
-	t := audit.Target{ID: id, Path: ref.GetPath()}
+// refTarget identifies the item of ref by its ID, when the driver reported
+// it. A call that failed before the item was found only has the reference.
+func refTarget(ref *provider.Reference, item *storagespace.ItemTypeSlot) audit.Target {
+	t := audit.Target{ID: itemID(ref, item), Path: ref.GetPath(), Name: item.Name}
+	if t.ID == "" {
+		t.ID, _ = storagespace.FormatReference(ref)
+	}
 	if rid := ref.GetResourceId(); rid != nil {
 		t.SpaceID = storagespace.FormatStorageID(rid.GetStorageId(), rid.GetSpaceId())
 	}
@@ -334,6 +351,19 @@ func refTarget(ref *provider.Reference) audit.Target {
 		t.Name = path.Base(p)
 	}
 	return t
+}
+
+// itemID formats the ID the driver reported, with the storage ID of ref,
+// which the driver doesn't know.
+func itemID(ref *provider.Reference, item *storagespace.ItemTypeSlot) string {
+	if item.ID.GetOpaqueId() == "" {
+		return ""
+	}
+	return storagespace.FormatResourceID(&provider.ResourceId{
+		StorageId: ref.GetResourceId().GetStorageId(),
+		SpaceId:   item.ID.GetSpaceId(),
+		OpaqueId:  item.ID.GetOpaqueId(),
+	})
 }
 
 func spaceTarget(rid *provider.ResourceId) audit.Target {

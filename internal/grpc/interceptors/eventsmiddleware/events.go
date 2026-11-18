@@ -80,7 +80,7 @@ func NewUnary(m map[string]interface{}) (grpc.UnaryServerInterceptor, int, error
 			return res, err
 		}
 
-		if aev, ok := auditEvent(req, res, itemSlot.Type); ok && firstLinkAccess(ctx, linkAccesses, aev) {
+		if aev, ok := auditEvent(req, res, itemSlot); ok && firstLinkAccess(ctx, linkAccesses, aev) {
 			if err := emitter.Emit(ctx, aev); err != nil {
 				// the call is done already, failing it now would hide that it happened
 				appctx.GetLogger(ctx).Error().Err(err).Str("event", aev.Definition.Name).Msg("audit event not emitted")

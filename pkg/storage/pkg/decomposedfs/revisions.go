@@ -133,6 +133,7 @@ func (fs *Decomposedfs) RestoreRevision(ctx context.Context, ref *provider.Refer
 		err = errtypes.NotFound(filepath.Join(n.ParentID, n.Name))
 		return nil, err
 	}
+	setAuditItem(ctx, n)
 
 	rp, err := fs.p.AssemblePermissions(ctx, n)
 	switch {

@@ -177,9 +177,12 @@ func ContextGetDeleteStorageSpaceResult(ctx context.Context) *storage.DeleteStor
 // --- item type ---
 
 // ItemTypeSlot receives the type of the item a storage call acts on, so the
-// audit events can tell files and folders apart.
+// audit events can tell files and folders apart. ID and Name identify the
+// item when the driver knows them; ID may lack the storage ID.
 type ItemTypeSlot struct {
 	Type provider.ResourceType
+	ID   *provider.ResourceId
+	Name string
 }
 
 // ContextRegisterItemTypeSlot stores an empty slot in ctx so the storage driver can fill it.
@@ -191,5 +194,13 @@ func ContextRegisterItemTypeSlot(ctx context.Context, slot *ItemTypeSlot) contex
 func ContextSetItemType(ctx context.Context, t provider.ResourceType) {
 	if slot, ok := ctx.Value(itemTypeSlotKey).(*ItemTypeSlot); ok {
 		slot.Type = t
+	}
+}
+
+// ContextSetItem fills the slot registered in ctx with the type, ID and name
+// of the item.
+func ContextSetItem(ctx context.Context, t provider.ResourceType, id *provider.ResourceId, name string) {
+	if slot, ok := ctx.Value(itemTypeSlotKey).(*ItemTypeSlot); ok {
+		slot.Type, slot.ID, slot.Name = t, id, name
 	}
 }

@@ -322,7 +322,7 @@ func (tb *Trashbin) RestoreRecycleItem(ctx context.Context, spaceID string, key,
 
 	trashRoot := filepath.Join(tb.lu.InternalPath(spaceID, spaceID), lookup.TrashDir)
 	trashPath := filepath.Clean(filepath.Join(trashRoot, "files", key+".trashitem", relativePath))
-	setItemType(ctx, trashPath)
+	tb.setAuditItem(ctx, spaceID, trashRoot, key, relativePath, trashPath)
 
 	restorePath := ""
 	// TODO why can we not use NodeFromResource here? It will use walk path. Do trashed items have a problem with that?
@@ -399,7 +399,7 @@ func (tb *Trashbin) PurgeRecycleItem(ctx context.Context, spaceID, key, relative
 
 	trashRoot := filepath.Join(tb.lu.InternalPath(spaceID, spaceID), lookup.TrashDir)
 	trashPath := filepath.Clean(filepath.Join(trashRoot, "files", key+".trashitem", relativePath))
-	setItemType(ctx, trashPath)
+	tb.setAuditItem(ctx, spaceID, trashRoot, key, relativePath, trashPath)
 
 	type item struct {
 		path  string
@@ -627,15 +627,27 @@ func (tb *Trashbin) IsEmpty(ctx context.Context, spaceID string) bool {
 	return true
 }
 
-// setItemType tells the events middleware whether a trashed item is a file or a folder.
-func setItemType(ctx context.Context, trashPath string) {
+// setAuditItem tells the events middleware which trashed item a call acts
+// on: file or folder, its ID and its name.
+func (tb *Trashbin) setAuditItem(ctx context.Context, spaceID, trashRoot, key, relativePath, trashPath string) {
 	fi, err := os.Lstat(trashPath)
 	if err != nil {
 		return
 	}
+	t := provider.ResourceType_RESOURCE_TYPE_FILE
 	if fi.IsDir() {
-		storagespace.ContextSetItemType(ctx, provider.ResourceType_RESOURCE_TYPE_CONTAINER)
-	} else {
-		storagespace.ContextSetItemType(ctx, provider.ResourceType_RESOURCE_TYPE_FILE)
+		t = provider.ResourceType_RESOURCE_TYPE_CONTAINER
 	}
+	var id *provider.ResourceId
+	if _, nodeID, _, _, err := tb.lu.MetadataBackend().IdentifyPath(ctx, trashPath); err == nil && nodeID != "" {
+		id = &provider.ResourceId{SpaceId: spaceID, OpaqueId: nodeID}
+	}
+	name := filepath.Base(relativePath)
+	if relativePath == "" || relativePath == "." || relativePath == "/" {
+		name = ""
+		if p, _, err := tb.readInfoFile(trashRoot, key); err == nil {
+			name = filepath.Base(p)
+		}
+	}
+	storagespace.ContextSetItem(ctx, t, id, name)
 }

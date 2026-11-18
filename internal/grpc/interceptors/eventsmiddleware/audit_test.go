@@ -11,6 +11,7 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/opencloud-eu/reva/v3/pkg/audit"
+	"github.com/opencloud-eu/reva/v3/pkg/storagespace"
 	"github.com/opencloud-eu/reva/v3/pkg/utils"
 	"github.com/stretchr/testify/assert"
 	"go.opentelemetry.io/otel/trace"
@@ -37,7 +38,11 @@ func TestAuditEvent(t *testing.T) {
 		outcome    audit.Outcome
 		reason     string
 		targetID   string
+		targetName string
 		itemType   provider.ResourceType
+		// the item the driver reported, without the storage ID it doesn't know
+		itemID   *provider.ResourceId
+		itemName string
 	}{
 		{
 			name:       "folder created",
@@ -173,14 +178,45 @@ func TestAuditEvent(t *testing.T) {
 			itemType:   provider.ResourceType_RESOURCE_TYPE_FILE,
 			definition: audit.FilePurge, outcome: audit.OutcomeSuccess, targetID: "k-1",
 		},
+		{
+			name:   "folder created, driver reported the node",
+			req:    &provider.CreateContainerRequest{Ref: ref},
+			res:    &provider.CreateContainerResponse{Status: ok},
+			itemID: &provider.ResourceId{SpaceId: "space", OpaqueId: "node-1"}, itemName: "docs",
+			definition: audit.FolderCreate, outcome: audit.OutcomeSuccess, targetID: "storage$space!node-1", targetName: "docs",
+		},
+		{
+			name:     "file renamed, driver reported the node",
+			req:      &provider.MoveRequest{Source: &provider.Reference{ResourceId: root, Path: "./docs/a.txt"}, Destination: &provider.Reference{ResourceId: root, Path: "./docs/b.txt"}},
+			res:      &provider.MoveResponse{Status: ok},
+			itemType: provider.ResourceType_RESOURCE_TYPE_FILE, itemID: &provider.ResourceId{SpaceId: "space", OpaqueId: "node-1"}, itemName: "a.txt",
+			definition: audit.FileRename, outcome: audit.OutcomeSuccess, targetID: "storage$space!node-1", targetName: "b.txt",
+		},
+		{
+			name:     "file restored, driver reported the node",
+			req:      &provider.RestoreRecycleItemRequest{Ref: &provider.Reference{ResourceId: root}, Key: "k-1"},
+			res:      &provider.RestoreRecycleItemResponse{Status: ok},
+			itemType: provider.ResourceType_RESOURCE_TYPE_FILE, itemID: &provider.ResourceId{SpaceId: "space", OpaqueId: "node-1"}, itemName: "a.txt",
+			definition: audit.FileRestore, outcome: audit.OutcomeSuccess, targetID: "storage$space!node-1", targetName: "a.txt",
+		},
+		{
+			name:     "folder purged, driver reported the node",
+			req:      &provider.PurgeRecycleRequest{Ref: &provider.Reference{ResourceId: root}, Key: "k-1"},
+			res:      &provider.PurgeRecycleResponse{Status: ok},
+			itemType: provider.ResourceType_RESOURCE_TYPE_CONTAINER, itemID: &provider.ResourceId{SpaceId: "space", OpaqueId: "node-1"}, itemName: "docs",
+			definition: audit.FolderPurge, outcome: audit.OutcomeSuccess, targetID: "storage$space!node-1", targetName: "docs",
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			ev, mapped := auditEvent(tc.req, tc.res, tc.itemType)
+			ev, mapped := auditEvent(tc.req, tc.res, &storagespace.ItemTypeSlot{Type: tc.itemType, ID: tc.itemID, Name: tc.itemName})
 			assert.True(t, mapped)
 			assert.Equal(t, tc.definition, ev.Definition)
 			assert.Equal(t, tc.outcome, ev.Outcome)
 			assert.Equal(t, tc.reason, ev.Reason)
 			assert.Equal(t, tc.targetID, ev.Target.ID)
+			if tc.targetName != "" {
+				assert.Equal(t, tc.targetName, ev.Target.Name)
+			}
 		})
 	}
 }
@@ -196,7 +232,7 @@ func TestAuditEventNotMapped(t *testing.T) {
 		"empty signature probe": {&link.GetPublicShareByTokenRequest{Token: "t", Authentication: &link.PublicShareAuthentication{Spec: &link.PublicShareAuthentication_Signature{Signature: &link.ShareSignature{}}}}, &link.GetPublicShareByTokenResponse{Status: denied}},
 		"existing home":         {&provider.CreateStorageSpaceRequest{Type: "personal"}, &provider.CreateStorageSpaceResponse{Status: &rpc.Status{Code: rpc.Code_CODE_ALREADY_EXISTS}}},
 	} {
-		_, mapped := auditEvent(tc.req, tc.res, provider.ResourceType_RESOURCE_TYPE_INVALID)
+		_, mapped := auditEvent(tc.req, tc.res, nil)
 		assert.False(t, mapped, name)
 	}
 }
@@ -236,7 +272,7 @@ func TestPublicLinkAccess(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			ev, mapped := auditEvent(tc.req, tc.res, provider.ResourceType_RESOURCE_TYPE_INVALID)
+			ev, mapped := auditEvent(tc.req, tc.res, nil)
 			assert.True(t, mapped)
 			assert.Equal(t, audit.PublicLinkAccess, ev.Definition)
 			assert.Equal(t, tc.outcome, ev.Outcome)

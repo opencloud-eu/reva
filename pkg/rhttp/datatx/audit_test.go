@@ -26,13 +26,14 @@ func (r *recorder) Emit(ctx context.Context, ev audit.Event) error {
 
 var (
 	ref       = &provider.Reference{ResourceId: &provider.ResourceId{StorageId: "storage", SpaceId: "space", OpaqueId: "space"}, Path: "./docs/report.pdf"}
+	node      = &provider.ResourceId{StorageId: "storage", SpaceId: "space", OpaqueId: "node-1"}
 	executant = &userpb.UserId{OpaqueId: "u-1", TenantId: "t-1"}
 	header    = audit.RequestContext{ClientAddress: "203.0.113.7"}.Encode()
 )
 
 func TestUploadWithoutHeaderIsNotAudited(t *testing.T) {
 	rec := &recorder{}
-	EmitUploadAudit(audit.ContextSetEmitter(context.Background(), rec), "", executant, ref, "")
+	EmitUploadAudit(audit.ContextSetEmitter(context.Background(), rec), "", executant, ref, node, "")
 	assert.Empty(t, rec.events, "writes by OpenCloud itself are not uploads")
 }
 
@@ -40,12 +41,13 @@ func TestUploadWithUserInContext(t *testing.T) {
 	rec := &recorder{}
 	ctx := ctxpkg.ContextSetUser(context.Background(), &userpb.User{Id: executant})
 
-	EmitUploadAudit(audit.ContextSetEmitter(ctx, rec), header, executant, ref, "")
+	EmitUploadAudit(audit.ContextSetEmitter(ctx, rec), header, executant, ref, node, "")
 
 	require.Len(t, rec.events, 1)
 	ev := rec.events[0]
 	assert.Equal(t, audit.FileUpload, ev.Definition)
-	assert.Equal(t, "storage$space!space/docs/report.pdf", ev.Target.ID)
+	assert.Equal(t, "storage$space!node-1", ev.Target.ID, "the node, not the path")
+	assert.Equal(t, "./docs/report.pdf", ev.Target.Path)
 	assert.Equal(t, "storage$space", ev.Target.SpaceID)
 	assert.Equal(t, "report.pdf", ev.Target.Name)
 	assert.Nil(t, ev.Actor, "the emitter takes the user from the context")
@@ -58,7 +60,7 @@ func TestUploadWithUserInContext(t *testing.T) {
 func TestTusUploadUsesTheSessionUser(t *testing.T) {
 	rec := &recorder{}
 
-	EmitUploadAudit(audit.ContextSetEmitter(context.Background(), rec), header, executant, &provider.Reference{ResourceId: ref.ResourceId}, "report.pdf")
+	EmitUploadAudit(audit.ContextSetEmitter(context.Background(), rec), header, executant, &provider.Reference{ResourceId: node}, node, "report.pdf")
 
 	require.Len(t, rec.events, 1)
 	ev := rec.events[0]
@@ -73,9 +75,10 @@ func TestUploadThroughPublicLink(t *testing.T) {
 	rec := &recorder{}
 	ctx := ctxpkg.ContextSetScopes(context.Background(), map[string]*authpb.Scope{"publicshare:l-1": {}})
 
-	EmitUploadAudit(audit.ContextSetEmitter(ctx, rec), header, executant, ref, "")
+	EmitUploadAudit(audit.ContextSetEmitter(ctx, rec), header, executant, ref, nil, "")
 
 	require.Len(t, rec.events, 1)
+	assert.Equal(t, "storage$space!space/docs/report.pdf", rec.events[0].Target.ID, "without a node ID the reference is all there is")
 	require.NotNil(t, rec.events[0].Actor)
 	assert.Equal(t, audit.ActorPublicLink, rec.events[0].Actor.Type)
 	assert.Equal(t, "l-1", rec.events[0].Actor.ID)

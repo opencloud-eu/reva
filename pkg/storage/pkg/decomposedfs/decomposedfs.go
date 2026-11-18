@@ -549,6 +549,7 @@ func (fs *Decomposedfs) CreateDir(ctx context.Context, ref *provider.Reference) 
 	if err = fs.tp.CreateDir(ctx, n); err != nil {
 		return nil, err
 	}
+	setAuditItem(ctx, n)
 
 	return &storage.CreateDirResult{SpaceOwner: spaceOwner, SpaceID: n.SpaceID, ResourceID: &provider.ResourceId{OpaqueId: n.ID, SpaceId: n.SpaceID}}, nil
 }
@@ -627,7 +628,7 @@ func (fs *Decomposedfs) Move(ctx context.Context, oldRef, newRef *provider.Refer
 	if !oldNode.Exists {
 		return nil, errtypes.NotFound(filepath.Join(oldNode.ParentID, oldNode.Name))
 	}
-	storagespace.ContextSetItemType(ctx, oldNode.Type(ctx))
+	setAuditItem(ctx, oldNode)
 
 	orp, err := fs.p.AssemblePermissions(ctx, oldNode)
 	switch {
@@ -915,7 +916,7 @@ func (fs *Decomposedfs) Delete(ctx context.Context, ref *provider.Reference) (dr
 	if node.IsProcessing(ctx) {
 		return nil, errtypes.TooEarly("file is processing")
 	}
-	storagespace.ContextSetItemType(ctx, node.Type(ctx))
+	setAuditItem(ctx, node)
 
 	rp, err := fs.p.AssemblePermissions(ctx, node)
 	switch {
@@ -1046,6 +1047,8 @@ func (fs *Decomposedfs) SetLock(ctx context.Context, ref *provider.Reference, lo
 		return nil, errtypes.NotFound(filepath.Join(node.ParentID, node.Name))
 	}
 
+	setAuditItem(ctx, node)
+
 	rp, err := fs.p.AssemblePermissions(ctx, node)
 	switch {
 	case err != nil:
@@ -1114,6 +1117,8 @@ func (fs *Decomposedfs) Unlock(ctx context.Context, ref *provider.Reference, loc
 	if !node.Exists {
 		return nil, errtypes.NotFound(filepath.Join(node.ParentID, node.Name))
 	}
+
+	setAuditItem(ctx, node)
 
 	rp, err := fs.p.AssemblePermissions(ctx, node)
 	switch {
@@ -1349,4 +1354,11 @@ func (fs *Decomposedfs) refFromNode(ctx context.Context, n *node.Node, storageId
 		},
 		Path: path,
 	}, nil
+}
+
+// setAuditItem tells the events middleware which item a call acts on. A
+// trashed node keeps the ID it had before it was deleted.
+func setAuditItem(ctx context.Context, n *node.Node) {
+	id, _, _ := strings.Cut(n.ID, node.TrashIDDelimiter)
+	storagespace.ContextSetItem(ctx, n.Type(ctx), &provider.ResourceId{SpaceId: n.SpaceID, OpaqueId: id}, n.Name)
 }
