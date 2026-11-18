@@ -15,6 +15,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/mock"
 
+	"github.com/opencloud-eu/reva/v3/pkg/storage"
 	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs"
 	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/node"
 	helpers "github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/testhelpers"
@@ -137,25 +138,38 @@ var _ = Describe("Revision cleanup", func() {
 			Expect(deletedBlobs()).To(ConsistOf("file1-blobid"))
 		})
 
-		It("trigger the cleanup when MarkProcessing clears the processing mark of their session", func() {
+		It("trigger the cleanup when the coordinator reports that they replaced the content", func() {
 			newEnv("0")
-			// the upload pipeline marks the node, and its upload replaces the content, keeping
-			// the previous content as a revision
-			Expect(env.Fs.MarkProcessing(env.Ctx, fileRef, true, "session-1")).To(Succeed())
+			// an upload replaced the content, keeping the previous content as a revision
 			_, err := env.Tree.CreateRevision(env.Ctx, file, "2024-01-01T00:00:00Z")
 			Expect(err).ToNot(HaveOccurred())
 			file.BlobID = "committed-blobid"
 			Expect(file.SetXattrs(file.NodeMetadata(env.Ctx))).To(Succeed())
 			Expect(revisionsOf(file)).To(HaveLen(1))
+			var h storage.UploadFinishedHandler = env.Fs
+			ref := &provider.Reference{ResourceId: &provider.ResourceId{SpaceId: file.SpaceID, OpaqueId: file.ID}}
 
-			// clearing the mark of another session neither clears it nor triggers the cleanup
-			Expect(env.Fs.MarkProcessing(env.Ctx, fileRef, false, "session-2")).To(Succeed())
+			// an upload that created the file leaves nothing to clean up
+			h.HandleUploadFinished(env.Ctx, ref, "session-1", false)
 			Expect(revisionsOf(file)).To(HaveLen(1))
 
-			Expect(env.Fs.MarkProcessing(env.Ctx, fileRef, false, "session-1")).To(Succeed())
+			h.HandleUploadFinished(env.Ctx, ref, "session-1", true)
 			Expect(revisionsOf(file)).To(BeEmpty())
 			// the blob of the replaced content went with its revision
 			Expect(deletedBlobs()).To(ConsistOf("file1-blobid"))
+		})
+
+		It("don't trigger the cleanup when MarkProcessing clears the processing mark", func() {
+			// clearing the mark also ends uploads that were rolled back: the coordinator
+			// reports the uploads that finished, see HandleUploadFinished
+			newEnv("0")
+			Expect(env.Fs.MarkProcessing(env.Ctx, fileRef, true, "session-1")).To(Succeed())
+			_, err := env.Tree.CreateRevision(env.Ctx, file, "2024-01-01T00:00:00Z")
+			Expect(err).ToNot(HaveOccurred())
+
+			Expect(env.Fs.MarkProcessing(env.Ctx, fileRef, false, "session-1")).To(Succeed())
+			Expect(revisionsOf(file)).To(HaveLen(1))
+			Expect(deletedBlobs()).To(BeEmpty())
 		})
 
 		It("trigger the cleanup in the background with revisions_cleanup_async", func() {

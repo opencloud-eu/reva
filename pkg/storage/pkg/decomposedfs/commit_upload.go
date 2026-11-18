@@ -48,18 +48,11 @@ func (fs *Decomposedfs) MarkProcessing(ctx context.Context, ref *provider.Refere
 	if err != nil {
 		return err
 	}
-	// released before the revision cleanup, or on any return before that
-	unlocked := false
-	unlockNode := func() {
-		if unlocked {
-			return
-		}
-		unlocked = true
+	defer func() {
 		if err := unlock(); err != nil {
 			appctx.GetLogger(ctx).Error().Err(err).Str("nodeid", n.ID).Msg("could not close mark-processing lock")
 		}
-	}
-	defer unlockNode()
+	}()
 
 	if !processing {
 		if !n.IsProcessing(ctx) {
@@ -69,15 +62,7 @@ func (fs *Decomposedfs) MarkProcessing(ctx context.Context, ref *provider.Refere
 		if id != sessionID {
 			return nil
 		}
-		if err := n.RemoveXattr(ctx, prefixes.StatusPrefix); err != nil {
-			return err
-		}
-		// The upload of this session is done: apply the revision cleanup strategy (see package
-		// revisioncleanup), which skipped the node while it was marked. It never fails clearing
-		// the mark. The node lock is released first, for the reasons given in RestoreRevision.
-		unlockNode()
-		fs.revisionsCleanup.HandleRevisionCreated(ctx, n)
-		return nil
+		return n.RemoveXattr(ctx, prefixes.StatusPrefix)
 	}
 
 	// a newer upload takes over the mark, the last writer wins
@@ -120,10 +105,11 @@ func (fs *Decomposedfs) CommitUpload(ctx context.Context, ref *provider.Referenc
 	cleanupRevisions := false
 	// That revision only becomes a version here, when its processing mark is removed, after the
 	// cleanup triggered by the newer upload left it alone: apply the revision cleanup strategy
-	// (see package revisioncleanup) once more. MarkProcessing, which triggers it for all other
-	// uploads, does nothing for this one, as the processing mark of the node is not its own. It
-	// never fails the upload. Registered before the lock is taken, so that it runs once the locks
-	// are released, for the reasons given in RestoreRevision.
+	// (see package revisioncleanup) once more. HandleUploadFinished, which triggers it for all
+	// other uploads, can't tell this case: the versionCreated of this upload is about the content
+	// it replaced itself, not about this revision. It never fails the upload. Registered before
+	// the lock is taken, so that it runs once the locks are released, for the reasons given in
+	// RestoreRevision.
 	defer func() {
 		if cleanupRevisions {
 			fs.revisionsCleanup.HandleRevisionCreated(ctx, n)

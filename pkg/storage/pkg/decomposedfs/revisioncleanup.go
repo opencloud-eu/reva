@@ -15,13 +15,43 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/pkg/errors"
 
+	"github.com/opencloud-eu/reva/v3/pkg/appctx"
 	"github.com/opencloud-eu/reva/v3/pkg/errtypes"
+	"github.com/opencloud-eu/reva/v3/pkg/storage"
 	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/metadata"
 	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/node"
 	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/revisioncleanup"
 )
 
 var _ revisioncleanup.OnDemand = (*Decomposedfs)(nil)
+
+var _ storage.UploadFinishedHandler = (*Decomposedfs)(nil)
+
+// HandleUploadFinished applies the revision cleanup strategy (see package revisioncleanup) to
+// the file of an upload that has finished, if the upload created a revision, see
+// storage.UploadFinishedHandler. Uploads that created the file, and rolled back ones, which
+// never get here, leave nothing to clean up. It never fails the upload.
+//
+// The revision a newer upload kept for an older one only becomes a version when the older
+// upload writes its content into it, see CommitUpload, which triggers the cleanup for that case
+// itself: versionCreated of the older upload doesn't say anything about that revision.
+func (fs *Decomposedfs) HandleUploadFinished(ctx context.Context, ref *provider.Reference, _ string, versionCreated bool) {
+	if !versionCreated {
+		return
+	}
+	// The cleanup takes the file by its ids, without resolving a path. The coordinator always
+	// passes them: it sets the space id and the node id of a session when the upload is
+	// initiated, also for a new file, whose node id it chooses itself. A reference without
+	// them, e.g. one with only a path, would come from another caller and be a bug there:
+	// it is logged, and the file is left as it is, as a missed cleanup only keeps revisions
+	// a little longer, until the next one.
+	id := ref.GetResourceId()
+	if id.GetSpaceId() == "" || id.GetOpaqueId() == "" {
+		appctx.GetLogger(ctx).Error().Interface("ref", ref).Msg("revision cleanup: a finished upload without the ids of its file, not cleaning up")
+		return
+	}
+	fs.revisionsCleanup.HandleRevisionCreatedByID(ctx, id.GetSpaceId(), id.GetOpaqueId())
+}
 
 // CleanupRevisionsUnchecked cleans up the revisions of the files of whole spaces, or of a file or
 // folder within a space, on demand, see revisioncleanup.OnDemand. It is meant for command line

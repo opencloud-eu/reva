@@ -316,6 +316,14 @@ func (fs *posixFS) PrepareCreatesNode() bool {
 	return ok && nc.PrepareCreatesNode()
 }
 
+// HandleUploadFinished passes the end of an upload on to the wrapped driver, see
+// storage.UploadFinishedHandler.
+func (fs *posixFS) HandleUploadFinished(ctx context.Context, ref *provider.Reference, sessionID string, versionCreated bool) {
+	if h, ok := fs.FS.(storage.UploadFinishedHandler); ok {
+		h.HandleUploadFinished(ctx, ref, sessionID, versionCreated)
+	}
+}
+
 // IsOrphaned reports whether the referenced resource exists but its metadata is unreadable.
 func (fs *posixFS) IsOrphaned(ctx context.Context, ref *provider.Reference) bool {
 	return fs.FS.(storage.OrphanChecker).IsOrphaned(ctx, ref)

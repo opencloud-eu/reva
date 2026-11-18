@@ -39,11 +39,10 @@
 // Service.HandleRevisionCreated is called after a new revision has been created and has
 // settled:
 //
-//   - after an upload that replaced a file, once the upload is complete: at the end of
-//     Decomposedfs.PrepareUpload for an upload the upload coordinator (pkg/upload)
-//     finishes right away, which never marks the node as processing, and otherwise when
-//     Decomposedfs.MarkProcessing clears the processing mark of the upload's session,
-//     i.e. after its postprocessing, or after the upload was rolled back,
+//   - after an upload that replaced a file, once the upload has finished: the upload
+//     coordinator (pkg/upload) calls Decomposedfs.HandleUploadFinished for every successful
+//     upload, whether it was committed right away or after its postprocessing. Uploads that
+//     created the file, and uploads that were rolled back, don't trigger it,
 //   - in Decomposedfs.CommitUpload, when an upload that a newer one superseded wrote its
 //     content into the revision the newer upload created for it, which makes that revision
 //     a version (see "Overlapping uploads" below),
