@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -380,6 +381,133 @@ var _ = Describe("HybridBackend", func() {
 
 			_, err = os.Stat(backend.LockfilePath(existing))
 			Expect(err).ToNot(HaveOccurred())
+		})
+	})
+
+	Describe("with metadata in the legacy xattrs format", func() {
+		var (
+			legacyMTime = time.Date(2024, 1, 2, 3, 4, 5, 6, time.UTC)
+		)
+
+		// Nodes written by the legacy XattrsBackend store every attribute as a
+		// plain extended attribute, without a metadata_offloaded marker or a
+		// messagepack file.
+		JustBeforeEach(func() {
+			legacy := map[string][]byte{
+				prefixes.SpaceIDAttr:  []byte("123"),
+				prefixes.IDAttr:       []byte("456"),
+				prefixes.ParentidAttr: []byte("789"),
+				prefixes.MTimeAttr:    []byte(legacyMTime.Format(time.RFC3339Nano)),
+				keySmall:              dataSmall,
+				nonOffloadingKey:      nonOffloadingData,
+			}
+			for k, v := range legacy {
+				Expect(xattr.Set(n.InternalPath(), k, v)).To(Succeed())
+			}
+			Expect(backend.MetadataPath(n)).ToNot(BeAnExistingFile())
+		})
+
+		Describe("Get", func() {
+			It("reads legacy attributes", func() {
+				readData, err := backend.Get(context.Background(), n, keySmall)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(readData).To(Equal(dataSmall))
+
+				readData, err = backend.Get(context.Background(), n, nonOffloadingKey)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(readData).To(Equal(nonOffloadingData))
+			})
+		})
+
+		Describe("All", func() {
+			It("returns all legacy attributes", func() {
+				attribs, err := backend.All(context.Background(), n)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(attribs).To(HaveKeyWithValue(prefixes.SpaceIDAttr, []byte("123")))
+				Expect(attribs).To(HaveKeyWithValue(prefixes.IDAttr, []byte("456")))
+				Expect(attribs).To(HaveKeyWithValue(keySmall, dataSmall))
+				Expect(attribs).To(HaveKeyWithValue(nonOffloadingKey, nonOffloadingData))
+			})
+		})
+
+		Describe("IdentifyPath", func() {
+			It("identifies the node from legacy attributes", func() {
+				spaceID, id, parentID, mtime, err := backend.IdentifyPath(context.Background(), n.InternalPath())
+				Expect(err).ToNot(HaveOccurred())
+				Expect(spaceID).To(Equal("123"))
+				Expect(id).To(Equal("456"))
+				Expect(parentID).To(Equal("789"))
+				Expect(mtime).To(BeTemporally("==", legacyMTime))
+			})
+		})
+
+		Describe("SetMultiple", func() {
+			It("updates legacy attributes in place without offloading", func() {
+				newMTime := legacyMTime.Add(time.Hour)
+				err := backend.SetMultiple(context.Background(), n, map[string][]byte{
+					nonOffloadingKey:   []byte("baz"),
+					prefixes.MTimeAttr: []byte(newMTime.Format(time.RFC3339Nano)),
+				})
+				Expect(err).ToNot(HaveOccurred())
+
+				// still stored as plain xattrs, i.e. in the legacy format
+				Expect(xattr.Get(n.InternalPath(), nonOffloadingKey)).To(Equal([]byte("baz")))
+				Expect(xattr.Get(n.InternalPath(), keySmall)).To(Equal(dataSmall))
+				Expect(backend.MetadataPath(n)).ToNot(BeAnExistingFile())
+				_, err = xattr.Get(n.InternalPath(), prefixes.OcPrefix+"metadata_offloaded")
+				Expect(err).To(HaveOccurred())
+
+				_, _, _, mtime, err := backend.IdentifyPath(context.Background(), n.InternalPath())
+				Expect(err).ToNot(HaveOccurred())
+				Expect(mtime).To(BeTemporally("==", newMTime))
+			})
+
+			It("offloads legacy grants once the limit is exceeded and keeps the node identifiable", func() {
+				err := backend.SetMultiple(context.Background(), n, map[string][]byte{
+					keyBig: dataBig,
+				})
+				Expect(err).ToNot(HaveOccurred())
+
+				By("moving the legacy grant into the messagepack file")
+				_, err = xattr.Get(n.InternalPath(), keySmall)
+				Expect(err).To(HaveOccurred())
+				Expect(xattr.Get(n.InternalPath(), prefixes.OcPrefix+"metadata_offloaded")).To(Equal([]byte("1")))
+
+				msgBytes, err := os.ReadFile(backend.MetadataPath(n))
+				Expect(err).ToNot(HaveOccurred())
+				attribs := map[string][]byte{}
+				err = msgpack.Unmarshal(msgBytes, &attribs)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(attribs).To(HaveKeyWithValue(keySmall, dataSmall))
+				Expect(attribs).To(HaveKeyWithValue(keyBig, dataBig))
+
+				By("keeping legacy grants readable through the backend")
+				Expect(backend.Get(context.Background(), n, keySmall)).To(Equal(dataSmall))
+				Expect(backend.Get(context.Background(), n, keyBig)).To(Equal(dataBig))
+
+				By("keeping identity attributes as plain xattrs")
+				spaceID, id, parentID, _, err := backend.IdentifyPath(context.Background(), n.InternalPath())
+				Expect(err).ToNot(HaveOccurred())
+				Expect([]string{spaceID, id, parentID}).To(Equal([]string{"123", "456", "789"}))
+				Expect(xattr.Get(n.InternalPath(), nonOffloadingKey)).To(Equal(nonOffloadingData))
+			})
+		})
+
+		Describe("Remove", func() {
+			It("removes legacy attributes without offloading", func() {
+				Expect(backend.Remove(context.Background(), n, keySmall)).To(Succeed())
+				Expect(backend.Remove(context.Background(), n, nonOffloadingKey)).To(Succeed())
+
+				_, err := xattr.Get(n.InternalPath(), keySmall)
+				Expect(err).To(HaveOccurred())
+				_, err = xattr.Get(n.InternalPath(), nonOffloadingKey)
+				Expect(err).To(HaveOccurred())
+				_, err = backend.Get(context.Background(), n, keySmall)
+				Expect(err).To(HaveOccurred())
+
+				Expect(backend.MetadataPath(n)).ToNot(BeAnExistingFile())
+				Expect(xattr.Get(n.InternalPath(), prefixes.IDAttr)).To(Equal([]byte("456")))
+			})
 		})
 	})
 })
