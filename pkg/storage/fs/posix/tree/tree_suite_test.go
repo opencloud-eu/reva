@@ -15,9 +15,17 @@ import (
 	"github.com/shirou/gopsutil/process"
 )
 
+// watchTimeoutEnv names the environment variable that sets watchTimeout, as a Go
+// duration such as "1m". Raise it when the specs time out on a busy machine.
+const watchTimeoutEnv = "REVA_POSIX_WATCH_TEST_TIMEOUT"
+
 var (
 	env              *helpers.TestEnv
 	non_watching_env *helpers.TestEnv
+
+	// watchTimeout is how long the specs wait for the watcher to pick up a change on
+	// disk.
+	watchTimeout = 15 * time.Second
 
 	root string
 )
@@ -50,7 +58,7 @@ var _ = SynchronizedBeforeSuite(func() {
 			}
 		}
 		return false
-	}).Should(BeTrue())
+	}).WithTimeout(watchTimeout).Should(BeTrue())
 
 	// create a directory in the space root and wait for it to be assimilated
 	Eventually(func(g Gomega) {
@@ -67,7 +75,7 @@ var _ = SynchronizedBeforeSuite(func() {
 		})
 		g.Expect(err).ToNot(HaveOccurred())
 		g.Expect(n.Exists).To(BeTrue())
-	}).WithTimeout(5 * time.Second).WithPolling(200 * time.Millisecond).Should(Succeed())
+	}).WithTimeout(watchTimeout).WithPolling(200 * time.Millisecond).Should(Succeed())
 
 	// Set up environment with FS watching disabled
 	non_watching_env, err = helpers.NewTestEnv(map[string]any{"watch_fs": false})
@@ -81,6 +89,14 @@ var _ = SynchronizedAfterSuite(func() {}, func() {
 })
 
 func TestTree(t *testing.T) {
+	if v, ok := os.LookupEnv(watchTimeoutEnv); ok {
+		d, err := time.ParseDuration(v)
+		if err != nil || d <= 0 {
+			t.Fatalf("%s=%q is not a positive duration such as \"1m\"", watchTimeoutEnv, v)
+		}
+		watchTimeout = d
+	}
+
 	RegisterFailHandler(Fail)
 	RunSpecs(t, "Tree Suite")
 }
