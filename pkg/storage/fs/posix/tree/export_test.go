@@ -19,3 +19,14 @@ package tree
 func (t *Tree) AssimilateForTest(path string) error {
 	return t.assimilate(scanItem{Path: path})
 }
+
+// LockNewPathForTest takes the lock the assimilation of a new file without an id takes, for
+// tests only.
+func (t *Tree) LockNewPathForTest(spaceID, path string) (func() error, error) {
+	unlock, err := t.lookup.MetadataBackend().Lock(&assimilationNode{
+		spaceID: spaceID,
+		nodeId:  t.generateTempNodeId(path),
+		path:    path,
+	})
+	return func() error { return unlock() }, err
+}

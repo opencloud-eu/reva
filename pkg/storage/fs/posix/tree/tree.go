@@ -382,6 +382,26 @@ func (t *Tree) TouchFile(ctx context.Context, n *node.Node, markprocessing bool,
 	parentPath := n.ParentPath()
 	nodePath := filepath.Join(parentPath, n.Name)
 
+	// the id has to be set before we lock, the lock file is named after it
+	if n.ID == "" {
+		n.ID = uuid.New().String()
+	}
+
+	// The watcher assimilates a new file that has no id yet under a lock named after its path.
+	// Hold that lock until the id attribute is written, or the assimilation gives the file an id
+	// of its own between creating it and writing the attributes, and the id we report is lost.
+	unlockPath, err := t.lookup.MetadataBackend().Lock(&assimilationNode{
+		spaceID: n.SpaceID,
+		nodeId:  t.generateTempNodeId(nodePath),
+		path:    nodePath,
+	})
+	if err != nil {
+		return err
+	}
+	defer func() {
+		_ = unlockPath()
+	}()
+
 	// lock the meta file
 	unlock, err := t.lookup.MetadataBackend().Lock(n)
 	if err != nil {
@@ -391,9 +411,6 @@ func (t *Tree) TouchFile(ctx context.Context, n *node.Node, markprocessing bool,
 		_ = unlock()
 	}()
 
-	if n.ID == "" {
-		n.ID = uuid.New().String()
-	}
 	n.SetType(provider.ResourceType_RESOURCE_TYPE_FILE)
 
 	// Set id in cache
