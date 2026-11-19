@@ -655,15 +655,19 @@ const (
 	purgeFailures    = "reva_revision_cleanup_purge_failures_total"
 )
 
-// counterValue reads a counter through the default gatherer, like a scrape would.
-// The counters are global to the process, so tests compare against the value from before.
+// counterValue reads a counter through the default gatherer, like a scrape would, summed over
+// all its series (space types). The counters are global to the process, so tests compare
+// against the value from before.
 func counterValue(name string) float64 {
 	families, err := prometheus.DefaultGatherer.Gather()
 	Expect(err).ToNot(HaveOccurred())
+	var sum float64
 	for _, family := range families {
-		if family.GetName() == name && len(family.GetMetric()) > 0 {
-			return family.GetMetric()[0].GetCounter().GetValue()
+		if family.GetName() == name {
+			for _, m := range family.GetMetric() {
+				sum += m.GetCounter().GetValue()
+			}
 		}
 	}
-	return 0
+	return sum
 }

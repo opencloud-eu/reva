@@ -12,6 +12,7 @@ import (
 	"time"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/mock"
 
@@ -209,11 +210,19 @@ var _ = Describe("Revision cleanup", func() {
 				"revisions_cleanup_strategy_project": "0",
 				"revisions_cleanup_async":            false,
 			})
+			// the counters are global to the process: compare against the values from before
+			deletedIn := func(spaceType string) float64 {
+				return testutil.ToFloat64(revisioncleanup.RevisionsDeleted.WithLabelValues(spaceType))
+			}
+			personalBefore, projectBefore := deletedIn(storagespace.TypePersonal), deletedIn(storagespace.TypeProject)
 
 			personal, project := uploadToBoth()
 
 			Expect(personal).To(HaveLen(1), "the default keeps the revisions of personal spaces")
 			Expect(project).To(BeEmpty())
+			// counted by the type of the space
+			Expect(deletedIn(storagespace.TypeProject)).To(Equal(projectBefore + 1))
+			Expect(deletedIn(storagespace.TypePersonal)).To(Equal(personalBefore))
 		})
 
 		It("keep all revisions of a type whose strategy is disabled, despite the default", func() {
