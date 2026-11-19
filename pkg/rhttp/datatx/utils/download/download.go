@@ -276,10 +276,10 @@ func GetOrHeadFile(w http.ResponseWriter, r *http.Request, fs storage.FS, spaceI
 			Path:    md.GetPath(),
 		}
 		if audited {
-			// the other file events have the path in the space, the
-			// resource info only has the name
-			if p, err := fs.GetPathByID(ctx, md.GetId()); err == nil && p != "" {
-				target.Path = utils.MakeRelativePath(p)
+			// the resource info only has the name; a stat by ID has the
+			// path in the space, like the other file events and the archiver
+			if info, err := fs.GetMD(ctx, &provider.Reference{ResourceId: md.GetId()}, nil, []string{"path"}); err == nil && info.GetPath() != "" && info.GetPath() != "." {
+				target.Path = utils.MakeRelativePath(info.GetPath())
 			}
 		}
 

@@ -13,6 +13,7 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/opencloud-eu/reva/v3/internal/http/services/owncloud/ocdav/net"
+	"github.com/opencloud-eu/reva/v3/pkg/audit"
 	"github.com/opencloud-eu/reva/v3/pkg/rgrpc/todo/pool"
 	cs3mocks "github.com/opencloud-eu/reva/v3/tests/cs3mocks/mocks"
 	"github.com/rs/zerolog"
@@ -113,5 +114,40 @@ func TestArchiveNameContentDisposition(t *testing.T) {
 	}
 	if !strings.Contains(got, `filename="Pröbe Ördner 308"`) {
 		t.Errorf("expected raw filename, got %q", got)
+	}
+}
+
+// recorder keeps the audit events emitted by the archiver.
+type recorder struct{ events []audit.Event }
+
+func (r *recorder) Emit(_ context.Context, ev audit.Event) error {
+	r.events = append(r.events, ev)
+	return nil
+}
+
+func TestAuditArchive(t *testing.T) {
+	ok := &rpc.Status{Code: rpc.Code_CODE_OK}
+	file := &provider.ResourceId{StorageId: "storage", SpaceId: "space", OpaqueId: "file"}
+	folder := &provider.ResourceId{StorageId: "storage", SpaceId: "space", OpaqueId: "folder"}
+
+	gw := cs3mocks.NewGatewayAPIClient(t)
+	gw.EXPECT().Stat(mock.Anything, mock.MatchedBy(func(r *provider.StatRequest) bool { return r.GetRef().GetResourceId() == file })).
+		Return(&provider.StatResponse{Status: ok, Info: &provider.ResourceInfo{Name: "report.pdf", Path: "/projects/report.pdf", Type: provider.ResourceType_RESOURCE_TYPE_FILE}}, nil)
+	gw.EXPECT().Stat(mock.Anything, mock.MatchedBy(func(r *provider.StatRequest) bool { return r.GetRef().GetResourceId() == folder })).
+		Return(&provider.StatResponse{Status: ok, Info: &provider.ResourceInfo{Name: "docs", Path: ".", Type: provider.ResourceType_RESOURCE_TYPE_CONTAINER}}, nil)
+
+	log := zerolog.Nop()
+	rec := &recorder{}
+	s := &svc{gatewaySelector: fakeSelector{client: gw}, log: &log, emitter: rec}
+	s.auditArchive(context.Background(), []*provider.ResourceId{file, folder}, audit.OutcomeSuccess, "")
+
+	if len(rec.events) != 2 {
+		t.Fatalf("got %d events, want 2", len(rec.events))
+	}
+	if ev := rec.events[0]; ev.Definition != audit.FileDownload || ev.Target.Name != "report.pdf" || ev.Target.Path != "./projects/report.pdf" || ev.Target.ID != "storage$space!file" {
+		t.Errorf("file: got %s %+v", ev.Definition.Name, ev.Target)
+	}
+	if ev := rec.events[1]; ev.Definition != audit.FolderDownload || ev.Target.Name != "docs" || ev.Target.Path != "" {
+		t.Errorf("space root without a path: got %s %+v", ev.Definition.Name, ev.Target)
 	}
 }

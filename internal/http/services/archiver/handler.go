@@ -46,6 +46,7 @@ import (
 	"github.com/opencloud-eu/reva/v3/pkg/storage/utils/downloader"
 	"github.com/opencloud-eu/reva/v3/pkg/storage/utils/walker"
 	"github.com/opencloud-eu/reva/v3/pkg/storagespace"
+	"github.com/opencloud-eu/reva/v3/pkg/utils"
 	"github.com/rs/zerolog"
 )
 
@@ -388,6 +389,11 @@ func (s *svc) auditArchive(ctx context.Context, resources []*provider.ResourceId
 			target.Name = res.GetInfo().GetName()
 			if res.GetInfo().GetType() != provider.ResourceType_RESOURCE_TYPE_CONTAINER {
 				d = audit.FileDownload
+			}
+			// a stat by ID returns the path in the space, like the other
+			// file events have it; a space root has none
+			if p := res.GetInfo().GetPath(); p != "" && p != "." {
+				target.Path = utils.MakeRelativePath(p)
 			}
 		}
 		if err := s.emitter.Emit(ctx, audit.Event{Definition: d, Outcome: outcome, Reason: reason, Target: target}); err != nil {

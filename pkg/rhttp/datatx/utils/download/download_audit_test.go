@@ -19,15 +19,19 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// fakeFS only implements Download and GetPathByID, every other call panics.
+// fakeFS only implements Download and GetMD, every other call panics.
 type fakeFS struct {
 	storage.FS
 	content string
 	err     error
 }
 
-func (f fakeFS) GetPathByID(context.Context, *provider.ResourceId) (string, error) {
-	return "/projects/docs/report.pdf", nil
+// GetMD answers a stat by ID with the path in the space, as decomposedfs does.
+func (f fakeFS) GetMD(_ context.Context, ref *provider.Reference, _, _ []string) (*provider.ResourceInfo, error) {
+	if ref.GetPath() != "" {
+		return nil, errtypes.BadRequest("only a stat by ID is expected")
+	}
+	return &provider.ResourceInfo{Id: ref.GetResourceId(), Path: "/projects/docs/report.pdf"}, nil
 }
 
 type seekableContent struct{ *strings.Reader }
