@@ -42,6 +42,8 @@ type EmitterConfig struct {
 	Enabled bool   `mapstructure:"enabled"`
 	Mode    string `mapstructure:"mode"`
 	Service string `mapstructure:"service"`
+	// ServiceVersion is the version of the service, e.g. of OpenCloud.
+	ServiceVersion string `mapstructure:"service_version"`
 	// NATS connection, same keys as the events config: address, clusterID, ...
 	Nats raw.Config `mapstructure:",squash"`
 }
@@ -60,6 +62,7 @@ func EmitterFromConfig(ctx context.Context, connName string, cfg EmitterConfig, 
 		return nil, ErrNoEndpoint
 	}
 	opts.Service.Name = cfg.Service
+	opts.Service.Version = cfg.ServiceVersion
 	opts.Mode = Mode(cfg.Mode)
 	return NewNatsEmitter(ctx, connName, cfg.Nats, opts)
 }

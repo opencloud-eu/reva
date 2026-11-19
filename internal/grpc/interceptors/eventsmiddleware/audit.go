@@ -28,6 +28,7 @@ type auditConfig struct {
 	Enabled bool   `mapstructure:"audit_enabled"`
 	Mode    string `mapstructure:"audit_mode"`
 	Service string `mapstructure:"audit_service"`
+	Version string `mapstructure:"audit_service_version"`
 }
 
 // emitterFromConfig returns the audit emitter, a discarding one when audit is off.
@@ -48,7 +49,7 @@ func emitterFromConfig(m map[string]interface{}) (audit.Emitter, error) {
 	}
 	name, _ := m["name"].(string)
 	return audit.NewNatsEmitter(context.Background(), name+"-audit", nc, audit.Options{
-		Service: audit.Service{Name: ac.Service},
+		Service: audit.Service{Name: ac.Service, Version: ac.Version},
 		Mode:    audit.Mode(ac.Mode),
 	})
 }

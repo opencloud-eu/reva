@@ -44,21 +44,22 @@ func init() {
 }
 
 type config struct {
-	Prefix             string                            `mapstructure:"prefix" docs:"data;The prefix to be used for this HTTP service"`
-	Driver             string                            `mapstructure:"driver" docs:"localhome;The storage driver to be used."`
-	Drivers            map[string]map[string]interface{} `mapstructure:"drivers" docs:"url:pkg/storage/fs/localhome/localhome.go;The configuration for the storage driver"`
-	DataTXs            map[string]map[string]interface{} `mapstructure:"data_txs" docs:"url:pkg/rhttp/datatx/manager/simple/simple.go;The configuration for the data tx protocols"`
-	NatsAddress        string                            `mapstructure:"nats_address"`
-	NatsClusterID      string                            `mapstructure:"nats_clusterID"`
-	NatsTLSInsecure    bool                              `mapstructure:"nats_tls_insecure"`
-	NatsRootCACertPath string                            `mapstructure:"nats_root_ca_cert_path"`
-	NatsEnableTLS      bool                              `mapstructure:"nats_enable_tls"`
-	NatsUsername       string                            `mapstructure:"nats_username"`
-	NatsPassword       string                            `mapstructure:"nats_password"`
-	UploadDirectory    string                            `mapstructure:"upload_directory" docs:";Local directory for staging upload sessions. Overrides the driver's root. Required for drivers that have no local filesystem root."`
-	AuditEnabled       bool                              `mapstructure:"audit_enabled"`
-	AuditMode          string                            `mapstructure:"audit_mode"`
-	AuditService       string                            `mapstructure:"audit_service"`
+	Prefix              string                            `mapstructure:"prefix" docs:"data;The prefix to be used for this HTTP service"`
+	Driver              string                            `mapstructure:"driver" docs:"localhome;The storage driver to be used."`
+	Drivers             map[string]map[string]interface{} `mapstructure:"drivers" docs:"url:pkg/storage/fs/localhome/localhome.go;The configuration for the storage driver"`
+	DataTXs             map[string]map[string]interface{} `mapstructure:"data_txs" docs:"url:pkg/rhttp/datatx/manager/simple/simple.go;The configuration for the data tx protocols"`
+	NatsAddress         string                            `mapstructure:"nats_address"`
+	NatsClusterID       string                            `mapstructure:"nats_clusterID"`
+	NatsTLSInsecure     bool                              `mapstructure:"nats_tls_insecure"`
+	NatsRootCACertPath  string                            `mapstructure:"nats_root_ca_cert_path"`
+	NatsEnableTLS       bool                              `mapstructure:"nats_enable_tls"`
+	NatsUsername        string                            `mapstructure:"nats_username"`
+	NatsPassword        string                            `mapstructure:"nats_password"`
+	UploadDirectory     string                            `mapstructure:"upload_directory" docs:";Local directory for staging upload sessions. Overrides the driver's root. Required for drivers that have no local filesystem root."`
+	AuditEnabled        bool                              `mapstructure:"audit_enabled"`
+	AuditMode           string                            `mapstructure:"audit_mode"`
+	AuditService        string                            `mapstructure:"audit_service"`
+	AuditServiceVersion string                            `mapstructure:"audit_service_version"`
 }
 
 func (c *config) init() {
@@ -122,7 +123,7 @@ func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) 
 			AuthUsername:         conf.NatsUsername,
 			AuthPassword:         conf.NatsPassword,
 		}, audit.Options{
-			Service: audit.Service{Name: conf.AuditService},
+			Service: audit.Service{Name: conf.AuditService, Version: conf.AuditServiceVersion},
 			Mode:    audit.Mode(conf.AuditMode),
 			Logger:  log,
 		})
