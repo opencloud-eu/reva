@@ -37,7 +37,6 @@ import (
 	"github.com/opencloud-eu/reva/v3/pkg/appctx"
 	"github.com/opencloud-eu/reva/v3/pkg/audit"
 	"github.com/opencloud-eu/reva/v3/pkg/errtypes"
-	"github.com/opencloud-eu/reva/v3/pkg/rhttp/datatx"
 	"github.com/opencloud-eu/reva/v3/pkg/storage"
 	"github.com/opencloud-eu/reva/v3/pkg/storagespace"
 	"github.com/opencloud-eu/reva/v3/pkg/utils"
@@ -312,7 +311,7 @@ func emitDownload(ctx context.Context, target audit.Target, outcome audit.Outcom
 	}
 	// through a public link the user in the context is the owner of the link,
 	// the one who downloads is the link
-	if shareID := datatx.PublicShareID(ctx); shareID != "" {
+	if shareID := audit.PublicShareID(ctx); shareID != "" {
 		ev.Actor = &audit.Actor{Type: audit.ActorPublicLink, ID: shareID}
 	}
 	err := audit.ContextGetEmitter(ctx).Emit(ctx, ev)

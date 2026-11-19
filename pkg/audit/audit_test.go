@@ -282,3 +282,12 @@ func TestEmitterFromConfig(t *testing.T) {
 		t.Errorf("audit on without endpoint: got %v, want ErrNoEndpoint", err)
 	}
 }
+
+func TestRequestContextMerge(t *testing.T) {
+	initial := RequestContext{ClientAddress: "198.51.100.1", AuthMethod: "oidc", SessionID: "sid", ClientID: "web", ImpersonatedBy: "admin", UserAgent: "post"}
+	got := RequestContext{ClientAddress: "203.0.113.7", UserAgent: "patch"}.Merge(initial)
+	assert.Equal(t, RequestContext{ClientAddress: "203.0.113.7", AuthMethod: "oidc", SessionID: "sid", ClientID: "web", ImpersonatedBy: "admin", UserAgent: "patch"}, got)
+
+	own := RequestContext{AuthMethod: "basic"}.Merge(initial)
+	assert.Equal(t, "basic", own.AuthMethod, "a value of the request itself is kept")
+}

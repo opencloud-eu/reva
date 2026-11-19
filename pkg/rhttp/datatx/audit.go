@@ -3,7 +3,6 @@ package datatx
 import (
 	"context"
 	"path"
-	"strings"
 
 	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -13,57 +12,65 @@ import (
 	"github.com/opencloud-eu/reva/v3/pkg/storagespace"
 )
 
+// UploadAudit describes a finished upload for the audit log.
+type UploadAudit struct {
+	// Header is the X-Audit-Context of the request that finished the upload.
+	// Without it the upload was not sent by a client and is not reported.
+	Header string
+	// Initial is the request context of the request that created the upload,
+	// for what the finishing request lacks, e.g. the auth method of a tus
+	// upload whose data is sent with a transfer token.
+	Initial audit.RequestContext
+	// Executant is the user of the upload session, the actor when the
+	// context has no user, as for tus uploads.
+	Executant *userv1beta1.User
+	// PublicShareID is the public link the upload was created through, when
+	// the context doesn't tell.
+	PublicShareID string
+	// Ref is where the file was uploaded to, ID the node.
+	Ref  *provider.Reference
+	ID   *provider.ResourceId
+	Name string
+}
+
 // EmitUploadAudit reports a finished upload. Only uploads a client sent are
 // reported: the proxy marks them with the audit header, writes by OpenCloud
-// itself, e.g. for a copy, don't carry it. executant is the user of the upload
-// session, used when the context has no user, as for tus uploads.
-func EmitUploadAudit(ctx context.Context, auditHeader string, executant *userv1beta1.UserId, ref *provider.Reference, id *provider.ResourceId, name string) {
-	if auditHeader == "" {
+// itself, e.g. for a copy, don't carry it.
+func EmitUploadAudit(ctx context.Context, u UploadAudit) {
+	if u.Header == "" {
 		return
 	}
-	ctx = audit.ContextSetRequest(ctx, audit.ParseRequestContext(auditHeader))
+	ctx = audit.ContextSetRequest(ctx, audit.ParseRequestContext(u.Header).Merge(u.Initial))
 
-	target := storagespace.FormatResourceID(id)
-	if id.GetOpaqueId() == "" {
-		target, _ = storagespace.FormatReference(ref)
+	target := storagespace.FormatResourceID(u.ID)
+	if u.ID.GetOpaqueId() == "" {
+		target, _ = storagespace.FormatReference(u.Ref)
 	}
 	ev := audit.Event{
 		Definition: audit.FileUpload,
-		Target:     audit.Target{ID: target, Path: ref.GetPath(), Name: name},
+		Target:     audit.Target{ID: target, Path: u.Ref.GetPath(), Name: u.Name},
 	}
-	if rid := ref.GetResourceId(); rid != nil {
+	if rid := u.Ref.GetResourceId(); rid != nil {
 		ev.Target.SpaceID = storagespace.FormatStorageID(rid.GetStorageId(), rid.GetSpaceId())
 	}
-	if ev.Target.Name == "" && ref.GetPath() != "" && ref.GetPath() != "." {
-		ev.Target.Name = path.Base(ref.GetPath())
+	if ev.Target.Name == "" && u.Ref.GetPath() != "" && u.Ref.GetPath() != "." {
+		ev.Target.Name = path.Base(u.Ref.GetPath())
 	}
 
-	switch shareID := PublicShareID(ctx); {
-	case shareID != "":
-		// through a public link the user in the context is the owner of the link
+	if _, ok := ctxpkg.ContextGetUser(ctx); !ok && u.Executant != nil {
+		// the emitter takes name, type and tenant from the user
+		ctx = ctxpkg.ContextSetUser(ctx, u.Executant)
+	}
+	shareID := audit.PublicShareID(ctx)
+	if shareID == "" {
+		shareID = u.PublicShareID
+	}
+	if shareID != "" {
+		// through a public link the user is the owner of the link
 		ev.Actor = &audit.Actor{Type: audit.ActorPublicLink, ID: shareID}
-	case executant != nil:
-		if _, ok := ctxpkg.ContextGetUser(ctx); !ok {
-			ev.Actor = &audit.Actor{Type: audit.ActorUser, ID: executant.GetOpaqueId()}
-			ev.Tenant = executant.GetTenantId()
-		}
 	}
 
 	if err := audit.ContextGetEmitter(ctx).Emit(ctx, ev); err != nil {
 		appctx.GetLogger(ctx).Error().Err(err).Msg("audit event not emitted")
 	}
-}
-
-// PublicShareID returns the public share the request is authorized by, if any.
-func PublicShareID(ctx context.Context) string {
-	scopes, ok := ctxpkg.ContextGetScopes(ctx)
-	if !ok {
-		return ""
-	}
-	for k := range scopes {
-		if id, found := strings.CutPrefix(k, "publicshare:"); found {
-			return id
-		}
-	}
-	return ""
 }

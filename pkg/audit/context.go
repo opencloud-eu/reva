@@ -3,6 +3,9 @@ package audit
 import (
 	"context"
 	"net/url"
+	"strings"
+
+	ctxpkg "github.com/opencloud-eu/reva/v3/pkg/ctx"
 
 	"google.golang.org/grpc/metadata"
 )
@@ -44,6 +47,37 @@ type RequestContext struct {
 // IsZero reports whether no field is set.
 func (rc RequestContext) IsZero() bool {
 	return rc == RequestContext{}
+}
+
+// Merge fills the identity fields rc lacks from initial, the request context
+// of an earlier request of the same operation. A tus upload is created by an
+// authenticated request, its data is sent with a transfer token, which has no
+// login session or auth method. Address and user agent stay the ones of rc.
+func (rc RequestContext) Merge(initial RequestContext) RequestContext {
+	fill := func(v *string, from string) {
+		if *v == "" {
+			*v = from
+		}
+	}
+	fill(&rc.SessionID, initial.SessionID)
+	fill(&rc.AuthMethod, initial.AuthMethod)
+	fill(&rc.ClientID, initial.ClientID)
+	fill(&rc.ImpersonatedBy, initial.ImpersonatedBy)
+	return rc
+}
+
+// PublicShareID returns the public link a request is authorized by, if any.
+func PublicShareID(ctx context.Context) string {
+	scopes, ok := ctxpkg.ContextGetScopes(ctx)
+	if !ok {
+		return ""
+	}
+	for k := range scopes {
+		if id, found := strings.CutPrefix(k, "publicshare:"); found {
+			return id
+		}
+	}
+	return ""
 }
 
 // Encode returns the header value.

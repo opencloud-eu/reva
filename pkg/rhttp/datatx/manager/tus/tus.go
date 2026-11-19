@@ -26,6 +26,7 @@ import (
 	"regexp"
 	"runtime"
 
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/go-viper/mapstructure/v2"
 	"github.com/pkg/errors"
@@ -43,6 +44,7 @@ import (
 	"github.com/opencloud-eu/reva/v3/pkg/storage"
 	"github.com/opencloud-eu/reva/v3/pkg/storagespace"
 	"github.com/opencloud-eu/reva/v3/pkg/upload"
+	"github.com/opencloud-eu/reva/v3/pkg/utils"
 )
 
 func init() {
@@ -157,7 +159,7 @@ func (m *manager) Handler(coord upload.Coordinator, fs storage.FS) (http.Handler
 				}
 			}
 			// the hook context keeps the values of the last request, the emitter among them
-			datatx.EmitUploadAudit(ev.Context, ev.HTTPRequest.Header.Get(audit.Header), &executant, &ref, ref.GetResourceId(), ev.Upload.MetaData["filename"])
+			datatx.EmitUploadAudit(ev.Context, tusUploadAudit(up, ev.HTTPRequest.Header.Get(audit.Header), ev.Upload.MetaData["filename"]))
 		}
 	}()
 
@@ -353,3 +355,23 @@ func (l tusdLogger) WithAttrs(attr []slog.Attr) slog.Handler {
 
 // WithGroup is not implemented
 func (l tusdLogger) WithGroup(name string) slog.Handler { return l }
+
+// tusUploadAudit describes a finished tus upload. The data requests carry a
+// transfer token, so the user, the public link, the auth method and the path
+// come from the upload session.
+func tusUploadAudit(up storage.UploadSession, header, filename string) datatx.UploadAudit {
+	ref := up.Reference()
+	ua := datatx.UploadAudit{Header: header, Ref: &ref, ID: ref.GetResourceId(), Name: filename}
+	executant := up.Executant()
+	ua.Executant = &userpb.User{Id: &executant}
+	if s, ok := up.(upload.Session); ok {
+		ua.Executant = s.ExecutantUser()
+		ua.Initial, ua.PublicShareID = s.AuditOrigin()
+		// the path in the space, like the other file events
+		ua.Ref = &provider.Reference{
+			ResourceId: &provider.ResourceId{StorageId: s.ProviderID(), SpaceId: s.SpaceID(), OpaqueId: s.SpaceID()},
+			Path:       utils.MakeRelativePath(path.Join(s.Dir(), s.Filename())),
+		}
+	}
+	return ua
+}
