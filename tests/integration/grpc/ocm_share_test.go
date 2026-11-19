@@ -64,10 +64,19 @@ var (
 		InitiateFileDownload: true,
 		InitiateFileUpload:   true,
 		ListContainer:        true,
-		ListGrants:           true,
 		ListRecycle:          true,
 		RestoreRecycleItem:   true,
 		Move:                 true,
+		Stat:                 true,
+	}
+	fileEditorPermissions = &provider.ResourcePermissions{
+		GetPath:              true,
+		GetQuota:             true,
+		InitiateFileDownload: true,
+		InitiateFileUpload:   true,
+		ListContainer:        true,
+		ListRecycle:          true,
+		RestoreRecycleItem:   true,
 		Stat:                 true,
 	}
 	viewerPermissions = &provider.ResourcePermissions{
@@ -449,7 +458,7 @@ var _ = Describe("ocm share", func() {
 					Path:          "new-file",
 					Size:          uint64(len(data)),
 					Type:          provider.ResourceType_RESOURCE_TYPE_FILE,
-					PermissionSet: editorPermissions,
+					PermissionSet: fileEditorPermissions,
 				})
 
 				data, err = helpers.Download(ctxMarie, cesnetgw, ref)
