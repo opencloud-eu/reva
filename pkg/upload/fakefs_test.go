@@ -31,15 +31,19 @@ type fakeFS struct {
 	mdErr error
 	tree  map[string]*provider.ResourceInfo
 	// mdErrs fails one path in the tree, for the errors that are not not-found.
-	mdErrs         map[string]error
-	quota          uint64
-	quotaErr       error
-	lock           *provider.Lock
-	lockErr        error
-	pathByID       string
-	pathByIDErr    error
-	touched        *provider.ResourceId
-	touchedOwner   *userpb.UserId
+	mdErrs       map[string]error
+	quota        uint64
+	quotaErr     error
+	lock         *provider.Lock
+	lockErr      error
+	pathByID     string
+	pathByIDErr  error
+	touched      *provider.ResourceId
+	touchedOwner *userpb.UserId
+	// touchResult is what TouchFile reports, drivers that report nothing leave it nil
+	touchResult *storage.TouchFileResult
+	// touchReadBacks counts the stats of the node TouchFile created
+	touchReadBacks int
 	touchErr       error
 	markErr        error
 	prepared       *storage.PrepareUploadResult
@@ -70,6 +74,7 @@ func (f *fakeFS) record(format string, args ...interface{}) {
 func (f *fakeFS) GetMD(_ context.Context, ref *provider.Reference, _, _ []string) (*provider.ResourceInfo, error) {
 	if f.touchRef != nil && ref == f.touchRef {
 		// the coordinator reading back the node TouchFile created
+		f.touchReadBacks++
 		return &provider.ResourceInfo{Id: f.touched, Owner: f.touchedOwner}, nil
 	}
 	f.record("GetMD(%s)", ref.GetPath())
@@ -111,6 +116,9 @@ func (f *fakeFS) TouchFile(ctx context.Context, ref *provider.Reference, markpro
 		return nil, f.touchErr
 	}
 	f.touchRef = ref
+	if f.touchResult != nil {
+		return f.touchResult, nil
+	}
 	return &storage.TouchFileResult{}, nil
 }
 
