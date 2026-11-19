@@ -1,0 +1,669 @@
+// Copyright 2026 OpenCloud GmbH <mail@opencloud.eu>
+// SPDX-License-Identifier: Apache-2.0
+
+package tree_test
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"os"
+	"slices"
+	"strings"
+	"sync"
+	"time"
+
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/rs/zerolog"
+	"github.com/stretchr/testify/mock"
+
+	"github.com/opencloud-eu/reva/v3/pkg/appctx"
+	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/metadata"
+	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/metadata/prefixes"
+	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/node"
+	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/revisioncleanup"
+	helpers "github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/testhelpers"
+	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/tree"
+
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+)
+
+var _ = Describe("Revisions", func() {
+	var (
+		env *helpers.DecomposedTestEnv
+		n   *node.Node
+		now = time.Now()
+		// One revision per age, chosen around the "7d, auto, 30d" strategy used below:
+		// within the 7 day retention, between retention and deletion (where "auto" keeps
+		// it, as it is the only one in its slot), and beyond the 30 day deletion threshold. The
+		// cleanup takes the age from the time a revision was created (node.RevisionCreatedAttr),
+		// which the fixture sets to these ages; the keys get the same times.
+		ages = []time.Duration{time.Hour, 10 * 24 * time.Hour, 100 * 24 * time.Hour}
+		keys []string
+	)
+
+	revisionNode := func(key string) *node.BaseNode {
+		return node.NewBaseNode(n.SpaceID, key, env.Lookup)
+	}
+	blobOfRevision := func(i int) string {
+		return fmt.Sprintf("revision-%d-blobid", i)
+	}
+	listKeys := func() []string {
+		revs, err := env.Tree.ListRevisions(env.Ctx, n)
+		Expect(err).ToNot(HaveOccurred())
+		keys := make([]string, len(revs))
+		for i, r := range revs {
+			keys[i] = r.Key
+		}
+		return keys
+	}
+	expectBlobDeletion := func(blobIDs ...string) {
+		for _, blobID := range blobIDs {
+			env.Blobstore.On("Delete", mock.MatchedBy(func(bn *node.Node) bool {
+				return bn.BlobID == blobID && bn.SpaceID == n.SpaceID
+			})).Return(nil).Once()
+		}
+	}
+
+	BeforeEach(func() {
+		var err error
+		env, err = helpers.NewTestEnv(nil)
+		Expect(err).ToNot(HaveOccurred())
+
+		n, err = env.Lookup.NodeFromResource(env.Ctx, &provider.Reference{
+			ResourceId: env.SpaceRootRes,
+			Path:       "dir1/file1",
+		})
+		Expect(err).ToNot(HaveOccurred())
+
+		keys = nil
+		for i, age := range ages {
+			version := now.Add(-age).UTC().Format(time.RFC3339Nano)
+			_, err := env.Tree.CreateRevision(env.Ctx, n, version)
+			Expect(err).ToNot(HaveOccurred())
+			key := n.ID + node.RevisionIDDelimiter + version
+			// give every revision its own blob, CreateRevision copies the one of the current node
+			Expect(env.Lookup.MetadataBackend().Set(env.Ctx, revisionNode(key), prefixes.BlobIDAttr, []byte(blobOfRevision(i)))).To(Succeed())
+			// CreateRevision records the current time as the time it was created
+			Expect(node.SetRevisionCreated(env.Ctx, env.Lookup.MetadataBackend(), revisionNode(key), now.Add(-age))).To(Succeed())
+			keys = append(keys, key)
+		}
+	})
+
+	AfterEach(func() {
+		if env != nil {
+			env.Cleanup()
+		}
+	})
+
+	Describe("ListRevisions", func() {
+		It("lists all revisions", func() {
+			Expect(listKeys()).To(ConsistOf(keys))
+		})
+	})
+
+	Describe("the time of a revision", func() {
+		// the times of the revisions, as the cleanup sees them, by key
+		timesOf := func(result revisioncleanup.Result) map[string]time.Time {
+			Expect(result.Err).ToNot(HaveOccurred())
+			times := map[string]time.Time{}
+			for _, rev := range result.Revisions {
+				times[rev.Key] = rev.Time
+			}
+			return times
+		}
+		createRevision := func(version string) string {
+			_, err := env.Tree.CreateRevision(env.Ctx, n, version)
+			Expect(err).ToNot(HaveOccurred())
+			return n.ID + node.RevisionIDDelimiter + version
+		}
+
+		It("is recorded by CreateRevision, whatever the name of the revision", func() {
+			before := time.Now()
+			key := createRevision("2001-01-01T00:00:00Z")
+			t, err := node.RevisionCreated(env.Ctx, env.Lookup.MetadataBackend(), revisionNode(key))
+			Expect(err).ToNot(HaveOccurred())
+			Expect(t).To(BeTemporally(">=", before.Round(0)))
+			Expect(t).To(BeTemporally("<=", time.Now()))
+		})
+
+		It("orders the revisions, not their names", func() {
+			// named a hundred years ahead, as a client can with X-OC-Mtime, but created 200 days ago
+			future := createRevision(now.Add(100 * 365 * 24 * time.Hour).UTC().Format(time.RFC3339Nano))
+			Expect(node.SetRevisionCreated(env.Ctx, env.Lookup.MetadataBackend(), revisionNode(future), now.Add(-200*24*time.Hour))).To(Succeed())
+
+			one, err := revisioncleanup.New("1")
+			Expect(err).ToNot(HaveOccurred())
+			result := one.DryRun(env.Ctx, env.Lookup, env.Tree, n)
+			Expect(result.Err).ToNot(HaveOccurred())
+
+			decisions := map[string]revisioncleanup.Decision{}
+			for _, rev := range result.Revisions {
+				decisions[rev.Key] = rev.Decision
+			}
+			// the newest is the one created an hour ago
+			Expect(decisions).To(HaveKeyWithValue(keys[0], revisioncleanup.Kept))
+			Expect(decisions).To(HaveKeyWithValue(future, revisioncleanup.Deleted))
+		})
+
+		It("is estimated for revisions created before it was recorded, as the time they were replaced", func() {
+			// named a day ahead, the newest by its name
+			future := createRevision(now.Add(24 * time.Hour).UTC().Format(time.RFC3339Nano))
+			for _, key := range append(slices.Clone(keys), future) {
+				Expect(env.Lookup.MetadataBackend().Remove(env.Ctx, revisionNode(key), node.RevisionCreatedAttr)).To(Succeed())
+			}
+			cleaner, err := revisioncleanup.New("7d, auto, 30d")
+			Expect(err).ToNot(HaveOccurred())
+
+			times := timesOf(cleaner.DryRun(env.Ctx, env.Lookup, env.Tree, n))
+
+			// replaced when the content of the next newer revision was written
+			Expect(times[keys[2]]).To(BeTemporally("==", now.Add(-ages[1])))
+			Expect(times[keys[1]]).To(BeTemporally("==", now.Add(-ages[0])))
+			// replaced by content dated in the future, which is capped at now
+			Expect(times[keys[0]]).To(BeTemporally("~", time.Now(), time.Minute))
+			Expect(times[keys[0]]).To(BeTemporally("<=", time.Now()))
+			// the newest, replaced by the current content of the file, never later than now
+			Expect(times[future]).To(BeTemporally("<=", time.Now()))
+		})
+	})
+
+	Describe("revisioncleanup.PurgeRevisionUnchecked", func() {
+		It("removes the revision, its metadata and its blob", func() {
+			expectBlobDeletion(blobOfRevision(0))
+
+			Expect(revisioncleanup.PurgeRevisionUnchecked(env.Ctx, env.Tree, n, keys[0])).To(Succeed())
+
+			rn := revisionNode(keys[0])
+			Expect(rn.InternalPath()).ToNot(BeAnExistingFile())
+			Expect(env.Lookup.MetadataBackend().MetadataPath(rn)).ToNot(BeAnExistingFile())
+			Expect(env.Lookup.MetadataBackend().LockfilePath(rn)).ToNot(BeAnExistingFile())
+			Expect(listKeys()).To(ConsistOf(keys[1:]))
+			env.Blobstore.AssertExpectations(GinkgoT())
+		})
+
+		It("leaves the current version alone", func() {
+			expectBlobDeletion(blobOfRevision(0))
+
+			Expect(revisioncleanup.PurgeRevisionUnchecked(env.Ctx, env.Tree, n, keys[0])).To(Succeed())
+
+			Expect(n.InternalPath()).To(BeAnExistingFile())
+			blobID, _, err := env.Lookup.ReadBlobIDAndSizeAttr(env.Ctx, n, nil)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(blobID).To(Equal("file1-blobid"))
+		})
+
+		It("rejects revision keys of other nodes", func() {
+			other := &node.Node{BaseNode: node.BaseNode{SpaceID: n.SpaceID, ID: "some-other-node"}}
+			Expect(revisioncleanup.PurgeRevisionUnchecked(env.Ctx, env.Tree, other, keys[0])).ToNot(Succeed())
+			Expect(revisioncleanup.PurgeRevisionUnchecked(env.Ctx, env.Tree, n, n.ID)).ToNot(Succeed())
+			Expect(revisioncleanup.PurgeRevisionUnchecked(env.Ctx, env.Tree, n, keys[0]+"/../x")).ToNot(Succeed())
+			Expect(listKeys()).To(ConsistOf(keys))
+			env.Blobstore.AssertNotCalled(GinkgoT(), "Delete", mock.Anything)
+		})
+	})
+
+	Describe("revisioncleanup.Cleaner", func() {
+		var cleaner *revisioncleanup.Cleaner
+
+		BeforeEach(func() {
+			var err error
+			// keep everything younger than 7 days, delete everything older than 30 days, thin out in between
+			cleaner, err = revisioncleanup.New("7d, auto, 30d")
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		It("purges the revisions the strategy wants to delete", func() {
+			expectBlobDeletion(blobOfRevision(2))
+			revs, err := env.Tree.ListRevisions(env.Ctx, n)
+			Expect(err).ToNot(HaveOccurred())
+			var size uint64
+			for _, r := range revs {
+				if r.Key == keys[2] {
+					size = r.Size
+				}
+			}
+			Expect(size).ToNot(BeZero())
+			deleted, bytes, failures := counterValue(revisionsDeleted), counterValue(bytesDeleted), counterValue(purgeFailures)
+
+			cleaner.Cleanup(env.Ctx, env.Lookup, env.Tree, n)
+
+			Expect(listKeys()).To(ConsistOf(keys[0], keys[1]))
+			env.Blobstore.AssertExpectations(GinkgoT())
+			Expect(counterValue(revisionsDeleted)).To(Equal(deleted + 1))
+			Expect(counterValue(bytesDeleted)).To(Equal(bytes + float64(size)))
+			Expect(counterValue(purgeFailures)).To(Equal(failures))
+		})
+
+		It("logs why it purged a revision", func() {
+			expectBlobDeletion(blobOfRevision(2))
+			var buf bytes.Buffer
+			logger := zerolog.New(&buf).Level(zerolog.DebugLevel)
+
+			cleaner.Cleanup(appctx.WithLogger(env.Ctx, &logger), env.Lookup, env.Tree, n)
+
+			var purged map[string]any
+			for _, line := range strings.Split(strings.TrimSpace(buf.String()), "\n") {
+				var entry map[string]any
+				Expect(json.Unmarshal([]byte(line), &entry)).To(Succeed())
+				if entry["message"] == "revision cleanup: purged revision" {
+					purged = entry
+				}
+			}
+			Expect(purged).ToNot(BeNil(), buf.String())
+			Expect(purged["revision"]).To(Equal(keys[2]))
+			// keys[2] is 100 days old, beyond the 30 days of "7d, auto, 30d"
+			Expect(purged["reason"]).To(HavePrefix(`deleted by "30d": older than `))
+		})
+
+		It("counts revisions whose blob it failed to delete as failures", func() {
+			env.Blobstore.On("Delete", mock.Anything).Return(errors.New("blobstore unavailable")).Once()
+			deleted, bytes, failures := counterValue(revisionsDeleted), counterValue(bytesDeleted), counterValue(purgeFailures)
+
+			cleaner.Cleanup(env.Ctx, env.Lookup, env.Tree, n)
+
+			// the revision is gone, only its blob is left behind
+			Expect(listKeys()).To(ConsistOf(keys[0], keys[1]))
+			Expect(counterValue(purgeFailures)).To(Equal(failures + 1))
+			Expect(counterValue(revisionsDeleted)).To(Equal(deleted))
+			Expect(counterValue(bytesDeleted)).To(Equal(bytes))
+		})
+
+		It("never purges the revision a restore marked while the file has the restored content", func() {
+			// keys[2] holds the content a restore replaced with the current one
+			Expect(env.Lookup.MetadataBackend().Set(env.Ctx, revisionNode(keys[2]), node.KeepAfterRestoreAttr, []byte("file1-blobid"))).To(Succeed())
+
+			cleaner.Cleanup(env.Ctx, env.Lookup, env.Tree, n)
+
+			Expect(listKeys()).To(ConsistOf(keys))
+			env.Blobstore.AssertNotCalled(GinkgoT(), "Delete", mock.Anything)
+		})
+
+		It("drops the mark of a restore once the file has other content", func() {
+			// keys[1] is kept by the strategy anyway, keys[2] is not: both were marked by restores
+			// whose content the file no longer has
+			Expect(env.Lookup.MetadataBackend().Set(env.Ctx, revisionNode(keys[1]), node.KeepAfterRestoreAttr, []byte("restored-blobid"))).To(Succeed())
+			Expect(env.Lookup.MetadataBackend().Set(env.Ctx, revisionNode(keys[2]), node.KeepAfterRestoreAttr, []byte("restored-blobid"))).To(Succeed())
+
+			By("leaving the marks in a dry run")
+			cleaner.DryRun(env.Ctx, env.Lookup, env.Tree, n)
+			Expect(env.Lookup.MetadataBackend().Get(env.Ctx, revisionNode(keys[1]), node.KeepAfterRestoreAttr)).To(Equal([]byte("restored-blobid")))
+
+			By("removing them, and treating the revisions like any other")
+			expectBlobDeletion(blobOfRevision(2))
+			cleaner.Cleanup(env.Ctx, env.Lookup, env.Tree, n)
+			Expect(listKeys()).To(ConsistOf(keys[0], keys[1]))
+			_, err := env.Lookup.MetadataBackend().Get(env.Ctx, revisionNode(keys[1]), node.KeepAfterRestoreAttr)
+			Expect(metadata.IsAttrUnset(err)).To(BeTrue(), "%v", err)
+		})
+
+		It("does nothing while the node is processing", func() {
+			Expect(n.SetXattrString(env.Ctx, prefixes.StatusPrefix, node.ProcessingStatus+"some-upload")).To(Succeed())
+
+			cleaner.Cleanup(env.Ctx, env.Lookup, env.Tree, n)
+
+			Expect(listKeys()).To(ConsistOf(keys))
+			env.Blobstore.AssertNotCalled(GinkgoT(), "Delete", mock.Anything)
+		})
+
+		It("leaves revisions alone that are not versions, and doesn't count them", func() {
+			// the newest revision keeps the processing mark of an older upload still in
+			// postprocessing, the next one was kept only to roll back an upload
+			Expect(env.Lookup.MetadataBackend().Set(env.Ctx, revisionNode(keys[0]), prefixes.StatusPrefix, []byte(node.ProcessingStatus+"older-upload"))).To(Succeed())
+			Expect(env.Lookup.MetadataBackend().Set(env.Ctx, revisionNode(keys[1]), node.UploadSnapshotAttr, []byte("1"))).To(Succeed())
+			// keeps only the newest revision: if the two above counted, it would delete the third
+			one, err := revisioncleanup.New("1")
+			Expect(err).ToNot(HaveOccurred())
+
+			one.Cleanup(env.Ctx, env.Lookup, env.Tree, n)
+
+			Expect(listKeys()).To(ConsistOf(keys))
+			env.Blobstore.AssertNotCalled(GinkgoT(), "Delete", mock.Anything)
+
+			// once they are gone, the strategy applies to the versions as usual
+			zero, err := revisioncleanup.New("0")
+			Expect(err).ToNot(HaveOccurred())
+			expectBlobDeletion(blobOfRevision(2))
+
+			zero.Cleanup(env.Ctx, env.Lookup, env.Tree, n)
+
+			Expect(listKeys()).To(ConsistOf(keys[0], keys[1]))
+			env.Blobstore.AssertExpectations(GinkgoT())
+		})
+
+		It("never deletes the blob the file still uses", func() {
+			// a revision sharing the blob of the file, which the strategy deletes
+			Expect(env.Lookup.MetadataBackend().Set(env.Ctx, revisionNode(keys[2]), prefixes.BlobIDAttr, []byte("file1-blobid"))).To(Succeed())
+
+			cleaner.Cleanup(env.Ctx, env.Lookup, env.Tree, n)
+
+			Expect(listKeys()).To(ConsistOf(keys[0], keys[1]))
+			env.Blobstore.AssertNotCalled(GinkgoT(), "Delete", mock.Anything)
+		})
+
+		It("deletes the blobs only after releasing the node lock", func() {
+			// the lock of the node is not reentrant for another node object
+			locked := func() bool {
+				acquired := make(chan func() error, 1)
+				go func() {
+					if unlock, err := env.Lookup.MetadataBackend().Lock(node.NewBaseNode(n.SpaceID, n.ID, env.Lookup)); err == nil {
+						acquired <- unlock
+					}
+				}()
+				select {
+				case unlock := <-acquired:
+					_ = unlock()
+					return false
+				case <-time.After(time.Second):
+					return true
+				}
+			}
+			var lockedWhileDeleting []bool
+			env.Blobstore.On("Delete", mock.Anything).Run(func(mock.Arguments) {
+				lockedWhileDeleting = append(lockedWhileDeleting, locked())
+			}).Return(nil).Once()
+
+			cleaner.Cleanup(env.Ctx, env.Lookup, env.Tree, n)
+
+			Expect(listKeys()).To(ConsistOf(keys[0], keys[1]))
+			Expect(lockedWhileDeleting).To(Equal([]bool{false}))
+		})
+
+		It("switches to the group of the space with a SpaceScoper", func() {
+			expectBlobDeletion(blobOfRevision(2))
+			st := &scopingTree{Tree: env.Tree}
+
+			cleaner.Cleanup(env.Ctx, env.Lookup, st, n)
+
+			Expect(st.scoped).To(Equal([]string{n.SpaceID}))
+			Expect(st.unscoped).To(Equal(1))
+			Expect(listKeys()).To(ConsistOf(keys[0], keys[1]))
+		})
+
+		It("is disabled when not configured", func() {
+			for _, config := range []string{"", "disabled", "  disabled "} {
+				c, err := revisioncleanup.New(config)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(c).ToNot(BeNil())
+				Expect(c.Enabled()).To(BeFalse())
+				c.Cleanup(env.Ctx, env.Lookup, env.Tree, n)
+			}
+			// a nil Cleaner behaves like a disabled one
+			var none *revisioncleanup.Cleaner
+			Expect(none.Enabled()).To(BeFalse())
+			none.Cleanup(env.Ctx, env.Lookup, env.Tree, n)
+			Expect(listKeys()).To(ConsistOf(keys))
+			Expect(cleaner.Enabled()).To(BeTrue())
+		})
+
+		It("rejects invalid configurations", func() {
+			_, err := revisioncleanup.New("whenever")
+			Expect(err).To(HaveOccurred())
+		})
+	})
+
+	Describe("revisioncleanup.Cleaner results", func() {
+		var cleaner *revisioncleanup.Cleaner
+
+		BeforeEach(func() {
+			var err error
+			// keep everything younger than 7 days, delete everything older than 30 days, thin out in between
+			cleaner, err = revisioncleanup.New("7d, auto, 30d")
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		decisions := func(result revisioncleanup.Result) map[string]revisioncleanup.Decision {
+			d := map[string]revisioncleanup.Decision{}
+			for _, rev := range result.Revisions {
+				d[rev.Key] = rev.Decision
+			}
+			return d
+		}
+
+		It("doesn't create the lock file of the node in a dry run", func() {
+			lockfile := env.Lookup.MetadataBackend().LockfilePath(n)
+			Expect(os.Remove(lockfile)).To(Or(Succeed(), MatchError(os.ErrNotExist)))
+
+			result := cleaner.DryRun(env.Ctx, env.Lookup, env.Tree, n)
+
+			Expect(result.Err).ToNot(HaveOccurred())
+			Expect(result.Revisions).To(HaveLen(3))
+			Expect(lockfile).ToNot(BeAnExistingFile())
+		})
+
+		It("reports what a dry run would do, without deleting anything", func() {
+			deleted := counterValue(revisionsDeleted)
+
+			result := cleaner.DryRun(env.Ctx, env.Lookup, env.Tree, n)
+
+			Expect(result.DryRun).To(BeTrue())
+			Expect(result.Skipped).To(BeEmpty())
+			Expect(result.Err).ToNot(HaveOccurred())
+			Expect(result.SpaceID).To(Equal(n.SpaceID))
+			Expect(result.NodeID).To(Equal(n.ID))
+			Expect(decisions(result)).To(Equal(map[string]revisioncleanup.Decision{
+				keys[0]: revisioncleanup.Protected, // 1 hour old
+				keys[1]: revisioncleanup.Kept,      // 10 days old
+				keys[2]: revisioncleanup.Deleted,   // 100 days old
+			}))
+			// newest first, with reasons
+			Expect(result.Revisions[0].Key).To(Equal(keys[0]))
+			Expect(result.Revisions[0].Reason).To(HavePrefix(`protected by "7d": newer than `))
+			Expect(result.Revisions[2].Reason).To(HavePrefix(`deleted by "30d": older than `))
+			count, _ := result.DeletedCount()
+			Expect(count).To(Equal(1))
+
+			Expect(listKeys()).To(ConsistOf(keys))
+			env.Blobstore.AssertNotCalled(GinkgoT(), "Delete", mock.Anything)
+			Expect(counterValue(revisionsDeleted)).To(Equal(deleted))
+		})
+
+		It("reports revisions that are not versions as protected, in their place", func() {
+			Expect(env.Lookup.MetadataBackend().Set(env.Ctx, revisionNode(keys[1]), prefixes.StatusPrefix, []byte(node.ProcessingStatus+"older-upload"))).To(Succeed())
+
+			result := cleaner.DryRun(env.Ctx, env.Lookup, env.Tree, n)
+
+			Expect(result.Revisions).To(HaveLen(3))
+			Expect(result.Revisions[1].Key).To(Equal(keys[1]))
+			Expect(result.Revisions[1].Decision).To(Equal(revisioncleanup.Protected))
+			Expect(result.Revisions[1].Reason).To(Equal("protected: an upload into this revision is still being processed"))
+			Expect(result.Revisions[2].Decision).To(Equal(revisioncleanup.Deleted))
+
+			// also when none of the revisions is a version
+			for _, key := range []string{keys[0], keys[2]} {
+				Expect(env.Lookup.MetadataBackend().Set(env.Ctx, revisionNode(key), node.UploadSnapshotAttr, []byte("1"))).To(Succeed())
+			}
+			result = cleaner.DryRun(env.Ctx, env.Lookup, env.Tree, n)
+
+			Expect(decisions(result)).To(Equal(map[string]revisioncleanup.Decision{
+				keys[0]: revisioncleanup.Protected,
+				keys[1]: revisioncleanup.Protected,
+				keys[2]: revisioncleanup.Protected,
+			}))
+			Expect(result.Revisions[0].Reason).To(Equal("protected: kept only to roll back an upload, it is not a version"))
+		})
+
+		It("reports what the cleanup did", func() {
+			expectBlobDeletion(blobOfRevision(2))
+
+			result := cleaner.Cleanup(env.Ctx, env.Lookup, env.Tree, n)
+
+			Expect(result.DryRun).To(BeFalse())
+			Expect(decisions(result)[keys[2]]).To(Equal(revisioncleanup.Deleted))
+			Expect(result.Revisions[2].Err).ToNot(HaveOccurred())
+			Expect(listKeys()).To(ConsistOf(keys[0], keys[1]))
+		})
+
+		It("reports revisions it failed to delete", func() {
+			env.Blobstore.On("Delete", mock.Anything).Return(errors.New("blobstore unavailable")).Once()
+
+			result := cleaner.Cleanup(env.Ctx, env.Lookup, env.Tree, n)
+
+			Expect(result.Revisions[2].Decision).To(Equal(revisioncleanup.Deleted))
+			Expect(result.Revisions[2].Err).To(MatchError(ContainSubstring("blobstore unavailable")))
+			count, _ := result.DeletedCount()
+			Expect(count).To(BeZero())
+		})
+
+		It("reports the revision a restore keeps as protected", func() {
+			Expect(env.Lookup.MetadataBackend().Set(env.Ctx, revisionNode(keys[2]), node.KeepAfterRestoreAttr, []byte("file1-blobid"))).To(Succeed())
+
+			result := cleaner.Cleanup(env.Ctx, env.Lookup, env.Tree, n)
+
+			Expect(result.Revisions[2].Decision).To(Equal(revisioncleanup.Protected))
+			Expect(result.Revisions[2].Reason).To(HavePrefix("protected: holds the content a restore replaced"))
+			Expect(listKeys()).To(ConsistOf(keys))
+		})
+
+		It("reports nodes it skipped", func() {
+			Expect(n.SetXattrString(env.Ctx, prefixes.StatusPrefix, node.ProcessingStatus+"some-upload")).To(Succeed())
+
+			for _, result := range []revisioncleanup.Result{
+				cleaner.DryRun(env.Ctx, env.Lookup, env.Tree, n),
+				cleaner.Cleanup(env.Ctx, env.Lookup, env.Tree, n),
+			} {
+				Expect(result.Skipped).To(ContainSubstring("still being processed"))
+				Expect(result.Revisions).To(BeEmpty())
+			}
+			Expect(listKeys()).To(ConsistOf(keys))
+		})
+
+		It("reports a disabled cleanup as skipped", func() {
+			disabled, err := revisioncleanup.New("disabled")
+			Expect(err).ToNot(HaveOccurred())
+			Expect(disabled.DryRun(env.Ctx, env.Lookup, env.Tree, n).Skipped).To(ContainSubstring("disabled"))
+			Expect(disabled.Cleanup(env.Ctx, env.Lookup, env.Tree, n).Skipped).To(ContainSubstring("disabled"))
+			// a nil Cleaner behaves like a disabled one
+			var none *revisioncleanup.Cleaner
+			Expect(none.DryRun(env.Ctx, env.Lookup, env.Tree, n).Skipped).To(ContainSubstring("disabled"))
+			Expect(listKeys()).To(ConsistOf(keys))
+		})
+	})
+
+	Describe("revisioncleanup.Service", func() {
+		var cleaner *revisioncleanup.Cleaner
+
+		BeforeEach(func() {
+			var err error
+			cleaner, err = revisioncleanup.New("7d, auto, 30d")
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		newService := func(opts revisioncleanup.AsyncOptions) *revisioncleanup.Service {
+			s, err := revisioncleanup.NewService(cleaner, env.Lookup, env.Tree, opts, nil)
+			Expect(err).ToNot(HaveOccurred())
+			DeferCleanup(func() {
+				Expect(s.Shutdown(context.Background())).To(Succeed())
+			})
+			return s
+		}
+
+		It("cleans up right away when not running asynchronously", func() {
+			expectBlobDeletion(blobOfRevision(2))
+			s := newService(revisioncleanup.AsyncOptions{Enabled: false})
+
+			s.HandleRevisionCreated(env.Ctx, n)
+
+			Expect(listKeys()).To(ConsistOf(keys[0], keys[1]))
+			env.Blobstore.AssertExpectations(GinkgoT())
+		})
+
+		It("cleans up in the background when running asynchronously", func() {
+			expectBlobDeletion(blobOfRevision(2))
+			s := newService(revisioncleanup.AsyncOptions{Enabled: true, Workers: 1})
+
+			s.HandleRevisionCreated(env.Ctx, n)
+
+			Eventually(listKeys).Should(ConsistOf(keys[0], keys[1]))
+			Eventually(func() bool { return env.Blobstore.AssertExpectations(&noopT{}) }).Should(BeTrue())
+		})
+
+		It("reads the node switched to the group of its space with a SpaceScoper", func() {
+			st := &scopingTree{Tree: env.Tree}
+			s, err := revisioncleanup.NewService(cleaner, env.Lookup, st, revisioncleanup.AsyncOptions{Enabled: true, Workers: 1}, nil)
+			Expect(err).ToNot(HaveOccurred())
+			DeferCleanup(func() {
+				Expect(s.Shutdown(context.Background())).To(Succeed())
+			})
+
+			// a node that doesn't exist is never cleaned up, but it is read
+			s.HandleRevisionCreatedByID(env.Ctx, n.SpaceID, "does-not-exist")
+
+			Eventually(func() []any {
+				scoped, unscoped := st.calls()
+				return []any{scoped, unscoped}
+			}).Should(Equal([]any{[]string{n.SpaceID}, 1}))
+		})
+
+		It("skips nodes that were deleted before the cleanup ran", func() {
+			expectBlobDeletion(blobOfRevision(2))
+			s := newService(revisioncleanup.AsyncOptions{Enabled: true, Workers: 1})
+			gone := &node.Node{BaseNode: node.BaseNode{SpaceID: n.SpaceID, ID: "does-not-exist"}}
+
+			s.HandleRevisionCreated(env.Ctx, gone)
+			s.HandleRevisionCreated(env.Ctx, n) // processed after gone, by the only worker
+
+			Eventually(listKeys).Should(ConsistOf(keys[0], keys[1]))
+			Eventually(func() bool { return env.Blobstore.AssertExpectations(&noopT{}) }).Should(BeTrue())
+		})
+	})
+})
+
+// scopingTree records the calls of the revision cleanup to switch to the group of a space.
+type scopingTree struct {
+	*tree.Tree
+	mu       sync.Mutex
+	scoped   []string
+	unscoped int
+}
+
+func (t *scopingTree) ScopeToSpace(ctx context.Context, spaceID string) (context.Context, func() error, error) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.scoped = append(t.scoped, spaceID)
+	return ctx, func() error {
+		t.mu.Lock()
+		defer t.mu.Unlock()
+		t.unscoped++
+		return nil
+	}, nil
+}
+
+// calls returns the spaces switched to, and how often it switched back, for a cleanup that
+// runs in a background worker.
+func (t *scopingTree) calls() ([]string, int) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return append([]string{}, t.scoped...), t.unscoped
+}
+
+// noopT lets mock assertions be polled without failing the test on the first attempt.
+type noopT struct{}
+
+func (noopT) Errorf(string, ...any) {}
+func (noopT) Logf(string, ...any)   {}
+func (noopT) FailNow()              {}
+
+// names of the revision cleanup counters, see revisioncleanup/metrics.go
+const (
+	revisionsDeleted = "reva_revision_cleanup_revisions_deleted_total"
+	bytesDeleted     = "reva_revision_cleanup_bytes_deleted_total"
+	purgeFailures    = "reva_revision_cleanup_purge_failures_total"
+)
+
+// counterValue reads a counter through the default gatherer, like a scrape would.
+// The counters are global to the process, so tests compare against the value from before.
+func counterValue(name string) float64 {
+	families, err := prometheus.DefaultGatherer.Gather()
+	Expect(err).ToNot(HaveOccurred())
+	for _, family := range families {
+		if family.GetName() == name && len(family.GetMetric()) > 0 {
+			return family.GetMetric()[0].GetCounter().GetValue()
+		}
+	}
+	return 0
+}

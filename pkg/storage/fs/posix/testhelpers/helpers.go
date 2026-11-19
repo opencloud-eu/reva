@@ -183,10 +183,6 @@ func NewTestEnv(config map[string]interface{}) (*TestEnv, error) {
 			"cache_store":    "nats-js-kv",
 			"cache_database": "ids-storage-users",
 		},
-		"filemetadata_cache": map[string]interface{}{
-			"cache_store":    "nats-js-kv",
-			"cache_database": "filemetadata-storage-users",
-		},
 	}
 	// make it possible to override single config values
 	maps.Copy(defaultConfig, config)
@@ -268,6 +264,12 @@ func NewTestEnv(config map[string]interface{}) (*TestEnv, error) {
 
 	logger := zerolog.New(os.Stderr).With().Logger()
 
+	// a cache of its own for each environment, unless the config sets one (filemetadatacache)
+	fileMetadataCache := o.FileMetadataCache
+	if fileMetadataCache.Store == "" {
+		fileMetadataCache = cache.Config{Database: o.Root}
+	}
+
 	var lu *lookup.Lookup
 	switch o.MetadataBackend {
 	case "xattrs":
@@ -282,9 +284,7 @@ func NewTestEnv(config map[string]interface{}) (*TestEnv, error) {
 
 				return filepath.Join(spaceRoot, lookup.MetadataDir)
 			},
-			cache.Config{
-				Database: o.Root,
-			}), um, o, &timemanager.Manager{}, c, historyCache, &logger)
+			fileMetadataCache), um, o, &timemanager.Manager{}, c, historyCache, &logger)
 	case "messagepack":
 		lu, _ = lookup.New(metadata.NewMessagePackBackend(o.FileMetadataCache), um, o, &timemanager.Manager{}, c, historyCache, &logger)
 	default:
@@ -318,6 +318,8 @@ func NewTestEnv(config map[string]interface{}) (*TestEnv, error) {
 		Tree:        tree,
 		Permissions: p,
 		Trashbin:    tb,
+		// the cleanup the tree created, as in posix.New
+		RevisionsCleanup: tree.RevisionsCleanup(),
 	}
 	fs, err := decomposedfs.New(&o.Options, aspects, &logger)
 	if err != nil {
