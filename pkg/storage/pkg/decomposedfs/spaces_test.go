@@ -434,6 +434,8 @@ var _ = Describe("Spaces", func() {
 			admin        *userv1beta1.User
 			adminSpace   *provider.StorageSpace
 			projectSpace *provider.StorageSpace
+
+			personalLister = &userv1beta1.User{Id: &userv1beta1.UserId{OpaqueId: "personal-lister"}}
 		)
 
 		BeforeEach(func() {
@@ -453,8 +455,8 @@ var _ = Describe("Spaces", func() {
 					return []string{"Drives.Create", "Drives.List", "Drives.ListPersonal", "Drives.ReadWrite", "Drives.ReadWritePersonal"}
 				case env.Owner.GetId().GetOpaqueId():
 					return []string{"Drives.Create"} // setup actor
-				case env.DeleteAllSpacesUser.GetId().GetOpaqueId():
-					return []string{"Drives.ListPersonal"} // custom role without Drives.List
+				case personalLister.GetId().GetOpaqueId():
+					return []string{"Drives.ListPersonal"}
 				}
 				return []string{}
 			}
@@ -543,7 +545,7 @@ var _ = Describe("Spaces", func() {
 			Expect(env.Fs.UserCache.Set(admin.GetId().GetOpaqueId(), admin)).To(Succeed())
 
 			spaces, err := env.Fs.ListStorageSpaces(
-				ctxpkg.ContextSetUser(context.Background(), env.DeleteAllSpacesUser),
+				ctxpkg.ContextSetUser(context.Background(), personalLister),
 				[]*provider.ListStorageSpacesRequest_Filter{
 					{Type: provider.ListStorageSpacesRequest_Filter_TYPE_USER, Term: &provider.ListStorageSpacesRequest_Filter_User{User: admin.GetId()}},
 				},
@@ -1006,7 +1008,7 @@ var _ = Describe("Spaces", func() {
 				},
 				rpcv1beta1.Code_CODE_OK,
 			),
-			Entry("Owner can change the name of his personal space",
+			Entry("Owner can change the name of their personal space",
 				func() (*userv1beta1.User, *provider.UpdateStorageSpaceRequest) {
 					return env.Owner, &provider.UpdateStorageSpaceRequest{
 						StorageSpace: &provider.StorageSpace{
