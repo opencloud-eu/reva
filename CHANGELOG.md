@@ -4,7 +4,7 @@
 
 ### ❤️ Thanks to all contributors! ❤️
 
-@butonic, @dragonchaser, @fschade, @pbleser-oc
+@butonic, @dragonchaser, @fschade, @maki5, @pbleser-oc
 
 ### ✨ Features
 
