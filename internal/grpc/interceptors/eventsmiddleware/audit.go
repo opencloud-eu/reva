@@ -143,6 +143,7 @@ func auditEvent(req, res interface{}, item *storagespace.ItemTypeSlot) (audit.Ev
 		} else {
 			ev = audit.Event{Definition: audit.ShareCreate, Target: shareTarget(v.GetShare().GetId().GetOpaqueId(), rid, r.GetResourceInfo().GetName())}
 		}
+		ev.Change = shareCreated(r, v)
 	case *collaboration.UpdateShareResponse:
 		if utils.ExistsInOpaque(v.GetOpaque(), "spacegrant") {
 			ev = audit.Event{Definition: audit.SpaceMemberUpdate, Target: spaceTarget(v.GetShare().GetResourceId())}
@@ -151,6 +152,7 @@ func auditEvent(req, res interface{}, item *storagespace.ItemTypeSlot) (audit.Ev
 			r := req.(*collaboration.UpdateShareRequest)
 			ev = audit.Event{Definition: audit.ShareUpdate, Target: shareTarget(shareID(r.GetShare().GetId(), r.GetRef()), v.GetShare().GetResourceId(), utils.ReadPlainFromOpaque(v.GetOpaque(), "resourcename"))}
 		}
+		ev.Change = shareUpdated(req.(*collaboration.UpdateShareRequest), v)
 	case *collaboration.RemoveShareResponse:
 		r := req.(*collaboration.RemoveShareRequest)
 		var rid *provider.ResourceId
@@ -161,6 +163,7 @@ func auditEvent(req, res interface{}, item *storagespace.ItemTypeSlot) (audit.Ev
 		} else {
 			ev = audit.Event{Definition: audit.ShareDelete, Target: shareTarget(shareID(nil, r.GetRef()), rid, utils.ReadPlainFromOpaque(v.GetOpaque(), "resourcename"))}
 		}
+		ev.Change = shareRemoved(v.GetOpaque())
 	case *collaboration.UpdateReceivedShareResponse:
 		rs := v.GetShare()
 		switch rs.GetState() {
@@ -180,9 +183,11 @@ func auditEvent(req, res interface{}, item *storagespace.ItemTypeSlot) (audit.Ev
 		r := req.(*link.CreatePublicShareRequest)
 		ev = audit.Event{Definition: audit.PublicLinkCreate, Target: shareTarget(v.GetShare().GetId().GetOpaqueId(), r.GetResourceInfo().GetId(), r.GetResourceInfo().GetName())}
 		ev.Target.Type = "public_link"
+		ev.Change = linkCreated(r, v)
 	case *link.UpdatePublicShareResponse:
 		r := req.(*link.UpdatePublicShareRequest)
 		ev = audit.Event{Definition: audit.PublicLinkUpdate, Target: shareTarget(r.GetRef().GetId().GetOpaqueId(), v.GetShare().GetResourceId(), utils.ReadPlainFromOpaque(v.GetOpaque(), "resourcename"))}
+		ev.Change = linkUpdated(r, v)
 	case *link.GetPublicShareByTokenResponse:
 		return publicLinkAccess(req.(*link.GetPublicShareByTokenRequest), v)
 	case *link.RemovePublicShareResponse:
@@ -190,6 +195,7 @@ func auditEvent(req, res interface{}, item *storagespace.ItemTypeSlot) (audit.Ev
 		var rid *provider.ResourceId
 		_ = utils.ReadJSONFromOpaque(v.GetOpaque(), "resourceid", &rid)
 		ev = audit.Event{Definition: audit.PublicLinkDelete, Target: shareTarget(r.GetRef().GetId().GetOpaqueId(), rid, utils.ReadPlainFromOpaque(v.GetOpaque(), "resourcename"))}
+		ev.Change = linkRemoved(v.GetOpaque())
 
 	case *provider.CreateStorageSpaceResponse:
 		r := req.(*provider.CreateStorageSpaceRequest)
