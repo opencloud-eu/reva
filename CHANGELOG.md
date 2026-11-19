@@ -1,10 +1,14 @@
 # Changelog
 
-## [3.0.2](https://github.com/opencloud-eu/reva/releases/tag/v3.0.2) - 2026-11-18
+## [3.1.0](https://github.com/opencloud-eu/reva/releases/tag/v3.1.0) - 2026-11-19
 
 ### ❤️ Thanks to all contributors! ❤️
 
-@butonic, @dragonchaser
+@butonic, @dragonchaser, @pbleser-oc
+
+### ✨ Features
+
+- feat: clean up old revisions according to a cleanup strategy [[#895](https://github.com/opencloud-eu/reva/pull/895)]
 
 ### 🐛 Bug Fixes
 
