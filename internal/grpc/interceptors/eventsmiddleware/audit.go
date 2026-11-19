@@ -92,8 +92,17 @@ func auditEvent(req, res interface{}, item *storagespace.ItemTypeSlot) (audit.Ev
 		if d == nil {
 			return ev, false
 		}
-		ev = audit.Event{Definition: d, Target: refTarget(src, item),
-			Change: &audit.Change{Before: map[string]any{"path": src.GetPath()}, After: map[string]any{"path": dst.GetPath()}}}
+		ev = audit.Event{Definition: d, Target: refTarget(src, item)}
+		before, after := movePaths(src, dst, item)
+		if before != "" {
+			ev.Change = &audit.Change{Before: map[string]any{"path": before}}
+		}
+		if after != "" {
+			if ev.Change == nil {
+				ev.Change = &audit.Change{}
+			}
+			ev.Change.After = map[string]any{"path": after}
+		}
 	case *provider.DeleteResponse:
 		d := pick(itemType, audit.FileDelete, audit.FolderDelete)
 		if d == nil {
@@ -368,7 +377,7 @@ func trashTarget(ref *provider.Reference, key string, item *storagespace.ItemTyp
 // refTarget identifies the item of ref by its ID, when the driver reported
 // it. A call that failed before the item was found only has the reference.
 func refTarget(ref *provider.Reference, item *storagespace.ItemTypeSlot) audit.Target {
-	t := audit.Target{ID: itemID(ref, item), Path: ref.GetPath(), Name: item.Name}
+	t := audit.Target{ID: itemID(ref, item), Path: refPath(ref, item), Name: item.Name}
 	if t.ID == "" {
 		t.ID, _ = storagespace.FormatReference(ref)
 	}
@@ -378,10 +387,40 @@ func refTarget(ref *provider.Reference, item *storagespace.ItemTypeSlot) audit.T
 	if p := ref.GetPath(); p != "" && p != "." {
 		t.Name = path.Base(p)
 	}
-	if t.Path == "" {
-		t.Path = itemPath(item)
-	}
 	return t
+}
+
+// refPath is the path of the item in its space. The path of a request is
+// only that when the request starts at the space root; a request through a
+// share, a link or by ID gets the path from the driver.
+func refPath(ref *provider.Reference, item *storagespace.ItemTypeSlot) string {
+	if p := itemPath(item); p != "" {
+		return p
+	}
+	if utils.IsSpaceRootedReference(ref) {
+		return ref.GetPath()
+	}
+	return ""
+}
+
+// movePaths returns the paths in the space before and after a move. The
+// driver knows the path of the source; a destination relative to the same
+// node as the source is put under the same prefix.
+func movePaths(src, dst *provider.Reference, item *storagespace.ItemTypeSlot) (before, after string) {
+	before = refPath(src, item)
+	switch {
+	case utils.IsSpaceRootedReference(dst):
+		after = dst.GetPath()
+	case before != "" && utils.IsRelativeReference(dst) && utils.ResourceIDEqual(src.GetResourceId(), dst.GetResourceId()):
+		rel := path.Clean(src.GetPath())
+		if rel == "." {
+			break
+		}
+		if prefix, ok := strings.CutSuffix(before, rel); ok {
+			after = utils.MakeRelativePath(path.Join(prefix, dst.GetPath()))
+		}
+	}
+	return before, after
 }
 
 // itemPath is the path in the space the driver reported, like the paths of

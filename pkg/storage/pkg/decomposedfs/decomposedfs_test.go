@@ -175,6 +175,25 @@ var _ = Describe("Decomposed", func() {
 			_, err := env.Fs.Move(ctx, ref, &provider.Reference{ResourceId: env.SpaceRootRes, Path: "/dir2"})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(slot.Type).To(Equal(provider.ResourceType_RESOURCE_TYPE_CONTAINER))
+			Expect(slot.Path).To(Equal("/dir1"))
+		})
+
+		It("reports the path in the space of a request by ID", func() {
+			info, err := env.Fs.GetMD(env.Ctx, ref, nil, nil)
+			Expect(err).ToNot(HaveOccurred())
+			slot := &storagespace.ItemTypeSlot{}
+
+			_, err = env.Fs.Move(storagespace.ContextRegisterItemTypeSlot(env.Ctx, slot), &provider.Reference{ResourceId: info.GetId(), Path: "."}, &provider.Reference{ResourceId: env.SpaceRootRes, Path: "./dir2"})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(slot.Path).To(Equal("/dir1"), "the request only names the node")
+		})
+
+		It("does not look up the path of a request from the space root", func() {
+			slot := &storagespace.ItemTypeSlot{}
+
+			_, err := env.Fs.Move(storagespace.ContextRegisterItemTypeSlot(env.Ctx, slot), &provider.Reference{ResourceId: env.SpaceRootRes, Path: "./dir1"}, &provider.Reference{ResourceId: env.SpaceRootRes, Path: "./dir2"})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(slot.Path).To(BeEmpty(), "the request has it")
 		})
 
 		It("returns the resolved references and space owner", func() {

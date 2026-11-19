@@ -134,11 +134,7 @@ func (fs *Decomposedfs) RestoreRevision(ctx context.Context, ref *provider.Refer
 		return nil, err
 	}
 	setAuditItem(ctx, n)
-	if storagespace.ContextWantsItem(ctx) {
-		if p, err := fs.lu.Path(ctx, n, node.NoCheck); err == nil {
-			storagespace.ContextSetItemPath(ctx, p)
-		}
-	}
+	fs.setAuditPath(ctx, n, ref)
 
 	rp, err := fs.p.AssemblePermissions(ctx, n)
 	switch {

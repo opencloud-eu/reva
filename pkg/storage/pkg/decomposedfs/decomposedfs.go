@@ -550,6 +550,7 @@ func (fs *Decomposedfs) CreateDir(ctx context.Context, ref *provider.Reference) 
 		return nil, err
 	}
 	setAuditItem(ctx, n)
+	fs.setAuditPath(ctx, n, ref)
 
 	return &storage.CreateDirResult{SpaceOwner: spaceOwner, SpaceID: n.SpaceID, ResourceID: &provider.ResourceId{OpaqueId: n.ID, SpaceId: n.SpaceID}}, nil
 }
@@ -629,6 +630,7 @@ func (fs *Decomposedfs) Move(ctx context.Context, oldRef, newRef *provider.Refer
 		return nil, errtypes.NotFound(filepath.Join(oldNode.ParentID, oldNode.Name))
 	}
 	setAuditItem(ctx, oldNode)
+	fs.setAuditPath(ctx, oldNode, oldRef)
 
 	orp, err := fs.p.AssemblePermissions(ctx, oldNode)
 	switch {
@@ -917,6 +919,7 @@ func (fs *Decomposedfs) Delete(ctx context.Context, ref *provider.Reference) (dr
 		return nil, errtypes.TooEarly("file is processing")
 	}
 	setAuditItem(ctx, node)
+	fs.setAuditPath(ctx, node, ref)
 
 	rp, err := fs.p.AssemblePermissions(ctx, node)
 	switch {
@@ -1048,6 +1051,7 @@ func (fs *Decomposedfs) SetLock(ctx context.Context, ref *provider.Reference, lo
 	}
 
 	setAuditItem(ctx, node)
+	fs.setAuditPath(ctx, node, ref)
 
 	rp, err := fs.p.AssemblePermissions(ctx, node)
 	switch {
@@ -1119,6 +1123,7 @@ func (fs *Decomposedfs) Unlock(ctx context.Context, ref *provider.Reference, loc
 	}
 
 	setAuditItem(ctx, node)
+	fs.setAuditPath(ctx, node, ref)
 
 	rp, err := fs.p.AssemblePermissions(ctx, node)
 	switch {
@@ -1354,6 +1359,19 @@ func (fs *Decomposedfs) refFromNode(ctx context.Context, n *node.Node, storageId
 		},
 		Path: path,
 	}, nil
+}
+
+// setAuditPath tells the events middleware the path of n in its space when
+// the request does not start at the space root, e.g. a request through a
+// share, a link or by ID: its path is relative to another node. The permission
+// check walks the same parents, so their metadata is cached.
+func (fs *Decomposedfs) setAuditPath(ctx context.Context, n *node.Node, ref *provider.Reference) {
+	if !storagespace.ContextWantsItem(ctx) || utils.IsSpaceRootedReference(ref) {
+		return
+	}
+	if p, err := fs.lu.Path(ctx, n, node.NoCheck); err == nil {
+		storagespace.ContextSetItemPath(ctx, p)
+	}
 }
 
 // setAuditItem tells the events middleware which item a call acts on. A
