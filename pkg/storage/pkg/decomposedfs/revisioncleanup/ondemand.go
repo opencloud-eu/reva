@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"math/rand/v2"
 	"path"
+	"strings"
 	"sync"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -20,7 +21,7 @@ import (
 // Request describes an on-demand cleanup of revisions, e.g. by a command line tool, as opposed
 // to the cleanup that runs whenever a file gets a new revision.
 //
-// The strategy and the AsyncOptions default to the configuration of the storage driver, and
+// The strategies and the AsyncOptions default to the configuration of the storage driver, and
 // can be overridden for this run. Without AsyncOptions of its own, though, a run waits for
 // room in a full queue for as long as it takes (QueueFullBlock without a timeout), whatever
 // the queue full policy of the storage driver: a run queues the files as fast as it finds
@@ -41,6 +42,11 @@ type Request struct {
 	// Strategy is forced on all spaces of this run, instead of the configured strategies, see
 	// PolicyConfig.Forced and revisions.NewRevisionCleanupStrategy.
 	Strategy string
+	// StrategyPersonal and StrategyProject replace the configured strategy of the personal
+	// and the project spaces for this run, see PolicyConfig.SpaceTypes. Empty keeps the
+	// configured one. They can't be combined with Strategy, which would override them.
+	StrategyPersonal string
+	StrategyProject  string
 	// Async overrides the configured AsyncOptions for this run. Without it, the configured
 	// ones are used, but with QueueFullBlock and no timeout.
 	Async *AsyncOptions
@@ -54,9 +60,12 @@ type Request struct {
 	Shuffle bool
 }
 
-// Validate checks the scope of the request.
+// Validate checks the scope of the request, and that it doesn't combine a forced strategy with
+// strategies per space type.
 func (r Request) Validate() error {
 	switch {
+	case strings.TrimSpace(r.Strategy) != "" && (strings.TrimSpace(r.StrategyPersonal) != "" || strings.TrimSpace(r.StrategyProject) != ""):
+		return errors.New("a strategy for all spaces can't be combined with strategies per space type")
 	case r.FSPath != "" && (r.All || len(r.SpaceIDs) > 0 || r.Path != ""):
 		return errors.New("a path on disk can't be combined with spaces or a path within a space")
 	case r.FSPath != "":

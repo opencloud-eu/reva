@@ -27,7 +27,7 @@ An invalid value in any of these options makes the storage driver fail at startu
 
 Which strategy applies to a file depends on its space (see `Policy` in `policy.go`): the strategy of the space's type if it has one, otherwise `revisions_cleanup_strategy`.
 Spaces of any other type than `personal` and `project` always get `revisions_cleanup_strategy`.
-A cleanup on demand can force one strategy on all spaces instead.
+A cleanup on demand can replace the strategy of a type for its run, or force one strategy on all spaces instead (see `Request` in `ondemand.go`).
 
 ## Strategies
 

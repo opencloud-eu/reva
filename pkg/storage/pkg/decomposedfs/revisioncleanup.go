@@ -21,6 +21,7 @@ import (
 	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/metadata"
 	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/node"
 	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/revisioncleanup"
+	"github.com/opencloud-eu/reva/v3/pkg/storagespace"
 )
 
 var _ revisioncleanup.OnDemand = (*Decomposedfs)(nil)
@@ -88,6 +89,11 @@ func (fs *Decomposedfs) CleanupRevisionsUnchecked(ctx context.Context, req revis
 	}
 
 	config := revisioncleanup.PolicyConfigFromOptions(fs.o)
+	for typ, strategy := range map[string]string{storagespace.TypePersonal: req.StrategyPersonal, storagespace.TypeProject: req.StrategyProject} {
+		if strings.TrimSpace(strategy) != "" {
+			config.SpaceTypes[typ] = strategy
+		}
+	}
 	config.Forced = req.Strategy
 	policy, err := revisioncleanup.NewPolicy(config)
 	if err != nil {

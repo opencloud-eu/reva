@@ -25,6 +25,7 @@ import (
 	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/spaceidindex"
 	helpers "github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/testhelpers"
 	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/tree"
+	"github.com/opencloud-eu/reva/v3/pkg/storagespace"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -205,6 +206,39 @@ var _ = Describe("On-demand revision cleanup", func() {
 
 			Expect(revisionCount(f)).To(BeZero())
 			Expect(revisionCount(file1)).To(BeZero())
+		})
+
+		It("apply the strategies per space type of the request", func() {
+			_, projectFile := newSpace(storagespace.TypeProject)
+
+			Expect(env.Fs.CleanupRevisionsUnchecked(toolCtx, revisioncleanup.Request{All: true, StrategyProject: "0"}, collect)).To(Succeed())
+
+			Expect(revisionCount(projectFile)).To(BeZero())
+			Expect(resultOf(projectFile).Strategy).To(Equal("0"))
+			Expect(resultOf(projectFile).StrategySource).To(Equal(revisioncleanup.SourceSpaceType))
+			// nothing is configured for the personal space
+			Expect(revisionCount(file1)).To(Equal(2))
+			Expect(resultOf(file1).Skipped).ToNot(BeEmpty())
+			Expect(resultOf(file1).Strategy).To(Equal("disabled"))
+			Expect(resultOf(file1).StrategySource).To(Equal(revisioncleanup.SourceDefault))
+		})
+
+		It("force the strategy of the request on spaces of all types", func() {
+			_, projectFile := newSpace(storagespace.TypeProject)
+
+			Expect(env.Fs.CleanupRevisionsUnchecked(toolCtx, revisioncleanup.Request{All: true, Strategy: "0"}, collect)).To(Succeed())
+
+			for _, f := range []*node.Node{projectFile, file1} {
+				Expect(revisionCount(f)).To(BeZero())
+				Expect(resultOf(f).Strategy).To(Equal("0"))
+				Expect(resultOf(f).StrategySource).To(Equal(revisioncleanup.SourceForced))
+			}
+		})
+
+		It("reject a forced strategy together with one per space type", func() {
+			err := env.Fs.CleanupRevisionsUnchecked(toolCtx, revisioncleanup.Request{All: true, Strategy: "0", StrategyPersonal: "1"}, collect)
+			Expect(err).To(HaveOccurred())
+			Expect(revisionCount(file1)).To(Equal(2))
 		})
 
 		It("skip disabled spaces, and fail for a disabled space requested by its id", func() {
