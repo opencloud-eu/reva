@@ -15,6 +15,8 @@ The options are part of the decomposedfs options and therefore apply to all thre
 | Option | Default | Meaning |
 |---|---|---|
 | `revisions_cleanup_strategy` | `""` (disabled) | Which revisions to delete, see below. Empty or `disabled` keeps all revisions. |
+| `revisions_cleanup_strategy_personal` | `""` (the default applies) | The strategy for personal spaces. Empty applies `revisions_cleanup_strategy` to them, `disabled` keeps all their revisions, whatever `revisions_cleanup_strategy` says. |
+| `revisions_cleanup_strategy_project` | `""` (the default applies) | The strategy for project spaces, like `revisions_cleanup_strategy_personal`. |
 | `revisions_cleanup_async` | `true` | Run the cleanup in background workers, so that it doesn't slow down the upload, restore or change that created the new revision. `false` runs it right away. |
 | `revisions_cleanup_async_workers` | `0` (automatic) | Number of background workers. Automatic: half the available CPUs (respecting container CPU limits), at least 2. |
 | `revisions_cleanup_async_queue_size` | `0` (automatic) | Number of files that can wait for a background cleanup. Automatic: 64 per worker. |
@@ -22,6 +24,10 @@ The options are part of the decomposedfs options and therefore apply to all thre
 | `revisions_cleanup_async_queue_full_timeout` | `5s` | How long `block` waits for room at most, after which the cleanup of that file is skipped as with `drop`. `0` waits as long as it takes, so that no cleanup is ever skipped, but then writes can slow down without bound under heavy load. |
 
 An invalid value in any of these options makes the storage driver fail at startup.
+
+Which strategy applies to a file depends on its space (see `Policy` in `policy.go`): the strategy of the space's type if it has one, otherwise `revisions_cleanup_strategy`.
+Spaces of any other type than `personal` and `project` always get `revisions_cleanup_strategy`.
+A cleanup on demand can force one strategy on all spaces instead.
 
 ## Strategies
 
