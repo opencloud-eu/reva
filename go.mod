@@ -22,6 +22,7 @@ require (
 	github.com/fsnotify/fsnotify v1.10.1
 	github.com/gdexlab/go-render v1.0.1
 	github.com/go-chi/chi/v5 v5.4.0
+	github.com/go-chi/render v1.0.3
 	github.com/go-ldap/ldap/v3 v3.4.14
 	github.com/go-micro/plugins/v4/events/natsjs v1.2.2
 	github.com/go-micro/plugins/v4/registry/memory v1.2.0
@@ -109,6 +110,7 @@ require (
 	github.com/Microsoft/go-winio v0.6.2 // indirect
 	github.com/ProtonMail/go-crypto v1.5.2 // indirect
 	github.com/VividCortex/ewma v1.2.0 // indirect
+	github.com/ajg/form v1.5.1 // indirect
 	github.com/antithesishq/antithesis-sdk-go v0.7.2 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/bitly/go-simplejson v0.5.1 // indirect
