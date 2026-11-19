@@ -128,6 +128,49 @@ var _ = Describe("coordinator", func() {
 				Expect(session.NodeID()).To(Equal("real-node-id"))
 			})
 
+			It("reads the node back when TouchFile does not report it", func() {
+				session := newSession(false)
+				fs.touched = &provider.ResourceId{StorageId: mountID, SpaceId: spaceID, OpaqueId: "real-node-id"}
+
+				_, err := c.finishUpload(ctx, session)
+
+				Expect(err).ToNot(HaveOccurred())
+				Expect(fs.touchReadBacks).To(Equal(1))
+			})
+
+			It("takes the node and space owner TouchFile reported without reading them back", func() {
+				session := newSession(false)
+				fs.touchResult = &storage.TouchFileResult{
+					SpaceOwner: &userpb.UserId{OpaqueId: "manager", Idp: "https://idp.example.org", Type: userpb.UserType_USER_TYPE_PRIMARY},
+					SpaceID:    spaceID,
+					ResourceID: &provider.ResourceId{StorageId: mountID, SpaceId: spaceID, OpaqueId: "reported-node-id"},
+				}
+
+				_, err := c.finishUpload(ctx, session)
+
+				Expect(err).ToNot(HaveOccurred())
+				Expect(fs.touchReadBacks).To(Equal(0))
+				Expect(session.NodeID()).To(Equal("reported-node-id"))
+				Expect(session.SpaceID()).To(Equal(spaceID))
+				Expect(session.SpaceOwner().GetOpaqueId()).To(Equal("manager"))
+				Expect(session.SpaceOwner().GetIdp()).To(Equal("https://idp.example.org"))
+				Expect(session.SpaceOwner().GetType()).To(Equal(userpb.UserType_USER_TYPE_PRIMARY))
+			})
+
+			It("reads the node back when TouchFile reports no space owner", func() {
+				session := newSession(false)
+				fs.touched = &provider.ResourceId{StorageId: mountID, SpaceId: spaceID, OpaqueId: "real-node-id"}
+				fs.touchResult = &storage.TouchFileResult{
+					ResourceID: &provider.ResourceId{StorageId: mountID, SpaceId: spaceID, OpaqueId: "reported-node-id"},
+				}
+
+				_, err := c.finishUpload(ctx, session)
+
+				Expect(err).ToNot(HaveOccurred())
+				Expect(fs.touchReadBacks).To(Equal(1))
+				Expect(session.NodeID()).To(Equal("real-node-id"))
+			})
+
 			// PrepareUpload propagates the node, so a second walk would be wasted.
 			It("tells TouchFile not to propagate", func() {
 				session := newSession(false)
