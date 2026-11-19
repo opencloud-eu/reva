@@ -498,6 +498,8 @@ func (t *Tree) assimilate(item scanItem) error {
 		if err != nil {
 			return err
 		}
+		// another process can have assimilated the item. Reload the stale cache before the code below reads from it.
+		t.reloadStaleCache(assimilationNode, mtime, item.reloaded)
 
 		previousPath, err := t.lookup.GetCachedID(context.Background(), spaceID, id)
 		if previousPath == "" || err != nil {
@@ -948,6 +950,7 @@ assimilate:
 // WarmupIDCache warms up the id cache
 func (t *Tree) WarmupIDCache(root string, assimilate, onlyDirty bool) error {
 	root = filepath.Clean(root)
+	reloaded := newReloadedNodes()
 	spaceID := ""
 
 	scopeSpace := func(spaceCandidate string) error {
@@ -1097,7 +1100,7 @@ func (t *Tree) WarmupIDCache(root string, assimilate, onlyDirty bool) error {
 				if isCopy || (assimilate && (isMove || isChanged || t.metadataIsStale(path))) {
 					// a copy with a clashing id, a move or a change on disk -> re-assimilate.
 					// assimilate skips items whose path and mtime still match the metadata
-					err := t.assimilate(scanItem{Path: path})
+					err := t.assimilate(scanItem{Path: path, reloaded: reloaded})
 					if err != nil && !errors.Is(err, _errSkipAlreadyKnown) {
 						t.log.Error().Err(err).Str("path", path).Msg("could not assimilate item")
 					}
@@ -1109,7 +1112,7 @@ func (t *Tree) WarmupIDCache(root string, assimilate, onlyDirty bool) error {
 				}
 			}
 		} else if assimilate {
-			if err := t.assimilate(scanItem{Path: path}); err != nil {
+			if err := t.assimilate(scanItem{Path: path, reloaded: reloaded}); err != nil {
 				t.log.Error().Err(err).Str("path", path).Msg("could not assimilate item")
 			}
 		}
@@ -1170,15 +1173,63 @@ func (t *Tree) metadataIsStale(path string) bool {
 	return err == nil && len(parentOnDisk) > 0 && string(parentID) != string(parentOnDisk)
 }
 
-func (t *Tree) propagateSizeDiff(n *node.Node, size int64) error {
-	attrs, err := t.lookup.MetadataBackend().All(context.Background(), n)
+// reloadStaleCache reloads the cached metadata of a known item and its parents up to the space root.
+// It reloads when the cached mtime is missing or differs from the one on disk.
+// Another process, e.g. 'opencloud posixfs scan', can assimilate the item with its own cache.
+// That process also changes the tree size and tree time of the parents.
+// The caller must hold the lock of n.
+// Within one walk, reloaded remembers the nodes reloaded already: the parents are shared by many
+// items, and a parent reloaded before had its own parents reloaded with it, so the walk up stops there.
+func (t *Tree) reloadStaleCache(n *assimilationNode, mtime time.Time, reloaded *reloadedNodes) {
+	backend := t.lookup.MetadataBackend()
+	if cached, ok := backend.GetCached(context.Background(), n, prefixes.MTimeAttr); ok {
+		if cachedMtime, err := time.Parse(time.RFC3339Nano, string(cached)); err == nil && cachedMtime.Equal(mtime) {
+			return
+		}
+	}
+
+	t.log.Debug().Str("path", n.path).Msg("metadata cache is missing or stale, reloading the item and its parents")
+	an := n
+	for {
+		if !reloaded.add(an.nodeId) && an != n {
+			return
+		}
+		if err := t.reloadCache(an); err != nil {
+			t.log.Warn().Err(err).Str("path", an.path).Msg("could not reload the metadata cache")
+		}
+		parent := filepath.Dir(an.path)
+		if an.nodeId == n.spaceID || t.Ignorer.IsRootPath(an.path) || parent == an.path {
+			return
+		}
+		_, id, _, _, err := backend.IdentifyPath(context.Background(), parent)
+		if err != nil || id == "" {
+			return
+		}
+		an = &assimilationNode{spaceID: n.spaceID, nodeId: id, path: parent}
+	}
+}
+
+// reloadCache reads the metadata of n from disk into the cache. It holds the lock of n
+// meanwhile, so that no other holder of the lock reads from a missing cache entry.
+func (t *Tree) reloadCache(n *assimilationNode) error {
+	backend := t.lookup.MetadataBackend()
+	unlock, err := backend.Lock(n)
 	if err != nil {
 		return err
 	}
-
-	oldSize, err := node.Attributes(attrs).Int64(prefixes.TreesizeAttr)
-	if err != nil {
+	defer func() { _ = unlock() }()
+	if err := backend.InvalidateCache(context.Background(), n); err != nil {
 		return err
+	}
+	_, err = backend.All(context.Background(), n)
+	return err
+}
+
+func (t *Tree) propagateSizeDiff(n *node.Node, size int64) error {
+	// read the old tree size from disk. Another process can have changed it.
+	oldSize, ok := t.storedTreeSize(n.InternalPath())
+	if !ok {
+		return fmt.Errorf("could not read the tree size of %s", n.InternalPath())
 	}
 	return t.Propagate(context.Background(), n, size-oldSize)
 }
@@ -1205,4 +1256,28 @@ func (t *Tree) isDirty(path string) (bool, error) {
 		return false, err
 	}
 	return string(dirtyAttr) == "true", nil
+}
+
+// reloadedNodes is the set of nodes whose metadata cache a walk reloaded already.
+type reloadedNodes struct {
+	mu  sync.Mutex
+	ids map[string]struct{}
+}
+
+func newReloadedNodes() *reloadedNodes {
+	return &reloadedNodes{ids: map[string]struct{}{}}
+}
+
+// add records id and reports whether it is new. A nil set (outside of a walk) never remembers anything.
+func (r *reloadedNodes) add(id string) bool {
+	if r == nil {
+		return true
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if _, ok := r.ids[id]; ok {
+		return false
+	}
+	r.ids[id] = struct{}{}
+	return true
 }

@@ -96,6 +96,8 @@ type scanItem struct {
 	Path          string
 	Recurse       bool
 	RefreshParent bool
+	// reloaded remembers the nodes whose metadata cache a walk reloaded already. Nil outside of a walk.
+	reloaded *reloadedNodes
 }
 
 // Tree manages a hierarchical tree
