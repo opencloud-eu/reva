@@ -87,15 +87,13 @@ func (fs *Decomposedfs) CleanupRevisionsUnchecked(ctx context.Context, req revis
 		report = func(revisioncleanup.Result) {}
 	}
 
-	strategy := req.Strategy
-	if strategy == "" {
-		strategy = fs.o.RevisionsCleanupStrategy
-	}
-	cleaner, err := revisioncleanup.New(strategy)
+	config := revisioncleanup.PolicyConfigFromOptions(fs.o)
+	config.Forced = req.Strategy
+	policy, err := revisioncleanup.NewPolicy(config)
 	if err != nil {
 		return errors.Wrap(err, "invalid revisions cleanup strategy")
 	}
-	if !cleaner.Enabled() {
+	if !policy.Enabled() {
 		return errors.New("no revisions cleanup strategy configured or given")
 	}
 	o := revisioncleanup.RunOptions{Async: revisioncleanup.AsyncOptionsFromOptions(fs.o), DryRun: req.DryRun, Shuffle: req.Shuffle}
@@ -110,7 +108,7 @@ func (fs *Decomposedfs) CleanupRevisionsUnchecked(ctx context.Context, req revis
 	if err != nil {
 		return err
 	}
-	return revisioncleanup.Run(ctx, fs.lu, w, roots, cleaner, o, report, fs.log)
+	return revisioncleanup.Run(ctx, fs.lu, w, roots, policy, o, report, fs.log)
 }
 
 // errSpaceDisabled is the error for a space that is disabled, i.e. in the trash

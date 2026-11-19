@@ -38,8 +38,8 @@ type Request struct {
 	// resolves it to the space and the path within it.
 	FSPath string
 
-	// Strategy overrides the configured revisions cleanup strategy for this run, see
-	// revisions.NewRevisionCleanupStrategy.
+	// Strategy is forced on all spaces of this run, instead of the configured strategies, see
+	// PolicyConfig.Forced and revisions.NewRevisionCleanupStrategy.
 	Strategy string
 	// Async overrides the configured AsyncOptions for this run. Without it, the configured
 	// ones are used, but with QueueFullBlock and no timeout.
@@ -114,11 +114,11 @@ type RunOptions struct {
 }
 
 // Run cleans up the revisions of the given roots, files or folders (recursively, e.g. space roots),
-// with the given Cleaner and RunOptions, and hands the Result of every file to report, one at a
+// with the given strategies and RunOptions, and hands the Result of every file to report, one at a
 // time. It is the common implementation of OnDemand.CleanupRevisionsUnchecked for the storage
 // drivers.
 //
-// It uses a Service of its own, independent of the storage driver's, so that the Cleaner and
+// It uses a Service of its own, independent of the storage driver's, so that the Policy and
 // the AsyncOptions of the run apply: files are queued as they are found, while the workers
 // already clean up, and Run waits for all cleanups before it returns. Files dropped by a full
 // queue (queue full policy "drop") are reported as skipped. That Service leaves the metrics
@@ -131,8 +131,8 @@ type RunOptions struct {
 //
 // It checks no permissions: the Walker lists folders without them, and neither do the
 // cleanups.
-func Run(ctx context.Context, lu node.PathLookup, w Walker, roots []*node.Node, cleaner *Cleaner, o RunOptions, report func(Result), log *zerolog.Logger) error {
-	if !cleaner.Enabled() {
+func Run(ctx context.Context, lu node.PathLookup, w Walker, roots []*node.Node, strategies *Policy, o RunOptions, report func(Result), log *zerolog.Logger) error {
+	if !strategies.Enabled() {
 		return errors.New("no revisions cleanup strategy configured or given")
 	}
 	if report == nil {
@@ -168,7 +168,7 @@ func Run(ctx context.Context, lu node.PathLookup, w Walker, roots []*node.Node, 
 		paths[key] = &queuedPath{path: path, count: 1}
 	}
 
-	s, err := newService(cleaner, lu, w, o.Async, log, true, o.DryRun, serialized)
+	s, err := newService(strategies, lu, w, o.Async, log, true, o.DryRun, serialized)
 	if err != nil {
 		return err
 	}

@@ -20,6 +20,7 @@ import (
 	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/node"
 	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/revisioncleanup"
 	helpers "github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/testhelpers"
+	"github.com/opencloud-eu/reva/v3/pkg/storagespace"
 	uploadcoordinator "github.com/opencloud-eu/reva/v3/pkg/upload"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -183,6 +184,64 @@ var _ = Describe("Revision cleanup", func() {
 		})
 	})
 
+	Describe("strategies per space type", func() {
+		// uploads to the file of the personal space of the test environment and to the same
+		// file in a new project space, and returns the revisions of both afterwards
+		uploadToBoth := func() (personal, project []*provider.FileVersion) {
+			// creating a space needs more than the permissions newEnvWithOptions grants: leave
+			// them to CreateTestStorageSpace, which grants the owner everything
+			env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything).Unset()
+			projectRes, err := env.CreateTestStorageSpace(storagespace.TypeProject, nil)
+			Expect(err).ToNot(HaveOccurred())
+			projectRef := &provider.Reference{ResourceId: projectRes, Path: "/dir1/file1"}
+			projectFile, err := env.Lookup.NodeFromResource(env.Ctx, projectRef)
+			Expect(err).ToNot(HaveOccurred())
+
+			upload([]byte("new content"))
+			uploadTo(projectRef, []byte("new content"))
+
+			return revisionsOf(file), revisionsOf(projectFile)
+		}
+
+		It("apply the strategy of the space's type", func() {
+			newEnvWithOptions(map[string]any{
+				"revisions_cleanup_strategy":         "disabled",
+				"revisions_cleanup_strategy_project": "0",
+				"revisions_cleanup_async":            false,
+			})
+
+			personal, project := uploadToBoth()
+
+			Expect(personal).To(HaveLen(1), "the default keeps the revisions of personal spaces")
+			Expect(project).To(BeEmpty())
+		})
+
+		It("keep all revisions of a type whose strategy is disabled, despite the default", func() {
+			newEnvWithOptions(map[string]any{
+				"revisions_cleanup_strategy":          "0",
+				"revisions_cleanup_strategy_personal": "disabled",
+				"revisions_cleanup_async":             false,
+			})
+
+			personal, project := uploadToBoth()
+
+			Expect(personal).To(HaveLen(1))
+			Expect(project).To(BeEmpty(), "the default applies to project spaces")
+		})
+
+		It("apply the strategy of the space's type in the background", func() {
+			newEnvWithOptions(map[string]any{
+				"revisions_cleanup_strategy_project": "0",
+				"revisions_cleanup_async":            true,
+			})
+
+			personal, _ := uploadToBoth()
+
+			Eventually(deletedBlobs).Should(HaveLen(1), "the revision of the project space's file")
+			Expect(personal).To(HaveLen(1))
+		})
+	})
+
 	Describe("restores", func() {
 		const (
 			rev1 = "2024-01-01T00:00:00Z"
@@ -314,8 +373,10 @@ var _ = Describe("Revision cleanup", func() {
 
 	Describe("configuration", func() {
 		It("rejects an invalid strategy at startup", func() {
-			_, err := helpers.NewTestEnv(map[string]any{"revisions_cleanup_strategy": "whenever"})
-			Expect(err).To(HaveOccurred())
+			for _, option := range []string{"revisions_cleanup_strategy", "revisions_cleanup_strategy_personal", "revisions_cleanup_strategy_project"} {
+				_, err := helpers.NewTestEnv(map[string]any{option: "whenever"})
+				Expect(err).To(HaveOccurred(), option)
+			}
 		})
 
 		It("rejects invalid background cleanup settings at startup", func() {

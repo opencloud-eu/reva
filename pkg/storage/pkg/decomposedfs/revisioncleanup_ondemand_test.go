@@ -162,11 +162,11 @@ var _ = Describe("On-demand revision cleanup", func() {
 	It("switches to the group of the space it walks with a SpaceScoper", func() {
 		root, err := env.Lookup.NodeFromSpaceID(env.Ctx, spaceID)
 		Expect(err).ToNot(HaveOccurred())
-		cleaner, err := revisioncleanup.New("0")
+		strategies, err := revisioncleanup.NewPolicy(revisioncleanup.PolicyConfig{Default: "0"})
 		Expect(err).ToNot(HaveOccurred())
 		w := &scopingWalker{Walker: env.Tree}
 
-		Expect(revisioncleanup.Run(toolCtx, env.Lookup, w, []*node.Node{root}, cleaner, revisioncleanup.RunOptions{}, collect, nil)).To(Succeed())
+		Expect(revisioncleanup.Run(toolCtx, env.Lookup, w, []*node.Node{root}, strategies, revisioncleanup.RunOptions{}, collect, nil)).To(Succeed())
 
 		Expect(revisionCount(file1)).To(BeZero())
 		Expect(w.scoped).To(ContainElement(spaceID))
@@ -354,7 +354,7 @@ var _ = Describe("On-demand revision cleanup", func() {
 		Expect(err).ToNot(HaveOccurred())
 		dtime := time.Now()
 		Expect(root.SetDTime(env.Ctx, &dtime)).To(Succeed())
-		cleaner, err := revisioncleanup.New("0")
+		strategies, err := revisioncleanup.NewPolicy(revisioncleanup.PolicyConfig{Default: "0"})
 		Expect(err).ToNot(HaveOccurred())
 		w, ok := any(env.Tree).(revisioncleanup.Walker)
 		Expect(ok).To(BeTrue())
@@ -362,7 +362,7 @@ var _ = Describe("On-demand revision cleanup", func() {
 
 		// file1 was found before the space was disabled, the worker reads it again
 		o := revisioncleanup.RunOptions{Async: revisioncleanup.AsyncOptions{Enabled: true, Workers: 1, QueueSize: 1}}
-		Expect(revisioncleanup.Run(toolCtx, env.Lookup, w, []*node.Node{file1}, cleaner, o, collect, &log)).To(Succeed())
+		Expect(revisioncleanup.Run(toolCtx, env.Lookup, w, []*node.Node{file1}, strategies, o, collect, &log)).To(Succeed())
 
 		Expect(resultOf(file1)).ToNot(BeNil())
 		Expect(resultOf(file1).Err).ToNot(HaveOccurred())
@@ -495,9 +495,9 @@ var _ = Describe("On-demand revision cleanup", func() {
 			roots = []*node.Node{root}
 		})
 		run := func(w revisioncleanup.Walker, async revisioncleanup.AsyncOptions) error {
-			cleaner, err := revisioncleanup.New("0")
+			strategies, err := revisioncleanup.NewPolicy(revisioncleanup.PolicyConfig{Default: "0"})
 			Expect(err).ToNot(HaveOccurred())
-			return revisioncleanup.Run(ctx, env.Lookup, w, roots, cleaner, revisioncleanup.RunOptions{Async: async}, collect, nil)
+			return revisioncleanup.Run(ctx, env.Lookup, w, roots, strategies, revisioncleanup.RunOptions{Async: async}, collect, nil)
 		}
 
 		It("doesn't stop in the middle of a file", func() {
@@ -595,7 +595,7 @@ var _ = Describe("On-demand revision cleanup", func() {
 			_, err := env.CreateTestFile(fmt.Sprintf("more%d", i), fmt.Sprintf("more%d-blobid", i), subdir1.ID, subdir1.SpaceID, 10)
 			Expect(err).ToNot(HaveOccurred())
 		}
-		cleaner, err := revisioncleanup.New("0")
+		strategies, err := revisioncleanup.NewPolicy(revisioncleanup.PolicyConfig{Default: "0"})
 		Expect(err).ToNot(HaveOccurred())
 		// the tree lists folders in parallel, in no particular order: sort them, so that only the shuffle changes it
 		w := &stoppingTree{Tree: env.Tree, onList: func(context.Context) error { return nil }, sortFolders: true}
@@ -603,7 +603,7 @@ var _ = Describe("On-demand revision cleanup", func() {
 		order := func(shuffle bool) string {
 			results = nil
 			o := revisioncleanup.RunOptions{DryRun: true, Shuffle: shuffle}
-			Expect(revisioncleanup.Run(toolCtx, env.Lookup, w, []*node.Node{subdir1}, cleaner, o, collect, nil)).To(Succeed())
+			Expect(revisioncleanup.Run(toolCtx, env.Lookup, w, []*node.Node{subdir1}, strategies, o, collect, nil)).To(Succeed())
 			Expect(results).To(HaveLen(6))
 			ids := make([]string, len(results))
 			for i, result := range results {
