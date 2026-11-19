@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	"github.com/nats-io/nats.go"
 	ctxpkg "github.com/opencloud-eu/reva/v3/pkg/ctx"
@@ -210,6 +211,24 @@ func TestRecordOutcomes(t *testing.T) {
 	rec, err = e.Record(context.Background(), Event{Definition: AuthLogin, Target: Target{ID: "unknown"}})
 	require.NoError(t, err)
 	assert.Equal(t, ActorAnonymous, rec.ActorType)
+}
+
+func TestPublicLinkIsTheActor(t *testing.T) {
+	e := NewEmitter(&fakePublisher{}, Options{Service: Service{Name: "storage-users"}, Mode: ModeStrict})
+	owner := &userpb.User{Id: &userpb.UserId{OpaqueId: "owner", TenantId: "t-1"}, Username: "owner"}
+	ctx := ctxpkg.ContextSetUser(context.Background(), owner)
+
+	rec, err := e.Record(ctxpkg.ContextSetScopes(ctx, map[string]*authpb.Scope{"publicshare:share-1": {}}), Event{Definition: FolderCreate, Target: Target{ID: "f"}})
+	require.NoError(t, err)
+	assert.Equal(t, ActorPublicLink, rec.ActorType, "a link acts with the user of its owner")
+	assert.Equal(t, "share-1", rec.ActorID)
+	assert.Empty(t, rec.ActorName)
+	assert.Equal(t, "t-1", rec.TenantID)
+
+	rec, err = e.Record(ctx, Event{Definition: FolderCreate, Target: Target{ID: "f"}})
+	require.NoError(t, err)
+	assert.Equal(t, ActorUser, rec.ActorType)
+	assert.Equal(t, "owner", rec.ActorID)
 }
 
 func TestRecordValidation(t *testing.T) {

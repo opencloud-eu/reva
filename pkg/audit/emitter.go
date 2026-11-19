@@ -279,6 +279,11 @@ func setActor(ctx context.Context, rec *Record, override *Actor) {
 	if override != nil {
 		return
 	}
+	// a public link acts with the user of its owner, the scope names the link
+	if id := PublicShareID(ctx); id != "" {
+		rec.ActorType, rec.ActorID = ActorPublicLink, id
+		return
+	}
 	rec.ActorID = u.GetId().GetOpaqueId()
 	rec.ActorName = u.GetDisplayName()
 	if rec.ActorName == "" {

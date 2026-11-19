@@ -330,8 +330,10 @@ func TestFirstLinkAccessOnlyDropsRepeatedSuccesses(t *testing.T) {
 	failed := audit.Event{Definition: audit.PublicLinkAccess, Outcome: audit.OutcomeDenied, Target: audit.Target{ID: "l-1"}}
 	other := audit.Event{Definition: audit.FileLock, Outcome: audit.OutcomeSuccess, Target: audit.Target{ID: "f"}}
 
-	assert.True(t, firstLinkAccess(context.Background(), o, ok))
-	assert.False(t, firstLinkAccess(context.Background(), o, ok))
+	client := audit.ContextSetRequest(context.Background(), audit.RequestContext{ClientAddress: "203.0.113.7"})
+	assert.True(t, firstLinkAccess(client, o, ok))
+	assert.False(t, firstLinkAccess(client, o, ok))
+	assert.False(t, firstLinkAccess(context.Background(), o, audit.Event{Definition: audit.PublicLinkAccess, Outcome: audit.OutcomeSuccess, Target: audit.Target{ID: "l-2"}}), "a service resolving the link is no access")
 	assert.True(t, firstLinkAccess(context.Background(), o, failed), "a failure without trace counts")
 	assert.True(t, firstLinkAccess(context.Background(), o, failed))
 

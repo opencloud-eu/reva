@@ -430,8 +430,9 @@ func shareID(id *collaboration.ShareId, ref *collaboration.ShareReference) strin
 }
 
 // firstLinkAccess drops repeated successful accesses of a link by the same
-// client. A failed one counts once per request: the proxy and ocdav both check
-// the credentials of a request to public-files.
+// client, and successful ones without a client request. A failed one counts
+// once per request: the proxy and ocdav both check the credentials of a
+// request to public-files.
 func firstLinkAccess(ctx context.Context, o *onceWithin, ev audit.Event) bool {
 	if ev.Definition != audit.PublicLinkAccess {
 		return true
@@ -443,7 +444,11 @@ func firstLinkAccess(ctx context.Context, o *onceWithin, ev audit.Event) bool {
 		}
 		return o.first(ev.Target.ID+"|"+ev.Reason+"|"+tid.String(), time.Now())
 	}
-	rc, _ := audit.ContextGetRequest(ctx)
+	rc, ok := audit.ContextGetRequest(ctx)
+	if !ok || rc.IsZero() {
+		// a service resolving the link, e.g. after an upload, is no client
+		return false
+	}
 	return o.first(ev.Target.ID+"|"+rc.ClientAddress+"|"+rc.SessionID, time.Now())
 }
 
