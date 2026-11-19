@@ -4,7 +4,7 @@
 
 ### ❤️ Thanks to all contributors! ❤️
 
-@butonic, @dragonchaser, @pbleser-oc
+@butonic, @dragonchaser, @fschade, @pbleser-oc
 
 ### ✨ Features
 
@@ -12,6 +12,7 @@
 
 ### 🐛 Bug Fixes
 
+- fix(ocm): use gateway selectors in the received storage and the ocmshares auth manager [[#1034](https://github.com/opencloud-eu/reva/pull/1034)]
 - fix(ocm): align ocm share permissions with the shared resource type [[#1035](https://github.com/opencloud-eu/reva/pull/1035)]
 - fix(ocm): fix wildcard providers and invite error handling [[#1027](https://github.com/opencloud-eu/reva/pull/1027)]
 - fix: set the share jail root as parent id of listed shares [[#1020](https://github.com/opencloud-eu/reva/pull/1020)]
