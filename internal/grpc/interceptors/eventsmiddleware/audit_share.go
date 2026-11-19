@@ -41,37 +41,46 @@ func recipient(m map[string]any, g *provider.Grantee) {
 	}
 }
 
-// roles are the reva roles the unified roles are built from, in the order
-// they are matched.
-var roles = []func() *conversions.Role{
-	conversions.NewViewerRole,
-	conversions.NewViewerWithVersionsRole,
-	conversions.NewViewerListGrantsRole,
-	conversions.NewSpaceViewerRole,
-	conversions.NewSpaceViewerWithVersionsRole,
-	conversions.NewEditorRole,
-	conversions.NewEditorWithVersionsRole,
-	conversions.NewEditorListGrantsRole,
-	conversions.NewEditorListGrantsWithVersionsRole,
-	conversions.NewSpaceEditorRole,
-	conversions.NewSpaceEditorWithoutVersionsRole,
-	conversions.NewSpaceEditorWithoutTrashbinRole,
-	conversions.NewSpaceEditorWithoutVersionsWithoutTrashbinRole,
-	conversions.NewFileEditorRole,
-	conversions.NewFileEditorWithVersionsRole,
-	conversions.NewFileEditorListGrantsRole,
-	conversions.NewFileEditorListGrantsWithVersionsRole,
-	conversions.NewEditorLiteRole,
-	conversions.NewUploaderRole,
-	conversions.NewSecureViewerRole,
-	conversions.NewManagerRole,
-	conversions.NewCoownerRole,
+// knownRole is a reva role a unified role is built from. The names are set
+// here, some constructors share a name, e.g. the file editor is "editor".
+type knownRole struct {
+	name  string
+	perms func() *conversions.Role
+	space bool
+}
+
+// roles are matched in this order. viewer-list-grants and spaceviewer,
+// editor-list-grants and spaceeditor-without-versions have the same
+// permissions; on a space root the space roles win, everywhere else the others.
+var roles = []knownRole{
+	{conversions.RoleViewer, conversions.NewViewerRole, false},
+	{conversions.RoleViewerWithVersions, conversions.NewViewerWithVersionsRole, false},
+	{conversions.RoleViewerListGrants, conversions.NewViewerListGrantsRole, false},
+	{conversions.RoleEditor, conversions.NewEditorRole, false},
+	{conversions.RoleEditorWithVersions, conversions.NewEditorWithVersionsRole, false},
+	{conversions.RoleEditorListGrants, conversions.NewEditorListGrantsRole, false},
+	{conversions.RoleEditorListGrantsWithVersions, conversions.NewEditorListGrantsWithVersionsRole, false},
+	{conversions.RoleFileEditor, conversions.NewFileEditorRole, false},
+	{conversions.RoleFileEditorWithVersions, conversions.NewFileEditorWithVersionsRole, false},
+	{conversions.RoleFileEditorListGrants, conversions.NewFileEditorListGrantsRole, false},
+	{conversions.RoleFileEditorListGrantsWithVersions, conversions.NewFileEditorListGrantsWithVersionsRole, false},
+	{conversions.RoleEditorLite, conversions.NewEditorLiteRole, false},
+	{conversions.RoleUploader, conversions.NewUploaderRole, false},
+	{conversions.RoleSecureViewer, conversions.NewSecureViewerRole, false},
+	{conversions.RoleCoowner, conversions.NewCoownerRole, false},
+	{conversions.RoleSpaceViewer, conversions.NewSpaceViewerRole, true},
+	{conversions.RoleSpaceViewerWithVersions, conversions.NewSpaceViewerWithVersionsRole, true},
+	{conversions.RoleSpaceEditor, conversions.NewSpaceEditorRole, true},
+	{conversions.RoleSpaceEditorWithoutVersions, conversions.NewSpaceEditorWithoutVersionsRole, true},
+	{conversions.RoleSpaceEditorWithoutTrashbin, conversions.NewSpaceEditorWithoutTrashbinRole, true},
+	{conversions.RoleSpaceEditorWithoutVersionsWithoutTrashbin, conversions.NewSpaceEditorWithoutVersionsWithoutTrashbinRole, true},
+	{conversions.RoleManager, conversions.NewManagerRole, true},
 }
 
 // role adds the role of the permissions to m: the reva role with exactly
 // these permissions, the one a unified role is built from, or "custom" with
-// the permission names.
-func role(m map[string]any, p *provider.ResourcePermissions, isLink bool) {
+// the permission names. space tells a space member from a share.
+func role(m map[string]any, p *provider.ResourcePermissions, isLink, space bool) {
 	if p == nil {
 		return
 	}
@@ -83,10 +92,12 @@ func role(m map[string]any, p *provider.ResourcePermissions, isLink bool) {
 		}
 		return
 	}
-	for _, r := range roles {
-		if role := r(); grants.PermissionsEqual(p, role.CS3ResourcePermissions()) {
-			m[keyRole] = role.Name
-			return
+	for _, preferred := range []bool{true, false} {
+		for _, r := range roles {
+			if (r.space == space) == preferred && grants.PermissionsEqual(p, r.perms().CS3ResourcePermissions()) {
+				m[keyRole] = r.name
+				return
+			}
 		}
 	}
 	m[keyRole] = roleCustom
@@ -123,7 +134,7 @@ func shareCreated(r *collaboration.CreateShareRequest, res *collaboration.Create
 	}
 	after := map[string]any{}
 	recipient(after, g)
-	role(after, p, false)
+	role(after, p, false, utils.ExistsInOpaque(res.GetOpaque(), "spacegrant"))
 	if exp != nil {
 		expiration(after, exp)
 	}
@@ -137,18 +148,19 @@ func shareUpdated(r *collaboration.UpdateShareRequest, res *collaboration.Update
 	if s == nil {
 		s = r.GetShare()
 	}
+	space := utils.ExistsInOpaque(res.GetOpaque(), "spacegrant")
 	after := map[string]any{}
 	recipient(after, s.GetGrantee())
 	for _, p := range r.GetUpdateMask().GetPaths() {
 		switch p {
 		case "permissions":
-			role(after, s.GetPermissions().GetPermissions(), false)
+			role(after, s.GetPermissions().GetPermissions(), false, space)
 		case "expiration":
 			expiration(after, s.GetExpiration())
 		}
 	}
 	if p := r.GetField().GetPermissions(); p != nil {
-		role(after, p.GetPermissions(), false)
+		role(after, p.GetPermissions(), false, space)
 	}
 	return &audit.Change{After: after}
 }
@@ -167,7 +179,7 @@ func shareRemoved(o *typesv1beta1.Opaque) *audit.Change {
 	}
 	var p *provider.ResourcePermissions
 	if utils.ReadJSONFromOpaque(o, "permissions", &p) == nil {
-		role(before, p, false)
+		role(before, p, false, utils.ExistsInOpaque(o, "spacegrant"))
 	}
 	if len(before) == 0 {
 		return nil
@@ -180,14 +192,14 @@ func shareRemoved(o *typesv1beta1.Opaque) *audit.Change {
 func linkCreated(r *link.CreatePublicShareRequest, res *link.CreatePublicShareResponse) *audit.Change {
 	after := map[string]any{}
 	if s := res.GetShare(); s != nil {
-		role(after, s.GetPermissions().GetPermissions(), true)
+		role(after, s.GetPermissions().GetPermissions(), true, false)
 		after[keyPassword] = s.GetPasswordProtected()
 		if s.GetExpiration() != nil {
 			expiration(after, s.GetExpiration())
 		}
 		return &audit.Change{After: after}
 	}
-	role(after, r.GetGrant().GetPermissions().GetPermissions(), true)
+	role(after, r.GetGrant().GetPermissions().GetPermissions(), true, false)
 	after[keyPassword] = r.GetGrant().GetPassword() != ""
 	if r.GetGrant().GetExpiration() != nil {
 		expiration(after, r.GetGrant().GetExpiration())
@@ -206,7 +218,7 @@ func linkUpdated(r *link.UpdatePublicShareRequest, res *link.UpdatePublicShareRe
 		if s != nil {
 			p = s.GetPermissions().GetPermissions()
 		}
-		role(after, p, true)
+		role(after, p, true, false)
 	case link.UpdatePublicShareRequest_Update_TYPE_PASSWORD:
 		// true: set or changed, false: removed
 		after[keyPassword] = u.GetGrant().GetPassword() != ""
@@ -237,6 +249,6 @@ func linkRemoved(o *typesv1beta1.Opaque) *audit.Change {
 		return nil
 	}
 	before := map[string]any{}
-	role(before, p, true)
+	role(before, p, true, false)
 	return &audit.Change{Before: before}
 }

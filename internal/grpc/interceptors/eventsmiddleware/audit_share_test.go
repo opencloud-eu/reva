@@ -24,6 +24,8 @@ func TestShareChanges(t *testing.T) {
 	viewer := conversions.NewViewerRole().CS3ResourcePermissions()
 	editor := conversions.NewEditorRole().CS3ResourcePermissions()
 	spaceEditor := conversions.NewSpaceEditorRole().CS3ResourcePermissions()
+	fileEditor := conversions.NewFileEditorRole().CS3ResourcePermissions()
+	spaceViewer := conversions.NewSpaceViewerRole().CS3ResourcePermissions()
 	custom := &provider.ResourcePermissions{Stat: true, InitiateFileDownload: true}
 	exp := &types.Timestamp{Seconds: 1798761600} // 2027-01-01
 	info := &provider.ResourceInfo{Id: rid, Name: "report.pdf"}
@@ -59,6 +61,34 @@ func TestShareChanges(t *testing.T) {
 			res:        &collaboration.CreateShareResponse{Status: ok, Opaque: utils.SpaceGrantOpaque(), Share: &collaboration.Share{Grantee: devs, Permissions: &collaboration.SharePermissions{Permissions: spaceEditor}}},
 			definition: audit.SpaceMemberAdd,
 			change:     &audit.Change{After: map[string]any{"recipient_type": "group", "recipient": "devs", "role": "spaceeditor"}},
+		},
+		{
+			name:       "file editor is not editor",
+			req:        &collaboration.CreateShareRequest{ResourceInfo: info, Grant: &collaboration.ShareGrant{Grantee: alan, Permissions: &collaboration.SharePermissions{Permissions: fileEditor}}},
+			res:        &collaboration.CreateShareResponse{Status: ok, Share: &collaboration.Share{Grantee: alan, Permissions: &collaboration.SharePermissions{Permissions: fileEditor}}},
+			definition: audit.ShareCreate,
+			change:     &audit.Change{After: map[string]any{"recipient_type": "user", "recipient": "alan", "role": "file-editor"}},
+		},
+		{
+			name:       "space viewer, same permissions as viewer-list-grants",
+			req:        &collaboration.CreateShareRequest{ResourceInfo: &provider.ResourceInfo{Id: root}, Grant: &collaboration.ShareGrant{Grantee: alan, Permissions: &collaboration.SharePermissions{Permissions: spaceViewer}}},
+			res:        &collaboration.CreateShareResponse{Status: ok, Opaque: utils.SpaceGrantOpaque(), Share: &collaboration.Share{Grantee: alan, Permissions: &collaboration.SharePermissions{Permissions: spaceViewer}}},
+			definition: audit.SpaceMemberAdd,
+			change:     &audit.Change{After: map[string]any{"recipient_type": "user", "recipient": "alan", "role": "spaceviewer"}},
+		},
+		{
+			name:       "the same permissions on a folder",
+			req:        &collaboration.CreateShareRequest{ResourceInfo: info, Grant: &collaboration.ShareGrant{Grantee: alan, Permissions: &collaboration.SharePermissions{Permissions: spaceViewer}}},
+			res:        &collaboration.CreateShareResponse{Status: ok, Share: &collaboration.Share{Grantee: alan, Permissions: &collaboration.SharePermissions{Permissions: spaceViewer}}},
+			definition: audit.ShareCreate,
+			change:     &audit.Change{After: map[string]any{"recipient_type": "user", "recipient": "alan", "role": "viewer-list-grants"}},
+		},
+		{
+			name:       "space member role changed",
+			req:        &collaboration.UpdateShareRequest{Share: &collaboration.Share{Id: &collaboration.ShareId{OpaqueId: "s-2"}}, UpdateMask: &fieldmaskpb.FieldMask{Paths: []string{"permissions"}}},
+			res:        &collaboration.UpdateShareResponse{Status: ok, Opaque: utils.SpaceGrantOpaque(), Share: &collaboration.Share{Grantee: alan, ResourceId: root, Permissions: &collaboration.SharePermissions{Permissions: conversions.NewSpaceEditorWithoutVersionsRole().CS3ResourcePermissions()}}},
+			definition: audit.SpaceMemberUpdate,
+			change:     &audit.Change{After: map[string]any{"recipient_type": "user", "recipient": "alan", "role": "spaceeditor-without-versions"}},
 		},
 		{
 			name:       "share role changed",
