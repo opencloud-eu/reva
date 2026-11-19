@@ -2,6 +2,7 @@ package datatx
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
@@ -9,6 +10,7 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/opencloud-eu/reva/v3/pkg/audit"
 	ctxpkg "github.com/opencloud-eu/reva/v3/pkg/ctx"
+	"github.com/opencloud-eu/reva/v3/pkg/storage"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -105,4 +107,34 @@ func TestTusUploadThroughPublicLink(t *testing.T) {
 	require.NotNil(t, rec.events[0].Actor, "not the owner of the link")
 	assert.Equal(t, audit.ActorPublicLink, rec.events[0].Actor.Type)
 	assert.Equal(t, "l-1", rec.events[0].Actor.ID)
+}
+
+// pathFS answers a stat by ID with the path in the space, as the drivers do.
+type pathFS struct {
+	storage.FS
+	path string
+	user string
+}
+
+func (f *pathFS) GetMD(ctx context.Context, ref *provider.Reference, _ []string, _ []string) (*provider.ResourceInfo, error) {
+	if u, ok := ctxpkg.ContextGetUser(ctx); ok {
+		f.user = u.GetId().GetOpaqueId()
+	}
+	if ref.GetPath() != "" {
+		return nil, errors.New("only by ID")
+	}
+	return &provider.ResourceInfo{Id: ref.GetResourceId(), Path: f.path}, nil
+}
+
+func TestUploadIntoAShareHasThePathInTheSpace(t *testing.T) {
+	rec := &recorder{}
+	fs := &pathFS{path: "/projects/shared/docs/report.pdf"}
+	// the session only knows the path below what the recipient may see
+	inShare := &provider.Reference{ResourceId: ref.GetResourceId(), Path: "./shared/docs/report.pdf"}
+
+	EmitUploadAudit(audit.ContextSetEmitter(context.Background(), rec), UploadAudit{Header: header, Executant: executant, Ref: inShare, ID: node, FS: fs})
+
+	require.Len(t, rec.events, 1)
+	assert.Equal(t, "./projects/shared/docs/report.pdf", rec.events[0].Target.Path)
+	assert.Equal(t, executant.GetId().GetOpaqueId(), fs.user, "looked up as the uploader")
 }

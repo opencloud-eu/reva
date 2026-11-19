@@ -9,7 +9,9 @@ import (
 	"github.com/opencloud-eu/reva/v3/pkg/appctx"
 	"github.com/opencloud-eu/reva/v3/pkg/audit"
 	ctxpkg "github.com/opencloud-eu/reva/v3/pkg/ctx"
+	"github.com/opencloud-eu/reva/v3/pkg/storage"
 	"github.com/opencloud-eu/reva/v3/pkg/storagespace"
+	"github.com/opencloud-eu/reva/v3/pkg/utils"
 )
 
 // UploadAudit describes a finished upload for the audit log.
@@ -31,6 +33,9 @@ type UploadAudit struct {
 	Ref  *provider.Reference
 	ID   *provider.ResourceId
 	Name string
+	// FS looks up the path of the node in its space. The path of the upload
+	// session is cut off above what the uploader may see, e.g. in a share.
+	FS storage.FS
 }
 
 // EmitUploadAudit reports a finished upload. Only uploads a client sent are
@@ -61,6 +66,9 @@ func EmitUploadAudit(ctx context.Context, u UploadAudit) {
 		// the emitter takes name, type and tenant from the user
 		ctx = ctxpkg.ContextSetUser(ctx, u.Executant)
 	}
+	if p := pathInSpace(ctx, u.FS, u.ID); p != "" {
+		ev.Target.Path = p
+	}
 	shareID := audit.PublicShareID(ctx)
 	if shareID == "" {
 		shareID = u.PublicShareID
@@ -73,4 +81,17 @@ func EmitUploadAudit(ctx context.Context, u UploadAudit) {
 	if err := audit.ContextGetEmitter(ctx).Emit(ctx, ev); err != nil {
 		appctx.GetLogger(ctx).Error().Err(err).Msg("audit event not emitted")
 	}
+}
+
+// pathInSpace returns the path of the node in its space. A stat by ID has the
+// whole path, a stat by path only what the user may see.
+func pathInSpace(ctx context.Context, fs storage.FS, id *provider.ResourceId) string {
+	if fs == nil || id.GetOpaqueId() == "" {
+		return ""
+	}
+	info, err := fs.GetMD(ctx, &provider.Reference{ResourceId: id}, nil, []string{"path"})
+	if err != nil || info.GetPath() == "" || info.GetPath() == "." {
+		return ""
+	}
+	return utils.MakeRelativePath(info.GetPath())
 }

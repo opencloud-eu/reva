@@ -135,7 +135,7 @@ func (m *manager) Handler(coord upload.Coordinator, driver storage.FS) (http.Han
 			case nil:
 				// audited here, the node ID is only known now
 				if auditRef != nil {
-					datatx.EmitUploadAudit(ctx, datatx.UploadAudit{Header: r.Header.Get(audit.Header), Executant: &userpb.User{Id: auditOwner}, Ref: auditRef, ID: info.GetId()})
+					datatx.EmitUploadAudit(ctx, datatx.UploadAudit{Header: r.Header.Get(audit.Header), Executant: &userpb.User{Id: auditOwner}, Ref: auditRef, ID: info.GetId(), FS: driver})
 				}
 				// set etag, mtime and file id
 				w.Header().Set(net.HeaderETag, info.Etag)

@@ -159,7 +159,9 @@ func (m *manager) Handler(coord upload.Coordinator, fs storage.FS) (http.Handler
 				}
 			}
 			// the hook context keeps the values of the last request, the emitter among them
-			datatx.EmitUploadAudit(ev.Context, tusUploadAudit(up, ev.HTTPRequest.Header.Get(audit.Header), ev.Upload.MetaData["filename"]))
+			ua := tusUploadAudit(up, ev.HTTPRequest.Header.Get(audit.Header), ev.Upload.MetaData["filename"])
+			ua.FS = fs
+			datatx.EmitUploadAudit(ev.Context, ua)
 		}
 	}()
 
