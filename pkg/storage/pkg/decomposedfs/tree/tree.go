@@ -913,6 +913,13 @@ var nodeIDRegep = regexp.MustCompile(`.*/nodes/([^.]*).*`)
 var nodeFullIDRegep = regexp.MustCompile(`.*/nodes/(.*)`)
 
 // TODO refactor the returned params into Node properties? would make all the path transformations go away...
+// RecycleItemOrigin returns the path in the space a trashed item had before
+// it was deleted.
+func (t *Tree) RecycleItemOrigin(ctx context.Context, spaceID, key, path string) (string, error) {
+	_, _, origin, err := t.readRecycleItem(ctx, spaceID, key, path)
+	return origin, err
+}
+
 func (t *Tree) readRecycleItem(ctx context.Context, spaceID, key, path string) (recycleNode *node.Node, trashItem string, origin string, err error) {
 	_, span := tracer.Start(ctx, "readRecycleItem")
 	defer span.End()

@@ -642,12 +642,20 @@ func (tb *Trashbin) setAuditItem(ctx context.Context, spaceID, trashRoot, key, r
 	if _, nodeID, _, _, err := tb.lu.MetadataBackend().IdentifyPath(ctx, trashPath); err == nil && nodeID != "" {
 		id = &provider.ResourceId{SpaceId: spaceID, OpaqueId: nodeID}
 	}
+	// the info file has the path in the space, without a leading slash
+	origin, _, err := tb.readInfoFile(trashRoot, key)
+	if err == nil {
+		origin = filepath.Join("/", origin, relativePath)
+	}
 	name := filepath.Base(relativePath)
 	if relativePath == "" || relativePath == "." || relativePath == "/" {
 		name = ""
-		if p, _, err := tb.readInfoFile(trashRoot, key); err == nil {
-			name = filepath.Base(p)
+		if origin != "" {
+			name = filepath.Base(origin)
 		}
 	}
 	storagespace.ContextSetItem(ctx, t, id, name)
+	if origin != "" {
+		storagespace.ContextSetItemPath(ctx, origin)
+	}
 }

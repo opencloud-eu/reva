@@ -19,6 +19,8 @@
 package decomposedfs_test
 
 import (
+	"path"
+
 	"context"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -102,6 +104,7 @@ var _ = Describe("Recycle", func() {
 						err = env.GetFs().PurgeRecycleItem(storagespace.ContextRegisterItemTypeSlot(env.GetCtx(), slot), &provider.Reference{ResourceId: env.GetSpaceRootRes()}, item.Key, "")
 						Expect(err).ToNot(HaveOccurred())
 						Expect(slot.Type).To(Equal(item.Type))
+						Expect(slot.Path).To(Equal(path.Join("/", item.GetRef().GetPath())), "the path before the deletion")
 					}
 
 					items, err = env.GetFs().ListRecycle(env.GetCtx(), &provider.Reference{ResourceId: env.GetSpaceRootRes()}, "", "")
@@ -120,6 +123,7 @@ var _ = Describe("Recycle", func() {
 					_, err = env.GetFs().RestoreRecycleItem(storagespace.ContextRegisterItemTypeSlot(env.GetCtx(), slot), &provider.Reference{ResourceId: env.GetSpaceRootRes()}, items[0].Key, "", nil)
 					Expect(err).ToNot(HaveOccurred())
 					Expect(slot.Type).To(Equal(items[0].Type))
+					Expect(slot.Path).To(Equal(path.Join("/", items[0].GetRef().GetPath())), "the path before the deletion")
 
 					items, err = env.GetFs().ListRecycle(env.GetCtx(), &provider.Reference{ResourceId: env.GetSpaceRootRes()}, "", "")
 					Expect(err).ToNot(HaveOccurred())

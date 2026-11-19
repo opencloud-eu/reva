@@ -225,13 +225,14 @@ func auditEvent(req, res interface{}, item *storagespace.ItemTypeSlot) (audit.Ev
 			ev.Change = &audit.Change{After: map[string]any{"quota": r.GetStorageSpace().GetQuota().GetQuotaMaxBytes()}}
 		default:
 			ev.Definition = audit.SpaceUpdate
-			if n := r.GetStorageSpace().GetName(); n != "" {
-				ev.Change = &audit.Change{After: map[string]any{"name": n}}
-			}
+			ev.Change = spaceChange(r.GetStorageSpace())
 		}
 	case *provider.DeleteStorageSpaceResponse:
 		r := req.(*provider.DeleteStorageSpaceRequest)
 		ev = audit.Event{Definition: audit.SpaceDisable, Target: audit.Target{ID: r.GetId().GetOpaqueId(), Name: item.Name}}
+		if rid, err := storagespace.ParseID(r.GetId().GetOpaqueId()); err == nil {
+			ev.Target.SpaceID = storagespace.FormatStorageID(rid.GetStorageId(), rid.GetSpaceId())
+		}
 		if utils.ExistsInOpaque(r.GetOpaque(), "purge") {
 			ev.Definition = audit.SpaceDelete
 		}
@@ -354,7 +355,7 @@ func sameParent(src, dst *provider.Reference) bool {
 // item had before it was deleted, when the driver reported it, else by its
 // trash key.
 func trashTarget(ref *provider.Reference, key string, item *storagespace.ItemTypeSlot) audit.Target {
-	t := audit.Target{ID: key, Name: item.Name}
+	t := audit.Target{ID: key, Name: item.Name, Path: itemPath(item)}
 	if rid := ref.GetResourceId(); rid != nil {
 		t.SpaceID = storagespace.FormatStorageID(rid.GetStorageId(), rid.GetSpaceId())
 	}
@@ -377,7 +378,19 @@ func refTarget(ref *provider.Reference, item *storagespace.ItemTypeSlot) audit.T
 	if p := ref.GetPath(); p != "" && p != "." {
 		t.Name = path.Base(p)
 	}
+	if t.Path == "" {
+		t.Path = itemPath(item)
+	}
 	return t
+}
+
+// itemPath is the path in the space the driver reported, like the paths of
+// requests: "./folder/file".
+func itemPath(item *storagespace.ItemTypeSlot) string {
+	if item.Path == "" || item.Path == "/" {
+		return ""
+	}
+	return utils.MakeRelativePath(item.Path)
 }
 
 // itemID formats the ID the driver reported, with the storage ID of ref,
@@ -432,4 +445,32 @@ func firstLinkAccess(ctx context.Context, o *onceWithin, ev audit.Event) bool {
 	}
 	rc, _ := audit.ContextGetRequest(ctx)
 	return o.first(ev.Target.ID+"|"+rc.ClientAddress+"|"+rc.SessionID, time.Now())
+}
+
+// spaceAttributes are the space attributes graph puts into the opaque of an
+// update, with their keys in the record. image and readme are the IDs of the
+// files.
+var spaceAttributes = []struct{ opaque, key string }{
+	{"description", "description"},
+	{"spaceAlias", "alias"},
+	{"image", "image"},
+	{"readme", "readme"},
+}
+
+// spaceChange lists what a space update changes. An attribute set to an
+// empty value was removed.
+func spaceChange(s *provider.StorageSpace) *audit.Change {
+	after := map[string]any{}
+	if n := s.GetName(); n != "" {
+		after["name"] = n
+	}
+	for _, a := range spaceAttributes {
+		if utils.ExistsInOpaque(s.GetOpaque(), a.opaque) {
+			after[a.key] = utils.ReadPlainFromOpaque(s.GetOpaque(), a.opaque)
+		}
+	}
+	if len(after) == 0 {
+		return nil
+	}
+	return &audit.Change{After: after}
 }
