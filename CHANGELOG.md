@@ -12,6 +12,7 @@
 
 ### 🐛 Bug Fixes
 
+- fix(ocm): align ocm share permissions with the shared resource type [[#1035](https://github.com/opencloud-eu/reva/pull/1035)]
 - fix(ocm): fix wildcard providers and invite error handling [[#1027](https://github.com/opencloud-eu/reva/pull/1027)]
 - fix: set the share jail root as parent id of listed shares [[#1020](https://github.com/opencloud-eu/reva/pull/1020)]
 
