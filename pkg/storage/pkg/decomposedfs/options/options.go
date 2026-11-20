@@ -134,6 +134,13 @@ type Options struct {
 	// to revisions posix creates from changes on disk (enable_fs_revisions).
 	// An invalid value makes the driver fail at startup.
 	RevisionsCleanupStrategy string `mapstructure:"revisions_cleanup_strategy"`
+	// RevisionsCleanupStrategyPersonal is the strategy for the personal spaces, in the same
+	// form as RevisionsCleanupStrategy. Leaving it empty applies RevisionsCleanupStrategy to
+	// them, "disabled" keeps all their revisions, whatever RevisionsCleanupStrategy says.
+	RevisionsCleanupStrategyPersonal string `mapstructure:"revisions_cleanup_strategy_personal"`
+	// RevisionsCleanupStrategyProject is the strategy for the project spaces, like
+	// RevisionsCleanupStrategyPersonal for the personal spaces.
+	RevisionsCleanupStrategyProject string `mapstructure:"revisions_cleanup_strategy_project"`
 
 	// RevisionsCleanupAsync runs the revision cleanup in the background instead of as part of
 	// the upload, restore or change on disk that created the new revision, so that those are not

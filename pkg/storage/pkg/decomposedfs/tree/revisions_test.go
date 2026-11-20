@@ -545,16 +545,16 @@ var _ = Describe("Revisions", func() {
 	})
 
 	Describe("revisioncleanup.Service", func() {
-		var cleaner *revisioncleanup.Cleaner
+		var strategies *revisioncleanup.Policy
 
 		BeforeEach(func() {
 			var err error
-			cleaner, err = revisioncleanup.New("7d, auto, 30d")
+			strategies, err = revisioncleanup.NewPolicy(revisioncleanup.PolicyConfig{Default: "7d, auto, 30d"})
 			Expect(err).ToNot(HaveOccurred())
 		})
 
 		newService := func(opts revisioncleanup.AsyncOptions) *revisioncleanup.Service {
-			s, err := revisioncleanup.NewService(cleaner, env.Lookup, env.Tree, opts, nil)
+			s, err := revisioncleanup.NewService(strategies, env.Lookup, env.Tree, opts, nil)
 			Expect(err).ToNot(HaveOccurred())
 			DeferCleanup(func() {
 				Expect(s.Shutdown(context.Background())).To(Succeed())
@@ -584,7 +584,7 @@ var _ = Describe("Revisions", func() {
 
 		It("reads the node switched to the group of its space with a SpaceScoper", func() {
 			st := &scopingTree{Tree: env.Tree}
-			s, err := revisioncleanup.NewService(cleaner, env.Lookup, st, revisioncleanup.AsyncOptions{Enabled: true, Workers: 1}, nil)
+			s, err := revisioncleanup.NewService(strategies, env.Lookup, st, revisioncleanup.AsyncOptions{Enabled: true, Workers: 1}, nil)
 			Expect(err).ToNot(HaveOccurred())
 			DeferCleanup(func() {
 				Expect(s.Shutdown(context.Background())).To(Succeed())
@@ -655,15 +655,19 @@ const (
 	purgeFailures    = "reva_revision_cleanup_purge_failures_total"
 )
 
-// counterValue reads a counter through the default gatherer, like a scrape would.
-// The counters are global to the process, so tests compare against the value from before.
+// counterValue reads a counter through the default gatherer, like a scrape would, summed over
+// all its series (space types). The counters are global to the process, so tests compare
+// against the value from before.
 func counterValue(name string) float64 {
 	families, err := prometheus.DefaultGatherer.Gather()
 	Expect(err).ToNot(HaveOccurred())
+	var sum float64
 	for _, family := range families {
-		if family.GetName() == name && len(family.GetMetric()) > 0 {
-			return family.GetMetric()[0].GetCounter().GetValue()
+		if family.GetName() == name {
+			for _, m := range family.GetMetric() {
+				sum += m.GetCounter().GetValue()
+			}
 		}
 	}
-	return 0
+	return sum
 }

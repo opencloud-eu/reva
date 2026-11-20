@@ -62,10 +62,10 @@ func TestAsyncOptionsResolve(t *testing.T) {
 
 func TestNewServiceWithoutStrategy(t *testing.T) {
 	ctx := context.Background()
-	disabled, err := New("disabled")
+	disabled, err := NewPolicy(PolicyConfig{Default: "disabled"})
 	require.NoError(t, err)
-	for _, cleaner := range []*Cleaner{disabled, nil} {
-		s, err := NewService(cleaner, nil, nil, AsyncOptions{Enabled: true}, nil)
+	for _, strategies := range []*Policy{disabled, nil} {
+		s, err := NewService(strategies, nil, nil, AsyncOptions{Enabled: true}, nil)
 		require.NoError(t, err)
 		require.NotNil(t, s)
 		require.False(t, s.Enabled())
@@ -105,11 +105,11 @@ type testService struct {
 }
 
 func newTestService(t *testing.T, workers, queueSize int, policy QueueFullPolicy) *testService {
-	// an enabled Cleaner, the workers below never run it
-	cleaner, err := New("1")
+	// an enabled strategy, the workers below never run it
+	strategies, err := NewPolicy(PolicyConfig{Default: "1"})
 	require.NoError(t, err)
 	ts := &testService{
-		Service: &Service{cleaner: cleaner, log: &zerolog.Logger{}},
+		Service: &Service{strategies: strategies, log: &zerolog.Logger{}},
 		t:       t,
 		started: make(chan string, 100),
 		release: make(chan struct{}),
@@ -257,9 +257,9 @@ func TestServiceDetachesTheCleanupFromTheRequest(t *testing.T) {
 	otel.SetTracerProvider(provider)
 	t.Cleanup(func() { otel.SetTracerProvider(previous) })
 
-	cleaner, err := New("1")
+	strategies, err := NewPolicy(PolicyConfig{Default: "1"})
 	require.NoError(t, err)
-	s := &Service{cleaner: cleaner, log: &zerolog.Logger{}}
+	s := &Service{strategies: strategies, log: &zerolog.Logger{}}
 	workerCtx := make(chan context.Context, 1)
 	s.startWorkers(1, 1, QueueFullBlock, func(ctx context.Context, spaceID, nodeID string) {
 		workerCtx <- ctx
@@ -490,7 +490,7 @@ func TestServiceWaitWithoutWork(t *testing.T) {
 	require.NoError(t, disabled.Wait(context.Background()))
 
 	// a synchronous Service: cleanups already ran in their callers
-	sync := &Service{cleaner: &Cleaner{}}
+	sync := &Service{strategies: &Policy{}}
 	require.NoError(t, sync.Wait(context.Background()))
 
 	// an idle asynchronous Service
