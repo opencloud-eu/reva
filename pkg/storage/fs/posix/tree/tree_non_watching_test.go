@@ -64,6 +64,34 @@ var _ = Describe("Non-watching tree", func() {
 			Expect(non_watching_env.Tree.TouchFile(ctx, n, false, "")).To(Succeed())
 		}
 
+		// The watcher would otherwise give the file an id of its own before TouchFile writes
+		// the one it reports.
+		It("holds off the assimilation of the new file until its id is written", func() {
+			n, err := non_watching_env.Lookup.NodeFromResource(non_watching_env.Ctx, &provider.Reference{
+				ResourceId: non_watching_env.SpaceRootRes,
+				Path:       subtree + "/newFile",
+			})
+			Expect(err).ToNot(HaveOccurred())
+			nodePath := filepath.Join(n.ParentPath(), n.Name)
+
+			unlock, err := non_watching_env.Tree.LockNewPathForTest(n.SpaceID, nodePath)
+			Expect(err).ToNot(HaveOccurred())
+
+			done := make(chan error, 1)
+			go func() { done <- non_watching_env.Tree.TouchFile(non_watching_env.Ctx, n, false, "") }()
+
+			Consistently(done, 200*time.Millisecond).ShouldNot(Receive())
+			_, err = os.Stat(nodePath)
+			Expect(os.IsNotExist(err)).To(BeTrue())
+
+			Expect(unlock()).To(Succeed())
+			Eventually(done).Should(Receive(BeNil()))
+
+			id, err := non_watching_env.Lookup.MetadataBackend().Get(non_watching_env.Ctx, n, prefixes.IDAttr)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(string(id)).To(Equal(n.ID))
+		})
+
 		It("propagates the new file to its parent", func() {
 			before := parentTMTime()
 			time.Sleep(10 * time.Millisecond)

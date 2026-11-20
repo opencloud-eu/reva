@@ -386,22 +386,23 @@ func (c *coordinator) touchNode(ctx context.Context, session Session) error {
 		Path: session.Filename(),
 	}
 	// PrepareUpload marks and propagates the node, so TouchFile need not.
-	_, err := c.fs.TouchFile(storage.ContextSkipTouchPropagation(ctx), pathRef, false, session.Metadata()["mtime"])
+	res, err := c.fs.TouchFile(storage.ContextSkipTouchPropagation(ctx), pathRef, false, session.Metadata()["mtime"])
 	if err == nil {
+		// decomposedfs, posix and the received OCM storage report the node they created
+		// together with the resolved space owner or manager, which spares us a stat.
+		if res != nil && res.ResourceID.GetOpaqueId() != "" && res.SpaceOwner != nil {
+			setTouchedNode(session, res.ResourceID, res.SpaceOwner)
+			return nil
+		}
 		// Not every driver reports the node it created, read it back.
 		var ri *provider.ResourceInfo
 		ri, err = c.fs.GetMD(ctx, pathRef, nil, nil)
 		if err == nil {
-			// Replaces the placeholder minted at initiate.
-			session.SetStorageValue("NodeId", ri.GetId().GetOpaqueId())
-			session.SetStorageValue("SpaceRoot", ri.GetId().GetSpaceId())
+			var owner *user.UserId
 			if ri.GetOwner() != nil {
-				if owner := c.spaceOwnerOrManager(ctx, ri.GetOwner(), ri.GetId().GetSpaceId()); owner != nil {
-					session.SetStorageValue("SpaceOwnerOrManager", owner.GetOpaqueId())
-					session.SetStorageValue("SpaceOwnerIdp", owner.GetIdp())
-					session.SetStorageValue("SpaceOwnerType", utils.UserTypeToString(owner.GetType()))
-				}
+				owner = c.spaceOwnerOrManager(ctx, ri.GetOwner(), ri.GetId().GetSpaceId())
 			}
+			setTouchedNode(session, ri.GetId(), owner)
 			return nil
 		}
 	}
@@ -411,6 +412,18 @@ func (c *coordinator) touchNode(ctx context.Context, session Session) error {
 		return errtypes.PreconditionFailed(err.Error())
 	}
 	return err
+}
+
+// setTouchedNode records the node touchNode created, replacing the placeholder minted at
+// initiate.
+func setTouchedNode(session Session, id *provider.ResourceId, owner *user.UserId) {
+	session.SetStorageValue("NodeId", id.GetOpaqueId())
+	session.SetStorageValue("SpaceRoot", id.GetSpaceId())
+	if owner != nil {
+		session.SetStorageValue("SpaceOwnerOrManager", owner.GetOpaqueId())
+		session.SetStorageValue("SpaceOwnerIdp", owner.GetIdp())
+		session.SetStorageValue("SpaceOwnerType", utils.UserTypeToString(owner.GetType()))
+	}
 }
 
 // prepare has the driver write the node metadata, mark it as processing so clients

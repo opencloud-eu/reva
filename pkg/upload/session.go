@@ -237,7 +237,7 @@ func (s *FileSession) SpaceOwner() *userpb.UserId {
 	return &userpb.UserId{
 		OpaqueId: s.info.Storage["SpaceOwnerOrManager"],
 		Idp:      s.info.Storage["SpaceOwnerIdp"],
-		Type:     userpb.UserType(userpb.UserType_value[s.info.Storage["SpaceOwnerType"]]),
+		Type:     utils.UserTypeMap(s.info.Storage["SpaceOwnerType"]),
 	}
 }
 
