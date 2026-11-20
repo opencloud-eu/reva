@@ -175,6 +175,14 @@ func (b HybridBackend) getAll(ctx context.Context, n MetadataNode, skipOffloaded
 	if err != nil {
 		return nil, err
 	}
+	if !isCacheable(n, attribs) {
+		// an incomplete read must neither be cached nor leave an older entry behind,
+		// so the next read goes to storage
+		if err := b.metaCache.RemoveMetadata(b.cacheKey(n)); err != nil {
+			return nil, err
+		}
+		return attribs, nil
+	}
 	if err := b.metaCache.PushToCache(b.cacheKey(n), attribs); err != nil {
 		return nil, err
 	}
@@ -204,9 +212,13 @@ func (b HybridBackend) readAll(ctx context.Context, n MetadataNode, skipOffloade
 	path := n.InternalPath()
 	for _, name := range attrNames {
 		var val []byte
-		if val, xerr = xattr.Get(path, name); xerr != nil && !IsAttrUnset(xerr) {
+		val, xerr = xattr.Get(path, name)
+		switch {
+		case IsAttrUnset(xerr):
+			// removed since we listed it
+		case xerr != nil:
 			xerrs++
-		} else {
+		default:
 			attribs[name] = val
 		}
 	}
