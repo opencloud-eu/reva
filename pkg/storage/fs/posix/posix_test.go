@@ -91,6 +91,19 @@ var _ = Describe("Posix", func() {
 			Expect(err).ToNot(HaveOccurred())
 		})
 
+		Context("with the xattrs metadata backend", func() {
+			BeforeEach(func() {
+				o.MetadataBackend = "xattrs"
+			})
+
+			It("rejects the configuration with an informative error", func() {
+				_, err := posix.New(o, nil, idCache, historyCache, &zerolog.Logger{})
+				Expect(err).To(HaveOccurred())
+				Expect(err).To(MatchError(ContainSubstring("xattrs")))
+				Expect(err).To(MatchError(ContainSubstring("hybrid")))
+			})
+		})
+
 		// through both wrappers, so an upload skips the TouchFile
 		It("creates a new file's node in PrepareUpload", func() {
 			fs, err := posix.New(o, nil, idCache, historyCache, &zerolog.Logger{})

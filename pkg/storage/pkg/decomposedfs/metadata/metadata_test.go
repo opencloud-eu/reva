@@ -66,7 +66,7 @@ var _ = Describe("Backend", func() {
 
 	BeforeEach(func() {
 		var err error
-		tmpdir, err = os.MkdirTemp(os.TempDir(), "XattrsBackendTest-")
+		tmpdir, err = os.MkdirTemp(os.TempDir(), "MetadataBackendTest-")
 		Expect(err).ToNot(HaveOccurred())
 	})
 

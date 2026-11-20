@@ -46,6 +46,7 @@ var _ = Describe("Options", func() {
 
 		It("sets defaults", func() {
 			Expect(o.MetadataBackend).ToNot(BeEmpty())
+			Expect(o.MetadataBackend).To(Equal("messagepack"))
 			Expect(o.RevisionsCleanupAsync).To(BeTrue())
 			Expect(o.RevisionsCleanupAsyncWorkers).To(Equal(0))
 			Expect(o.RevisionsCleanupAsyncQueueSize).To(Equal(0))
