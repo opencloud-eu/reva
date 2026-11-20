@@ -20,6 +20,9 @@ package decomposedfs_test
 
 import (
 	"context"
+	"io"
+	"os"
+	"strings"
 
 	"github.com/opencloud-eu/reva/v3/pkg/errtypes"
 	"github.com/stretchr/testify/mock"
@@ -27,6 +30,7 @@ import (
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs"
+	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/metadata/prefixes"
 	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/node"
 	nodemocks "github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/node/mocks"
 	helpers "github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/testhelpers"
@@ -345,6 +349,148 @@ var _ = Describe("Decomposed", func() {
 				Expect(result.ResourceId.SpaceId).NotTo(BeEmpty())
 				Expect(result.ResourceId.OpaqueId).NotTo(BeEmpty())
 			})
+		})
+	})
+
+	Describe("Download", func() {
+		var (
+			fileRef *provider.Reference
+
+			deletedBlobs map[string]bool
+			onDownload   func(n *node.Node)
+			openReader   = func(*provider.ResourceInfo) bool { return true }
+		)
+
+		// updateBlob changes the blob of the file like a finished upload does
+		updateBlob := func(blobID string, blobSize int64) {
+			n, err := env.Lookup.NodeFromResource(env.Ctx, fileRef)
+			Expect(err).ToNot(HaveOccurred())
+			attribs := node.Attributes{}
+			attribs.SetString(prefixes.BlobIDAttr, blobID)
+			attribs.SetInt64(prefixes.BlobsizeAttr, blobSize)
+			Expect(n.SetXattrsWithContext(env.Ctx, attribs)).To(Succeed())
+		}
+
+		JustBeforeEach(func() {
+			fileRef = &provider.Reference{ResourceId: env.SpaceRootRes, Path: "/dir1/file1"}
+			mockPermissionsByName(map[string]*provider.ResourcePermissions{
+				"file1": {Stat: true, InitiateFileDownload: true},
+			})
+
+			deletedBlobs = map[string]bool{}
+			onDownload = nil
+			env.Blobstore.On("Download", mock.Anything).Return(
+				func(n *node.Node) (io.ReadCloser, error) {
+					if onDownload != nil {
+						onDownload(n)
+					}
+					if deletedBlobs[n.BlobID] {
+						return nil, os.ErrNotExist
+					}
+					return io.NopCloser(strings.NewReader(n.BlobID)), nil
+				}, nil)
+		})
+
+		It("does not open a reader when it is not requested", func() {
+			ri, reader, err := env.Fs.Download(env.Ctx, fileRef, func(*provider.ResourceInfo) bool { return false })
+
+			Expect(err).ToNot(HaveOccurred())
+			Expect(ri).ToNot(BeNil())
+			Expect(reader).To(BeNil())
+			env.Blobstore.AssertNotCalled(GinkgoT(), "Download", mock.Anything)
+		})
+
+		It("returns too early when the node is already processing", func() {
+			n, err := env.Lookup.NodeFromResource(env.Ctx, fileRef)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(n.SetXattrString(env.Ctx, prefixes.StatusPrefix, node.ProcessingStatus+"upload-id")).To(Succeed())
+
+			_, reader, err := env.Fs.Download(env.Ctx, fileRef, openReader)
+
+			Expect(err).To(MatchError(errtypes.TooEarly("file is still being processed")))
+			Expect(reader).To(BeNil())
+		})
+
+		It("returns too early when the node started processing while the blob could not be opened", func() {
+			_, reader, err := env.Fs.Download(env.Ctx, fileRef, func(*provider.ResourceInfo) bool {
+				n, err := env.Lookup.NodeFromResource(env.Ctx, fileRef)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(n.SetXattrString(env.Ctx, prefixes.StatusPrefix, node.ProcessingStatus+"upload-id")).To(Succeed())
+				deletedBlobs["file1-blobid"] = true
+				return true
+			})
+
+			Expect(err).To(MatchError(errtypes.TooEarly("file is still being processed")))
+			Expect(reader).To(BeNil())
+			env.Blobstore.AssertNumberOfCalls(GinkgoT(), "Download", 1)
+		})
+
+		It("serves the new blob when the blob was replaced and deleted while resolving the node", func() {
+			ri, reader, err := env.Fs.Download(env.Ctx, fileRef, func(*provider.ResourceInfo) bool {
+				updateBlob("new-blobid", 9)
+				deletedBlobs["file1-blobid"] = true
+				return true
+			})
+
+			Expect(err).ToNot(HaveOccurred())
+			Expect(ri.Size).To(Equal(uint64(9)))
+			Expect(reader).ToNot(BeNil())
+			defer reader.Close()
+			content, err := io.ReadAll(reader)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(string(content)).To(Equal("new-blobid"))
+			env.Blobstore.AssertNumberOfCalls(GinkgoT(), "Download", 2)
+		})
+
+		It("returns the error after a single attempt when the blob id did not change", func() {
+			deletedBlobs["file1-blobid"] = true
+
+			_, reader, err := env.Fs.Download(env.Ctx, fileRef, openReader)
+
+			Expect(err).To(MatchError(ContainSubstring("Decomposedfs: error download blob")))
+			Expect(reader).To(BeNil())
+			env.Blobstore.AssertNumberOfCalls(GinkgoT(), "Download", 1)
+		})
+
+		It("returns the blob error when the node cannot be re-read after the blob could not be opened", func() {
+			onDownload = func(n *node.Node) {
+				deletedBlobs[n.BlobID] = true
+				Expect(env.Lookup.MetadataBackend().Purge(env.Ctx, n)).To(Succeed())
+				Expect(os.WriteFile(env.Lookup.MetadataBackend().MetadataPath(n), []byte("corrupt"), 0600)).To(Succeed())
+			}
+
+			_, reader, err := env.Fs.Download(env.Ctx, fileRef, openReader)
+
+			Expect(err).To(MatchError(ContainSubstring("Decomposedfs: error download blob")))
+			Expect(reader).To(BeNil())
+			env.Blobstore.AssertNumberOfCalls(GinkgoT(), "Download", 1)
+		})
+
+		It("returns not found when the node was removed while the blob could not be opened", func() {
+			onDownload = func(n *node.Node) {
+				deletedBlobs[n.BlobID] = true
+				Expect(env.Lookup.MetadataBackend().Purge(env.Ctx, n)).To(Succeed())
+				Expect(os.Remove(n.InternalPath())).To(Succeed())
+			}
+
+			_, reader, err := env.Fs.Download(env.Ctx, fileRef, openReader)
+
+			Expect(err).To(BeAssignableToTypeOf(errtypes.NotFound("")))
+			Expect(reader).To(BeNil())
+			env.Blobstore.AssertNumberOfCalls(GinkgoT(), "Download", 1)
+		})
+
+		It("returns the error after three attempts when the blob id changes on every attempt", func() {
+			onDownload = func(n *node.Node) {
+				deletedBlobs[n.BlobID] = true
+				updateBlob(n.BlobID+"-next", 9)
+			}
+
+			_, reader, err := env.Fs.Download(env.Ctx, fileRef, openReader)
+
+			Expect(err).To(MatchError(ContainSubstring("Decomposedfs: error download blob")))
+			Expect(reader).To(BeNil())
+			env.Blobstore.AssertNumberOfCalls(GinkgoT(), "Download", 3)
 		})
 	})
 })

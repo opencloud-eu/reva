@@ -40,6 +40,7 @@ import (
 	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/aspects"
 	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/lookup"
 	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/metadata"
+	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/metadata/prefixes"
 	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/node"
 	nodemocks "github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/node/mocks"
 	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/options"
@@ -528,6 +529,90 @@ var _ = Describe("File uploads", func() {
 
 				Expect(err).To(MatchError(ContainSubstring("blobstore unavailable")))
 				bs.AssertExpectations(GinkgoT())
+			})
+
+			Context("with an obsolete blob", func() {
+				expectDeleted := func(blobID string) {
+					bs.On("Delete", mock.AnythingOfType("*node.Node")).
+						Run(func(args mock.Arguments) {
+							Expect(args.Get(0).(*node.Node).BlobID).To(Equal(blobID))
+						}).Return(nil).Once()
+				}
+
+				It("deletes it once the new blob is written", func() {
+					prepare("session-1", false)
+					bs.On("UploadFromReader", mock.AnythingOfType("*node.Node"), mock.Anything, int64(len(body))).
+						Return(nil).Once()
+					expectDeleted("old-blob")
+
+					Expect(fs.CommitUpload(ctx, ref, "session-1", storage.UploadSource{
+						Body:           io.NopCloser(bytes.NewReader(body)),
+						Length:         int64(len(body)),
+						ObsoleteBlobID: "old-blob",
+					})).To(Succeed())
+					bs.AssertExpectations(GinkgoT())
+				})
+
+				It("keeps it when the write fails", func() {
+					prepare("session-1", false)
+					bs.On("UploadFromReader", mock.AnythingOfType("*node.Node"), mock.Anything, int64(len(body))).
+						Return(errors.New("blobstore unavailable")).Once()
+					expectDeleted("session-1")
+
+					err := fs.CommitUpload(ctx, ref, "session-1", storage.UploadSource{
+						Body:           io.NopCloser(bytes.NewReader(body)),
+						Length:         int64(len(body)),
+						ObsoleteBlobID: "old-blob",
+					})
+
+					Expect(err).To(HaveOccurred())
+					bs.AssertExpectations(GinkgoT())
+					bs.AssertNumberOfCalls(GinkgoT(), "Delete", 1)
+				})
+
+				It("keeps the blob of the session itself", func() {
+					prepare("session-1", false)
+					bs.On("UploadFromReader", mock.AnythingOfType("*node.Node"), mock.Anything, int64(len(body))).
+						Return(nil).Once()
+
+					Expect(fs.CommitUpload(ctx, ref, "session-1", storage.UploadSource{
+						Body:           io.NopCloser(bytes.NewReader(body)),
+						Length:         int64(len(body)),
+						ObsoleteBlobID: "session-1",
+					})).To(Succeed())
+					bs.AssertNotCalled(GinkgoT(), "Delete", mock.Anything)
+				})
+
+				It("deletes it when the bytes go to the revision of a newer upload", func() {
+					prepare("session-a", false)
+					prepare("session-b", true)
+					bs.On("UploadFromReader", mock.AnythingOfType("*node.Node"), mock.Anything, int64(len(body))).
+						Return(nil).Once()
+					expectDeleted("old-blob")
+
+					Expect(fs.CommitUpload(ctx, ref, "session-a", storage.UploadSource{
+						Body:           io.NopCloser(bytes.NewReader(body)),
+						Length:         int64(len(body)),
+						ObsoleteBlobID: "old-blob",
+					})).To(Succeed())
+					bs.AssertExpectations(GinkgoT())
+				})
+
+				It("deletes it when the upload was superseded and has no revision", func() {
+					prepare("session-1", false)
+					n, err := lu.NodeFromResource(ctx, ref)
+					Expect(err).ToNot(HaveOccurred())
+					Expect(n.SetXattrString(ctx, prefixes.BlobIDAttr, "session-2")).To(Succeed())
+					expectDeleted("old-blob")
+
+					Expect(fs.CommitUpload(ctx, ref, "session-1", storage.UploadSource{
+						Body:           io.NopCloser(bytes.NewReader(body)),
+						Length:         int64(len(body)),
+						ObsoleteBlobID: "old-blob",
+					})).To(Succeed())
+					bs.AssertNotCalled(GinkgoT(), "UploadFromReader", mock.Anything, mock.Anything, mock.Anything)
+					bs.AssertExpectations(GinkgoT())
+				})
 			})
 		})
 
