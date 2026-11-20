@@ -17,6 +17,11 @@
 - fix(ocm): fix wildcard providers and invite error handling [[#1027](https://github.com/opencloud-eu/reva/pull/1027)]
 - fix: set the share jail root as parent id of listed shares [[#1020](https://github.com/opencloud-eu/reva/pull/1020)]
 
+### 📦️ Dependencies
+
+- chore(deps): bump golang.org/x/sys from 0.48.0 to 0.49.0 [[#983](https://github.com/opencloud-eu/reva/pull/983)]
+- chore(deps): bump go.opentelemetry.io/otel/sdk from 1.46.0 to 1.47.0 in the go_modules group across 1 directory [[#1004](https://github.com/opencloud-eu/reva/pull/1004)]
+
 ## [3.0.1](https://github.com/opencloud-eu/reva/releases/tag/v3.0.1) - 2026-11-17
 
 ### ❤️ Thanks to all contributors! ❤️
