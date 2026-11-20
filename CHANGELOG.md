@@ -1,5 +1,27 @@
 # Changelog
 
+## [3.1.0](https://github.com/opencloud-eu/reva/releases/tag/v3.1.0) - 2026-11-20
+
+### ❤️ Thanks to all contributors! ❤️
+
+@asaah262, @butonic, @dragonchaser, @fschade, @maki5, @pbleser-oc
+
+### ✨ Features
+
+- feat: clean up old revisions according to a cleanup strategy [[#895](https://github.com/opencloud-eu/reva/pull/895)]
+
+### 🐛 Bug Fixes
+
+- fix(ocm): use gateway selectors in the received storage and the ocmshares auth manager [[#1034](https://github.com/opencloud-eu/reva/pull/1034)]
+- fix(ocm): align ocm share permissions with the shared resource type [[#1035](https://github.com/opencloud-eu/reva/pull/1035)]
+- fix(ocm): fix wildcard providers and invite error handling [[#1027](https://github.com/opencloud-eu/reva/pull/1027)]
+- fix: set the share jail root as parent id of listed shares [[#1020](https://github.com/opencloud-eu/reva/pull/1020)]
+
+### 📦️ Dependencies
+
+- chore(deps): bump golang.org/x/sys from 0.48.0 to 0.49.0 [[#983](https://github.com/opencloud-eu/reva/pull/983)]
+- chore(deps): bump go.opentelemetry.io/otel/sdk from 1.46.0 to 1.47.0 in the go_modules group across 1 directory [[#1004](https://github.com/opencloud-eu/reva/pull/1004)]
+
 ## [3.0.1](https://github.com/opencloud-eu/reva/releases/tag/v3.0.1) - 2026-11-17
 
 ### ❤️ Thanks to all contributors! ❤️
