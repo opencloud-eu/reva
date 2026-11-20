@@ -71,6 +71,38 @@ type (
 	}
 )
 
+var globEscaper = strings.NewReplacer(`\`, `\\`, `*`, `\*`, `?`, `\?`, `[`, `\[`)
+
+// Glob returns a filepath.Match pattern for the paths the given template
+// string can produce. A path segment with an action matches any name.
+func Glob(tpl string) string {
+	// replace the actions first, they can contain separators
+	var b strings.Builder
+	for {
+		start := strings.Index(tpl, "{{")
+		if start == -1 {
+			break
+		}
+		end := strings.Index(tpl[start:], "}}")
+		if end == -1 {
+			break
+		}
+		b.WriteString(tpl[:start])
+		b.WriteByte(0)
+		tpl = tpl[start+end+2:]
+	}
+	b.WriteString(tpl)
+	segments := strings.Split(clean(b.String()), "/")
+	for n, segment := range segments {
+		if strings.Contains(segment, "\x00") {
+			segments[n] = "*"
+		} else {
+			segments[n] = globEscaper.Replace(segment)
+		}
+	}
+	return strings.Join(segments, "/")
+}
+
 // Base returns the base path for the given template string.
 func Base(tpl string) string {
 	tpl = clean(tpl)
