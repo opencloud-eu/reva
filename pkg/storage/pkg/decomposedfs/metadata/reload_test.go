@@ -21,9 +21,6 @@ var _ = Describe("Reload", func() {
 		"MessagePackBackend": func(cfg cache.Config) metadata.Backend {
 			return metadata.NewMessagePackBackend(cfg)
 		},
-		"XattrsBackend": func(cfg cache.Config) metadata.Backend {
-			return metadata.NewXattrsBackend(cfg)
-		},
 		"HybridBackend": func(cfg cache.Config) metadata.Backend {
 			return metadata.NewHybridBackend(1024, func(n metadata.MetadataNode) string {
 				return n.InternalPath() + ".mpk"

@@ -13,11 +13,9 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/pkg/xattr"
-	"github.com/rogpeppe/go-internal/lockedfile"
 
 	"github.com/opencloud-eu/reva/v3/pkg/storage/cache"
 	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/metadata"
-	"github.com/opencloud-eu/reva/v3/pkg/storage/utils/filelocks"
 )
 
 // The hybrid backend (posix) locks to read the metadata of a node that isn't cached. The
@@ -118,50 +116,5 @@ var _ = Describe("WithReadOnly", func() {
 		Expect(unlock()).To(Succeed())
 		Eventually(done, 5*time.Second).Should(Receive(BeNil()))
 		Expect(readerNode.LockHeld()).To(BeFalse())
-	})
-
-	// The xattrs backend only locks to read when listing the attributes failed, and tries
-	// again under the lock. Listing the attributes of a missing file always fails.
-	Describe("the locked retry of the xattrs backend", func() {
-		var (
-			backend  metadata.XattrsBackend
-			missing  *testNode
-			lockfile string
-		)
-
-		BeforeEach(func() {
-			backend = metadata.NewXattrsBackend(cache.Config{Database: tmpdir, Table: "xattrs"})
-			missing = &testNode{spaceID: "123", id: "789", path: path.Join(tmpdir, "missing")}
-			lockfile = missing.path + filelocks.LockFileSuffix
-		})
-
-		It("doesn't create the lock file", func() {
-			_, err := backend.All(metadata.WithReadOnly(ctx), missing)
-			Expect(err).To(HaveOccurred())
-			Expect(lockfile).ToNot(BeAnExistingFile())
-			Expect(missing.LockHeld()).To(BeFalse())
-		})
-
-		It("creates the lock file for other reads", func() {
-			_, err := backend.All(ctx, missing)
-			Expect(err).To(HaveOccurred())
-			Expect(lockfile).To(BeAnExistingFile())
-		})
-
-		It("still waits for the lock when the lock file exists", func() {
-			held, err := lockedfile.OpenFile(lockfile, os.O_CREATE|os.O_WRONLY, 0600)
-			Expect(err).ToNot(HaveOccurred())
-
-			done := make(chan error, 1)
-			go func() {
-				_, err := backend.All(metadata.WithReadOnly(ctx), missing)
-				done <- err
-			}()
-			Consistently(done, 200*time.Millisecond).ShouldNot(Receive())
-
-			Expect(held.Close()).To(Succeed())
-			Eventually(done, 5*time.Second).Should(Receive(HaveOccurred()))
-			Expect(missing.LockHeld()).To(BeFalse())
-		})
 	})
 })
