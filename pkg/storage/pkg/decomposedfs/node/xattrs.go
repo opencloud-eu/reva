@@ -151,6 +151,15 @@ func (n *Node) Xattrs(ctx context.Context) (Attributes, error) {
 	})
 }
 
+// ReloadXattrs reads the extended attributes of the node from storage, bypassing
+// both the attributes cached on the node and the metadata cache of the backend.
+func (n *Node) ReloadXattrs(ctx context.Context) (Attributes, error) {
+	n.xattrsCache = nil
+	return n.loadXattrs(func() (Attributes, error) {
+		return n.lu.MetadataBackend().Reload(ctx, n)
+	})
+}
+
 // Xattr returns an extended attribute of the node. If the attributes have already
 // been cached it is not read from disk again.
 func (n *Node) Xattr(ctx context.Context, key string) ([]byte, error) {
