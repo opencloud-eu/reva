@@ -19,6 +19,8 @@
 package decomposedfs_test
 
 import (
+	"path"
+
 	"context"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -30,6 +32,7 @@ import (
 	posixhelpers "github.com/opencloud-eu/reva/v3/pkg/storage/fs/posix/testhelpers"
 	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/permissions/mocks"
 	helpers "github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/testhelpers"
+	"github.com/opencloud-eu/reva/v3/pkg/storagespace"
 	"github.com/stretchr/testify/mock"
 )
 
@@ -95,11 +98,14 @@ var _ = Describe("Recycle", func() {
 					Expect(err).ToNot(HaveOccurred())
 					Expect(len(items)).To(Equal(2))
 
-					err = env.GetFs().PurgeRecycleItem(env.GetCtx(), &provider.Reference{ResourceId: env.GetSpaceRootRes()}, items[0].Key, "")
-					Expect(err).ToNot(HaveOccurred())
-
-					err = env.GetFs().PurgeRecycleItem(env.GetCtx(), &provider.Reference{ResourceId: env.GetSpaceRootRes()}, items[1].Key, "")
-					Expect(err).ToNot(HaveOccurred())
+					// the audit log learns whether a file or a folder was purged
+					for _, item := range items {
+						slot := &storagespace.ItemTypeSlot{}
+						err = env.GetFs().PurgeRecycleItem(storagespace.ContextRegisterItemTypeSlot(env.GetCtx(), slot), &provider.Reference{ResourceId: env.GetSpaceRootRes()}, item.Key, "")
+						Expect(err).ToNot(HaveOccurred())
+						Expect(slot.Type).To(Equal(item.Type))
+						Expect(slot.Path).To(Equal(path.Join("/", item.GetRef().GetPath())), "the path before the deletion")
+					}
 
 					items, err = env.GetFs().ListRecycle(env.GetCtx(), &provider.Reference{ResourceId: env.GetSpaceRootRes()}, "", "")
 					Expect(err).ToNot(HaveOccurred())
@@ -113,8 +119,11 @@ var _ = Describe("Recycle", func() {
 					Expect(err).ToNot(HaveOccurred())
 					Expect(len(items)).To(Equal(2))
 
-					_, err = env.GetFs().RestoreRecycleItem(env.GetCtx(), &provider.Reference{ResourceId: env.GetSpaceRootRes()}, items[0].Key, "", nil)
+					slot := &storagespace.ItemTypeSlot{}
+					_, err = env.GetFs().RestoreRecycleItem(storagespace.ContextRegisterItemTypeSlot(env.GetCtx(), slot), &provider.Reference{ResourceId: env.GetSpaceRootRes()}, items[0].Key, "", nil)
 					Expect(err).ToNot(HaveOccurred())
+					Expect(slot.Type).To(Equal(items[0].Type))
+					Expect(slot.Path).To(Equal(path.Join("/", items[0].GetRef().GetPath())), "the path before the deletion")
 
 					items, err = env.GetFs().ListRecycle(env.GetCtx(), &provider.Reference{ResourceId: env.GetSpaceRootRes()}, "", "")
 					Expect(err).ToNot(HaveOccurred())

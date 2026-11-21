@@ -32,6 +32,7 @@ import (
 
 	"github.com/opencloud-eu/reva/v3/internal/http/services/owncloud/ocdav/net"
 	"github.com/opencloud-eu/reva/v3/pkg/appctx"
+	"github.com/opencloud-eu/reva/v3/pkg/audit"
 	"github.com/opencloud-eu/reva/v3/pkg/errtypes"
 	"github.com/opencloud-eu/reva/v3/pkg/events"
 	"github.com/opencloud-eu/reva/v3/pkg/rhttp/datatx"
@@ -118,6 +119,8 @@ func (m *manager) Handler(coord upload.Coordinator, driver storage.FS) (http.Han
 				Path:       fn,
 			}
 			var info *provider.ResourceInfo
+			var auditOwner *userpb.UserId
+			var auditRef *provider.Reference
 			info, err = coord.Upload(ctx, upload.Request{
 				Ref:    ref,
 				Body:   r.Body,
@@ -126,9 +129,14 @@ func (m *manager) Handler(coord upload.Coordinator, driver storage.FS) (http.Han
 				if err := datatx.EmitFileUploadedEvent(spaceOwner, owner, ref, m.publisher); err != nil {
 					sublog.Error().Err(err).Msg("failed to publish FileUploaded event")
 				}
+				auditOwner, auditRef = owner, ref
 			})
 			switch v := err.(type) {
 			case nil:
+				// audited here, the node ID is only known now
+				if auditRef != nil {
+					datatx.EmitUploadAudit(ctx, datatx.UploadAudit{Header: r.Header.Get(audit.Header), Executant: &userpb.User{Id: auditOwner}, Ref: auditRef, ID: info.GetId(), FS: driver})
+				}
 				// set etag, mtime and file id
 				w.Header().Set(net.HeaderETag, info.Etag)
 				w.Header().Set(net.HeaderOCETag, info.Etag)

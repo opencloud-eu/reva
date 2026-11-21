@@ -34,6 +34,7 @@ import (
 	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/node"
 	nodemocks "github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/node/mocks"
 	helpers "github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/testhelpers"
+	"github.com/opencloud-eu/reva/v3/pkg/storagespace"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -182,6 +183,34 @@ var _ = Describe("Decomposed", func() {
 	})
 
 	Describe("Move", func() {
+		It("reports the item type for the audit log", func() {
+			slot := &storagespace.ItemTypeSlot{}
+			ctx := storagespace.ContextRegisterItemTypeSlot(env.Ctx, slot)
+
+			_, err := env.Fs.Move(ctx, ref, &provider.Reference{ResourceId: env.SpaceRootRes, Path: "/dir2"})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(slot.Type).To(Equal(provider.ResourceType_RESOURCE_TYPE_CONTAINER))
+			Expect(slot.Path).To(Equal("/dir1"))
+		})
+
+		It("reports the path in the space of a request by ID", func() {
+			info, err := env.Fs.GetMD(env.Ctx, ref, nil, nil)
+			Expect(err).ToNot(HaveOccurred())
+			slot := &storagespace.ItemTypeSlot{}
+
+			_, err = env.Fs.Move(storagespace.ContextRegisterItemTypeSlot(env.Ctx, slot), &provider.Reference{ResourceId: info.GetId(), Path: "."}, &provider.Reference{ResourceId: env.SpaceRootRes, Path: "./dir2"})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(slot.Path).To(Equal("/dir1"), "the request only names the node")
+		})
+
+		It("does not look up the path of a request from the space root", func() {
+			slot := &storagespace.ItemTypeSlot{}
+
+			_, err := env.Fs.Move(storagespace.ContextRegisterItemTypeSlot(env.Ctx, slot), &provider.Reference{ResourceId: env.SpaceRootRes, Path: "./dir1"}, &provider.Reference{ResourceId: env.SpaceRootRes, Path: "./dir2"})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(slot.Path).To(BeEmpty(), "the request has it")
+		})
+
 		It("returns the resolved references and space owner", func() {
 			destination := &provider.Reference{
 				ResourceId: env.SpaceRootRes,
@@ -291,6 +320,17 @@ var _ = Describe("Decomposed", func() {
 
 				Expect(err).To(MatchError(ContainSubstring("permission denied")))
 			})
+
+			It("still reports the item type for the audit log", func() {
+				env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything).Unset()
+				env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything).Return(&provider.ResourcePermissions{Stat: true}, nil)
+				slot := &storagespace.ItemTypeSlot{}
+
+				_, err := env.Fs.Delete(storagespace.ContextRegisterItemTypeSlot(env.Ctx, slot), ref)
+
+				Expect(err).To(HaveOccurred())
+				Expect(slot.Type).To(Equal(provider.ResourceType_RESOURCE_TYPE_CONTAINER))
+			})
 		})
 
 		Context("on the root of a share", func() {
@@ -317,9 +357,11 @@ var _ = Describe("Decomposed", func() {
 					"file1": {Stat: true, Delete: true},
 				})
 
-				_, err := env.Fs.Delete(env.Ctx, &provider.Reference{ResourceId: env.SpaceRootRes, Path: "/dir1/file1"})
+				slot := &storagespace.ItemTypeSlot{}
+				_, err := env.Fs.Delete(storagespace.ContextRegisterItemTypeSlot(env.Ctx, slot), &provider.Reference{ResourceId: env.SpaceRootRes, Path: "/dir1/file1"})
 
 				Expect(err).ToNot(HaveOccurred())
+				Expect(slot.Type).To(Equal(provider.ResourceType_RESOURCE_TYPE_FILE))
 			})
 		})
 
