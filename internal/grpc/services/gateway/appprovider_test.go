@@ -106,4 +106,60 @@ func TestBuildOpenInAppRequest(t *testing.T) {
 			t.Errorf("Unexpected opaque. Got: %v, want: %v", req.Opaque, "mockToken")
 		}
 	})
+
+	// A view only token is meant for users who may look at a file but not download it.
+	// Users who are allowed to download it open it with their own access token.
+	noTokenCases := []struct {
+		name        string
+		viewMode    gatewayv1beta1.OpenInAppRequest_ViewMode
+		permissions *providerv1beta1.ResourcePermissions
+	}{
+		{
+			name:        "View only mode with stat and download permission will not mint a viewOnlyToken",
+			viewMode:    gatewayv1beta1.OpenInAppRequest_VIEW_MODE_VIEW_ONLY,
+			permissions: &providerv1beta1.ResourcePermissions{Stat: true, InitiateFileDownload: true},
+		},
+		{
+			name:        "View only mode with download but without stat permission will not mint a viewOnlyToken",
+			viewMode:    gatewayv1beta1.OpenInAppRequest_VIEW_MODE_VIEW_ONLY,
+			permissions: &providerv1beta1.ResourcePermissions{InitiateFileDownload: true},
+		},
+		{
+			name:        "Read only mode with stat and download permission will not mint a viewOnlyToken",
+			viewMode:    gatewayv1beta1.OpenInAppRequest_VIEW_MODE_READ_ONLY,
+			permissions: &providerv1beta1.ResourcePermissions{Stat: true, InitiateFileDownload: true},
+		},
+	}
+	for _, tc := range noTokenCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ri := &providerv1beta1.ResourceInfo{PermissionSet: tc.permissions}
+			ctx := ctxpkg.ContextSetUser(context.Background(), &user.User{Username: "a user with download permission"})
+			req, err := buildOpenInAppRequest(ctx, ri, tc.viewMode, tokenmgr, "accessToken", nil)
+			if err != nil {
+				t.Fatalf("Unexpected error: %v", err)
+			}
+			if req.ViewMode != providerpb.ViewMode(tc.viewMode) {
+				t.Errorf("Unexpected view mode. Got: %v, want: %v", req.ViewMode, providerpb.ViewMode(tc.viewMode))
+			}
+			if req.AccessToken != "accessToken" {
+				t.Errorf("Unexpected access token. Got: %v, want: %v", req.AccessToken, "accessToken")
+			}
+			if token := utils.ReadPlainFromOpaque(req.Opaque, "viewOnlyToken"); token != "" {
+				t.Errorf("Unexpected viewOnlyToken. Got: %q, want none", token)
+			}
+		})
+	}
+
+	t.Run("View only mode with stat and download permission does not need a user in the context", func(t *testing.T) {
+		ri := &providerv1beta1.ResourceInfo{
+			PermissionSet: &providerv1beta1.ResourcePermissions{Stat: true, InitiateFileDownload: true},
+		}
+		req, err := buildOpenInAppRequest(context.Background(), ri, gatewayv1beta1.OpenInAppRequest_VIEW_MODE_VIEW_ONLY, tokenmgr, "accessToken", nil)
+		if err != nil {
+			t.Fatalf("Unexpected error: %v", err)
+		}
+		if token := utils.ReadPlainFromOpaque(req.Opaque, "viewOnlyToken"); token != "" {
+			t.Errorf("Unexpected viewOnlyToken. Got: %q, want none", token)
+		}
+	})
 }
