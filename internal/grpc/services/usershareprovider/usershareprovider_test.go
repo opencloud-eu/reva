@@ -49,6 +49,7 @@ import (
 	_ "github.com/opencloud-eu/reva/v3/pkg/share/manager/loader"
 	"github.com/opencloud-eu/reva/v3/pkg/share/manager/registry"
 	"github.com/opencloud-eu/reva/v3/pkg/share/mocks"
+	"github.com/opencloud-eu/reva/v3/pkg/storagespace"
 	"github.com/opencloud-eu/reva/v3/pkg/utils"
 	cs3mocks "github.com/opencloud-eu/reva/v3/tests/cs3mocks/mocks"
 )
@@ -333,6 +334,40 @@ var _ = Describe("user share provider service", func() {
 				nil,
 			),
 		)
+
+		Context("with audit on", func() {
+			// renaming the mount point of an accepted share sends its state along
+			rename := &collaborationpb.UpdateReceivedShareRequest{
+				UpdateMask: &fieldmaskpb.FieldMask{Paths: []string{"state", "mount_point"}},
+				Share: &collaborationpb.ReceivedShare{
+					State:      collaborationpb.ShareState_SHARE_STATE_ACCEPTED,
+					MountPoint: &providerpb.Reference{Path: "renamed"},
+					Share:      &collaborationpb.Share{Id: &collaborationpb.ShareId{OpaqueId: "1"}},
+				},
+			}
+
+			It("adds the state before the update", func() {
+				manager.EXPECT().GetReceivedShare(mock.Anything, mock.Anything).
+					Return(&collaborationpb.ReceivedShare{State: collaborationpb.ShareState_SHARE_STATE_ACCEPTED}, nil)
+				manager.EXPECT().UpdateReceivedShare(mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+					Return(&collaborationpb.ReceivedShare{State: collaborationpb.ShareState_SHARE_STATE_ACCEPTED}, nil)
+
+				auditCtx := storagespace.ContextRegisterItemSlot(ctx, &storagespace.ItemSlot{})
+				res, err := provider.UpdateReceivedShare(auditCtx, rename)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(utils.ReadPlainFromOpaque(res.GetOpaque(), "previousstate")).To(Equal("SHARE_STATE_ACCEPTED"))
+			})
+
+			It("looks nothing up with audit off", func() {
+				manager.EXPECT().UpdateReceivedShare(mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+					Return(&collaborationpb.ReceivedShare{State: collaborationpb.ShareState_SHARE_STATE_ACCEPTED}, nil)
+
+				res, err := provider.UpdateReceivedShare(ctx, rename)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(res.GetOpaque()).To(BeNil())
+				manager.AssertNotCalled(GinkgoT(), "GetReceivedShare", mock.Anything, mock.Anything)
+			})
+		})
 	})
 
 	Describe("CreateShare", func() {

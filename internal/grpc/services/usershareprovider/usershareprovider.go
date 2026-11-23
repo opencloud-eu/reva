@@ -49,6 +49,7 @@ import (
 	"github.com/opencloud-eu/reva/v3/pkg/share"
 	"github.com/opencloud-eu/reva/v3/pkg/share/manager/registry"
 	"github.com/opencloud-eu/reva/v3/pkg/sharedconf"
+	"github.com/opencloud-eu/reva/v3/pkg/storagespace"
 	"github.com/opencloud-eu/reva/v3/pkg/utils"
 )
 
@@ -506,6 +507,7 @@ func (s *service) RemoveShare(ctx context.Context, req *collaboration.RemoveShar
 		opaque = utils.AppendJSONToOpaque(opaque, "granteegroupid", share.GetGrantee().GetGroupId())
 	}
 	opaque = utils.AppendJSONToOpaque(opaque, "shareid", share.GetId())
+	opaque = utils.AppendJSONToOpaque(opaque, "permissions", share.GetPermissions().GetPermissions())
 
 	return &collaboration.RemoveShareResponse{
 		Opaque: opaque,
@@ -774,6 +776,15 @@ func (s *service) UpdateReceivedShare(ctx context.Context, req *collaboration.Up
 		}
 	}
 
+	// the audit tells an accept from a hide or a rename, which send the state
+	// the share already has
+	var opaque *typesv1beta1.Opaque
+	if storagespace.ContextWantsItem(ctx) && slices.Contains(req.GetUpdateMask().GetPaths(), _fieldMaskPathState) {
+		if prev, err := s.sm.GetReceivedShare(ctx, &collaboration.ShareReference{Spec: &collaboration.ShareReference_Id{Id: req.GetShare().GetShare().GetId()}}); err == nil {
+			opaque = utils.AppendPlainToOpaque(opaque, "previousstate", prev.GetState().String())
+		}
+	}
+
 	var uid userpb.UserId
 	_ = utils.ReadJSONFromOpaque(req.Opaque, "userid", &uid)
 	updatedShare, err := s.sm.UpdateReceivedShare(ctx, req.Share, req.UpdateMask, &uid)
@@ -782,6 +793,7 @@ func (s *service) UpdateReceivedShare(ctx context.Context, req *collaboration.Up
 		return &collaboration.UpdateReceivedShareResponse{
 			Status: status.NewOK(ctx),
 			Share:  updatedShare,
+			Opaque: opaque,
 		}, nil
 	case errtypes.NotFound:
 		return &collaboration.UpdateReceivedShareResponse{
