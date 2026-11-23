@@ -118,11 +118,11 @@ type Options struct {
 	// A number of revisions to keep counts the ones within X1 too: "7d, 10" keeps at
 	// most 10 revisions, unless more than 10 are younger than 7 days.
 	//
-	// The age of a revision is the time its content was written, i.e. the modification time
-	// the file had before it was changed, not the time of that change, which turned the
-	// content into a revision. A revision created today from content that was unchanged for
-	// two months is two months old, so e.g. "30d" deletes it right away; combine
-	// durations with a number of revisions, e.g. "5, 30d", to always keep the newest ones.
+	// The age of a revision is the time it was created, i.e. when the file was changed and its
+	// previous content became the revision, not the modification time of that content, which
+	// the version list shows. A revision created today from content that was unchanged for two
+	// months is new, so e.g. "30d" keeps it for 30 days. Combine durations with a number of
+	// revisions, e.g. "5, 30d", to always keep the newest ones.
 	//
 	// A duration in days or weeks with an uppercase unit (D, W) is aligned to midnight in the
 	// server's local time zone: "1d" means the last 24 hours, "1D" since yesterday 00:00,
