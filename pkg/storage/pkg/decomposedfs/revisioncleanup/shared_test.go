@@ -76,6 +76,20 @@ func TestNewServiceFromOptionsRejectsDifferentSettingsForTheSameStorage(t *testi
 	other.RevisionsCleanupAsyncWorkers = 3
 	_, err = NewServiceFromOptions(other, nil, nil, nil)
 	require.ErrorContains(t, err, "different revision cleanup settings")
+
+	// the strategies of the space types count, too
+	other = asyncOptions(root, "1")
+	other.RevisionsCleanupStrategyProject = "90d"
+	_, err = NewServiceFromOptions(other, nil, nil, nil)
+	require.ErrorContains(t, err, "different revision cleanup settings")
+
+	// but not how a strategy is spelled: an empty one is the same as none
+	same := asyncOptions(root, " 1 ")
+	same.RevisionsCleanupStrategyPersonal = " "
+	second, err := NewServiceFromOptions(same, nil, nil, nil)
+	require.NoError(t, err)
+	require.Same(t, first, second)
+	require.NoError(t, second.Shutdown(context.Background()))
 }
 
 // A disabled Service is shared as well, so that an instance with a strategy can't silently

@@ -196,9 +196,9 @@ func TestMetricsNodesToCleanUpOnceMore(t *testing.T) {
 }
 
 func TestMetricsEnabled(t *testing.T) {
-	cleaner, err := New("auto")
+	strategies, err := NewPolicy(PolicyConfig{Default: "auto"})
 	require.NoError(t, err)
-	s, err := NewService(cleaner, nil, nil, AsyncOptions{Enabled: false}, nil)
+	s, err := NewService(strategies, nil, nil, AsyncOptions{Enabled: false}, nil)
 	require.NoError(t, err)
 	require.NotNil(t, s)
 	require.Equal(t, float64(1), metricValue(t, mEnabled))
@@ -212,9 +212,9 @@ func TestMetricsOfADisabledService(t *testing.T) {
 	defer Enabled.Set(enabled)
 	workers, capacity := metricValue(t, mWorkers), metricValue(t, mCapacity)
 
-	cleaner, err := New("disabled")
+	strategies, err := NewPolicy(PolicyConfig{Default: "disabled"})
 	require.NoError(t, err)
-	s, err := NewService(cleaner, nil, nil, AsyncOptions{Enabled: true, Workers: 2, QueueSize: 3}, nil)
+	s, err := NewService(strategies, nil, nil, AsyncOptions{Enabled: true, Workers: 2, QueueSize: 3}, nil)
 	require.NoError(t, err)
 	defer func() { _ = s.Shutdown(context.Background()) }()
 
@@ -230,9 +230,9 @@ func TestMetricsOnDemandRun(t *testing.T) {
 	defer Enabled.Set(enabled)
 	workers, capacity := metricValue(t, mWorkers), metricValue(t, mCapacity)
 
-	cleaner, err := New("auto")
+	strategies, err := NewPolicy(PolicyConfig{Default: "auto"})
 	require.NoError(t, err)
-	s, err := newService(cleaner, nil, nil, AsyncOptions{Enabled: true, Workers: 2, QueueSize: 3}, nil, true, false, nil)
+	s, err := newService(strategies, nil, nil, AsyncOptions{Enabled: true, Workers: 2, QueueSize: 3}, nil, true, false, nil)
 	require.NoError(t, err)
 
 	require.Equal(t, float64(0), metricValue(t, mEnabled))
@@ -247,6 +247,6 @@ func TestMetricsOnDemandRun(t *testing.T) {
 	require.Equal(t, capacity, metricValue(t, mCapacity))
 
 	// Run uses such a Service
-	require.NoError(t, Run(context.Background(), nil, nil, nil, cleaner, RunOptions{Async: AsyncOptions{Enabled: true}}, nil, nil))
+	require.NoError(t, Run(context.Background(), nil, nil, nil, strategies, RunOptions{Async: AsyncOptions{Enabled: true}}, nil, nil))
 	require.Equal(t, float64(0), metricValue(t, mEnabled))
 }
