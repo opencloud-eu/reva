@@ -8,10 +8,12 @@
 
 ### ✨ Features
 
+- feat: 4076: a revision cleanup strategy per type of space [[#1042](https://github.com/opencloud-eu/reva/pull/1042)]
 - feat: clean up old revisions according to a cleanup strategy [[#895](https://github.com/opencloud-eu/reva/pull/895)]
 
 ### 🐛 Bug Fixes
 
+- docs: 1419: describe the age of a revision as the time it was created [[#1041](https://github.com/opencloud-eu/reva/pull/1041)]
 - fix(gateway): issue a view only token only to users without download permission [[#1053](https://github.com/opencloud-eu/reva/pull/1053)]
 - fix: take only webdav permissions from ocm permission change notifications [[#1037](https://github.com/opencloud-eu/reva/pull/1037)]
 - fix(ocm): use gateway selectors in the received storage and the ocmshares auth manager [[#1034](https://github.com/opencloud-eu/reva/pull/1034)]
