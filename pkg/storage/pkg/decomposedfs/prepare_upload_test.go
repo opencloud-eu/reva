@@ -5,22 +5,30 @@ package decomposedfs_test
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
+	cs3permissions "github.com/cs3org/go-cs3apis/cs3/permissions/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/google/uuid"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	ctxpkg "github.com/opencloud-eu/reva/v3/pkg/ctx"
 	"github.com/opencloud-eu/reva/v3/pkg/errtypes"
+	"github.com/opencloud-eu/reva/v3/pkg/rgrpc/todo/pool"
 	"github.com/opencloud-eu/reva/v3/pkg/storage"
+	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs"
+	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/aspects"
 	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/metadata/prefixes"
 	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/node"
+	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/permissions"
 	helpers "github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/testhelpers"
+	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/mock"
+	"google.golang.org/grpc"
 )
 
 var _ = Describe("PrepareUpload", func() {
@@ -455,6 +463,180 @@ var _ = Describe("PrepareUpload", func() {
 			blobID, err := env.Lookup.MetadataBackend().Get(env.Ctx, revisionNode, prefixes.BlobIDAttr)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(string(blobID)).To(Equal("session-1"))
+		})
+	})
+
+	Context("overwrite with a blobstore that keeps blobs apart from the nodes", func() {
+		var (
+			disableVersioning bool
+			sepFs             storage.FS
+			deletedBlobs      []string
+			firstResult       *storage.PrepareUploadResult
+			deleteResult      error
+		)
+
+		BeforeEach(func() {
+			disableVersioning = true
+			deleteResult = nil
+		})
+
+		JustBeforeEach(func() {
+			var err error
+			env, err = helpers.NewTestEnv(map[string]interface{}{
+				"disable_versioning": disableVersioning,
+			})
+			Expect(err).ToNot(HaveOccurred())
+
+			ref = &provider.Reference{
+				ResourceId: env.SpaceRootRes,
+				Path:       "/dir1/upload-target.txt",
+			}
+
+			env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything).
+				Return(&provider.ResourcePermissions{
+					InitiateFileUpload: true,
+					Stat:               true,
+					ListFileVersions:   true,
+				}, nil)
+			_, err = env.Fs.TouchFile(env.Ctx, ref, false, "")
+			Expect(err).ToNot(HaveOccurred())
+
+			// the env's driver does not report separate blobs, so build one that does on its storage
+			selector := pool.GetSelector[cs3permissions.PermissionsAPIClient](
+				"PermissionsSelector",
+				"any",
+				func(grpc.ClientConnInterface) cs3permissions.PermissionsAPIClient {
+					return env.PermissionsClient
+				},
+			)
+			sepFs, err = decomposedfs.New(env.Options, aspects.Aspects{
+				Lookup:        env.Lookup,
+				Tree:          env.Tree,
+				Permissions:   permissions.NewPermissions(env.Permissions, selector),
+				Trashbin:      &decomposedfs.DecomposedfsTrashbin{},
+				SeparateBlobs: true,
+			}, &zerolog.Logger{})
+			Expect(err).ToNot(HaveOccurred())
+
+			deletedBlobs = nil
+			env.Blobstore.On("Delete", mock.AnythingOfType("*node.Node")).
+				Run(func(args mock.Arguments) {
+					deletedBlobs = append(deletedBlobs, args.Get(0).(*node.Node).BlobID)
+				}).Return(deleteResult).Maybe()
+
+			// Lay down initial metadata.
+			firstResult, err = sepFs.PrepareUpload(env.Ctx, ref, "session-1", storage.UploadInfo{NodeExisted: false, Size: 10})
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		Context("with versioning disabled", func() {
+			It("reports the blob of the finished upload as obsolete", func() {
+				Expect(sepFs.MarkProcessing(env.Ctx, ref, false, "session-1")).To(Succeed())
+
+				result, err := sepFs.PrepareUpload(env.Ctx, ref, "session-2", storage.UploadInfo{NodeExisted: true, Size: 20})
+
+				Expect(err).ToNot(HaveOccurred())
+				Expect(result.VersionCreated).To(BeFalse())
+				Expect(result.Committed).To(BeFalse())
+				Expect(result.ObsoleteBlobID).To(Equal("session-1"))
+				Expect(deletedBlobs).To(BeEmpty(), "the old blob must only go once the new one is stored")
+			})
+
+			It("does not report a blob for a new file", func() {
+				Expect(firstResult.ObsoleteBlobID).To(BeEmpty())
+			})
+
+			It("does not report a blob while another upload is still processing the node", func() {
+				result, err := sepFs.PrepareUpload(env.Ctx, ref, "session-2", storage.UploadInfo{NodeExisted: true, Size: 20})
+
+				Expect(err).ToNot(HaveOccurred())
+				Expect(result.VersionCreated).To(BeTrue())
+				Expect(result.ObsoleteBlobID).To(BeEmpty(), "the snapshot keeps the blob of the other upload")
+			})
+
+			It("does not report a blob when the driver keeps the blobs in the nodes", func() {
+				Expect(env.Fs.MarkProcessing(env.Ctx, ref, false, "session-1")).To(Succeed())
+
+				result, err := env.Fs.PrepareUpload(env.Ctx, ref, "session-2", storage.UploadInfo{NodeExisted: true, Size: 20})
+
+				Expect(err).ToNot(HaveOccurred())
+				Expect(result.ObsoleteBlobID).To(BeEmpty())
+			})
+
+			Context("when the staged bytes come with the upload", func() {
+				JustBeforeEach(func() {
+					Expect(sepFs.MarkProcessing(env.Ctx, ref, false, "session-1")).To(Succeed())
+					env.Blobstore.On("Upload", mock.AnythingOfType("*node.Node"), "/staged/session-2", "").
+						Return(nil).Once()
+				})
+
+				overwrite := func() (*storage.PrepareUploadResult, error) {
+					return sepFs.PrepareUpload(env.Ctx, ref, "session-2", storage.UploadInfo{
+						NodeExisted: true,
+						Size:        20,
+						Source:      &storage.UploadSource{Path: "/staged/session-2", Length: 20},
+					})
+				}
+
+				It("deletes the old blob once the node points to the new one", func() {
+					result, err := overwrite()
+
+					Expect(err).ToNot(HaveOccurred())
+					Expect(result.Committed).To(BeTrue())
+					Expect(result.ObsoleteBlobID).To(BeEmpty(), "there is nothing left to hand to a commit")
+					Expect(deletedBlobs).To(Equal([]string{"session-1"}))
+
+					n, err := env.Lookup.NodeFromResource(env.Ctx, ref)
+					Expect(err).ToNot(HaveOccurred())
+					Expect(n.BlobID).To(Equal("session-2"))
+					Expect(n.IsProcessing(env.Ctx)).To(BeFalse())
+				})
+
+				Context("when the old blob cannot be deleted", func() {
+					BeforeEach(func() {
+						deleteResult = errors.New("blobstore unavailable")
+					})
+
+					It("still finishes the upload", func() {
+						result, err := overwrite()
+
+						Expect(err).ToNot(HaveOccurred())
+						Expect(result.Committed).To(BeTrue())
+						Expect(deletedBlobs).To(Equal([]string{"session-1"}))
+					})
+				})
+
+				It("keeps the old blob when the new one cannot be stored", func() {
+					env.Blobstore.ExpectedCalls = nil
+					env.Blobstore.On("Upload", mock.AnythingOfType("*node.Node"), "/staged/session-2", "").
+						Return(errors.New("blobstore unavailable")).Once()
+					env.Blobstore.On("Delete", mock.AnythingOfType("*node.Node")).
+						Run(func(args mock.Arguments) {
+							deletedBlobs = append(deletedBlobs, args.Get(0).(*node.Node).BlobID)
+						}).Return(nil).Maybe()
+
+					_, err := overwrite()
+
+					Expect(err).To(MatchError(storage.ErrSourceNotStored))
+					Expect(deletedBlobs).ToNot(ContainElement("session-1"))
+				})
+			})
+		})
+
+		Context("with versioning enabled", func() {
+			BeforeEach(func() {
+				disableVersioning = false
+			})
+
+			It("does not report a blob: the version keeps it", func() {
+				Expect(sepFs.MarkProcessing(env.Ctx, ref, false, "session-1")).To(Succeed())
+
+				result, err := sepFs.PrepareUpload(env.Ctx, ref, "session-2", storage.UploadInfo{NodeExisted: true, Size: 20})
+
+				Expect(err).ToNot(HaveOccurred())
+				Expect(result.VersionCreated).To(BeTrue())
+				Expect(result.ObsoleteBlobID).To(BeEmpty())
+			})
 		})
 	})
 

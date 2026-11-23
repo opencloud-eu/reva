@@ -250,6 +250,47 @@ var _ = Describe("Synchronous uploads", func() {
 		Expect(uploadFiles()).ToNot(ContainElement(HavePrefix(id)))
 	})
 
+	blobPath := func(id string) string {
+		return bs.Path(&node.Node{BaseNode: node.BaseNode{SpaceID: ref.ResourceId.SpaceId}, BlobID: id})
+	}
+
+	blobFiles := func() []string {
+		files := []string{}
+		Expect(filepath.WalkDir(filepath.Join(o.Root, "spaces"), func(path string, d os.DirEntry, err error) error {
+			if err == nil && !d.IsDir() && strings.Contains(path, string(filepath.Separator)+"blobs"+string(filepath.Separator)) {
+				files = append(files, path)
+			}
+			return err
+		})).To(Succeed())
+		return files
+	}
+
+	It("deletes the blob of the content an overwrite replaced when versioning is disabled", func() {
+		first, err := upload("v1", nil)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(blobPath(first)).To(BeAnExistingFile())
+
+		second, err := upload("v2", nil)
+		Expect(err).ToNot(HaveOccurred())
+
+		Expect(download()).To(Equal("v2"))
+		Expect(blobPath(first)).ToNot(BeAnExistingFile())
+		Expect(blobFiles()).To(ConsistOf(blobPath(second)))
+	})
+
+	It("keeps the blob of the old content when the overwrite fails", func() {
+		first, err := upload("v1", nil)
+		Expect(err).ToNot(HaveOccurred())
+
+		bs.failUpload = errors.New("blobstore unavailable")
+		_, err = upload("v2", nil)
+		Expect(err).To(MatchError(storage.ErrSourceNotStored))
+		bs.failUpload = nil
+
+		Expect(download()).To(Equal("v1"))
+		Expect(blobFiles()).To(ConsistOf(blobPath(first)))
+	})
+
 	It("stores the blob of a new file before the file exists", func() {
 		ref = &provider.Reference{ResourceId: ref.ResourceId, Path: "/new.json"}
 

@@ -253,6 +253,41 @@ var _ = Describe("coordinator", func() {
 				Expect(fs.calls).ToNot(ContainElement(ContainSubstring("TouchFile")))
 				Expect(fs.calls[0]).To(Equal("PrepareUpload(size=17)"))
 			})
+
+			It("hands CommitUpload the blob PrepareUpload reported as obsolete", func() {
+				session := newSession(true)
+				fs.prepared = &storage.PrepareUploadResult{SizeDiff: bodyLen, ObsoleteBlobID: "old-blob"}
+
+				_, err := c.finishUpload(ctx, session)
+
+				Expect(err).ToNot(HaveOccurred())
+				Expect(fs.committed.ObsoleteBlobID).To(Equal("old-blob"))
+			})
+
+			// The commit of an async upload may run in another process, which only
+			// has the persisted session to learn it from.
+			It("persists the obsolete blob with the session", func() {
+				session := newSession(true)
+				fs.prepared = &storage.PrepareUploadResult{SizeDiff: bodyLen, ObsoleteBlobID: "old-blob"}
+				fs.commitErr = errors.New("blobstore unavailable")
+				fs.rollbackErr = errors.New("no such node")
+
+				_, err := c.finishUpload(ctx, session)
+
+				Expect(err).To(MatchError("blobstore unavailable"))
+				kept, getErr := store.Get(ctx, session.ID())
+				Expect(getErr).ToNot(HaveOccurred())
+				Expect(kept.ObsoleteBlobID()).To(Equal("old-blob"))
+			})
+
+			It("hands CommitUpload no blob when PrepareUpload reported none", func() {
+				session := newSession(true)
+
+				_, err := c.finishUpload(ctx, session)
+
+				Expect(err).ToNot(HaveOccurred())
+				Expect(fs.committed.ObsoleteBlobID).To(BeEmpty())
+			})
 		})
 
 		Context("when PrepareUpload stores the bytes itself", func() {

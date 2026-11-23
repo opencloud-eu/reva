@@ -22,6 +22,7 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/metadata/prefixes"
 	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/node"
 	helpers "github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/testhelpers"
 )
@@ -42,6 +43,19 @@ var _ = Describe("Lookup", func() {
 			env.Cleanup()
 		}
 	})
+
+	// expectSpaceRoot checks that n.SpaceRoot is the root of the test space. A space
+	// root is the top of its space: it has no parent, and its id is the space id. The
+	// name of the space is kept in an attribute of its own.
+	expectSpaceRoot := func(n *node.Node) {
+		Expect(n.SpaceRoot).ToNot(BeNil())
+		Expect(n.SpaceRoot.ID).To(Equal(env.SpaceRootRes.GetOpaqueId()))
+		Expect(n.SpaceRoot.SpaceID).To(Equal(env.SpaceRootRes.GetSpaceId()))
+		Expect(n.SpaceRoot.ParentID).To(BeEmpty())
+		spaceName, err := n.SpaceRoot.XattrString(env.Ctx, prefixes.SpaceNameAttr)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(spaceName).To(Equal("username"))
+	}
 
 	Describe("Node from path", func() {
 		It("returns the path including a leading slash", func() {
@@ -68,8 +82,7 @@ var _ = Describe("Lookup", func() {
 			path, err := env.Lookup.Path(env.Ctx, n, func(n *node.Node) bool { return true })
 			Expect(err).ToNot(HaveOccurred())
 			Expect(path).To(Equal("/dir1/subdir1/file2"))
-			Expect(n.SpaceRoot.Name).To(Equal("userid"))
-			Expect(n.SpaceRoot.ParentID).To(Equal("root"))
+			expectSpaceRoot(n)
 		})
 	})
 
@@ -82,8 +95,8 @@ var _ = Describe("Lookup", func() {
 			})
 			Expect(err).ToNot(HaveOccurred())
 
-			// try to find the same node by id
-			n, err := env.Lookup.NodeFromResource(env.Ctx, &provider.Reference{ResourceId: &provider.ResourceId{OpaqueId: nRef.ID}})
+			// try to find the same node by id, which needs the id of its space
+			n, err := env.Lookup.NodeFromResource(env.Ctx, &provider.Reference{ResourceId: &provider.ResourceId{SpaceId: nRef.SpaceID, OpaqueId: nRef.ID}})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(n.SpaceRoot).ToNot(BeNil())
 
@@ -91,8 +104,7 @@ var _ = Describe("Lookup", func() {
 			path, err := env.Lookup.Path(env.Ctx, n, func(n *node.Node) bool { return true })
 			Expect(err).ToNot(HaveOccurred())
 			Expect(path).To(Equal("/dir1/file1"))
-			Expect(n.SpaceRoot.Name).To(Equal("userid"))
-			Expect(n.SpaceRoot.ParentID).To(Equal("root"))
+			expectSpaceRoot(n)
 		})
 	})
 
@@ -106,7 +118,7 @@ var _ = Describe("Lookup", func() {
 			Expect(err).ToNot(HaveOccurred())
 
 			// try to find the child node by parent id and relative path
-			n, err := env.Lookup.NodeFromResource(env.Ctx, &provider.Reference{ResourceId: &provider.ResourceId{OpaqueId: nRef.ID}, Path: "./file1"})
+			n, err := env.Lookup.NodeFromResource(env.Ctx, &provider.Reference{ResourceId: &provider.ResourceId{SpaceId: nRef.SpaceID, OpaqueId: nRef.ID}, Path: "./file1"})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(n.SpaceRoot).ToNot(BeNil())
 
@@ -114,8 +126,7 @@ var _ = Describe("Lookup", func() {
 			path, err := env.Lookup.Path(env.Ctx, n, func(n *node.Node) bool { return true })
 			Expect(err).ToNot(HaveOccurred())
 			Expect(path).To(Equal("/dir1/file1"))
-			Expect(n.SpaceRoot.Name).To(Equal("userid"))
-			Expect(n.SpaceRoot.ParentID).To(Equal("root"))
+			expectSpaceRoot(n)
 		})
 	})
 })
