@@ -1,6 +1,6 @@
 # Changelog
 
-## [3.1.0](https://github.com/opencloud-eu/reva/releases/tag/v3.1.0) - 2026-11-20
+## [3.1.0](https://github.com/opencloud-eu/reva/releases/tag/v3.1.0) - 2026-11-23
 
 ### ❤️ Thanks to all contributors! ❤️
 
@@ -9,6 +9,10 @@
 ### ✨ Features
 
 - feat: clean up old revisions according to a cleanup strategy [[#895](https://github.com/opencloud-eu/reva/pull/895)]
+
+### ✅ Tests
+
+- test(decomposedfs): run the lookup specs and update them to the current layout [[#1050](https://github.com/opencloud-eu/reva/pull/1050)]
 
 ### 🐛 Bug Fixes
 
