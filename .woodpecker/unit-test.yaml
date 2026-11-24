@@ -41,4 +41,5 @@ steps:
       CODACY_USERNAME: opencloud-eu
       CODACY_PROJECT_NAME: reva
     commands:
-      - /app/codacy-coverage-reporter report --force-coverage-parser go -r coverage.codacy.out
+      # partial, test-integration adds its coverage and sends the final report
+      - /app/codacy-coverage-reporter report --partial --force-coverage-parser go -r coverage.codacy.out
