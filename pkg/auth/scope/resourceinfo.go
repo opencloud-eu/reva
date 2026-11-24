@@ -21,6 +21,7 @@ package scope
 import (
 	"context"
 	"fmt"
+	"path"
 	"strings"
 
 	appprovider "github.com/cs3org/go-cs3apis/cs3/app/provider/v1beta1"
@@ -112,24 +113,38 @@ func resourceinfoScope(_ context.Context, scope *authpb.Scope, resource interfac
 	return false, errtypes.InternalError(msg)
 }
 
+// checkResourceInfo checks whether ref references the resource of the scope,
+// or a resource below it.
+//
+// Only references with the id of the resource are accepted, with an optional
+// relative path that doesn't leave the resource. References with a path only
+// are rejected: the path of the resource in the scope is whatever the storage
+// provider returned for it (e.g. only its name for a relative reference), while
+// the path of a path only reference is in the namespace of the gateway, so the
+// two can't be compared.
 func checkResourceInfo(inf *provider.ResourceInfo, ref *provider.Reference) bool {
-	// ref: <resource_id:<storage_id:$storageID opaque_id:$opaqueID path:$path> >
-	if ref.ResourceId != nil { // path can be empty or a relative path
-		if inf.Id.SpaceId == ref.ResourceId.SpaceId && inf.Id.OpaqueId == ref.ResourceId.OpaqueId {
-			if ref.Path == "" {
-				// id only reference
-				return true
-			}
-			// check path has same prefix below
-		} else {
-			return false
-		}
+	id := ref.GetResourceId()
+	if id == nil || inf.GetId().GetSpaceId() == "" || inf.GetId().GetOpaqueId() == "" {
+		return false
 	}
-	// ref: <path:$path >
-	if strings.HasPrefix(ref.GetPath(), inf.Path) {
+	if id.GetSpaceId() != inf.GetId().GetSpaceId() || id.GetOpaqueId() != inf.GetId().GetOpaqueId() {
+		return false
+	}
+	return isPathInsideResource(ref.GetPath())
+}
+
+// isPathInsideResource checks whether p, the path of an id based reference, is
+// the resource itself ("" or ".") or a path below it ("./a", "a/b"). Absolute
+// paths and paths leaving the resource ("..", "./a/../../b") are rejected.
+func isPathInsideResource(p string) bool {
+	if p == "" {
 		return true
 	}
-	return false
+	if strings.HasPrefix(p, "/") {
+		return false
+	}
+	p = path.Clean(p)
+	return p != ".." && !strings.HasPrefix(p, "../")
 }
 
 func checkResourcePath(path string) bool {
