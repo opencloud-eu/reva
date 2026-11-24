@@ -923,6 +923,13 @@ func (t *Tree) InitNewNode(ctx context.Context, n *node.Node, fsize uint64) (met
 		return nil, err
 	}
 
+	// Write the id before anything else. A listing or a scan that finds the file without an
+	// id and without a cache entry takes it for a new item and gives it a second id. With the
+	// id on disk it waits for the node lock we hold instead.
+	if err := xattr.FSet(h, prefixes.IDAttr, []byte(n.ID)); err != nil {
+		return fail(err)
+	}
+
 	// cached only now that the name is ours, so a losing upload cannot point it at its id
 	if err := t.lookup.CacheID(ctx, n.SpaceID, n.ID, nodePath); err != nil {
 		return fail(err)
