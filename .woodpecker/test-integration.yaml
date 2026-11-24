@@ -21,7 +21,6 @@ when:
 
 depends_on:
   - build
-  - unit-test # sends its coverage first, this workflow sends the final report
 
 workspace:
   base: /go # use the go home dir as workspace to share go packages, see https://woodpecker-ci.org/docs/usage/workflow-syntax#workspace
@@ -57,14 +56,3 @@ steps:
     environment: *codacy_environment
     commands:
       - /app/codacy-coverage-reporter report --partial --force-coverage-parser go -r integration.codacy.out
-
-  - name: codacy-coverage-final
-    image: *codacy_image
-    environment: *codacy_environment
-    commands:
-      # also without the integration coverage, Codacy waits for it otherwise
-      - /app/codacy-coverage-reporter final
-    when:
-      - status:
-          - success
-          - failure
