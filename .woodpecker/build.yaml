@@ -34,7 +34,10 @@ steps:
     image: *golang_image
     environment: *environment
     commands:
-      - make lint
+      # Not `make lint`: its 450s timeout is too short on busy agents, where lint
+      # shares the CPU with the parallel build step and takes up to ~8 minutes.
+      - make toolchain
+      - ./toolchain/golangci-lint run --timeout 15m
 
   - name: build
     image: *golang_image
