@@ -981,12 +981,19 @@ func (t *Tree) createDirNode(ctx context.Context, n *node.Node) (err error) {
 		_ = unlock()
 	}()
 
-	if err := os.MkdirAll(path, 0700); err != nil {
-		return errors.Wrap(err, "posixfs: error creating node")
-	}
-
+	// Cache the id before the directory exists. A listing that finds a directory the id
+	// cache doesn't know takes it for a new item and gives it a second id. With the id
+	// cached it reads the node instead, which waits for the node lock we hold until the
+	// attributes are written.
 	if err := idcache.Set(ctx, n.SpaceID, n.ID, path); err != nil {
 		t.log.Error().Err(err).Str("spaceID", n.SpaceID).Str("id", n.ID).Str("path", path).Msg("could not cache id")
+	}
+
+	if err := os.MkdirAll(path, 0700); err != nil {
+		if dErr := idcache.Delete(ctx, n.SpaceID, n.ID); dErr != nil {
+			t.log.Error().Err(dErr).Str("spaceID", n.SpaceID).Str("id", n.ID).Str("path", path).Msg("could not remove the id of the failed directory from the cache")
+		}
+		return errors.Wrap(err, "posixfs: error creating node")
 	}
 
 	// Write mtime from filesystem to metadata to preven re-assimilation

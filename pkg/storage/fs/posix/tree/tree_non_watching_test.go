@@ -280,6 +280,25 @@ var _ = Describe("Non-watching tree", func() {
 		Expect(ok).To(BeTrue())
 	})
 
+	It("removes the id of a directory from the cache when its mkdir fails", func() {
+		n, err := non_watching_env.Lookup.NodeFromResource(non_watching_env.Ctx, &provider.Reference{
+			ResourceId: non_watching_env.SpaceRootRes,
+			Path:       subtree + "/blocked",
+		})
+		Expect(err).ToNot(HaveOccurred())
+		path := filepath.Join(n.ParentPath(), n.Name)
+
+		// a file in the way makes the mkdir fail
+		Expect(os.WriteFile(path, nil, 0600)).To(Succeed())
+		Expect(non_watching_env.Tree.CreateDir(non_watching_env.Ctx, n)).ToNot(Succeed())
+
+		// the id is cached before the mkdir, a failed create must not leave it behind
+		_, _, err = non_watching_env.Lookup.IDsForPath(non_watching_env.Ctx, path)
+		Expect(err).To(HaveOccurred())
+		_, err = non_watching_env.Lookup.GetCachedID(non_watching_env.Ctx, n.SpaceID, n.ID)
+		Expect(err).To(HaveOccurred())
+	})
+
 	It("does not change the tree size when a file fails to assimilate", func() {
 		if os.Geteuid() == 0 {
 			Skip("root can set extended attributes on read-only files")
