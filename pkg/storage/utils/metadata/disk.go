@@ -93,7 +93,7 @@ func (disk *Disk) SimpleUpload(ctx context.Context, uploadpath string, content [
 }
 
 // Upload stores a file on disk
-func (disk *Disk) Upload(_ context.Context, req UploadRequest) (*UploadResponse, error) {
+func (disk *Disk) Upload(_ context.Context, req UploadRequest) (_ *UploadResponse, err error) {
 	p := disk.targetPath(req.Path)
 
 	// Serialize check+write across processes to eliminate the TOCTOU race.
@@ -101,7 +101,14 @@ func (disk *Disk) Upload(_ context.Context, req UploadRequest) (*UploadResponse,
 	if err != nil {
 		return nil, fmt.Errorf("acquiring write lock: %w", err)
 	}
-	defer filelocks.ReleaseLock(lock)
+	defer func() {
+		rerr := filelocks.ReleaseLock(lock)
+
+		// if err is non nil we do not overwrite that
+		if err == nil {
+			err = rerr
+		}
+	}()
 
 	if req.IfMatchEtag != "" {
 		info, err := os.Stat(p)
