@@ -29,6 +29,8 @@ steps:
     commands:
       - apt-get update -qq && apt-get install -y inotify-tools
       - make test
+      # mocks, generated and example code are not part of the coverage
+      - grep -v -E '/mocks/|/cs3mocks/|\.pb\.go:|/examples/|/tools/' coverage.out > coverage.codacy.out
 
   - name: codacy-coverage
     image: *codacy_image
@@ -39,4 +41,4 @@ steps:
       CODACY_USERNAME: opencloud-eu
       CODACY_PROJECT_NAME: reva
     commands:
-      - /app/codacy-coverage-reporter report --force-coverage-parser go -r coverage.out
+      - /app/codacy-coverage-reporter report --force-coverage-parser go -r coverage.codacy.out
