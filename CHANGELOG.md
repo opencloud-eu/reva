@@ -4,7 +4,7 @@
 
 ### ❤️ Thanks to all contributors! ❤️
 
-@asaah262, @butonic, @dragonchaser, @fschade, @maki5, @micbar, @pbleser-oc
+@asaah262, @butonic, @dragonchaser, @fschade, @maki5, @micbar, @pbleser-oc, @rhafer
 
 ### ✨ Features
 
@@ -13,6 +13,7 @@
 
 ### 🐛 Bug Fixes
 
+- fix(dataprovider): only warn about an incomplete nats configuration [[#1069](https://github.com/opencloud-eu/reva/pull/1069)]
 - docs: 1419: describe the age of a revision as the time it was created [[#1041](https://github.com/opencloud-eu/reva/pull/1041)]
 - fix(gateway): issue a view only token only to users without download permission [[#1053](https://github.com/opencloud-eu/reva/pull/1053)]
 - fix: take only webdav permissions from ocm permission change notifications [[#1037](https://github.com/opencloud-eu/reva/pull/1037)]
