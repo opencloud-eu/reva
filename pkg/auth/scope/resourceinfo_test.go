@@ -14,6 +14,9 @@ import (
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
+
+	"github.com/opencloud-eu/reva/v3/pkg/utils"
 )
 
 var (
@@ -163,4 +166,76 @@ func listStorageProvidersRequest(filters map[string]string) *registry.ListStorag
 		m[k] = &types.OpaqueEntry{Decoder: "plain", Value: []byte(v)}
 	}
 	return &registry.ListStorageProvidersRequest{Opaque: &types.Opaque{Map: m}}
+}
+
+func TestAddResourceInfoScope(t *testing.T) {
+	t.Run("stores only the id", func(t *testing.T) {
+		scopes, err := AddResourceInfoScope(scopedInfo(), authpb.Role_ROLE_VIEWER, nil)
+		require.NoError(t, err)
+		require.Len(t, scopes, 1)
+
+		s, ok := scopes["resourceinfo:"+scopedID.String()]
+		require.True(t, ok)
+		assert.Equal(t, authpb.Role_ROLE_VIEWER, s.GetRole())
+
+		var inf provider.ResourceInfo
+		require.NoError(t, utils.UnmarshalJSONToProtoV1(s.GetResource().GetValue(), &inf))
+		assert.True(t, proto.Equal(scopedID, inf.GetId()))
+		assert.Empty(t, inf.GetPath())
+	})
+
+	t.Run("adds to the given scopes", func(t *testing.T) {
+		scopes := map[string]*authpb.Scope{"user": {}}
+		scopes, err := AddResourceInfoScope(scopedInfo(), authpb.Role_ROLE_VIEWER, scopes)
+		require.NoError(t, err)
+		assert.Len(t, scopes, 2)
+	})
+
+	for name, r := range map[string]*provider.ResourceInfo{
+		"nil resource info": nil,
+		"no id":             {Path: "/Documents/report"},
+		"empty id":          {Id: &provider.ResourceId{}, Path: "/Documents/report"},
+		"no space id":       {Id: &provider.ResourceId{StorageId: "storage-1", OpaqueId: "file-1"}},
+		"no opaque id":      {Id: &provider.ResourceId{StorageId: "storage-1", SpaceId: "space-1"}},
+	} {
+		t.Run("refuses "+name, func(t *testing.T) {
+			scopes := map[string]*authpb.Scope{"user": {}}
+			got, err := AddResourceInfoScope(r, authpb.Role_ROLE_VIEWER, scopes)
+			require.Error(t, err)
+			assert.Nil(t, got)
+			assert.Len(t, scopes, 1)
+		})
+	}
+}
+
+// TestResourceInfoScopeWithPath checks scopes created by older versions, which
+// also stored the path of the resource.
+func TestResourceInfoScopeWithPath(t *testing.T) {
+	val, err := utils.MarshalProtoV1ToJSON(scopedInfo())
+	require.NoError(t, err)
+	scopes := map[string]*authpb.Scope{
+		"resourceinfo:" + scopedID.String(): {
+			Resource: &types.OpaqueEntry{Decoder: "json", Value: val},
+			Role:     authpb.Role_ROLE_VIEWER,
+		},
+	}
+
+	tests := []struct {
+		name string
+		req  interface{}
+		want bool
+	}{
+		{"stat by id", &provider.StatRequest{Ref: &provider.Reference{ResourceId: scopedID, Path: "."}}, true},
+		{"stat by own path", &provider.StatRequest{Ref: &provider.Reference{Path: "/Documents/report"}}, false},
+		{"stat by sibling path", &provider.StatRequest{Ref: &provider.Reference{Path: "/Documents/report-salaries.xlsx"}}, false},
+		{"http data path", "/data/sometoken", true},
+		{"http webdav path", "/remote.php/dav/files/alice", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := VerifyScope(context.Background(), scopes, tt.req)
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, got)
+		})
+	}
 }
