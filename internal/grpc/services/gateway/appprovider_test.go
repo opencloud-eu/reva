@@ -82,8 +82,21 @@ func TestBuildOpenInAppRequest(t *testing.T) {
 			t.Errorf("Unexpected opaque. Got: %v, want: %v", req.Opaque, "")
 		}
 	})
+	t.Run("View only mode with stat permission fails for a resource without id", func(t *testing.T) {
+		ri := &providerv1beta1.ResourceInfo{
+			PermissionSet: &providerv1beta1.ResourcePermissions{
+				Stat: true,
+			},
+		}
+		ctx := ctxpkg.ContextSetUser(context.Background(), &user.User{Username: "a user without download permission"})
+		req, err := buildOpenInAppRequest(ctx, ri, gatewayv1beta1.OpenInAppRequest_VIEW_MODE_VIEW_ONLY, tokenmgr, "accessToken", nil)
+		if err == nil {
+			t.Errorf("Expected an error, got request: %v", req)
+		}
+	})
 	t.Run("View only mode with stat permission will mint a viewOnlyToken", func(t *testing.T) {
 		ri := &providerv1beta1.ResourceInfo{
+			Id: &providerv1beta1.ResourceId{StorageId: "storage-1", SpaceId: "space-1", OpaqueId: "file-1"},
 			PermissionSet: &providerv1beta1.ResourcePermissions{
 				Stat: true,
 			},

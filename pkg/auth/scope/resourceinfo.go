@@ -165,10 +165,16 @@ func checkResourcePath(path string) bool {
 	return false
 }
 
-// AddResourceInfoScope adds the scope to allow access to a resource info object.
+// AddResourceInfoScope adds the scope to allow access to the resource with the
+// id of r, and to the resources below it. r must have a complete id.
+//
+// Only the id is stored in the scope: the path of a resource info is no stable
+// address of the resource, and its form depends on how it was looked up.
 func AddResourceInfoScope(r *provider.ResourceInfo, role authpb.Role, scopes map[string]*authpb.Scope) (map[string]*authpb.Scope, error) {
-	// Create a new "scope info" to only expose the required fields `Id` and `Path` to the scope.
-	scopeInfo := &provider.ResourceInfo{Id: r.Id, Path: r.Path}
+	if r.GetId().GetSpaceId() == "" || r.GetId().GetOpaqueId() == "" {
+		return nil, errtypes.BadRequest("resourceinfo scope: resource info without a complete id")
+	}
+	scopeInfo := &provider.ResourceInfo{Id: r.GetId()}
 	val, err := utils.MarshalProtoV1ToJSON(scopeInfo)
 	if err != nil {
 		return nil, err
@@ -176,7 +182,7 @@ func AddResourceInfoScope(r *provider.ResourceInfo, role authpb.Role, scopes map
 	if scopes == nil {
 		scopes = make(map[string]*authpb.Scope)
 	}
-	scopes["resourceinfo:"+r.Id.String()] = &authpb.Scope{
+	scopes["resourceinfo:"+r.GetId().String()] = &authpb.Scope{
 		Resource: &types.OpaqueEntry{
 			Decoder: "json",
 			Value:   val,
