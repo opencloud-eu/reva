@@ -28,6 +28,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"syscall"
 	"testing"
 	"time"
 
@@ -256,14 +257,10 @@ func startRevads(configs []RevadConfig, variables map[string]string) (map[string
 			GrpcAddress: ownAddress,
 			ID:          ownID,
 			Cleanup: func(keepLogs bool) error {
-				err := cmd.Process.Signal(os.Kill)
+				err := stopRevad(cmd)
 				if err != nil {
-					return errors.Wrap(err, "Could not kill revad")
+					return err
 				}
-
-				// Wait for the process to actually terminate and reap it
-				// This prevents zombie processes
-				_ = cmd.Wait()
 
 				_ = waitForPort(ownAddress, "close")
 				if keepLogs {
@@ -278,6 +275,33 @@ func startRevads(configs []RevadConfig, variables map[string]string) (map[string
 		revads[c.Name] = revad
 	}
 	return revads, nil
+}
+
+// stopRevad kills revad. When GOCOVERDIR is set, revad is a coverage build
+// and only writes its coverage data on a clean exit, so it gets SIGTERM first.
+func stopRevad(cmd *exec.Cmd) error {
+	exited := make(chan struct{})
+	go func() {
+		// reap the process, this prevents zombie processes
+		_ = cmd.Wait()
+		close(exited)
+	}()
+
+	if os.Getenv("GOCOVERDIR") != "" {
+		if err := cmd.Process.Signal(syscall.SIGTERM); err == nil {
+			select {
+			case <-exited:
+				return nil
+			case <-time.After(30 * time.Second):
+			}
+		}
+	}
+
+	if err := cmd.Process.Signal(os.Kill); err != nil {
+		return errors.Wrap(err, "Could not kill revad")
+	}
+	<-exited
+	return nil
 }
 
 func waitForPort(grpcAddress, expectedStatus string) error {

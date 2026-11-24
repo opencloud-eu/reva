@@ -1,5 +1,12 @@
 variables:
   - &golang_image 'docker.io/golang:1.26'
+  - &codacy_image 'codacy/codacy-coverage-reporter:14.1.3'
+  - &codacy_environment
+    CODACY_API_TOKEN:
+      from_secret: codacy_api_token
+    CODACY_ORGANIZATION_PROVIDER: gh
+    CODACY_USERNAME: opencloud-eu
+    CODACY_PROJECT_NAME: reva
 
 when:
   - event:
@@ -14,24 +21,22 @@ when:
 
 depends_on:
   - build
+  - unit-test # sends its coverage first, this workflow sends the final report
 
 workspace:
   base: /go # use the go home dir as workspace to share go packages, see https://woodpecker-ci.org/docs/usage/workflow-syntax#workspace
 
 steps:
-  - name: fetch-binary
-    image: quay.io/opencloudeu/minio-mc-ci:1.0
+  - name: build-revad
+    image: *golang_image
     environment:
-      AWS_ACCESS_KEY_ID:
-        from_secret: cache_s3_access_key
-      AWS_SECRET_ACCESS_KEY:
-        from_secret: cache_s3_secret_key
-      S3_BUCKET:
-        from_secret: cache_s3_bucket
-      S3_ENDPOINT: 'https://s3.ci.opencloud.eu'
+      HTTP_PROXY:
+        from_secret: ci_http_proxy
+      HTTPS_PROXY:
+        from_secret: ci_http_proxy
     commands:
-      - mc alias set s3 $S3_ENDPOINT $AWS_ACCESS_KEY_ID $AWS_SECRET_ACCESS_KEY
-      - mc cp -a s3/$S3_BUCKET/${CI_REPO}/$CI_COMMIT_SHA-$CI_PIPELINE_NUMBER-revad $CI_WORKSPACE/cmd/revad/revad
+      # a coverage build, revad writes what the tests cover into GOCOVERDIR when it stops
+      - go build -cover -coverpkg=github.com/opencloud-eu/reva/v3/... -o ./cmd/revad/revad ./cmd/revad
 
   - name: test-integration
     image: *golang_image
@@ -41,5 +46,25 @@ steps:
       HTTPS_PROXY:
         from_secret: ci_http_proxy
     commands:
-      # `make test-integration` rebuilds the binaries, which is unnecessary in the pipeline, so only using `go test` here
+      - export GOCOVERDIR=$CI_WORKSPACE/covdata && mkdir -p $GOCOVERDIR
       - cd tests/integration && go test -race ./... -timeout 15m
+      - cd $CI_WORKSPACE && go tool covdata textfmt -i=covdata -o integration.coverage.out
+      # mocks, generated and example code are not part of the coverage
+      - grep -v -E '/mocks/|/cs3mocks/|\.pb\.go:|/examples/|/tools/' integration.coverage.out > integration.codacy.out
+
+  - name: codacy-coverage
+    image: *codacy_image
+    environment: *codacy_environment
+    commands:
+      - /app/codacy-coverage-reporter report --partial --force-coverage-parser go -r integration.codacy.out
+
+  - name: codacy-coverage-final
+    image: *codacy_image
+    environment: *codacy_environment
+    commands:
+      # also without the integration coverage, Codacy waits for it otherwise
+      - /app/codacy-coverage-reporter final
+    when:
+      - status:
+          - success
+          - failure
