@@ -55,6 +55,12 @@ func resourceinfoScope(_ context.Context, scope *authpb.Scope, resource interfac
 					StorageId: string(e.Value),
 				}
 			}
+			if e, ok := v.Opaque.Map["space_id"]; ok {
+				if ref.ResourceId == nil {
+					ref.ResourceId = &provider.ResourceId{}
+				}
+				ref.ResourceId.SpaceId = string(e.Value)
+			}
 			if e, ok := v.Opaque.Map["opaque_id"]; ok {
 				if ref.ResourceId == nil {
 					ref.ResourceId = &provider.ResourceId{}
