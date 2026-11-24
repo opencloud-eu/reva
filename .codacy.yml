@@ -1,0 +1,16 @@
+---
+exclude_paths:
+  - '.github/**'
+  - '.templates/**'
+  - 'CHANGELOG.md'
+  - 'release-config.ts'
+  - 'changelog/**'
+  - 'vendor/**'
+  - 'examples/**'
+  - 'tools/**'
+  - 'tests/acceptance/**'
+  - 'tests/oc-integration-tests/**'
+  - 'tests/cs3mocks/**'
+  - '**/mocks/**'
+  - '**/*.pb.go'
+...
