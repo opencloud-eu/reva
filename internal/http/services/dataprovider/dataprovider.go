@@ -82,9 +82,14 @@ func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) 
 
 	var evstream events.Stream
 
-	if conf.NatsAddress == "" || conf.NatsClusterID == "" {
-		log.Warn().Msg("missing or incomplete nats configuration. Events will not be published.")
-	} else {
+	switch {
+	case conf.NatsAddress == "" && conf.NatsClusterID == "":
+		// services like the system storage run a dataprovider without events on purpose
+		log.Debug().Msg("no nats configuration. Events will not be published.")
+	case conf.NatsAddress == "" || conf.NatsClusterID == "":
+		log.Warn().Str("nats_address", conf.NatsAddress).Str("nats_clusterID", conf.NatsClusterID).
+			Msg("incomplete nats configuration. Events will not be published.")
+	default:
 		s, err := stream.NatsFromConfig("dataprovider", false, stream.NatsConfig{
 			Endpoint:             conf.NatsAddress,
 			Cluster:              conf.NatsClusterID,
