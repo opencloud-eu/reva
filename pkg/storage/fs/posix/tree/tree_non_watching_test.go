@@ -14,6 +14,7 @@ import (
 	"github.com/opencloud-eu/reva/v3/pkg/storage"
 	"github.com/opencloud-eu/reva/v3/pkg/storage/fs/posix/lookup"
 	"github.com/opencloud-eu/reva/v3/pkg/storage/fs/posix/timemanager"
+	"github.com/opencloud-eu/reva/v3/pkg/storage/fs/posix/tree"
 	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/metadata/prefixes"
 	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/node"
 	"github.com/pkg/xattr"
@@ -280,6 +281,47 @@ var _ = Describe("Non-watching tree", func() {
 		Expect(err).To(HaveOccurred())
 		_, ok = err.(errtypes.IsPermissionDenied)
 		Expect(ok).To(BeTrue())
+	})
+
+	It("makes a second assimilation of a new file wait until the first has cached it", func() {
+		parentSize := func() uint64 {
+			parent, err := non_watching_env.Lookup.NodeFromResource(non_watching_env.Ctx, &provider.Reference{
+				ResourceId: non_watching_env.SpaceRootRes,
+				Path:       subtree,
+			})
+			Expect(err).ToNot(HaveOccurred())
+			size, err := parent.GetTreeSize(non_watching_env.Ctx)
+			Expect(err).ToNot(HaveOccurred())
+			return size
+		}
+		initialSize := parentSize()
+
+		path := filepath.Join(root, "file")
+		content := make([]byte, 4096)
+		Expect(os.WriteFile(path, content, 0600)).To(Succeed())
+
+		// a second listing finds the file once the first one has claimed an id for it
+		second := make(chan error, 1)
+		secondFinishedEarly := false
+		non_watching_env.Tree.OnIDClaimedForTest(func(p string) {
+			if p != path {
+				return
+			}
+			go func() { second <- non_watching_env.Tree.AssimilateForTest(path) }()
+			select {
+			case <-second:
+				secondFinishedEarly = true
+			case <-time.After(200 * time.Millisecond):
+			}
+		})
+		DeferCleanup(func() { non_watching_env.Tree.OnIDClaimedForTest(nil) })
+
+		Expect(non_watching_env.Tree.AssimilateForTest(path)).To(Succeed())
+		Expect(secondFinishedEarly).To(BeFalse(), "the second assimilation didn't wait for the first")
+		Eventually(second).Should(Receive(MatchError(tree.ErrSkipAlreadyKnown)))
+
+		Eventually(parentSize).Should(Equal(initialSize + uint64(len(content))))
+		Consistently(parentSize, 200*time.Millisecond).Should(Equal(initialSize + uint64(len(content))))
 	})
 
 	It("leaves a new file to an assimilation that set its id first", func() {

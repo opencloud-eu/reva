@@ -490,9 +490,15 @@ func (t *Tree) assimilate(item scanItem) error {
 
 		// read the metadata and the file again now that we hold the lock. The previous holder may have changed
 		// both, e.g. an upload sets the mtime on disk before it writes the mtime attribute.
-		_, _, parentID, mtime, err := t.lookup.MetadataBackend().IdentifyPath(context.Background(), item.Path)
+		_, idNow, parentID, mtime, err := t.lookup.MetadataBackend().IdentifyPath(context.Background(), item.Path)
 		if err != nil {
 			return err
+		}
+		if idNow != id {
+			// the id changed while we waited, e.g. a new item's assimilation failed and removed its claim
+			_ = unlock()
+			locked = false
+			return t.assimilate(item)
 		}
 		fi, err = os.Lstat(item.Path)
 		if err != nil {
@@ -626,13 +632,13 @@ func (t *Tree) assimilate(item scanItem) error {
 		}
 	} else {
 		t.log.Debug().Str("path", item.Path).Msg("new item detected")
-		assimilationNode := &assimilationNode{
+		tempNode := &assimilationNode{
 			spaceID: spaceID,
 			// Use the path as the node ID (which is used for calculating the lock file path) since we do not have an ID yet
 			// In the case path is too long, we do sha256 and extract first 240 characters
 			nodeId: t.generateTempNodeId(item.Path),
 		}
-		unlock, err := t.lookup.MetadataBackend().Lock(assimilationNode)
+		unlock, err := t.lookup.MetadataBackend().Lock(tempNode)
 		if err != nil {
 			return err
 		}
@@ -652,6 +658,15 @@ func (t *Tree) assimilate(item scanItem) error {
 		// assimilate new file
 		newId := uuid.New().String()
 
+		// Lock the new id before claiming it, like InitNewNode does. From the claim on, another
+		// assimilation finds the id on disk and takes the known-item path, which locks by id. It
+		// has to wait until the item is cached, or it updates and propagates it a second time.
+		idUnlock, err := t.lookup.MetadataBackend().Lock(&assimilationNode{spaceID: spaceID, nodeId: newId, path: item.Path})
+		if err != nil {
+			return err
+		}
+		defer func() { _ = idUnlock() }()
+
 		// Claim the id before anything else. XATTR_CREATE fails when the item got an id since we
 		// looked, e.g. from an upload that just created it, which doesn't hold our path lock.
 		// Whoever sets the id first owns the item, so it never gets two. Other errors, e.g. on
@@ -660,6 +675,9 @@ func (t *Tree) assimilate(item scanItem) error {
 		if errors.Is(claimErr, syscall.EEXIST) {
 			t.log.Debug().Str("path", item.Path).Msg("item got an id meanwhile")
 			return nil
+		}
+		if claimErr == nil && t.idClaimed != nil {
+			t.idClaimed(item.Path)
 		}
 
 		fi, attrs, err := t.updateFile(item.Path, newId, spaceID, nil)

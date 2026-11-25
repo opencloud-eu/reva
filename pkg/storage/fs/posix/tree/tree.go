@@ -125,6 +125,8 @@ type Tree struct {
 
 	// called by InitNewNode between creating a file and setting its id, for tests only
 	newFileCreated func(path string)
+	// called by assimilate between claiming the id of a new item and caching it, for tests only
+	idClaimed func(path string)
 
 	es  events.Stream
 	log *zerolog.Logger
