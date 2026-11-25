@@ -151,3 +151,34 @@ func TestAuditArchive(t *testing.T) {
 		t.Errorf("space root without a path: got %s %+v", ev.Definition.Name, ev.Target)
 	}
 }
+
+func TestAuditArchiveOff(t *testing.T) {
+	// the mock fails the test on any call, with audit off there is no Stat
+	gw := cs3mocks.NewGatewayAPIClient(t)
+	log := zerolog.Nop()
+	s := &svc{gatewaySelector: fakeSelector{client: gw}, log: &log, emitter: audit.Discard{}}
+	s.auditArchive(context.Background(), []*provider.ResourceId{{OpaqueId: "file"}}, audit.OutcomeSuccess, "")
+}
+
+func TestAuditArchiveAborted(t *testing.T) {
+	file := &provider.ResourceId{StorageId: "storage", SpaceId: "space", OpaqueId: "file"}
+	gw := cs3mocks.NewGatewayAPIClient(t)
+	gw.EXPECT().Stat(mock.MatchedBy(func(ctx context.Context) bool { return ctx.Err() == nil }), mock.Anything).
+		Return(&provider.StatResponse{Status: &rpc.Status{Code: rpc.Code_CODE_OK}, Info: &provider.ResourceInfo{Name: "report.pdf", Type: provider.ResourceType_RESOURCE_TYPE_FILE}}, nil)
+
+	// the client aborted the download, the request ctx is cancelled
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	log := zerolog.Nop()
+	rec := &recorder{}
+	s := &svc{gatewaySelector: fakeSelector{client: gw}, log: &log, emitter: rec}
+	s.auditArchive(ctx, []*provider.ResourceId{file}, audit.OutcomeFailure, "incomplete")
+
+	if len(rec.events) != 1 {
+		t.Fatalf("got %d events, want 1", len(rec.events))
+	}
+	if ev := rec.events[0]; ev.Definition != audit.FileDownload || ev.Target.Name != "report.pdf" {
+		t.Errorf("got %s %+v, want a file download with the name", ev.Definition.Name, ev.Target)
+	}
+}

@@ -375,18 +375,24 @@ func (s *svc) Unprotected() []string {
 // the archive is written. The files read for it are internal reads and not
 // audited on their own.
 func (s *svc) auditArchive(ctx context.Context, resources []*provider.ResourceId, outcome audit.Outcome, reason string) {
+	if !audit.Enabled(s.emitter) {
+		return
+	}
 	gatewayClient, err := s.gatewaySelector.Next()
 	if err != nil {
 		s.log.Error().Err(err).Msg("archiver: could not select gateway for the audit event")
 		return
 	}
+	// a client that aborts the download cancels ctx, the lookup of type and
+	// name must still work for the incomplete record
+	statCtx := context.WithoutCancel(ctx)
 	for _, id := range resources {
 		d := audit.FolderDownload
 		target := audit.Target{
 			ID:      storagespace.FormatResourceID(id),
 			SpaceID: storagespace.FormatStorageID(id.GetStorageId(), id.GetSpaceId()),
 		}
-		if res, err := gatewayClient.Stat(ctx, &provider.StatRequest{Ref: &provider.Reference{ResourceId: id}}); err == nil && res.GetStatus().GetCode() == rpc.Code_CODE_OK {
+		if res, err := gatewayClient.Stat(statCtx, &provider.StatRequest{Ref: &provider.Reference{ResourceId: id}}); err == nil && res.GetStatus().GetCode() == rpc.Code_CODE_OK {
 			target.Name = res.GetInfo().GetName()
 			if res.GetInfo().GetType() != provider.ResourceType_RESOURCE_TYPE_CONTAINER {
 				d = audit.FileDownload
