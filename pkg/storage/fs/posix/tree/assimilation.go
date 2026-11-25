@@ -626,6 +626,15 @@ func (t *Tree) assimilate(item scanItem) error {
 		}
 	} else {
 		t.log.Debug().Str("path", item.Path).Msg("new item detected")
+
+		// A request that creates an item it cannot give its id right away reserves the path in the
+		// id cache first and holds the node lock of that id until the id is written. Wait for it.
+		if reserved, err := t.waitForReservation(spaceID, item.Path); err != nil {
+			return err
+		} else if reserved {
+			return nil
+		}
+
 		assimilationNode := &assimilationNode{
 			spaceID: spaceID,
 			// Use the path as the node ID (which is used for calculating the lock file path) since we do not have an ID yet
@@ -1205,4 +1214,35 @@ func (t *Tree) isDirty(path string) (bool, error) {
 		return false, err
 	}
 	return string(dirtyAttr) == "true", nil
+}
+
+// waitForReservation reports whether the item at path got its id from a request that reserved
+// the path in the id cache. It waits for the node lock of the reserved id, so the request has
+// written the id by then. A stale reservation, with the lock free and still no id on the item,
+// reports false: the item is assimilated as a new one, it must not take the stale id, which may
+// belong to a deleted node.
+func (t *Tree) waitForReservation(spaceID, path string) (bool, error) {
+	reservedSpace, reservedID, err := t.lookup.IDCache.GetByPath(context.Background(), path)
+	if err != nil || reservedID == "" || reservedSpace != spaceID {
+		return false, nil
+	}
+	unlock, err := t.lookup.MetadataBackend().Lock(&assimilationNode{
+		spaceID: spaceID,
+		nodeId:  reservedID,
+		path:    path,
+	})
+	if err != nil {
+		return false, errors.Wrap(err, "failed to lock reserved item for assimilation")
+	}
+	defer func() { _ = unlock() }()
+
+	_, id, _, _, err := t.lookup.MetadataBackend().IdentifyPath(context.Background(), path)
+	if err != nil {
+		return false, err
+	}
+	if id == "" {
+		return false, nil
+	}
+	t.log.Debug().Str("path", path).Str("id", id).Msg("item was created by a request that reserved its path")
+	return true, nil
 }

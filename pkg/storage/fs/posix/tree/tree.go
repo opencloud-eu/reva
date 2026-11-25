@@ -989,6 +989,50 @@ func (t *Tree) createFileNode(n *node.Node, nodePath string) (os.FileInfo, error
 	return fi, nil
 }
 
+// reservePath reserves path in the id cache for the new node n, see IDCache.ReservePath. The
+// caller holds the node lock of n until the id is written to the new item.
+//
+// If another node holds the path we wait for its node lock: a request that reserved the path
+// holds it until its item has its id. If the item exists then, the name is taken. If it does not,
+// the reservation is stale (its request failed or crashed) and we take it over, unless someone
+// else was faster. A node that holds a reservation never waits for another node's lock, so this
+// cannot deadlock.
+func (t *Tree) reservePath(ctx context.Context, n *node.Node, path string) error {
+	idcache := t.lookup.IDCache
+	for range 3 {
+		heldBySpace, heldByNode, revision, err := idcache.ReservePath(ctx, n.SpaceID, n.ID, path)
+		if err != nil {
+			return errors.Wrap(err, "posixfs: could not reserve the path of the new node")
+		}
+		if heldByNode == "" {
+			return nil
+		}
+
+		unlock, err := t.lookup.MetadataBackend().Lock(&assimilationNode{spaceID: heldBySpace, nodeId: heldByNode, path: path})
+		if err != nil {
+			return err
+		}
+		_, statErr := os.Lstat(path)
+		_ = unlock()
+		switch {
+		case statErr == nil:
+			// the name only: the message reaches the client, the path is the server's
+			return errtypes.AlreadyExists(n.Name)
+		case !os.IsNotExist(statErr):
+			return statErr
+		}
+
+		ok, err := idcache.TakeOverPath(ctx, n.SpaceID, n.ID, path, revision)
+		if err != nil {
+			return errors.Wrap(err, "posixfs: could not take over the path of the new node")
+		}
+		if ok {
+			return nil
+		}
+	}
+	return errtypes.AlreadyExists(n.Name)
+}
+
 // releaseNewNodeLock releases the lock of a node InitNewNode failed to create.
 func releaseNewNodeLock(ctx context.Context, n *node.Node, unlock metadata.UnlockFunc) {
 	if err := unlock(); err != nil {
@@ -1022,12 +1066,30 @@ func (t *Tree) createDirNode(ctx context.Context, n *node.Node) (err error) {
 		_ = unlock()
 	}()
 
-	if err := os.MkdirAll(path, 0700); err != nil {
-		return errors.Wrap(err, "posixfs: error creating node")
+	// Reserve the path for our id before the folder exists. A folder cannot be created with its
+	// id already set, so the watcher can see it without one. Its assimilation finds the
+	// reservation and waits for the node lock we hold until the id is written, instead of
+	// giving the folder an id of its own.
+	if err := t.reservePath(ctx, n, path); err != nil {
+		return err
+	}
+	release := func() {
+		if err := idcache.Release(ctx, n.SpaceID, n.ID, path); err != nil {
+			t.log.Error().Err(err).Str("spaceID", n.SpaceID).Str("id", n.ID).Str("path", path).Msg("could not release the id cache reservation")
+		}
 	}
 
-	if err := idcache.Set(ctx, n.SpaceID, n.ID, path); err != nil {
-		t.log.Error().Err(err).Str("spaceID", n.SpaceID).Str("id", n.ID).Str("path", path).Msg("could not cache id")
+	if err := os.MkdirAll(parentPath, 0700); err != nil {
+		release()
+		return errors.Wrap(err, "posixfs: error creating node")
+	}
+	// Mkdir, not MkdirAll: a folder that already has the name is not ours
+	if err := os.Mkdir(path, 0700); err != nil {
+		release()
+		if os.IsExist(err) {
+			return errtypes.AlreadyExists(n.Name)
+		}
+		return errors.Wrap(err, "posixfs: error creating node")
 	}
 
 	// Write mtime from filesystem to metadata to preven re-assimilation

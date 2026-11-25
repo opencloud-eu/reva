@@ -17,6 +17,7 @@ import (
 	"github.com/pkg/xattr"
 	"github.com/stretchr/testify/mock"
 
+	"github.com/opencloud-eu/reva/v3/pkg/errtypes"
 	"github.com/opencloud-eu/reva/v3/pkg/storage"
 	posixblobstore "github.com/opencloud-eu/reva/v3/pkg/storage/fs/posix/blobstore"
 	posixhelpers "github.com/opencloud-eu/reva/v3/pkg/storage/fs/posix/testhelpers"
@@ -244,5 +245,162 @@ var _ = Describe("new uploads with the fs watcher", Label("watcher-race"), func(
 		}
 
 		Expect(wrongIDOnDisk + wrongReverseCache + wrongByPath).To(BeZero())
+	})
+
+	// https://github.com/opencloud-eu/reva/issues/1078: createDirNode creates the folder before
+	// it writes its id, the watcher could give it an id of its own in between.
+	It("keeps the id CreateDir assigns to every new folder", func() {
+		const (
+			dirs    = 2000
+			workers = 8
+		)
+		ids := make([]string, dirs)
+
+		var wg sync.WaitGroup
+		work := make(chan int)
+		for range workers {
+			wg.Add(1)
+			go func() {
+				defer GinkgoRecover()
+				defer wg.Done()
+				for i := range work {
+					n, err := env.Lookup.NodeFromResource(env.Ctx, &provider.Reference{ResourceId: env.SpaceRootRes, Path: fmt.Sprintf("./dir-%d", i)})
+					Expect(err).ToNot(HaveOccurred())
+					Expect(env.Tree.CreateDir(env.Ctx, n)).To(Succeed())
+					ids[i] = n.ID
+				}
+			}()
+		}
+		for i := range dirs {
+			work <- i
+		}
+		close(work)
+		wg.Wait()
+
+		// let the watcher settle
+		time.Sleep(2 * time.Second)
+
+		var (
+			wrongIDOnDisk, wrongReverseCache, wrongByPath int
+			examples                                      []string
+		)
+		for i, id := range ids {
+			name := fmt.Sprintf("dir-%d", i)
+			path := filepath.Join(env.Root, "users", env.Owner.Username, name)
+			var problems []string
+
+			if v, _ := xattr.Get(path, prefixes.IDAttr); string(v) != id {
+				wrongIDOnDisk++
+				problems = append(problems, fmt.Sprintf("id on disk %q", v))
+			}
+			if _, cached, err := env.Lookup.IDCache.GetByPath(env.Ctx, path); err != nil || cached != id {
+				wrongReverseCache++
+				problems = append(problems, fmt.Sprintf("path resolves to id %q (%v)", cached, err))
+			}
+			n, err := env.Lookup.NodeFromResource(env.Ctx, &provider.Reference{ResourceId: env.SpaceRootRes, Path: "./" + name})
+			if err != nil || n.ID != id {
+				wrongByPath++
+				problems = append(problems, fmt.Sprintf("by path: %v (%v)", n, err))
+			}
+
+			if len(problems) > 0 && len(examples) < 10 {
+				examples = append(examples, fmt.Sprintf("%s (id %s): %v", name, id, problems))
+			}
+		}
+
+		GinkgoWriter.Printf("of %d created folders: id wrong on disk %d, path resolves to another id %d, wrong by path %d\n",
+			dirs, wrongIDOnDisk, wrongReverseCache, wrongByPath)
+		for _, e := range examples {
+			GinkgoWriter.Println(e)
+		}
+
+		Expect(wrongIDOnDisk + wrongReverseCache + wrongByPath).To(BeZero())
+	})
+
+	// A request that loses the race for a name must neither take the folder over nor break the
+	// id cache entry of the one that won.
+	It("keeps the winner of concurrent CreateDirs of the same name", func() {
+		const (
+			names    = 500
+			attempts = 4
+			workers  = 8
+		)
+		var mu sync.Mutex
+		winners := make(map[int][]string, names)
+
+		var wg sync.WaitGroup
+		work := make(chan int)
+		for range workers {
+			wg.Add(1)
+			go func() {
+				defer GinkgoRecover()
+				defer wg.Done()
+				for i := range work {
+					n, err := env.Lookup.NodeFromResource(env.Ctx, &provider.Reference{ResourceId: env.SpaceRootRes, Path: fmt.Sprintf("./same-%d", i)})
+					Expect(err).ToNot(HaveOccurred())
+					err = env.Tree.CreateDir(env.Ctx, n)
+					if err != nil {
+						Expect(err).To(BeAssignableToTypeOf(errtypes.AlreadyExists("")))
+						continue
+					}
+					mu.Lock()
+					winners[i] = append(winners[i], n.ID)
+					mu.Unlock()
+				}
+			}()
+		}
+		for i := range names {
+			for range attempts {
+				work <- i
+			}
+		}
+		close(work)
+		wg.Wait()
+
+		// let the watcher settle
+		time.Sleep(2 * time.Second)
+
+		var (
+			notOneWinner, wrongIDOnDisk, wrongReverseCache, wrongByPath int
+			examples                                                    []string
+		)
+		for i := range names {
+			name := fmt.Sprintf("same-%d", i)
+			if len(winners[i]) != 1 {
+				notOneWinner++
+				if len(examples) < 10 {
+					examples = append(examples, fmt.Sprintf("%s: %d winners %v", name, len(winners[i]), winners[i]))
+				}
+				continue
+			}
+			id := winners[i][0]
+			path := filepath.Join(env.Root, "users", env.Owner.Username, name)
+			var problems []string
+
+			if v, _ := xattr.Get(path, prefixes.IDAttr); string(v) != id {
+				wrongIDOnDisk++
+				problems = append(problems, fmt.Sprintf("id on disk %q", v))
+			}
+			if _, cached, err := env.Lookup.IDCache.GetByPath(env.Ctx, path); err != nil || cached != id {
+				wrongReverseCache++
+				problems = append(problems, fmt.Sprintf("path resolves to id %q (%v)", cached, err))
+			}
+			n, err := env.Lookup.NodeFromResource(env.Ctx, &provider.Reference{ResourceId: env.SpaceRootRes, Path: "./" + name})
+			if err != nil || n.ID != id {
+				wrongByPath++
+				problems = append(problems, fmt.Sprintf("by path: %v (%v)", n, err))
+			}
+			if len(problems) > 0 && len(examples) < 10 {
+				examples = append(examples, fmt.Sprintf("%s (id %s): %v", name, id, problems))
+			}
+		}
+
+		GinkgoWriter.Printf("of %d names created %d times each: not exactly one winner %d, id wrong on disk %d, path resolves to another id %d, wrong by path %d\n",
+			names, attempts, notOneWinner, wrongIDOnDisk, wrongReverseCache, wrongByPath)
+		for _, e := range examples {
+			GinkgoWriter.Println(e)
+		}
+
+		Expect(notOneWinner + wrongIDOnDisk + wrongReverseCache + wrongByPath).To(BeZero())
 	})
 })

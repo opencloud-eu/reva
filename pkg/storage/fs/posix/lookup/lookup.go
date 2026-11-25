@@ -73,6 +73,14 @@ type IDCache interface {
 	DeleteByPath(ctx context.Context, path string) error
 
 	DeletePath(ctx context.Context, path string) error
+	// ReservePath claims path for a node before it exists, without overwriting the entry of
+	// another node. If another node holds the path it reports that node and the entry's revision.
+	ReservePath(ctx context.Context, spaceID, nodeID, path string) (heldBySpace, heldByNode string, revision uint64, err error)
+	// TakeOverPath points the path entry at the node if it is still at revision
+	TakeOverPath(ctx context.Context, spaceID, nodeID, path string, revision uint64) (bool, error)
+	// Release removes the entries of a node reserved for path, the path entry only while it
+	// still points at the node
+	Release(ctx context.Context, spaceID, nodeID, path string) error
 }
 
 // Lookup implements transformations from filepath to node and back
