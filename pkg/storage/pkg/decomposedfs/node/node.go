@@ -569,6 +569,20 @@ func readNode(ctx context.Context, lu PathLookup, spaceID, nodeID, internalPath 
 	n.Name = attrs.String(prefixes.NameAttr)
 	n.ParentID = attrs.String(prefixes.ParentidAttr)
 	if n.ParentID == "" {
+		// the attributes might come from a cache that holds an incomplete read, look
+		// at the storage once more before we give up on the node
+		attrs, err = n.ReloadXattrs(ctx)
+		switch {
+		case metadata.IsNotExist(err):
+			n.Exists = false
+			return n, nil
+		case err != nil:
+			return nil, err
+		}
+		n.Name = attrs.String(prefixes.NameAttr)
+		n.ParentID = attrs.String(prefixes.ParentidAttr)
+	}
+	if n.ParentID == "" {
 		d, _ := os.ReadFile(lu.MetadataBackend().MetadataPath(n))
 		if _, ok := lu.MetadataBackend().(metadata.MessagePackBackend); ok {
 			appctx.GetLogger(ctx).Error().Str("path", n.InternalPath()).Str("nodeid", n.ID).Interface("attrs", attrs).Bytes("messagepack", d).Msg("missing parent id")
