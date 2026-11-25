@@ -170,9 +170,15 @@ func (b HybridBackend) Reload(ctx context.Context, n MetadataNode) (map[string][
 }
 
 // getAll reads all attributes of n from storage, like readAll, and caches them.
+// If the read fails, it drops the cached attributes of n, so that the next read goes to storage.
 func (b HybridBackend) getAll(ctx context.Context, n MetadataNode, skipOffloaded bool) (map[string][]byte, error) {
 	attribs, err := b.readAll(ctx, n, skipOffloaded)
 	if err != nil {
+		// SetMultiple and Remove refresh the cache with getAll after they changed the
+		// attributes on storage: if that read fails, the cached attributes are outdated
+		// and would be served until their TTL runs out. The read error is what matters to
+		// the caller, a failure to drop the entry is left out.
+		_ = b.metaCache.RemoveMetadata(b.cacheKey(n))
 		return nil, err
 	}
 	if err := b.metaCache.PushToCache(b.cacheKey(n), attribs); err != nil {
