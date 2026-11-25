@@ -95,8 +95,10 @@ test-integration: build-ci
 	cd tests/integration && go test -timeout 15m -race ./...
 
 .PHONY: test-benchmark
+# The run time depends a lot on the disk of the machine: on the CI runners it
+# varies between 3 and more than 10 minutes, the default timeout of go test.
 test-benchmark:
-	cd tests/benchmark && go test
+	cd tests/benchmark && go test -timeout 30m
 
 .PHONY: litmus-test-old
 litmus-test-old: build

@@ -84,7 +84,7 @@ var _ = Describe("FS Benchmark", func() {
 			ref.Path = fmt.Sprintf("%d.txt", idx)
 			_, err := posixEnv.Fs.GetMD(posixEnv.Ctx, ref, []string{}, []string{})
 			Expect(err).ToNot(HaveOccurred())
-		}, gmeasure.SamplingConfig{N: int(ReportEntryVisibilityNever)})
+		}, gmeasure.SamplingConfig{N: N})
 
 		By("testing decomposed fs")
 		ref = &provider.Reference{
@@ -98,7 +98,7 @@ var _ = Describe("FS Benchmark", func() {
 			ref.Path = fmt.Sprintf("%d.txt", idx)
 			_, err := decomposedEnv.Fs.GetMD(decomposedEnv.Ctx, ref, []string{}, []string{})
 			Expect(err).ToNot(HaveOccurred())
-		}, gmeasure.SamplingConfig{N: int(ReportEntryVisibilityNever)})
+		}, gmeasure.SamplingConfig{N: N})
 
 	})
 
