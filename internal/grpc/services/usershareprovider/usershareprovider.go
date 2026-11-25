@@ -563,7 +563,7 @@ func (s *service) UpdateShare(ctx context.Context, req *collaboration.UpdateShar
 	if err != nil {
 		return &collaboration.UpdateShareResponse{
 			Status: status.NewInternal(ctx, "failed check user permission to write share"),
-		}, err
+		}, nil
 	}
 	if !ok {
 		return &collaboration.UpdateShareResponse{
@@ -613,7 +613,7 @@ func (s *service) UpdateShare(ctx context.Context, req *collaboration.UpdateShar
 		log.Err(err).Interface("resource_id", req.GetShare().GetResourceId()).Msg("failed to stat resource to share")
 		return &collaboration.UpdateShareResponse{
 			Status: status.NewInternal(ctx, "failed to stat shared resource"),
-		}, err
+		}, nil
 	}
 	// the requesting user needs to be either the Owner/Creator of the share or have the UpdateGrant permissions on the Resource
 	switch {
@@ -624,7 +624,7 @@ func (s *service) UpdateShare(ctx context.Context, req *collaboration.UpdateShar
 	default:
 		return &collaboration.UpdateShareResponse{
 			Status: status.NewPermissionDenied(ctx, nil, "no permission to remove grants on shared resource"),
-		}, err
+		}, nil
 	}
 
 	// resharing is forbidden for not space roots
