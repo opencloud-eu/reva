@@ -237,14 +237,20 @@ func (d *driver) Delete(ctx context.Context, ref *provider.Reference) (*storage.
 }
 
 func (d *driver) TouchFile(ctx context.Context, ref *provider.Reference, markprocessing bool, mtime string) (*storage.TouchFileResult, error) {
-	client, _, rel, err := d.serviceWebdavClient(ctx, ref)
+	client, share, rel, err := d.serviceWebdavClient(ctx, ref)
 	if err != nil {
 		return nil, err
 	}
 	if err := client.Write(rel, []byte{}, 0); err != nil {
 		return nil, err
 	}
-	return &storage.TouchFileResult{}, nil
+	// report the node like a stat would, so the upload coordinator does not have to stat
+	// the new file on the remote instance
+	return &storage.TouchFileResult{
+		SpaceOwner: share.GetCreator(),
+		SpaceID:    share.GetId().GetOpaqueId(),
+		ResourceID: resourceID(share, rel),
+	}, nil
 }
 
 func (d *driver) Move(ctx context.Context, oldRef, newRef *provider.Reference) (*storage.MoveResult, error) {
@@ -261,7 +267,21 @@ func getPathFromShareIDAndRelPath(shareID *ocmpb.ShareId, relPath string) string
 	return filepath.Join("/", shareID.OpaqueId, relPath)
 }
 
-func convertStatToResourceInfo(ref *provider.Reference, f fs.FileInfo, share *ocmpb.ReceivedShare) (*provider.ResourceInfo, error) {
+// resourceID returns the id of the resource at path p, relative to the root of the received
+// share. Ids are of the format <ocmstorageproviderid>$<shareid>!<base64 of the relative path>.
+func resourceID(share *ocmpb.ReceivedShare, p string) *provider.ResourceId {
+	return &provider.ResourceId{
+		StorageId: utils.OCMStorageProviderID,
+		SpaceId:   share.GetId().GetOpaqueId(),
+		OpaqueId:  base64.StdEncoding.EncodeToString([]byte(filepath.Join("/", p))),
+	}
+}
+
+// convertStatToResourceInfo converts the webdav file info of the resource at path p, relative
+// to the root of the received share. We cannot take the path from the file info: for a stat
+// gowebdav only keeps the base name, so "/a/b.txt" would come back as "/b.txt".
+func convertStatToResourceInfo(f fs.FileInfo, share *ocmpb.ReceivedShare, p string) (*provider.ResourceInfo, error) {
+	p = filepath.Join("/", p)
 	t := provider.ResourceType_RESOURCE_TYPE_FILE
 	if f.IsDir() {
 		t = provider.ResourceType_RESOURCE_TYPE_CONTAINER
@@ -276,20 +296,13 @@ func convertStatToResourceInfo(ref *provider.Reference, f fs.FileInfo, share *oc
 	switch {
 	case share.ResourceType == provider.ResourceType_RESOURCE_TYPE_FILE: //nolint:staticcheck // we will update our ocm implementation later
 		name = share.Name
-	case webdavFile.Path() == "/":
+	case p == "/":
 		name = share.Name
 	default:
 		name = webdavFile.Name()
 	}
 
-	opaqueid := base64.StdEncoding.EncodeToString([]byte(webdavFile.Path()))
-
-	// ids are of the format <ocmstorageproviderid>$<shareid>!<opaqueid>
-	id := &provider.ResourceId{
-		StorageId: utils.OCMStorageProviderID,
-		SpaceId:   share.Id.OpaqueId,
-		OpaqueId:  opaqueid,
-	}
+	id := resourceID(share, p)
 	webdavProtocol, _ := getWebDAVProtocol(share.Protocols)
 
 	ri := provider.ResourceInfo{
@@ -366,7 +379,7 @@ func (d *driver) GetMD(ctx context.Context, ref *provider.Reference, _ []string,
 		return nil, err
 	}
 
-	return convertStatToResourceInfo(ref, info, share)
+	return convertStatToResourceInfo(info, share, rel)
 }
 
 func (d *driver) ListFolder(ctx context.Context, ref *provider.Reference, _ []string, _ []string) ([]*provider.ResourceInfo, error) {
@@ -382,7 +395,7 @@ func (d *driver) ListFolder(ctx context.Context, ref *provider.Reference, _ []st
 
 	res := make([]*provider.ResourceInfo, 0, len(list))
 	for _, r := range list {
-		info, err := convertStatToResourceInfo(ref, r, share)
+		info, err := convertStatToResourceInfo(r, share, filepath.Join(rel, r.Name()))
 		if err != nil {
 			return nil, err
 		}
@@ -404,7 +417,7 @@ func (d *driver) Download(ctx context.Context, ref *provider.Reference, openRead
 		}
 		return nil, nil, err
 	}
-	md, err := convertStatToResourceInfo(ref, info, share)
+	md, err := convertStatToResourceInfo(info, share, rel)
 	if err != nil {
 		return nil, nil, err
 	}
