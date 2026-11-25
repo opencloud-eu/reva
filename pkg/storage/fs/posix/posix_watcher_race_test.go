@@ -124,8 +124,8 @@ var _ = Describe("new uploads with the fs watcher", Label("watcher-race"), func(
 		time.Sleep(2 * time.Second)
 
 		var (
-			emptyOnDisk, wrongBlobsize, wrongIDOnDisk, wrongReverseCache, staleByPath int
-			examples                                                                  []string
+			emptyOnDisk, wrongBlobsize, wrongBlobID, wrongIDOnDisk, wrongReverseCache, staleByPath int
+			examples                                                                               []string
 		)
 		for _, u := range uploads {
 			path := filepath.Join(env.Root, "users", env.Owner.Username, u.name)
@@ -140,6 +140,7 @@ var _ = Describe("new uploads with the fs watcher", Label("watcher-race"), func(
 				problems = append(problems, fmt.Sprintf("blobsize on disk %q", v))
 			}
 			if v, _ := xattr.Get(path, prefixes.BlobIDAttr); string(v) != "session-"+u.id {
+				wrongBlobID++
 				problems = append(problems, fmt.Sprintf("blobid on disk %q", v))
 			}
 			if v, _ := xattr.Get(path, prefixes.IDAttr); string(v) != u.id {
@@ -167,13 +168,13 @@ var _ = Describe("new uploads with the fs watcher", Label("watcher-race"), func(
 			}
 		}
 
-		GinkgoWriter.Printf("of %d uploads: content wrong on disk %d, blobsize wrong on disk %d, id wrong on disk %d, path resolves to another id %d, wrong by path %d\n",
-			files, emptyOnDisk, wrongBlobsize, wrongIDOnDisk, wrongReverseCache, staleByPath)
+		GinkgoWriter.Printf("of %d uploads: content wrong on disk %d, blobsize wrong on disk %d, blobid wrong on disk %d, id wrong on disk %d, path resolves to another id %d, wrong by path %d\n",
+			files, emptyOnDisk, wrongBlobsize, wrongBlobID, wrongIDOnDisk, wrongReverseCache, staleByPath)
 		for _, e := range examples {
 			GinkgoWriter.Println(e)
 		}
 
-		Expect(emptyOnDisk + wrongBlobsize + wrongIDOnDisk + wrongReverseCache + staleByPath).To(BeZero())
+		Expect(emptyOnDisk + wrongBlobsize + wrongBlobID + wrongIDOnDisk + wrongReverseCache + staleByPath).To(BeZero())
 	})
 
 	// TouchFile creates empty files for an empty PUT, the app provider and locks on unmapped
