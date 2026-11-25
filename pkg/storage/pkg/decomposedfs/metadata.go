@@ -57,9 +57,6 @@ func (fs *Decomposedfs) SetArbitraryMetadata(ctx context.Context, ref *provider.
 		return nil, errtypes.NotFound(f)
 	}
 
-	// Set space owner in context
-	storagespace.ContextSetSpaceOwner(ctx, n.SpaceOwnerOrManager(ctx))
-
 	// check lock
 	if err := n.CheckLock(ctx); err != nil {
 		return nil, err
@@ -67,7 +64,7 @@ func (fs *Decomposedfs) SetArbitraryMetadata(ctx context.Context, ref *provider.
 
 	errs := []error{}
 	// TODO should we really continue updating when an error occurs?
-	result := &storage.MetadataResult{}
+	result := &storage.MetadataResult{SpaceOwner: n.SpaceOwnerOrManager(ctx)}
 	if md.Metadata != nil {
 		if val, ok := md.Metadata["mtime"]; ok {
 			delete(md.Metadata, "mtime")
@@ -158,16 +155,13 @@ func (fs *Decomposedfs) UnsetArbitraryMetadata(ctx context.Context, ref *provide
 		return nil, errtypes.NotFound(f)
 	}
 
-	// Set space owner in context
-	storagespace.ContextSetSpaceOwner(ctx, n.SpaceOwnerOrManager(ctx))
-
 	// check lock
 	if err := n.CheckLock(ctx); err != nil {
 		return nil, err
 	}
 
 	errs := []error{}
-	result := &storage.MetadataResult{}
+	result := &storage.MetadataResult{SpaceOwner: n.SpaceOwnerOrManager(ctx)}
 	existingAttribs, err := n.Xattrs(ctx)
 	if err != nil {
 		return nil, errors.Wrap(err, "Decomposedfs: could not read metadata attributes")

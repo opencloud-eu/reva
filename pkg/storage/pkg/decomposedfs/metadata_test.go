@@ -160,6 +160,7 @@ var _ = Describe("SetArbitraryMetadata", func() {
 			})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(result).ToNot(BeNil())
+			Expect(result.SpaceOwner.GetOpaqueId()).To(Equal(env.Owner.GetId().GetOpaqueId()))
 			Expect(result.ChangedKeys).To(ConsistOf("foo", "baz"))
 			Expect(result.RemovedKeys).To(BeEmpty())
 
@@ -291,6 +292,7 @@ var _ = Describe("UnsetArbitraryMetadata", func() {
 		result, err := env.Fs.UnsetArbitraryMetadata(env.Ctx, ref, []string{"foo", "never-set"})
 		Expect(err).ToNot(HaveOccurred())
 		Expect(result).ToNot(BeNil())
+		Expect(result.SpaceOwner.GetOpaqueId()).To(Equal(env.Owner.GetId().GetOpaqueId()))
 		Expect(result.RemovedKeys).To(ConsistOf("foo"))
 		Expect(result.ChangedKeys).To(BeEmpty())
 	})

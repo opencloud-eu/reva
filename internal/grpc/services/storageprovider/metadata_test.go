@@ -5,6 +5,7 @@ import (
 	"errors"
 	"testing"
 
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/opencloud-eu/reva/v3/pkg/errtypes"
@@ -28,21 +29,23 @@ func (s metadataStorage) UnsetArbitraryMetadata(context.Context, *provider.Refer
 }
 
 func TestMetadataResultPropagation(t *testing.T) {
-	result := &storage.MetadataResult{ChangedKeys: []string{"foo"}, RemovedKeys: []string{"bar"}}
+	owner := &userpb.UserId{OpaqueId: "owner-1"}
+	result := &storage.MetadataResult{SpaceOwner: owner, ChangedKeys: []string{"foo"}, RemovedKeys: []string{"bar"}}
 	for _, tt := range []struct {
 		name   string
 		result *storage.MetadataResult
 		err    error
 		code   rpc.Code
 		want   *storage.MetadataResult
+		owner  *userpb.UserId
 	}{
-		{name: "reported keys", result: result, code: rpc.Code_CODE_OK, want: result},
+		{name: "reported keys", result: result, code: rpc.Code_CODE_OK, want: result, owner: owner},
 		{name: "driver without result", code: rpc.Code_CODE_OK},
 		{name: "failed call", result: result, err: errtypes.NotFound("resource"), code: rpc.Code_CODE_NOT_FOUND},
 		{name: "internal error", err: errors.New("write failed"), code: rpc.Code_CODE_INTERNAL},
 	} {
 		t.Run(tt.name+" on set", func(t *testing.T) {
-			ctx := storagespace.ContextRegisterMetadataResultSlot(context.Background())
+			ctx := storagespace.ContextRegisterSpaceOwnerSlot(storagespace.ContextRegisterMetadataResultSlot(context.Background()))
 			s := &Service{Storage: metadataStorage{result: tt.result, err: tt.err}}
 
 			response, err := s.SetArbitraryMetadata(ctx, &provider.SetArbitraryMetadataRequest{})
@@ -50,9 +53,10 @@ func TestMetadataResultPropagation(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, tt.code, response.Status.Code)
 			require.Same(t, tt.want, storagespace.ContextGetMetadataResult(ctx))
+			require.Same(t, tt.owner, storagespace.ContextGetSpaceOwner(ctx))
 		})
 		t.Run(tt.name+" on unset", func(t *testing.T) {
-			ctx := storagespace.ContextRegisterMetadataResultSlot(context.Background())
+			ctx := storagespace.ContextRegisterSpaceOwnerSlot(storagespace.ContextRegisterMetadataResultSlot(context.Background()))
 			s := &Service{Storage: metadataStorage{result: tt.result, err: tt.err}}
 
 			response, err := s.UnsetArbitraryMetadata(ctx, &provider.UnsetArbitraryMetadataRequest{})
@@ -60,6 +64,7 @@ func TestMetadataResultPropagation(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, tt.code, response.Status.Code)
 			require.Same(t, tt.want, storagespace.ContextGetMetadataResult(ctx))
+			require.Same(t, tt.owner, storagespace.ContextGetSpaceOwner(ctx))
 		})
 	}
 }

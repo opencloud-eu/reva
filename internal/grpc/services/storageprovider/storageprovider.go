@@ -234,6 +234,7 @@ func (s *Service) SetArbitraryMetadata(ctx context.Context, req *provider.SetArb
 
 	result, err := s.Storage.SetArbitraryMetadata(ctx, req.Ref, req.ArbitraryMetadata)
 	if err == nil && result != nil {
+		storagespace.ContextSetSpaceOwner(ctx, result.SpaceOwner)
 		storagespace.ContextSetMetadataResult(ctx, result)
 	}
 
@@ -247,6 +248,7 @@ func (s *Service) UnsetArbitraryMetadata(ctx context.Context, req *provider.Unse
 
 	result, err := s.Storage.UnsetArbitraryMetadata(ctx, req.Ref, req.ArbitraryMetadataKeys)
 	if err == nil && result != nil {
+		storagespace.ContextSetSpaceOwner(ctx, result.SpaceOwner)
 		storagespace.ContextSetMetadataResult(ctx, result)
 	}
 

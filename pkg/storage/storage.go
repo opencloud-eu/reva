@@ -126,6 +126,7 @@ type UnlockResult struct {
 // MetadataResult carries the keys a successful SetArbitraryMetadata or UnsetArbitraryMetadata actually changed.
 // Drivers that do not track the keys return nil, the caller then treats every requested key as changed.
 type MetadataResult struct {
+	SpaceOwner  *userpb.UserId
 	ChangedKeys []string
 	RemovedKeys []string
 }
