@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 	"syscall"
 	"time"
 
@@ -297,6 +298,78 @@ var _ = Describe("Non-watching tree", func() {
 		Expect(err).To(HaveOccurred())
 		_, err = non_watching_env.Lookup.GetCachedID(non_watching_env.Ctx, n.SpaceID, n.ID)
 		Expect(err).To(HaveOccurred())
+	})
+
+	It("keeps the cached id of a file that is in the way of a new directory", func() {
+		ref := &provider.Reference{ResourceId: non_watching_env.SpaceRootRes, Path: subtree + "/taken"}
+		n, err := non_watching_env.Lookup.NodeFromResource(non_watching_env.Ctx, ref)
+		Expect(err).ToNot(HaveOccurred())
+		path := filepath.Join(n.ParentPath(), n.Name)
+
+		// the file appears after the create checked that the name is free
+		file, err := non_watching_env.Lookup.NodeFromResource(non_watching_env.Ctx, ref)
+		Expect(err).ToNot(HaveOccurred())
+		file.ID = "file-in-the-way"
+		Expect(non_watching_env.Tree.TouchFile(non_watching_env.Ctx, file, false, "")).To(Succeed())
+		_, fileID, err := non_watching_env.Lookup.IDsForPath(non_watching_env.Ctx, path)
+		Expect(err).ToNot(HaveOccurred())
+
+		err = non_watching_env.Tree.CreateDir(non_watching_env.Ctx, n)
+		Expect(err).To(BeAssignableToTypeOf(errtypes.AlreadyExists("")))
+
+		_, id, err := non_watching_env.Lookup.IDsForPath(non_watching_env.Ctx, path)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(id).To(Equal(fileID))
+		_, err = non_watching_env.Lookup.GetCachedID(non_watching_env.Ctx, n.SpaceID, n.ID)
+		Expect(err).To(HaveOccurred())
+	})
+
+	It("lets only one of two concurrent creates of a directory succeed", func() {
+		for i := range 20 {
+			ref := &provider.Reference{ResourceId: non_watching_env.SpaceRootRes, Path: fmt.Sprintf("%s/twice%d", subtree, i)}
+			nodes := make([]*node.Node, 2)
+			for j := range nodes {
+				n, err := non_watching_env.Lookup.NodeFromResource(non_watching_env.Ctx, ref)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(n.Exists).To(BeFalse())
+				nodes[j] = n
+			}
+
+			errs := make([]error, len(nodes))
+			start := make(chan struct{})
+			var wg sync.WaitGroup
+			for j, n := range nodes {
+				wg.Add(1)
+				go func() {
+					defer GinkgoRecover()
+					defer wg.Done()
+					<-start
+					errs[j] = non_watching_env.Tree.CreateDir(non_watching_env.Ctx, n)
+				}()
+			}
+			close(start)
+			wg.Wait()
+
+			var winner *node.Node
+			for j, err := range errs {
+				if err == nil {
+					Expect(winner).To(BeNil(), "both creates succeeded")
+					winner = nodes[j]
+					continue
+				}
+				Expect(err).To(BeAssignableToTypeOf(errtypes.AlreadyExists("")))
+			}
+			Expect(winner).ToNot(BeNil())
+
+			// the directory, its attributes and the cache all agree on the winner's id
+			path := filepath.Join(winner.ParentPath(), winner.Name)
+			idOnDisk, err := winner.XattrString(non_watching_env.Ctx, prefixes.IDAttr)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(idOnDisk).To(Equal(winner.ID))
+			_, id, err := non_watching_env.Lookup.IDsForPath(non_watching_env.Ctx, path)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(id).To(Equal(winner.ID))
+		}
 	})
 
 	It("does not change the tree size when a file fails to assimilate", func() {

@@ -39,6 +39,55 @@ func (_m *IDCache) EXPECT() *IDCache_Expecter {
 	return &IDCache_Expecter{mock: &_m.Mock}
 }
 
+// Claim provides a mock function with given fields: ctx, spaceID, nodeID, path
+func (_m *IDCache) Claim(ctx context.Context, spaceID string, nodeID string, path string) error {
+	ret := _m.Called(ctx, spaceID, nodeID, path)
+
+	if len(ret) == 0 {
+		panic("no return value specified for Claim")
+	}
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(context.Context, string, string, string) error); ok {
+		r0 = rf(ctx, spaceID, nodeID, path)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+// IDCache_Claim_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Claim'
+type IDCache_Claim_Call struct {
+	*mock.Call
+}
+
+// Claim is a helper method to define mock.On call
+//   - ctx context.Context
+//   - spaceID string
+//   - nodeID string
+//   - path string
+func (_e *IDCache_Expecter) Claim(ctx interface{}, spaceID interface{}, nodeID interface{}, path interface{}) *IDCache_Claim_Call {
+	return &IDCache_Claim_Call{Call: _e.mock.On("Claim", ctx, spaceID, nodeID, path)}
+}
+
+func (_c *IDCache_Claim_Call) Run(run func(ctx context.Context, spaceID string, nodeID string, path string)) *IDCache_Claim_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string), args[2].(string), args[3].(string))
+	})
+	return _c
+}
+
+func (_c *IDCache_Claim_Call) Return(_a0 error) *IDCache_Claim_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *IDCache_Claim_Call) RunAndReturn(run func(context.Context, string, string, string) error) *IDCache_Claim_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // Delete provides a mock function with given fields: ctx, spaceID, nodeID
 func (_m *IDCache) Delete(ctx context.Context, spaceID string, nodeID string) error {
 	ret := _m.Called(ctx, spaceID, nodeID)
@@ -299,6 +348,55 @@ func (_c *IDCache_GetByPath_Call) Return(_a0 string, _a1 string, _a2 error) *IDC
 }
 
 func (_c *IDCache_GetByPath_Call) RunAndReturn(run func(context.Context, string) (string, string, error)) *IDCache_GetByPath_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// Release provides a mock function with given fields: ctx, spaceID, nodeID, path
+func (_m *IDCache) Release(ctx context.Context, spaceID string, nodeID string, path string) error {
+	ret := _m.Called(ctx, spaceID, nodeID, path)
+
+	if len(ret) == 0 {
+		panic("no return value specified for Release")
+	}
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(context.Context, string, string, string) error); ok {
+		r0 = rf(ctx, spaceID, nodeID, path)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+// IDCache_Release_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Release'
+type IDCache_Release_Call struct {
+	*mock.Call
+}
+
+// Release is a helper method to define mock.On call
+//   - ctx context.Context
+//   - spaceID string
+//   - nodeID string
+//   - path string
+func (_e *IDCache_Expecter) Release(ctx interface{}, spaceID interface{}, nodeID interface{}, path interface{}) *IDCache_Release_Call {
+	return &IDCache_Release_Call{Call: _e.mock.On("Release", ctx, spaceID, nodeID, path)}
+}
+
+func (_c *IDCache_Release_Call) Run(run func(ctx context.Context, spaceID string, nodeID string, path string)) *IDCache_Release_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string), args[2].(string), args[3].(string))
+	})
+	return _c
+}
+
+func (_c *IDCache_Release_Call) Return(_a0 error) *IDCache_Release_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *IDCache_Release_Call) RunAndReturn(run func(context.Context, string, string, string) error) *IDCache_Release_Call {
 	_c.Call.Return(run)
 	return _c
 }

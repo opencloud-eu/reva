@@ -68,6 +68,8 @@ type IDCache interface {
 	GetByPath(ctx context.Context, path string) (string, string, error)
 
 	Set(ctx context.Context, spaceID, nodeID, val string) error
+	Claim(ctx context.Context, spaceID, nodeID, path string) error
+	Release(ctx context.Context, spaceID, nodeID, path string) error
 
 	Delete(ctx context.Context, spaceID, nodeID string) error
 	DeleteByPath(ctx context.Context, path string) error

@@ -985,15 +985,35 @@ func (t *Tree) createDirNode(ctx context.Context, n *node.Node) (err error) {
 	// cache doesn't know takes it for a new item and gives it a second id. With the id
 	// cached it reads the node instead, which waits for the node lock we hold until the
 	// attributes are written.
-	if err := idcache.Set(ctx, n.SpaceID, n.ID, path); err != nil {
-		t.log.Error().Err(err).Str("spaceID", n.SpaceID).Str("id", n.ID).Str("path", path).Msg("could not cache id")
+	// Claim doesn't touch a path that is already cached, so it can't take the entry of an
+	// item that is in the way or of a concurrent create of the same directory.
+	claimed := true
+	if err := idcache.Claim(ctx, n.SpaceID, n.ID, path); err != nil {
+		claimed = false
+		if _, ok := err.(errtypes.AlreadyExists); !ok {
+			t.log.Error().Err(err).Str("spaceID", n.SpaceID).Str("id", n.ID).Str("path", path).Msg("could not cache id")
+		}
 	}
 
-	if err := os.MkdirAll(path, 0700); err != nil {
-		if dErr := idcache.Delete(ctx, n.SpaceID, n.ID); dErr != nil {
-			t.log.Error().Err(dErr).Str("spaceID", n.SpaceID).Str("id", n.ID).Str("path", path).Msg("could not remove the id of the failed directory from the cache")
+	// Mkdir fails if the path exists, so of several concurrent creates only one succeeds
+	if err := os.Mkdir(path, 0700); err != nil {
+		if claimed {
+			if rErr := idcache.Release(ctx, n.SpaceID, n.ID, path); rErr != nil {
+				t.log.Error().Err(rErr).Str("spaceID", n.SpaceID).Str("id", n.ID).Str("path", path).Msg("could not remove the id of the failed directory from the cache")
+			}
+		}
+		if errors.Is(err, fs.ErrExist) {
+			return errtypes.AlreadyExists(path)
 		}
 		return errors.Wrap(err, "posixfs: error creating node")
+	}
+
+	if !claimed {
+		// The path is ours now. Its entry was left over from an item that is gone or belongs
+		// to a concurrent create that lost the mkdir, which keeps an entry that isn't its own.
+		if err := idcache.Set(ctx, n.SpaceID, n.ID, path); err != nil {
+			t.log.Error().Err(err).Str("spaceID", n.SpaceID).Str("id", n.ID).Str("path", path).Msg("could not cache id")
+		}
 	}
 
 	// Write mtime from filesystem to metadata to preven re-assimilation

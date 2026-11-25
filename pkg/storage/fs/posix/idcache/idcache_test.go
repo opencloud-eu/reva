@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	"github.com/nats-io/nats.go/jetstream"
+	"github.com/opencloud-eu/reva/v3/pkg/errtypes"
 	"github.com/opencloud-eu/reva/v3/pkg/storage/cache"
 	"github.com/opencloud-eu/reva/v3/pkg/storage/fs/posix/idcache"
 	helpers "github.com/opencloud-eu/reva/v3/pkg/storage/fs/posix/testhelpers"
@@ -143,6 +144,62 @@ var _ = Describe("IDCache", func() {
 				Expect(err).To(HaveOccurred())
 				_, err = c.Get(context.TODO(), "spaceID", "nodeID3")
 				Expect(err).To(HaveOccurred())
+			})
+		})
+
+		Describe("Claim", func() {
+			It("caches a path that isn't cached yet", func() {
+				Expect(c.Claim(context.TODO(), "spaceID", "newID", "newpath")).To(Succeed())
+
+				v, err := c.Get(context.TODO(), "spaceID", "newID")
+				Expect(err).ToNot(HaveOccurred())
+				Expect(v).To(Equal("newpath"))
+				_, id, err := c.GetByPath(context.TODO(), "newpath")
+				Expect(err).ToNot(HaveOccurred())
+				Expect(id).To(Equal("newID"))
+			})
+
+			It("leaves a cached path alone", func() {
+				err := c.Claim(context.TODO(), "spaceID", "newID", "path")
+				Expect(err).To(BeAssignableToTypeOf(errtypes.AlreadyExists("")))
+
+				_, id, err := c.GetByPath(context.TODO(), "path")
+				Expect(err).ToNot(HaveOccurred())
+				Expect(id).To(Equal("nodeID"))
+				_, err = c.Get(context.TODO(), "spaceID", "newID")
+				Expect(err).To(HaveOccurred())
+			})
+
+			It("caches a path whose entry was deleted", func() {
+				Expect(c.Delete(context.TODO(), "spaceID", "nodeID")).To(Succeed())
+				Expect(c.Claim(context.TODO(), "spaceID", "newID", "path")).To(Succeed())
+
+				_, id, err := c.GetByPath(context.TODO(), "path")
+				Expect(err).ToNot(HaveOccurred())
+				Expect(id).To(Equal("newID"))
+			})
+		})
+
+		Describe("Release", func() {
+			It("removes both entries of a claimed path", func() {
+				Expect(c.Claim(context.TODO(), "spaceID", "newID", "newpath")).To(Succeed())
+				Expect(c.Release(context.TODO(), "spaceID", "newID", "newpath")).To(Succeed())
+
+				_, err := c.Get(context.TODO(), "spaceID", "newID")
+				Expect(err).To(HaveOccurred())
+				_, _, err = c.GetByPath(context.TODO(), "newpath")
+				Expect(err).To(HaveOccurred())
+			})
+
+			It("keeps the path entry of another node", func() {
+				Expect(c.Release(context.TODO(), "spaceID", "newID", "path")).To(Succeed())
+
+				_, id, err := c.GetByPath(context.TODO(), "path")
+				Expect(err).ToNot(HaveOccurred())
+				Expect(id).To(Equal("nodeID"))
+				v, err := c.Get(context.TODO(), "spaceID", "nodeID")
+				Expect(err).ToNot(HaveOccurred())
+				Expect(v).To(Equal("path"))
 			})
 		})
 

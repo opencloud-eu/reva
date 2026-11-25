@@ -144,6 +144,62 @@ func (c *IDCache) Set(ctx context.Context, spaceID, nodeID, val string) error {
 	return err
 }
 
+// Claim caches nodeID for path unless the path is already in the cache, in which case it
+// returns errtypes.AlreadyExists and leaves the cache alone. Use it to cache the id of an
+// item before the item exists on disk.
+func (c *IDCache) Claim(ctx context.Context, spaceID, nodeID, path string) error {
+	_, err := retry(ctx, func() (uint64, error) {
+		return c.kv.Create(ctx, reverseCacheKey(path), []byte(cacheKey(spaceID, nodeID)))
+	})
+	if errors.Is(err, jetstream.ErrKeyExists) {
+		// a retry finds the entry an earlier attempt wrote before its reply got lost
+		if owner, gErr := retry(ctx, func() (jetstream.KeyValueEntry, error) {
+			return c.kv.Get(ctx, reverseCacheKey(path))
+		}); gErr != nil || string(owner.Value()) != cacheKey(spaceID, nodeID) {
+			return errtypes.AlreadyExists(path)
+		}
+		err = nil
+	}
+	if err != nil {
+		return err
+	}
+
+	_, err = retry(ctx, func() (uint64, error) {
+		return c.kv.Put(ctx, cacheKey(spaceID, nodeID), []byte(path))
+	})
+	return err
+}
+
+// Release removes the entries of nodeID that Claim or Set added. The entry for path is only
+// removed while it still belongs to nodeID, so an entry someone else wrote in the meantime stays.
+func (c *IDCache) Release(ctx context.Context, spaceID, nodeID, path string) error {
+	err := retryErr(ctx, func() error { return c.kv.Purge(ctx, cacheKey(spaceID, nodeID)) })
+	if err != nil && err != jetstream.ErrKeyNotFound {
+		return err
+	}
+
+	entry, err := retry(ctx, func() (jetstream.KeyValueEntry, error) {
+		return c.kv.Get(ctx, reverseCacheKey(path))
+	})
+	if err == jetstream.ErrKeyNotFound {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if string(entry.Value()) != cacheKey(spaceID, nodeID) {
+		return nil
+	}
+	err = retryErr(ctx, func() error {
+		return c.kv.Purge(ctx, reverseCacheKey(path), jetstream.LastRevision(entry.Revision()))
+	})
+	if errors.Is(err, jetstream.ErrKeyExists) {
+		// the entry changed after we read it, so it isn't ours anymore
+		return nil
+	}
+	return err
+}
+
 // Get returns the value for a given key
 func (c *IDCache) Get(ctx context.Context, spaceID, nodeID string) (string, error) {
 	record, err := retry(ctx, func() (jetstream.KeyValueEntry, error) {
@@ -204,7 +260,7 @@ func retry[T any](ctx context.Context, f func() (T, error)) (T, error) {
 	b := backoff.NewExponentialBackOff()
 	for range 5 {
 		v, err = f()
-		if err == nil || err == jetstream.ErrKeyNotFound {
+		if err == nil || err == jetstream.ErrKeyNotFound || errors.Is(err, jetstream.ErrKeyExists) {
 			return v, err
 		}
 
@@ -222,7 +278,7 @@ func retryErr(ctx context.Context, f func() error) error {
 	b := backoff.NewExponentialBackOff()
 	for range 5 {
 		err = f()
-		if err == nil || err == jetstream.ErrKeyNotFound {
+		if err == nil || err == jetstream.ErrKeyNotFound || errors.Is(err, jetstream.ErrKeyExists) {
 			return err
 		}
 
