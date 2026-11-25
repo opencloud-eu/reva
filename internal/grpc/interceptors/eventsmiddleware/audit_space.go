@@ -32,15 +32,18 @@ func spaceEvent(req, res interface{}, item *storagespace.ItemSlot) (audit.Event,
 			ev.Target.ID = r.GetStorageSpace().GetId().GetOpaqueId()
 		}
 		ev.Target.Name = item.Name
-		switch {
-		case utils.ExistsInOpaque(r.GetOpaque(), "restore"):
+		if utils.ExistsInOpaque(r.GetOpaque(), "restore") {
 			ev.Definition = audit.SpaceEnable
-		case r.GetStorageSpace().GetQuota() != nil:
-			ev.Definition = audit.SpaceQuotaChange
-			ev.Change = &audit.Change{After: map[string]any{"quota": r.GetStorageSpace().GetQuota().GetQuotaMaxBytes()}}
-		default:
-			ev.Definition = audit.SpaceUpdate
-			ev.Change = spaceChange(r.GetStorageSpace())
+			break
+		}
+		// graph sends all changes of a drive PATCH in one request, a quota
+		// change is only its own event when nothing else changed
+		ev.Change = spaceChange(r.GetStorageSpace())
+		ev.Definition = audit.SpaceUpdate
+		if c := ev.Change; c != nil && len(c.After) == 1 {
+			if _, quota := c.After["quota"]; quota {
+				ev.Definition = audit.SpaceQuotaChange
+			}
 		}
 	case *provider.DeleteStorageSpaceResponse:
 		r := req.(*provider.DeleteStorageSpaceRequest)
@@ -81,6 +84,9 @@ func spaceChange(s *provider.StorageSpace) *audit.Change {
 	after := map[string]any{}
 	if n := s.GetName(); n != "" {
 		after["name"] = n
+	}
+	if q := s.GetQuota(); q != nil {
+		after["quota"] = q.GetQuotaMaxBytes()
 	}
 	for _, a := range spaceAttributes {
 		if utils.ExistsInOpaque(s.GetOpaque(), a.opaque) {
