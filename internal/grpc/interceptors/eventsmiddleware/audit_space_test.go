@@ -44,3 +44,20 @@ func TestSpaceDisableHasTheSpaceID(t *testing.T) {
 		assert.Equal(t, "Team", ev.Target.Name)
 	}
 }
+
+func TestSpaceQuotaChange(t *testing.T) {
+	update := func(s *provider.StorageSpace) audit.Event {
+		s.Root = root
+		ev, found := auditEvent(&provider.UpdateStorageSpaceRequest{StorageSpace: s}, &provider.UpdateStorageSpaceResponse{Status: ok}, &storagespace.ItemSlot{Name: "Finance"})
+		require.True(t, found)
+		return ev
+	}
+
+	ev := update(&provider.StorageSpace{Quota: &provider.Quota{QuotaMaxBytes: 10737418240}})
+	assert.Equal(t, audit.SpaceQuotaChange, ev.Definition, "only the quota changed")
+	assert.Equal(t, &audit.Change{After: map[string]any{"quota": uint64(10737418240)}}, ev.Change)
+
+	ev = update(&provider.StorageSpace{Name: "Finance 2026", Quota: &provider.Quota{QuotaMaxBytes: 10737418240}})
+	assert.Equal(t, audit.SpaceUpdate, ev.Definition, "a rename in the same PATCH is not lost")
+	assert.Equal(t, &audit.Change{After: map[string]any{"name": "Finance 2026", "quota": uint64(10737418240)}}, ev.Change)
+}
