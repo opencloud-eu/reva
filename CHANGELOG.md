@@ -13,6 +13,7 @@
 
 ### 🐛 Bug Fixes
 
+- ci: raise golangci-lint timeout to 15m [[#1065](https://github.com/opencloud-eu/reva/pull/1065)]
 - fix(scope): only accept id based references in the resourceinfo scope [[#1071](https://github.com/opencloud-eu/reva/pull/1071)]
 - fix(sharing): return the real status code instead of 500 when updating a share fails [[#1054](https://github.com/opencloud-eu/reva/pull/1054)]
 - fix(dataprovider): only warn about an incomplete nats configuration [[#1069](https://github.com/opencloud-eu/reva/pull/1069)]
