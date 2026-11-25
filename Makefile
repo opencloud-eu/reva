@@ -16,6 +16,7 @@ TESTS="basic http copymove props"
 
 TOOLCHAIN		?= $(CURDIR)/toolchain
 GOLANGCI_LINT	?= $(TOOLCHAIN)/golangci-lint
+GOLANGCI_LINT_TIMEOUT	?= 450s
 
 .PHONY: toolchain
 toolchain: $(GOLANGCI_LINT)
@@ -30,7 +31,7 @@ $(GOLANGCI_LINT):
 
 .PHONY: lint
 lint: $(GOLANGCI_LINT)
-	$(GOLANGCI_LINT) run --timeout 450s
+	$(GOLANGCI_LINT) run --timeout $(GOLANGCI_LINT_TIMEOUT)
 
 .PHONY: lint-fix
 lint-fix: $(GOLANGCI_LINT)
