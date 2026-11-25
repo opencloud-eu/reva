@@ -92,6 +92,7 @@ func GetOrHeadFile(w http.ResponseWriter, r *http.Request, fs storage.FS, spaceI
 		rid, err := storagespace.ParseID(spaceID)
 		if err != nil {
 			handleError(w, &sublog, err, "parse ID")
+			return
 		}
 		ref = &provider.Reference{
 			ResourceId: &rid,
