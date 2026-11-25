@@ -237,7 +237,6 @@ func (e *NatsEmitter) Record(ctx context.Context, ev Event) (*Record, error) {
 		rec.SessionID = rc.SessionID
 		rec.AuthMethod = rc.AuthMethod
 		rec.AuthClientID = rc.ClientID
-		rec.ActorImpersonatedBy = rc.ImpersonatedBy
 		rec.UserAgent = rc.UserAgent
 	}
 	if rec.UserAgent == "" {

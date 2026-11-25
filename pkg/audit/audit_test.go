@@ -90,12 +90,11 @@ func TestCodes(t *testing.T) {
 
 func TestRequestContextRoundTrip(t *testing.T) {
 	rc := RequestContext{
-		ClientAddress:  "203.0.113.7",
-		SessionID:      "s-1",
-		AuthMethod:     "oidc",
-		ClientID:       "web",
-		ImpersonatedBy: "admin",
-		UserAgent:      "Mozilla/5.0 (Macintosh) Safari/605.1.15",
+		ClientAddress: "203.0.113.7",
+		SessionID:     "s-1",
+		AuthMethod:    "oidc",
+		ClientID:      "web",
+		UserAgent:     "Mozilla/5.0 (Macintosh) Safari/605.1.15",
 	}
 	assert.Equal(t, rc, ParseRequestContext(rc.Encode()))
 	assert.Equal(t, RequestContext{}, ParseRequestContext("%zz"))
@@ -364,9 +363,9 @@ func TestEmitterFromConfig(t *testing.T) {
 }
 
 func TestRequestContextMerge(t *testing.T) {
-	initial := RequestContext{ClientAddress: "198.51.100.1", AuthMethod: "oidc", SessionID: "sid", ClientID: "web", ImpersonatedBy: "admin", UserAgent: "post"}
+	initial := RequestContext{ClientAddress: "198.51.100.1", AuthMethod: "oidc", SessionID: "sid", ClientID: "web", UserAgent: "post"}
 	got := RequestContext{ClientAddress: "203.0.113.7", UserAgent: "patch"}.Merge(initial)
-	assert.Equal(t, RequestContext{ClientAddress: "203.0.113.7", AuthMethod: "oidc", SessionID: "sid", ClientID: "web", ImpersonatedBy: "admin", UserAgent: "patch"}, got)
+	assert.Equal(t, RequestContext{ClientAddress: "203.0.113.7", AuthMethod: "oidc", SessionID: "sid", ClientID: "web", UserAgent: "patch"}, got)
 
 	own := RequestContext{AuthMethod: "basic"}.Merge(initial)
 	assert.Equal(t, "basic", own.AuthMethod, "a value of the request itself is kept")

@@ -17,12 +17,11 @@ const Header = "x-audit-context"
 
 // Short keys keep the header small, it is sent with every call.
 const (
-	keyClientAddress  = "ip"
-	keySessionID      = "sid"
-	keyAuthMethod     = "am"
-	keyClientID       = "cid"
-	keyImpersonatedBy = "imp"
-	keyUserAgent      = "ua"
+	keyClientAddress = "ip"
+	keySessionID     = "sid"
+	keyAuthMethod    = "am"
+	keyClientID      = "cid"
+	keyUserAgent     = "ua"
 )
 
 // RequestContext is what the proxy knows about a request and the audit
@@ -36,8 +35,6 @@ type RequestContext struct {
 	AuthMethod string
 	// ClientID is the OIDC client.
 	ClientID string
-	// ImpersonatedBy is set when someone acts on behalf of the user.
-	ImpersonatedBy string
 	// UserAgent is the user agent of the client. The x-user-agent metadata
 	// is not set by every service, and the gRPC user-agent is the one of
 	// the calling service, not of the client.
@@ -62,7 +59,6 @@ func (rc RequestContext) Merge(initial RequestContext) RequestContext {
 	fill(&rc.SessionID, initial.SessionID)
 	fill(&rc.AuthMethod, initial.AuthMethod)
 	fill(&rc.ClientID, initial.ClientID)
-	fill(&rc.ImpersonatedBy, initial.ImpersonatedBy)
 	return rc
 }
 
@@ -92,7 +88,6 @@ func (rc RequestContext) Encode() string {
 	set(keySessionID, rc.SessionID)
 	set(keyAuthMethod, rc.AuthMethod)
 	set(keyClientID, rc.ClientID)
-	set(keyImpersonatedBy, rc.ImpersonatedBy)
 	set(keyUserAgent, rc.UserAgent)
 	return v.Encode()
 }
@@ -105,12 +100,11 @@ func ParseRequestContext(s string) RequestContext {
 		return RequestContext{}
 	}
 	return RequestContext{
-		ClientAddress:  v.Get(keyClientAddress),
-		SessionID:      v.Get(keySessionID),
-		AuthMethod:     v.Get(keyAuthMethod),
-		ClientID:       v.Get(keyClientID),
-		ImpersonatedBy: v.Get(keyImpersonatedBy),
-		UserAgent:      v.Get(keyUserAgent),
+		ClientAddress: v.Get(keyClientAddress),
+		SessionID:     v.Get(keySessionID),
+		AuthMethod:    v.Get(keyAuthMethod),
+		ClientID:      v.Get(keyClientID),
+		UserAgent:     v.Get(keyUserAgent),
 	}
 }
 

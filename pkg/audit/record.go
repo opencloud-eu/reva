@@ -75,10 +75,9 @@ type Record struct {
 
 	TenantID string `json:"tenant.id"`
 
-	ActorType           ActorType `json:"actor.type"`
-	ActorID             string    `json:"actor.id,omitempty"`
-	ActorName           string    `json:"actor.name,omitempty"`
-	ActorImpersonatedBy string    `json:"actor.impersonated_by,omitempty"`
+	ActorType ActorType `json:"actor.type"`
+	ActorID   string    `json:"actor.id,omitempty"`
+	ActorName string    `json:"actor.name,omitempty"`
 
 	AuthMethod   string `json:"auth.method,omitempty"`
 	AuthClientID string `json:"auth.client_id,omitempty"`
