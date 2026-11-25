@@ -9,12 +9,14 @@ import (
 	"time"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/google/uuid"
 	"github.com/opencloud-eu/reva/v3/pkg/errtypes"
 	"github.com/opencloud-eu/reva/v3/pkg/storage"
 	"github.com/opencloud-eu/reva/v3/pkg/storage/fs/posix/lookup"
 	"github.com/opencloud-eu/reva/v3/pkg/storage/fs/posix/timemanager"
 	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/metadata/prefixes"
 	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/node"
+	"github.com/pkg/xattr"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -278,6 +280,41 @@ var _ = Describe("Non-watching tree", func() {
 		Expect(err).To(HaveOccurred())
 		_, ok = err.(errtypes.IsPermissionDenied)
 		Expect(ok).To(BeTrue())
+	})
+
+	It("leaves a new file to an assimilation that set its id first", func() {
+		n, err := non_watching_env.Lookup.NodeFromResource(non_watching_env.Ctx, &provider.Reference{
+			ResourceId: non_watching_env.SpaceRootRes,
+			Path:       subtree + "/file",
+		})
+		Expect(err).ToNot(HaveOccurred())
+		n.ID = uuid.NewString()
+		path := filepath.Join(n.ParentPath(), n.Name)
+
+		// a listing finds the file before the upload set its id
+		non_watching_env.Tree.OnNewFileCreatedForTest(func(path string) {
+			Expect(non_watching_env.Tree.AssimilateForTest(path)).To(Succeed())
+		})
+		DeferCleanup(func() { non_watching_env.Tree.OnNewFileCreatedForTest(nil) })
+
+		_, err = non_watching_env.Tree.InitNewNode(non_watching_env.Ctx, n, 0)
+		_, ok := err.(errtypes.IsAlreadyExists)
+		Expect(ok).To(BeTrue(), "expected AlreadyExists, got %v", err)
+
+		// the file keeps the id of the assimilation, on disk and in the cache
+		idOnDisk, err := xattr.Get(path, prefixes.IDAttr)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(string(idOnDisk)).ToNot(Equal(n.ID))
+		_, cachedID, err := non_watching_env.Lookup.IDsForPath(non_watching_env.Ctx, path)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(cachedID).To(Equal(string(idOnDisk)))
+		_, err = non_watching_env.Lookup.GetCachedID(non_watching_env.Ctx, n.SpaceID, n.ID)
+		Expect(err).To(HaveOccurred())
+
+		// and the upload released its lock
+		unlock, err := non_watching_env.Lookup.MetadataBackend().Lock(n)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(unlock()).To(Succeed())
 	})
 
 	It("does not change the tree size when a file fails to assimilate", func() {

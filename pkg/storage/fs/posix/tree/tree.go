@@ -123,6 +123,9 @@ type Tree struct {
 	// deletes old revisions after a change on disk created a new one, disabled without a strategy
 	revisionsCleanup *revisioncleanup.Service
 
+	// called by InitNewNode between creating a file and setting its id, for tests only
+	newFileCreated func(path string)
+
 	es  events.Stream
 	log *zerolog.Logger
 }
@@ -923,10 +926,20 @@ func (t *Tree) InitNewNode(ctx context.Context, n *node.Node, fsize uint64) (met
 		return nil, err
 	}
 
+	if t.newFileCreated != nil {
+		t.newFileCreated(nodePath)
+	}
+
 	// Write the id before anything else. A listing or a scan that finds the file without an
-	// id and without a cache entry takes it for a new item and gives it a second id. With the
-	// id on disk it waits for the node lock we hold instead.
-	if err := xattr.FSet(h, prefixes.IDAttr, []byte(n.ID)); err != nil {
+	// id and without a cache entry assimilates it, which doesn't wait for our node lock. Both
+	// set the id with XATTR_CREATE, and whoever is first owns the file. With our id on disk
+	// assimilation waits for our lock. If assimilation was first, the file is known under
+	// its id now, so it isn't ours to remove: the name is taken.
+	if err := xattr.FSetWithFlags(h, prefixes.IDAttr, []byte(n.ID), xattr.XATTR_CREATE); err != nil {
+		if errors.Is(err, syscall.EEXIST) {
+			releaseNewNodeLock(ctx, n, unlock)
+			return nil, errtypes.AlreadyExists(n.Name)
+		}
 		return fail(err)
 	}
 

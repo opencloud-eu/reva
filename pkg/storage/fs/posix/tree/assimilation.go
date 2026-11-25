@@ -651,8 +651,25 @@ func (t *Tree) assimilate(item scanItem) error {
 
 		// assimilate new file
 		newId := uuid.New().String()
+
+		// Claim the id before anything else. XATTR_CREATE fails when the item got an id since we
+		// looked, e.g. from an upload that just created it, which doesn't hold our path lock.
+		// Whoever sets the id first owns the item, so it never gets two. Other errors, e.g. on
+		// a read-only file, are left to updateFile, which fails the same way and records it.
+		claimErr := xattr.SetWithFlags(item.Path, prefixes.IDAttr, []byte(newId), xattr.XATTR_CREATE)
+		if errors.Is(claimErr, syscall.EEXIST) {
+			t.log.Debug().Str("path", item.Path).Msg("item got an id meanwhile")
+			return nil
+		}
+
 		fi, attrs, err := t.updateFile(item.Path, newId, spaceID, nil)
 		if err != nil {
+			if claimErr == nil {
+				// nobody else can have set an id since our claim, so this only removes ours
+				if rErr := xattr.Remove(item.Path, prefixes.IDAttr); rErr != nil && !metadata.IsAttrUnset(rErr) {
+					t.log.Error().Err(rErr).Str("path", item.Path).Msg("could not remove the id of an item that failed to assimilate")
+				}
+			}
 			return err
 		}
 

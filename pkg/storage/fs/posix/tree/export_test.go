@@ -19,3 +19,9 @@ package tree
 func (t *Tree) AssimilateForTest(path string) error {
 	return t.assimilate(scanItem{Path: path})
 }
+
+// OnNewFileCreatedForTest sets a function that InitNewNode calls between creating a file and
+// setting its id, to step into that window. nil removes it.
+func (t *Tree) OnNewFileCreatedForTest(f func(path string)) {
+	t.newFileCreated = f
+}
