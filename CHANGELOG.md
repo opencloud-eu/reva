@@ -1,6 +1,6 @@
 # Changelog
 
-## [3.1.0](https://github.com/opencloud-eu/reva/releases/tag/v3.1.0) - 2026-11-24
+## [3.1.0](https://github.com/opencloud-eu/reva/releases/tag/v3.1.0) - 2026-11-25
 
 ### ❤️ Thanks to all contributors! ❤️
 
@@ -13,6 +13,7 @@
 
 ### 🐛 Bug Fixes
 
+- fix(sharing): return the real status code instead of 500 when updating a share fails [[#1054](https://github.com/opencloud-eu/reva/pull/1054)]
 - fix(dataprovider): only warn about an incomplete nats configuration [[#1069](https://github.com/opencloud-eu/reva/pull/1069)]
 - docs: 1419: describe the age of a revision as the time it was created [[#1041](https://github.com/opencloud-eu/reva/pull/1041)]
 - fix(gateway): issue a view only token only to users without download permission [[#1053](https://github.com/opencloud-eu/reva/pull/1053)]
