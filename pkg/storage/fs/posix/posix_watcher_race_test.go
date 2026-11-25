@@ -175,4 +175,73 @@ var _ = Describe("new uploads with the fs watcher", Label("watcher-race"), func(
 
 		Expect(emptyOnDisk + wrongBlobsize + wrongIDOnDisk + wrongReverseCache + staleByPath).To(BeZero())
 	})
+
+	// TouchFile creates empty files for an empty PUT, the app provider and locks on unmapped
+	// urls. It used to create the file before writing its id, the same window as above.
+	It("keeps the id TouchFile reports for every new file", func() {
+		const (
+			files   = 2000
+			workers = 8
+		)
+		ids := make([]string, files)
+
+		var wg sync.WaitGroup
+		work := make(chan int)
+		for range workers {
+			wg.Add(1)
+			go func() {
+				defer GinkgoRecover()
+				defer wg.Done()
+				for i := range work {
+					res, err := env.Fs.TouchFile(env.Ctx, &provider.Reference{ResourceId: env.SpaceRootRes, Path: fmt.Sprintf("./touch-%d.txt", i)}, false, "")
+					Expect(err).ToNot(HaveOccurred())
+					ids[i] = res.ResourceID.GetOpaqueId()
+				}
+			}()
+		}
+		for i := range files {
+			work <- i
+		}
+		close(work)
+		wg.Wait()
+
+		// let the watcher settle
+		time.Sleep(2 * time.Second)
+
+		var (
+			wrongIDOnDisk, wrongReverseCache, wrongByPath int
+			examples                                      []string
+		)
+		for i, id := range ids {
+			name := fmt.Sprintf("touch-%d.txt", i)
+			path := filepath.Join(env.Root, "users", env.Owner.Username, name)
+			var problems []string
+
+			if v, _ := xattr.Get(path, prefixes.IDAttr); string(v) != id {
+				wrongIDOnDisk++
+				problems = append(problems, fmt.Sprintf("id on disk %q", v))
+			}
+			if _, cached, err := env.Lookup.IDCache.GetByPath(env.Ctx, path); err != nil || cached != id {
+				wrongReverseCache++
+				problems = append(problems, fmt.Sprintf("path resolves to id %q (%v)", cached, err))
+			}
+			n, err := env.Lookup.NodeFromResource(env.Ctx, &provider.Reference{ResourceId: env.SpaceRootRes, Path: "./" + name})
+			if err != nil || n.ID != id {
+				wrongByPath++
+				problems = append(problems, fmt.Sprintf("by path: %v (%v)", n, err))
+			}
+
+			if len(problems) > 0 && len(examples) < 10 {
+				examples = append(examples, fmt.Sprintf("%s (id %s): %v", name, id, problems))
+			}
+		}
+
+		GinkgoWriter.Printf("of %d touched files: id wrong on disk %d, path resolves to another id %d, wrong by path %d\n",
+			files, wrongIDOnDisk, wrongReverseCache, wrongByPath)
+		for _, e := range examples {
+			GinkgoWriter.Println(e)
+		}
+
+		Expect(wrongIDOnDisk + wrongReverseCache + wrongByPath).To(BeZero())
+	})
 })
