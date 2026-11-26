@@ -151,14 +151,7 @@ func (s *svc) CreateHome(ctx context.Context, req *provider.CreateHomeRequest) (
 
 	// send the user id as the space id, makes debugging easier
 	if u.Id != nil && u.Id.OpaqueId != "" {
-		createReq.Opaque = &typesv1beta1.Opaque{
-			Map: map[string]*typesv1beta1.OpaqueEntry{
-				"space_id": {
-					Decoder: "plain",
-					Value:   []byte(u.Id.OpaqueId),
-				},
-			},
-		}
+		createReq.Opaque = utils.AppendPlainToOpaque(nil, "spaceid", u.Id.OpaqueId)
 	}
 	res, err := s.CreateStorageSpace(ctx, createReq)
 	if err != nil {
@@ -181,10 +174,9 @@ func (s *svc) CreateStorageSpace(ctx context.Context, req *provider.CreateStorag
 		Quota:     req.Quota,
 	}
 
-	if req.Opaque != nil && req.Opaque.Map != nil && req.Opaque.Map["id"] != nil {
-		if req.Opaque.Map["space_id"].Decoder == "plain" {
-			space.Id = &provider.StorageSpaceId{OpaqueId: string(req.Opaque.Map["id"].Value)}
-		}
+	// clients pass a requested space id as "spaceid", the same key the storage drivers read
+	if spaceID := utils.ReadPlainFromOpaque(req.GetOpaque(), "spaceid"); spaceID != "" {
+		space.Id = &provider.StorageSpaceId{OpaqueId: spaceID}
 	}
 
 	srClient, err := s.getStorageRegistryClient(ctx, s.c.StorageRegistryEndpoint)

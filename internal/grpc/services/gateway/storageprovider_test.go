@@ -39,6 +39,7 @@ import (
 	"github.com/opencloud-eu/reva/v3/pkg/rgrpc/todo/pool"
 	"github.com/opencloud-eu/reva/v3/pkg/storage/cache"
 	"github.com/opencloud-eu/reva/v3/pkg/storagespace"
+	"github.com/opencloud-eu/reva/v3/pkg/utils"
 	cs3mocks "github.com/opencloud-eu/reva/v3/tests/cs3mocks/mocks"
 )
 
@@ -184,6 +185,56 @@ var _ = Describe("CreateStorageSpace", func() {
 			Expect(resp.GetStatus().GetCode()).To(Equal(rpcv1beta1.Code_CODE_OK))
 			// No share must be created for personal spaces.
 			collaborationMock.AssertNotCalled(GinkgoT(), "CreateShare")
+		})
+	})
+
+	Context("requested space id", func() {
+		// registrySpace returns the space the gateway asked the registry to find a provider for
+		registrySpace := func() *provider.StorageSpace {
+			for _, call := range registryMock.Calls {
+				if call.Method != "GetStorageProviders" {
+					continue
+				}
+				req := call.Arguments.Get(1).(*registryv1beta1.GetStorageProvidersRequest)
+				space := &provider.StorageSpace{}
+				Expect(utils.ReadJSONFromOpaque(req.GetOpaque(), "space", space)).To(Succeed())
+				return space
+			}
+			Fail("GetStorageProviders was not called")
+			return nil
+		}
+
+		It("passes the spaceid from the opaque on to the registry", func() {
+			resp, err := s.CreateStorageSpace(ctx, &provider.CreateStorageSpaceRequest{
+				Opaque: utils.AppendPlainToOpaque(nil, "spaceid", "requested-id"),
+				Type:   "personal",
+			})
+
+			Expect(err).ToNot(HaveOccurred())
+			Expect(resp.GetStatus().GetCode()).To(Equal(rpcv1beta1.Code_CODE_OK))
+			Expect(registrySpace().GetId().GetOpaqueId()).To(Equal("requested-id"))
+		})
+
+		It("requests the user id as the space id when creating a home", func() {
+			resp, err := s.CreateHome(ctx, &provider.CreateHomeRequest{})
+
+			Expect(err).ToNot(HaveOccurred())
+			Expect(resp.GetStatus().GetCode()).To(Equal(rpcv1beta1.Code_CODE_OK))
+			Expect(registrySpace().GetId().GetOpaqueId()).To(Equal("alice"))
+			spacesMock.AssertCalled(GinkgoT(), "CreateStorageSpace", mock.Anything, mock.MatchedBy(func(req *provider.CreateStorageSpaceRequest) bool {
+				return utils.ReadPlainFromOpaque(req.GetOpaque(), "spaceid") == "alice"
+			}))
+		})
+
+		It("does not panic on an opaque that only carries an id", func() {
+			resp, err := s.CreateStorageSpace(ctx, &provider.CreateStorageSpaceRequest{
+				Opaque: utils.AppendPlainToOpaque(nil, "id", "requested-id"),
+				Type:   "personal",
+			})
+
+			Expect(err).ToNot(HaveOccurred())
+			Expect(resp.GetStatus().GetCode()).To(Equal(rpcv1beta1.Code_CODE_OK))
+			Expect(registrySpace().GetId()).To(BeNil())
 		})
 	})
 
