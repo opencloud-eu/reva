@@ -156,6 +156,7 @@ func checkResourcePath(path string) bool {
 		"/archiver",
 		"/ocs/v2.php/cloud/capabilities",
 		"/ocs/v1.php/cloud/capabilities",
+		"/ocs/v2.php/apps/notifications/api/v1/notifications/sse",
 	}
 	for _, p := range paths {
 		if strings.HasPrefix(path, p) {
