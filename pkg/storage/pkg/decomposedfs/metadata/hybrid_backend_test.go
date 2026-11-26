@@ -305,6 +305,25 @@ var _ = Describe("HybridBackend", func() {
 		})
 	})
 
+	// https://github.com/opencloud-eu/reva/pull/1074#discussion_r4693431860
+	Describe("a failed read that refreshes the cache", func() {
+		It("drops the cached attributes", func() {
+			err := backend.Set(context.Background(), n, nonOffloadingKey, nonOffloadingData)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(backend.All(context.Background(), n)).To(HaveKeyWithValue(nonOffloadingKey, nonOffloadingData))
+
+			// SetMultiple and Remove refresh the cache with the same read after a change on
+			// storage; a removed file makes that read fail
+			Expect(os.Remove(n.InternalPath())).To(Succeed())
+			n.SetLockHeld(true)
+			_, err = backend.Reload(context.Background(), n)
+			Expect(err).To(HaveOccurred())
+
+			_, err = backend.All(context.Background(), n)
+			Expect(err).To(HaveOccurred())
+		})
+	})
+
 	Describe("Lock", func() {
 		It("acquires a lock", func() {
 			unlock, err := backend.Lock(n)
