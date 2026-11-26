@@ -38,6 +38,9 @@ import (
 //
 // The error result returned by the function controls how Walk continues. If the function returns the special value SkipDir, Walk skips the current directory.
 // Otherwise, if the function returns a non-nil error, Walk stops entirely and returns that error.
+//
+// If a directory can't be listed, the function is called a second time for that directory with the
+// listing error. Returning nil or SkipDir then skips the directory's contents and the walk continues.
 type WalkFunc func(wd string, info *provider.ResourceInfo, err error) error
 
 // Walker is an interface implemented by objects that are able to walk from a dir rooted into the passed path
@@ -85,7 +88,7 @@ func (r *revaWalker) walkRecursively(session *auth.Session, wd string, info *pro
 
 	list, err := r.readDir(session, info.Id)
 	if err != nil {
-		return err
+		return fn(wd, info, err)
 	}
 	for _, file := range list {
 		err = r.walkRecursively(session, filepath.Join(wd, info.Path), file, fn)
