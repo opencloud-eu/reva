@@ -1,0 +1,63 @@
+package eventsmiddleware
+
+import (
+	"testing"
+
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/opencloud-eu/reva/v3/pkg/audit"
+	"github.com/opencloud-eu/reva/v3/pkg/storagespace"
+	"github.com/opencloud-eu/reva/v3/pkg/utils"
+)
+
+func TestSpaceUpdateChanges(t *testing.T) {
+	update := func(s *provider.StorageSpace) *audit.Change {
+		s.Root = root
+		ev, found := auditEvent(&provider.UpdateStorageSpaceRequest{StorageSpace: s}, &provider.UpdateStorageSpaceResponse{Status: ok}, &storagespace.ItemSlot{Name: "Audit Test"})
+		require.True(t, found)
+		assert.Equal(t, audit.SpaceUpdate, ev.Definition)
+		assert.Equal(t, "Audit Test", ev.Target.Name, "the name before the update")
+		return ev.Change
+	}
+
+	assert.Equal(t, &audit.Change{After: map[string]any{"name": "Renamed"}}, update(&provider.StorageSpace{Name: "Renamed"}))
+
+	o := utils.AppendPlainToOpaque(nil, "description", "Team files")
+	o = utils.AppendPlainToOpaque(o, "readme", "storage$space!readme-id")
+	assert.Equal(t, &audit.Change{After: map[string]any{"description": "Team files", "readme": "storage$space!readme-id"}}, update(&provider.StorageSpace{Opaque: o}))
+
+	assert.Equal(t, &audit.Change{After: map[string]any{"description": ""}}, update(&provider.StorageSpace{Opaque: utils.AppendPlainToOpaque(nil, "description", "")}), "a removed description")
+	assert.Nil(t, update(&provider.StorageSpace{}))
+}
+
+func TestSpaceDisableHasTheSpaceID(t *testing.T) {
+	for _, purge := range []bool{false, true} {
+		req := &provider.DeleteStorageSpaceRequest{Id: &provider.StorageSpaceId{OpaqueId: "storage$space!space"}}
+		if purge {
+			req.Opaque = utils.AppendPlainToOpaque(nil, "purge", "")
+		}
+		ev, found := auditEvent(req, &provider.DeleteStorageSpaceResponse{Status: ok}, &storagespace.ItemSlot{Name: "Team"})
+		require.True(t, found)
+		assert.Equal(t, "storage$space", ev.Target.SpaceID)
+		assert.Equal(t, "Team", ev.Target.Name)
+	}
+}
+
+func TestSpaceQuotaChange(t *testing.T) {
+	update := func(s *provider.StorageSpace) audit.Event {
+		s.Root = root
+		ev, found := auditEvent(&provider.UpdateStorageSpaceRequest{StorageSpace: s}, &provider.UpdateStorageSpaceResponse{Status: ok}, &storagespace.ItemSlot{Name: "Finance"})
+		require.True(t, found)
+		return ev
+	}
+
+	ev := update(&provider.StorageSpace{Quota: &provider.Quota{QuotaMaxBytes: 10737418240}})
+	assert.Equal(t, audit.SpaceQuotaChange, ev.Definition, "only the quota changed")
+	assert.Equal(t, &audit.Change{After: map[string]any{"quota": uint64(10737418240)}}, ev.Change)
+
+	ev = update(&provider.StorageSpace{Name: "Finance 2026", Quota: &provider.Quota{QuotaMaxBytes: 10737418240}})
+	assert.Equal(t, audit.SpaceUpdate, ev.Definition, "a rename in the same PATCH is not lost")
+	assert.Equal(t, &audit.Change{After: map[string]any{"name": "Finance 2026", "quota": uint64(10737418240)}}, ev.Change)
+}
