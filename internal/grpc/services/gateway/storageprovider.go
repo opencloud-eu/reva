@@ -151,14 +151,7 @@ func (s *svc) CreateHome(ctx context.Context, req *provider.CreateHomeRequest) (
 
 	// send the user id as the space id, makes debugging easier
 	if u.Id != nil && u.Id.OpaqueId != "" {
-		createReq.Opaque = &typesv1beta1.Opaque{
-			Map: map[string]*typesv1beta1.OpaqueEntry{
-				"space_id": {
-					Decoder: "plain",
-					Value:   []byte(u.Id.OpaqueId),
-				},
-			},
-		}
+		createReq.Opaque = utils.AppendPlainToOpaque(nil, "spaceid", u.Id.OpaqueId)
 	}
 	res, err := s.CreateStorageSpace(ctx, createReq)
 	if err != nil {

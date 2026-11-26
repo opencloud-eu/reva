@@ -215,6 +215,17 @@ var _ = Describe("CreateStorageSpace", func() {
 			Expect(registrySpace().GetId().GetOpaqueId()).To(Equal("requested-id"))
 		})
 
+		It("requests the user id as the space id when creating a home", func() {
+			resp, err := s.CreateHome(ctx, &provider.CreateHomeRequest{})
+
+			Expect(err).ToNot(HaveOccurred())
+			Expect(resp.GetStatus().GetCode()).To(Equal(rpcv1beta1.Code_CODE_OK))
+			Expect(registrySpace().GetId().GetOpaqueId()).To(Equal("alice"))
+			spacesMock.AssertCalled(GinkgoT(), "CreateStorageSpace", mock.Anything, mock.MatchedBy(func(req *provider.CreateStorageSpaceRequest) bool {
+				return utils.ReadPlainFromOpaque(req.GetOpaque(), "spaceid") == "alice"
+			}))
+		})
+
 		It("does not panic on an opaque that only carries an id", func() {
 			resp, err := s.CreateStorageSpace(ctx, &provider.CreateStorageSpaceRequest{
 				Opaque: utils.AppendPlainToOpaque(nil, "id", "requested-id"),
