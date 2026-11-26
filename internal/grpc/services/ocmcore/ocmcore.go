@@ -304,6 +304,7 @@ func (s *service) DeleteOCMCoreShare(ctx context.Context, req *ocmcore.DeleteOCM
 		if s.eventStream != nil {
 			if err := events.Publish(ctx, s.eventStream, events.OCMCoreShareDelete{
 				ShareID:      share.Id.OpaqueId,
+				Executant:    share.GetCreator(),
 				Sharer:       share.GetOwner(),
 				Grantee:      ocmuser.DecodeRemoteUserFederatedID(&userpb.UserId{OpaqueId: grantee}),
 				ResourceName: share.Name,

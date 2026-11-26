@@ -17,8 +17,10 @@ import (
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
+	microevents "go-micro.dev/v4/events"
 
 	"github.com/opencloud-eu/reva/v3/internal/grpc/services/ocmcore"
+	"github.com/opencloud-eu/reva/v3/pkg/events"
 	ocmshare "github.com/opencloud-eu/reva/v3/pkg/ocm/share"
 	jsonrepo "github.com/opencloud-eu/reva/v3/pkg/ocm/share/repository/json"
 	"github.com/opencloud-eu/reva/v3/pkg/utils"
@@ -82,4 +84,62 @@ func TestUpdateOCMCoreShareTakesOnlyWebDAVPermissions(t *testing.T) {
 	require.Equal(t, "secret", webdav.GetSharedSecret())
 	require.True(t, webdav.GetPermissions().GetPermissions().GetInitiateFileUpload())
 	require.Equal(t, "https://remote.example.org/app/{token}", rs.GetProtocols()[1].GetWebappOptions().GetUri())
+}
+
+type recordingStream struct {
+	published []any
+}
+
+func (r *recordingStream) Publish(_ string, ev any, _ ...microevents.PublishOption) error {
+	r.published = append(r.published, ev)
+	return nil
+}
+
+func (r *recordingStream) Consume(string, ...microevents.ConsumeOption) (<-chan microevents.Event, error) {
+	return nil, nil
+}
+
+func TestDeleteOCMCoreShareEventNamesTheCreatorAsExecutant(t *testing.T) {
+	ctx := context.Background()
+	file := filepath.Join(t.TempDir(), "shares.json")
+	grantee := &userpb.UserId{Idp: "cloud.example.com", OpaqueId: "alice", Type: userpb.UserType_USER_TYPE_PRIMARY}
+	owner := &userpb.UserId{Idp: "remote.example.org", OpaqueId: "space-owner"}
+	sender := &userpb.UserId{Idp: "remote.example.org", OpaqueId: "bob"}
+
+	log := zerolog.Nop()
+	svc, err := ocmcore.New(map[string]any{
+		"driver":  "json",
+		"drivers": map[string]any{"json": map[string]any{"file": file}},
+	}, nil, &log)
+	require.NoError(t, err)
+	stream := &recordingStream{}
+	ocmcore.SetEventStream(svc, stream)
+	core := svc.(ocmcorepb.OcmCoreAPIServer)
+
+	created, err := core.CreateOCMCoreShare(ctx, &ocmcorepb.CreateOCMCoreShareRequest{
+		ResourceId:   "remote-resource",
+		Name:         "project",
+		ShareWith:    grantee,
+		ResourceType: providerpb.ResourceType_RESOURCE_TYPE_CONTAINER,
+		ShareType:    ocm.ShareType_SHARE_TYPE_USER,
+		Owner:        owner,
+		Sender:       sender,
+		Protocols: []*ocm.Protocol{
+			ocmshare.NewWebDAVProtocol("https://remote.example.org/dav/ocm/token", "secret", &ocm.SharePermissions{Permissions: &providerpb.ResourcePermissions{InitiateFileDownload: true}}),
+		},
+	})
+	require.NoError(t, err)
+	require.Equal(t, rpc.Code_CODE_OK, created.GetStatus().GetCode())
+
+	o := &typespb.Opaque{}
+	utils.AppendPlainToOpaque(o, "grantee", "alice@cloud.example.com")
+	deleted, err := core.DeleteOCMCoreShare(ctx, &ocmcorepb.DeleteOCMCoreShareRequest{Id: created.GetId(), Opaque: o})
+	require.NoError(t, err)
+	require.Equal(t, rpc.Code_CODE_OK, deleted.GetStatus().GetCode())
+
+	require.Len(t, stream.published, 2)
+	ev, ok := stream.published[1].(events.OCMCoreShareDelete)
+	require.True(t, ok)
+	require.True(t, utils.UserEqual(sender, ev.Executant), "executant should be the share creator, got %v", ev.Executant)
+	require.True(t, utils.UserEqual(owner, ev.Sharer), "sharer should stay the share owner, got %v", ev.Sharer)
 }

@@ -47,7 +47,11 @@ func (OCMCoreShareCreated) Unmarshal(v []byte) (interface{}, error) {
 
 // OCMCoreShareDelete is emitted when an ocm share is requested for delete
 type OCMCoreShareDelete struct {
-	ShareID      string
+	ShareID string
+	// Executant is the remote user who created the share. The unshare
+	// notification does not say who removed it, the creator is the closest
+	// we know.
+	Executant    *user.UserId
 	Sharer       *user.UserId
 	Grantee      *user.UserId
 	ResourceName string
