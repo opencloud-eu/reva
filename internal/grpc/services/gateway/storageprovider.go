@@ -181,10 +181,9 @@ func (s *svc) CreateStorageSpace(ctx context.Context, req *provider.CreateStorag
 		Quota:     req.Quota,
 	}
 
-	if req.Opaque != nil && req.Opaque.Map != nil && req.Opaque.Map["id"] != nil {
-		if req.Opaque.Map["space_id"].Decoder == "plain" {
-			space.Id = &provider.StorageSpaceId{OpaqueId: string(req.Opaque.Map["id"].Value)}
-		}
+	// clients pass a requested space id as "spaceid", the same key the storage drivers read
+	if spaceID := utils.ReadPlainFromOpaque(req.GetOpaque(), "spaceid"); spaceID != "" {
+		space.Id = &provider.StorageSpaceId{OpaqueId: spaceID}
 	}
 
 	srClient, err := s.getStorageRegistryClient(ctx, s.c.StorageRegistryEndpoint)
