@@ -1,6 +1,6 @@
 # Changelog
 
-## [3.1.0](https://github.com/opencloud-eu/reva/releases/tag/v3.1.0) - 2026-11-25
+## [3.1.0](https://github.com/opencloud-eu/reva/releases/tag/v3.1.0) - 2026-11-26
 
 ### ❤️ Thanks to all contributors! ❤️
 
@@ -11,13 +11,9 @@
 - feat: 4076: a revision cleanup strategy per type of space [[#1042](https://github.com/opencloud-eu/reva/pull/1042)]
 - feat: clean up old revisions according to a cleanup strategy [[#895](https://github.com/opencloud-eu/reva/pull/895)]
 
-### ✅ Tests
-
-- ci: give the benchmark 30 minutes and sample every GetMD [[#1063](https://github.com/opencloud-eu/reva/pull/1063)]
-- test(decomposedfs): run the lookup specs and update them to the current layout [[#1050](https://github.com/opencloud-eu/reva/pull/1050)]
-
 ### 🐛 Bug Fixes
 
+- fix: don't cache a nil map after a failed xattr read, and don't panic on one [[#1074](https://github.com/opencloud-eu/reva/pull/1074)]
 - ci: raise golangci-lint timeout to 15m [[#1065](https://github.com/opencloud-eu/reva/pull/1065)]
 - fix(scope): only accept id based references in the resourceinfo scope [[#1071](https://github.com/opencloud-eu/reva/pull/1071)]
 - fix(sharing): return the real status code instead of 500 when updating a share fails [[#1054](https://github.com/opencloud-eu/reva/pull/1054)]
@@ -29,6 +25,11 @@
 - fix(ocm): align ocm share permissions with the shared resource type [[#1035](https://github.com/opencloud-eu/reva/pull/1035)]
 - fix(ocm): fix wildcard providers and invite error handling [[#1027](https://github.com/opencloud-eu/reva/pull/1027)]
 - fix: set the share jail root as parent id of listed shares [[#1020](https://github.com/opencloud-eu/reva/pull/1020)]
+
+### ✅ Tests
+
+- ci: give the benchmark 30 minutes and sample every GetMD [[#1063](https://github.com/opencloud-eu/reva/pull/1063)]
+- test(decomposedfs): run the lookup specs and update them to the current layout [[#1050](https://github.com/opencloud-eu/reva/pull/1050)]
 
 ### 📦️ Dependencies
 
