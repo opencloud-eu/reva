@@ -11,6 +11,10 @@
 - feat: 4076: a revision cleanup strategy per type of space [[#1042](https://github.com/opencloud-eu/reva/pull/1042)]
 - feat: clean up old revisions according to a cleanup strategy [[#895](https://github.com/opencloud-eu/reva/pull/895)]
 
+### 📈 Enhancement
+
+- Auditing NG Part 1 [[#956](https://github.com/opencloud-eu/reva/pull/956)]
+
 ### 🐛 Bug Fixes
 
 - fix: don't cache a nil map after a failed xattr read, and don't panic on one [[#1074](https://github.com/opencloud-eu/reva/pull/1074)]
