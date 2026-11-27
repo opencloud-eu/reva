@@ -62,6 +62,11 @@ func (fs *Decomposedfs) SetArbitraryMetadata(ctx context.Context, ref *provider.
 		return nil, err
 	}
 
+	existingAttribs, err := n.Xattrs(ctx)
+	if err != nil {
+		return nil, errors.Wrap(err, "Decomposedfs: could not read metadata attributes")
+	}
+
 	errs := []error{}
 	// TODO should we really continue updating when an error occurs?
 	result := &storage.MetadataResult{SpaceOwner: n.SpaceOwnerOrManager(ctx)}
@@ -92,10 +97,6 @@ func (fs *Decomposedfs) SetArbitraryMetadata(ctx context.Context, ref *provider.
 	// one write for the whole set: a per key write publishes every intermediate
 	// state to the unlocked, cache first readers
 	attribs := make(map[string][]byte, len(md.Metadata))
-	existingAttribs, err := n.Xattrs(ctx)
-	if err != nil {
-		return nil, errors.Wrap(err, "Decomposedfs: could not read metadata attributes")
-	}
 	for k, v := range md.Metadata {
 		if existingVal, ok := existingAttribs[prefixes.MetadataPrefix+k]; ok && string(existingVal) == v {
 			continue // no change needed
@@ -184,8 +185,10 @@ func (fs *Decomposedfs) UnsetArbitraryMetadata(ctx context.Context, ref *provide
 	}
 	switch len(errs) {
 	case 0:
-		if err := fs.tp.Propagate(ctx, n, 0); err != nil {
-			return nil, err
+		if len(result.RemovedKeys) > 0 {
+			if err := fs.tp.Propagate(ctx, n, 0); err != nil {
+				return nil, err
+			}
 		}
 		return result, nil
 	case 1:

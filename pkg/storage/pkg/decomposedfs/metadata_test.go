@@ -306,4 +306,40 @@ var _ = Describe("UnsetArbitraryMetadata", func() {
 		Expect(result).ToNot(BeNil())
 		Expect(result.RemovedKeys).To(BeEmpty())
 	})
+
+	It("only propagates when a key is actually removed", func() {
+		parentRef := &provider.Reference{
+			ResourceId: env.SpaceRootRes,
+			Path:       "/dir1",
+		}
+		tmtimeOf := func() time.Time {
+			p, err := env.Lookup.NodeFromResource(env.Ctx, parentRef)
+			Expect(err).ToNot(HaveOccurred())
+			t, err := p.GetTMTime(env.Ctx)
+			Expect(err).ToNot(HaveOccurred())
+			return t
+		}
+
+		keys := map[string]string{}
+		for i := range 200 {
+			keys[fmt.Sprintf("key%d", i)] = "value"
+		}
+		_, err := env.Fs.SetArbitraryMetadata(env.Ctx, ref, &provider.ArbitraryMetadata{Metadata: keys})
+		Expect(err).ToNot(HaveOccurred())
+		afterSet := tmtimeOf()
+
+		_, err = env.Fs.UnsetArbitraryMetadata(env.Ctx, ref, []string{"never-set"})
+		Expect(err).ToNot(HaveOccurred())
+		Expect(tmtimeOf()).To(BeTemporally("==", afterSet))
+
+		// each iteration removes another key, so the tmtime advances as soon as
+		// the clock has moved past afterSet
+		i := 0
+		Eventually(func() time.Time {
+			_, err := env.Fs.UnsetArbitraryMetadata(env.Ctx, ref, []string{fmt.Sprintf("key%d", i)})
+			Expect(err).ToNot(HaveOccurred())
+			i++
+			return tmtimeOf()
+		}).Should(BeTemporally(">", afterSet))
+	})
 })
