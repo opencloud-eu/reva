@@ -167,21 +167,53 @@ var (
 	ErrTokenStatInfoMissing = errors.New("webdav: token stat info missing")
 )
 
-// HandleErrorStatus checks the status code, logs a Debug or Error level message
-// and writes an appropriate http status
-func HandleErrorStatus(log *zerolog.Logger, w http.ResponseWriter, s *rpc.Status) {
-	hsc := status.HTTPStatusFromCode(s.Code)
-	if s.Code == rpc.Code_CODE_ABORTED {
+// httpStatusFromStatus maps a CS3 status to the http status code webdav uses for it.
+func httpStatusFromStatus(s *rpc.Status) int {
+	hsc := status.HTTPStatusFromCode(s.GetCode())
+	if s.GetCode() == rpc.Code_CODE_ABORTED {
 		// aborted is used for etag an lock mismatches, which translates to 412
 		// in case a real Conflict response is needed, the calling code needs to send the header
 		hsc = http.StatusPreconditionFailed
 	}
+	return hsc
+}
+
+// logStatus logs a status at Error level when it turns into a server error and at
+// Debug level otherwise, so that a 500 is always visible in the logs of an operator
+// who is not running the service at debug level.
+func logStatus(log *zerolog.Logger, s *rpc.Status, hsc int) {
 	if hsc == http.StatusInternalServerError {
 		log.Error().Interface("status", s).Int("code", hsc).Msg(http.StatusText(hsc))
 	} else {
 		log.Debug().Interface("status", s).Int("code", hsc).Msg(http.StatusText(hsc))
 	}
+}
+
+// HandleErrorStatus checks the status code, logs a Debug or Error level message
+// and writes an appropriate http status
+func HandleErrorStatus(log *zerolog.Logger, w http.ResponseWriter, s *rpc.Status) {
+	hsc := httpStatusFromStatus(s)
+	logStatus(log, s, hsc)
 	w.WriteHeader(hsc)
+}
+
+// HandleWebdavErrorStatus does what HandleErrorStatus does and additionally writes a
+// webdav error body. Prefer it over HandleErrorStatus wherever a webdav client is
+// waiting for the response: a bare status code with an empty body cannot be parsed by
+// a webdav client, so it can only report a generic "not XML" error, which hides both
+// the status and the message the server had available.
+func HandleWebdavErrorStatus(log *zerolog.Logger, w http.ResponseWriter, s *rpc.Status) {
+	hsc := httpStatusFromStatus(s)
+	logStatus(log, s, hsc)
+
+	m := s.GetMessage()
+	if hsc == http.StatusNotFound {
+		m = "Resource not found" // mimic the oc10 error message
+	}
+
+	w.WriteHeader(hsc)
+	b, err := Marshal(hsc, m, "", "")
+	HandleWebdavError(log, w, b, err)
 }
 
 // HandleWebdavError checks the status code, logs an error and creates a webdav response body
