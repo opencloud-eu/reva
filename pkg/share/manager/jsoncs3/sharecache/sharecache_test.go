@@ -86,4 +86,45 @@ var _ = Describe("Sharecache", func() {
 			})
 		})
 	})
+
+	Describe("List", func() {
+		Context("when no cache file exists yet", func() {
+			It("creates the cache file on first call", func() {
+				_, err := c.List(ctx, userid)
+				Expect(err).ToNot(HaveOccurred())
+
+				_, err = os.Stat(tmpdir + "/users/" + userid.SafeFilename() + "/created.json")
+				Expect(err).ToNot(HaveOccurred())
+			})
+
+			It("sets an etag after the first call", func() {
+				_, err := c.List(ctx, userid)
+				Expect(err).ToNot(HaveOccurred())
+
+				uc, ok := c.UserShares.Load(userid.SafeFilename())
+				Expect(ok).To(BeTrue())
+				Expect(uc.Etag).ToNot(BeEmpty())
+			})
+
+			It("returns empty shares", func() {
+				shares, err := c.List(ctx, userid)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(shares).To(BeEmpty())
+			})
+
+			It("does not upload again on second call", func() {
+				_, err := c.List(ctx, userid)
+				Expect(err).ToNot(HaveOccurred())
+
+				uc, _ := c.UserShares.Load(userid.SafeFilename())
+				etagAfterFirst := uc.Etag
+
+				_, err = c.List(ctx, userid)
+				Expect(err).ToNot(HaveOccurred())
+
+				uc, _ = c.UserShares.Load(userid.SafeFilename())
+				Expect(uc.Etag).To(Equal(etagAfterFirst))
+			})
+		})
+	})
 })
