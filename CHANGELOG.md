@@ -4,10 +4,11 @@
 
 ### ❤️ Thanks to all contributors! ❤️
 
-@asaah262, @butonic, @dragonchaser, @fschade, @maki5, @micbar, @pbleser-oc, @rhafer
+@asaah262, @butonic, @dragonchaser, @dschmidt, @fschade, @maki5, @micbar, @pbleser-oc, @rhafer
 
 ### ✨ Features
 
+- feat(events): emit ArbitraryMetadataChanged when arbitrary metadata is set or unset [[#898](https://github.com/opencloud-eu/reva/pull/898)]
 - feat: 4076: a revision cleanup strategy per type of space [[#1042](https://github.com/opencloud-eu/reva/pull/1042)]
 - feat: clean up old revisions according to a cleanup strategy [[#895](https://github.com/opencloud-eu/reva/pull/895)]
 
