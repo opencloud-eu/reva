@@ -22,6 +22,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math/rand/v2"
 	"os"
 	"path"
 	"path/filepath"
@@ -134,7 +135,12 @@ func (c *Cache) Add(ctx context.Context, userID utils.FilenameEncoder, spaceID s
 		Str("spaceID", spaceID).Logger()
 
 	var err error
-	for retries := 100; retries > 0; retries-- {
+	for attempt := 0; attempt < 20; attempt++ {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
 		err = persistFunc()
 		switch err.(type) {
 		case nil:
@@ -157,6 +163,13 @@ func (c *Cache) Add(ctx context.Context, userID utils.FilenameEncoder, spaceID s
 			span.SetStatus(codes.Error, fmt.Sprintf("persisting added received share failed. giving up: %s", err.Error()))
 			log.Error().Err(err).Msg("persisting added received share failed")
 			return err
+		}
+		timer := time.NewTimer(expBackoff(attempt))
+		select {
+		case <-timer.C:
+		case <-ctx.Done():
+			timer.Stop()
+			return ctx.Err()
 		}
 		if err := c.syncWithLock(ctx, userID); err != nil {
 			span.RecordError(err)
@@ -223,7 +236,12 @@ func (c *Cache) Remove(ctx context.Context, userID utils.FilenameEncoder, spaceI
 		Str("spaceID", spaceID).Logger()
 
 	var err error
-	for retries := 100; retries > 0; retries-- {
+	for attempt := 0; attempt < 20; attempt++ {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
 		err = persistFunc()
 		switch err.(type) {
 		case nil:
@@ -246,6 +264,13 @@ func (c *Cache) Remove(ctx context.Context, userID utils.FilenameEncoder, spaceI
 			span.SetStatus(codes.Error, fmt.Sprintf("persisting added received share failed. giving up: %s", err.Error()))
 			log.Error().Err(err).Msg("persisting added received share failed")
 			return err
+		}
+		timer := time.NewTimer(expBackoff(attempt))
+		select {
+		case <-timer.C:
+		case <-ctx.Done():
+			timer.Stop()
+			return ctx.Err()
 		}
 		if err := c.syncWithLock(ctx, userID); err != nil {
 			span.RecordError(err)
@@ -384,6 +409,17 @@ func (c *Cache) persist(ctx context.Context, userID utils.FilenameEncoder) error
 
 	span.SetStatus(codes.Ok, "")
 	return nil
+}
+
+// expBackoff returns full-jitter delay: rand(0, min(100ms, 2^attempt ms)).
+// attempt:  0    1    2    3    4    5    6    7+
+// max ms:   1    2    4    8   16   32   64  100
+func expBackoff(attempt int) time.Duration {
+	base := time.Duration(1<<uint(attempt)) * time.Millisecond
+	if base > 100*time.Millisecond {
+		base = 100 * time.Millisecond
+	}
+	return time.Duration(rand.Int64N(int64(base) + 1))
 }
 
 func userJSONPath(userID string) string {
