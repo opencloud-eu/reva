@@ -20,7 +20,10 @@ package receivedsharecache_test
 
 import (
 	"context"
+	"fmt"
 	"os"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -104,6 +107,50 @@ var _ = Describe("Cache", func() {
 		})
 	})
 
+	Describe("concurrent writes from multiple cache instances", func() {
+		It("preserves all shares when replicas write concurrently for the same user", func() {
+			const numReplicas = 3
+			const numShares = 15
+
+			// barrierStorage holds all Upload calls until numReplicas have arrived,
+			// then releases them simultaneously. This makes the race deterministic
+			// regardless of OS goroutine scheduling or GOMAXPROCS.
+			bs := newBarrierStorage(storage, numReplicas)
+			replicas := make([]receivedsharecache.Cache, numReplicas)
+			for i := range replicas {
+				replicas[i] = receivedsharecache.New(bs, 0*time.Second)
+			}
+
+			errs := make([]error, numShares)
+			var wg sync.WaitGroup
+			for i := 0; i < numShares; i++ {
+				wg.Add(1)
+				go func(idx int) {
+					defer wg.Done()
+					rs := &collaboration.ReceivedShare{
+						Share: &collaboration.Share{
+							Id: &collaboration.ShareId{OpaqueId: fmt.Sprintf("share-%d", idx)},
+						},
+						State: collaboration.ShareState_SHARE_STATE_PENDING,
+					}
+					errs[idx] = replicas[idx%numReplicas].Add(ctx, userID, spaceID, rs)
+				}(i)
+			}
+			wg.Wait()
+			for i, err := range errs {
+				Expect(err).ToNot(HaveOccurred(), "Add failed for share-%d", i)
+			}
+
+			fresh := receivedsharecache.New(storage, 0*time.Second)
+			spaces, err := fresh.List(ctx, userID)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(spaces[spaceID]).ToNot(BeNil())
+			for i := 0; i < numShares; i++ {
+				Expect(spaces[spaceID].States).To(HaveKey(fmt.Sprintf("share-%d", i)))
+			}
+		})
+	})
+
 	Describe("with an existing entry", func() {
 		BeforeEach(func() {
 			rs := &collaboration.ReceivedShare{
@@ -164,3 +211,26 @@ var _ = Describe("Cache", func() {
 		})
 	})
 })
+
+// barrierStorage wraps a Storage and holds Upload calls until n goroutines have
+// arrived, then releases them all at once. This makes the concurrent-write race
+// reproducible regardless of OS goroutine scheduling.
+type barrierStorage struct {
+	metadata.Storage
+	arrived   int32
+	n         int32
+	ready     chan struct{}
+	closeOnce sync.Once
+}
+
+func newBarrierStorage(s metadata.Storage, n int) *barrierStorage {
+	return &barrierStorage{Storage: s, n: int32(n), ready: make(chan struct{})}
+}
+
+func (b *barrierStorage) Upload(ctx context.Context, req metadata.UploadRequest) (*metadata.UploadResponse, error) {
+	if atomic.AddInt32(&b.arrived, 1) >= b.n {
+		b.closeOnce.Do(func() { close(b.ready) })
+	}
+	<-b.ready
+	return b.Storage.Upload(ctx, req)
+}
