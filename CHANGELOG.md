@@ -1,5 +1,48 @@
 # Changelog
 
+## [3.1.0](https://github.com/opencloud-eu/reva/releases/tag/v3.1.0) - 2026-11-27
+
+### ❤️ Thanks to all contributors! ❤️
+
+@Supportlik, @asaah262, @butonic, @dragonchaser, @dschmidt, @fschade, @maki5, @micbar, @pbleser-oc, @rhafer
+
+### ✨ Features
+
+- feat(events): emit ArbitraryMetadataChanged when arbitrary metadata is set or unset [[#898](https://github.com/opencloud-eu/reva/pull/898)]
+- feat: 4076: a revision cleanup strategy per type of space [[#1042](https://github.com/opencloud-eu/reva/pull/1042)]
+- feat: clean up old revisions according to a cleanup strategy [[#895](https://github.com/opencloud-eu/reva/pull/895)]
+
+### 🐛 Bug Fixes
+
+- fix(posix): give new files their id before they get their name [[#1076](https://github.com/opencloud-eu/reva/pull/1076)]
+- fix(decomposedfs): replace the space index atomically [[#1082](https://github.com/opencloud-eu/reva/pull/1082)]
+- fix: don't cache a nil map after a failed xattr read, and don't panic on one [[#1074](https://github.com/opencloud-eu/reva/pull/1074)]
+- ci: raise golangci-lint timeout to 15m [[#1065](https://github.com/opencloud-eu/reva/pull/1065)]
+- fix(scope): only accept id based references in the resourceinfo scope [[#1071](https://github.com/opencloud-eu/reva/pull/1071)]
+- fix(sharing): return the real status code instead of 500 when updating a share fails [[#1054](https://github.com/opencloud-eu/reva/pull/1054)]
+- fix(dataprovider): only warn about an incomplete nats configuration [[#1069](https://github.com/opencloud-eu/reva/pull/1069)]
+- docs: 1419: describe the age of a revision as the time it was created [[#1041](https://github.com/opencloud-eu/reva/pull/1041)]
+- fix(gateway): issue a view only token only to users without download permission [[#1053](https://github.com/opencloud-eu/reva/pull/1053)]
+- fix: take only webdav permissions from ocm permission change notifications [[#1037](https://github.com/opencloud-eu/reva/pull/1037)]
+- fix(ocm): use gateway selectors in the received storage and the ocmshares auth manager [[#1034](https://github.com/opencloud-eu/reva/pull/1034)]
+- fix(ocm): align ocm share permissions with the shared resource type [[#1035](https://github.com/opencloud-eu/reva/pull/1035)]
+- fix(ocm): fix wildcard providers and invite error handling [[#1027](https://github.com/opencloud-eu/reva/pull/1027)]
+- fix: set the share jail root as parent id of listed shares [[#1020](https://github.com/opencloud-eu/reva/pull/1020)]
+
+### 📈 Enhancement
+
+- Auditing NG Part 1 [[#956](https://github.com/opencloud-eu/reva/pull/956)]
+
+### ✅ Tests
+
+- ci: give the benchmark 30 minutes and sample every GetMD [[#1063](https://github.com/opencloud-eu/reva/pull/1063)]
+- test(decomposedfs): run the lookup specs and update them to the current layout [[#1050](https://github.com/opencloud-eu/reva/pull/1050)]
+
+### 📦️ Dependencies
+
+- chore(deps): bump golang.org/x/sys from 0.48.0 to 0.49.0 [[#983](https://github.com/opencloud-eu/reva/pull/983)]
+- chore(deps): bump go.opentelemetry.io/otel/sdk from 1.46.0 to 1.47.0 in the go_modules group across 1 directory [[#1004](https://github.com/opencloud-eu/reva/pull/1004)]
+
 ## [3.0.1](https://github.com/opencloud-eu/reva/releases/tag/v3.0.1) - 2026-11-17
 
 ### ❤️ Thanks to all contributors! ❤️
