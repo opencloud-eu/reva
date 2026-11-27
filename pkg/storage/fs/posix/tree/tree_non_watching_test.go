@@ -11,10 +11,12 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/opencloud-eu/reva/v3/pkg/errtypes"
 	"github.com/opencloud-eu/reva/v3/pkg/storage"
+	"github.com/opencloud-eu/reva/v3/pkg/storage/fs/posix/blobstore"
 	"github.com/opencloud-eu/reva/v3/pkg/storage/fs/posix/lookup"
 	"github.com/opencloud-eu/reva/v3/pkg/storage/fs/posix/timemanager"
 	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/metadata/prefixes"
 	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/node"
+	"github.com/pkg/xattr"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -63,6 +65,32 @@ var _ = Describe("Non-watching tree", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(non_watching_env.Tree.TouchFile(ctx, n, false, "")).To(Succeed())
 		}
+
+		// A file can sit under the name before the node is known, e.g. one the watcher has not
+		// assimilated yet. TouchFile used to truncate it with os.Create.
+		It("leaves a file that already has the name alone", func() {
+			n, err := non_watching_env.Lookup.NodeFromResource(non_watching_env.Ctx, &provider.Reference{
+				ResourceId: non_watching_env.SpaceRootRes,
+				Path:       subtree + "/taken",
+			})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(n.Exists).To(BeFalse())
+			nodePath := filepath.Join(n.ParentPath(), n.Name)
+			Expect(os.WriteFile(nodePath, []byte("not ours"), 0600)).To(Succeed())
+
+			err = non_watching_env.Tree.TouchFile(non_watching_env.Ctx, n, false, "")
+			Expect(err).To(BeAssignableToTypeOf(errtypes.AlreadyExists("")))
+
+			content, err := os.ReadFile(nodePath)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(string(content)).To(Equal("not ours"))
+			_, err = xattr.Get(nodePath, prefixes.IDAttr)
+			Expect(err).To(HaveOccurred(), "the file must not get our id")
+			_, err = non_watching_env.Lookup.IDCache.Get(non_watching_env.Ctx, n.SpaceID, n.ID)
+			Expect(err).To(BeAssignableToTypeOf(errtypes.NotFound("")), "our id must not be cached")
+			_, err = os.Stat(filepath.Join(n.SpaceRoot.InternalPath(), blobstore.TMPDir, ".new-"+n.ID))
+			Expect(os.IsNotExist(err)).To(BeTrue(), "the temp name must be gone")
+		})
 
 		It("propagates the new file to its parent", func() {
 			before := parentTMTime()

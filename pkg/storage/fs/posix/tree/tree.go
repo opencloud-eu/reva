@@ -27,6 +27,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime/debug"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -47,6 +48,7 @@ import (
 	"github.com/opencloud-eu/reva/v3/pkg/errtypes"
 	"github.com/opencloud-eu/reva/v3/pkg/events"
 	"github.com/opencloud-eu/reva/v3/pkg/storage"
+	"github.com/opencloud-eu/reva/v3/pkg/storage/fs/posix/blobstore"
 	"github.com/opencloud-eu/reva/v3/pkg/storage/fs/posix/idcache"
 	"github.com/opencloud-eu/reva/v3/pkg/storage/fs/posix/ignore"
 	"github.com/opencloud-eu/reva/v3/pkg/storage/fs/posix/lookup"
@@ -383,7 +385,11 @@ func (t *Tree) TouchFile(ctx context.Context, n *node.Node, markprocessing bool,
 	parentPath := n.ParentPath()
 	nodePath := filepath.Join(parentPath, n.Name)
 
-	// lock the meta file
+	// the lock file is named after the id, and the watcher waits for this lock once the file
+	// shows up with its id
+	if n.ID == "" {
+		n.ID = uuid.New().String()
+	}
 	unlock, err := t.lookup.MetadataBackend().Lock(n)
 	if err != nil {
 		return err
@@ -392,26 +398,20 @@ func (t *Tree) TouchFile(ctx context.Context, n *node.Node, markprocessing bool,
 		_ = unlock()
 	}()
 
-	if n.ID == "" {
-		n.ID = uuid.New().String()
-	}
 	n.SetType(provider.ResourceType_RESOURCE_TYPE_FILE)
-
-	// Set id in cache
-	if err := t.lookup.CacheID(context.Background(), n.SpaceID, n.ID, nodePath); err != nil {
-		t.log.Error().Err(err).Str("spaceID", n.SpaceID).Str("id", n.ID).Str("path", nodePath).Msg("could not cache id")
-	}
 
 	if err := os.MkdirAll(filepath.Dir(nodePath), 0700); err != nil {
 		return errors.Wrap(err, "posixfs: error creating node")
 	}
-	f, err := os.Create(nodePath)
+	fi, err := t.createFileNode(n, nodePath)
 	if err != nil {
-		return errors.Wrap(err, "posixfs: error creating node")
+		return err
 	}
-	defer func() {
-		_ = f.Close()
-	}()
+
+	// cached only now that the name is ours, so a losing touch cannot point it at its id
+	if err := t.lookup.CacheID(context.Background(), n.SpaceID, n.ID, nodePath); err != nil {
+		t.log.Error().Err(err).Str("spaceID", n.SpaceID).Str("id", n.ID).Str("path", nodePath).Msg("could not cache id")
+	}
 
 	attributes := n.NodeMetadata(ctx)
 	attributes[prefixes.IDAttr] = []byte(n.ID)
@@ -428,12 +428,7 @@ func (t *Tree) TouchFile(ctx context.Context, n *node.Node, markprocessing bool,
 			return err
 		}
 	} else {
-		fi, err := f.Stat()
-		if err != nil {
-			return err
-		}
-		mtime := fi.ModTime()
-		attributes[prefixes.MTimeAttr] = []byte(mtime.UTC().Format(time.RFC3339Nano))
+		attributes[prefixes.MTimeAttr] = []byte(fi.ModTime().UTC().Format(time.RFC3339Nano))
 	}
 
 	err = n.SetXattrsWithContext(ctx, attributes)
@@ -908,18 +903,11 @@ func (t *Tree) InitNewNode(ctx context.Context, n *node.Node, fsize uint64) (met
 		return nil, err
 	}
 
-	// we also need to touch the actual node file here it stores the mtime of the resource
-	h, err := os.OpenFile(nodePath, os.O_CREATE|os.O_EXCL, 0600)
-	if err != nil {
+	if _, err := t.createFileNode(n, nodePath); err != nil {
 		// the file is not ours: leave it, and its cache entry, alone
 		releaseNewNodeLock(ctx, n, unlock)
-		if os.IsExist(err) {
-			// the name only: the message reaches the client, the path is the server's
-			return nil, errtypes.AlreadyExists(n.Name)
-		}
 		return nil, err
 	}
-	defer func() { _ = h.Close() }()
 
 	// from here the file is ours. A failure removes it and our cache entry before
 	// unlocking, so nothing can open the node in between.
@@ -939,24 +927,66 @@ func (t *Tree) InitNewNode(ctx context.Context, n *node.Node, fsize uint64) (met
 		return fail(err)
 	}
 
-	// Set known mtime from filesystem to metadata to preven re-assimilation
-	fi, err := h.Stat()
-	if err != nil {
-		return fail(err)
-	}
-	mtime := fi.ModTime()
-	err = n.SetXattrsWithContext(ctx, map[string][]byte{
-		prefixes.MTimeAttr: []byte(mtime.UTC().Format(time.RFC3339Nano)),
-	})
-	if err != nil {
-		t.log.Error().Err(err).Str("path", nodePath).Msg("could not set mtime attribute on new node")
-	}
-
 	if _, err := node.CheckQuota(ctx, n.SpaceRoot, false, 0, fsize); err != nil {
 		return fail(err)
 	}
 
 	return unlock, nil
+}
+
+// createFileNode creates the file of the new node n at nodePath. The file must not show up
+// under its name without an id: the watcher would assimilate it as a new item under a lock of
+// its own, give it an id, blob id and size of its own and cache its id for the path, racing
+// the attributes the caller writes. So we create it under a temp name the watcher ignores,
+// give it its identity there and only then hardlink it to its name. Whatever scans it from
+// then on finds the id and waits for the node lock the caller holds.
+// Like O_EXCL, link() fails if the name is taken, and unlike renameat2(RENAME_NOREPLACE) it
+// works on every POSIX filesystem, NFS included. On an error nothing at nodePath is ours.
+// It returns the stat of the new file, the mtime attribute already matches it.
+func (t *Tree) createFileNode(n *node.Node, nodePath string) (os.FileInfo, error) {
+	tmpDir := filepath.Join(n.SpaceRoot.InternalPath(), blobstore.TMPDir)
+	if err := os.MkdirAll(tmpDir, 0700); err != nil {
+		return nil, err
+	}
+	tmpPath := filepath.Join(tmpDir, ".new-"+n.ID)
+	h, err := os.OpenFile(tmpPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = h.Close() }()
+	// after the link only the temp name goes, the inode stays under its real name
+	defer func() {
+		if err := os.Remove(tmpPath); err != nil && !os.IsNotExist(err) {
+			t.log.Error().Err(err).Str("path", tmpPath).Msg("could not remove temp file of new node")
+		}
+	}()
+
+	// the mtime is set here as well, so the watcher's mtime check skips the file
+	fi, err := h.Stat()
+	if err != nil {
+		return nil, err
+	}
+	identity := map[string]string{
+		prefixes.IDAttr:       n.ID,
+		prefixes.ParentidAttr: n.ParentID,
+		prefixes.NameAttr:     n.Name,
+		prefixes.TypeAttr:     strconv.FormatInt(int64(provider.ResourceType_RESOURCE_TYPE_FILE), 10),
+		prefixes.MTimeAttr:    fi.ModTime().UTC().Format(time.RFC3339Nano),
+	}
+	for k, v := range identity {
+		if err := xattr.FSet(h, k, []byte(v)); err != nil {
+			return nil, err
+		}
+	}
+
+	if err := os.Link(tmpPath, nodePath); err != nil {
+		if os.IsExist(err) {
+			// the name only: the message reaches the client, the path is the server's
+			return nil, errtypes.AlreadyExists(n.Name)
+		}
+		return nil, err
+	}
+	return fi, nil
 }
 
 // releaseNewNodeLock releases the lock of a node InitNewNode failed to create.
