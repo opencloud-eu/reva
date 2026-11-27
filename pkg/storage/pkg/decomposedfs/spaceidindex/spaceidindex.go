@@ -4,8 +4,10 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 
+	"github.com/google/renameio/v2"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/mtimesyncedcache"
 	"github.com/pkg/errors"
 	"github.com/rogpeppe/go-internal/lockedfile"
@@ -19,10 +21,42 @@ type Index struct {
 	cache mtimesyncedcache.Cache[string, map[string]string]
 }
 
-type readWriteCloseSeekTruncater interface {
-	io.ReadWriteCloser
-	io.Seeker
-	Truncate(int64) error
+// writeLock is the in-process lock of one index file. refs counts the writers that hold it or wait for it.
+type writeLock struct {
+	mu   sync.Mutex
+	refs int
+}
+
+var (
+	writeLocksMu sync.Mutex
+	writeLocks   = map[string]*writeLock{} // index path -> lock, only while a writer holds it or waits for it
+)
+
+// lockIndex serializes the writers of an index file within this process, so that at most one of them at a time
+// waits for the file lock: several flock requests of one client waiting for the same file can be very slow on some
+// shared filesystems (ceph-fuse). It returns the unlock function, which removes the entry again when no other
+// writer of this process holds it or waits for it.
+func lockIndex(indexPath string) (unlock func()) {
+	writeLocksMu.Lock()
+	l, ok := writeLocks[indexPath]
+	if !ok {
+		l = &writeLock{}
+		writeLocks[indexPath] = l
+	}
+	l.refs++
+	writeLocksMu.Unlock()
+
+	l.mu.Lock()
+	return func() {
+		l.mu.Unlock()
+
+		writeLocksMu.Lock()
+		l.refs--
+		if l.refs == 0 {
+			delete(writeLocks, indexPath)
+		}
+		writeLocksMu.Unlock()
+	}
 }
 
 // New returns a new index instance
@@ -65,18 +99,22 @@ func (i *Index) Remove(index, key string) error {
 	return i.updateIndex(index, map[string]string{}, []string{key})
 }
 
-func (i *Index) updateIndex(index string, addLinks map[string]string, removeLinks []string) error {
+func (i *Index) updateIndex(index string, addLinks map[string]string, removeLinks []string) (err error) {
 	indexPath := filepath.Join(i.root, i.name, index+".mpk")
 
-	var err error
-	// acquire writelock
-	var f readWriteCloseSeekTruncater
-	f, err = lockedfile.OpenFile(indexPath, os.O_RDWR|os.O_CREATE, 0600)
+	unlock := lockIndex(indexPath)
+	defer unlock()
+
+	// acquire writelock on a separate lock file, like the node metadata does. The index itself is replaced
+	// atomically and never truncated and rewritten in place: on a shared filesystem (e.g. the CephFS kernel client)
+	// a writer on another node could otherwise read up to a stale size and drop entries, and a process that dies
+	// between truncating and writing would leave an empty or partial index behind.
+	l, err := lockedfile.OpenFile(indexPath+".mlock", os.O_RDWR|os.O_CREATE, 0600)
 	if err != nil {
 		return errors.Wrap(err, "unable to lock index to write")
 	}
 	defer func() {
-		rerr := f.Close()
+		rerr := l.Close()
 
 		// if err is non nil we do not overwrite that
 		if err == nil {
@@ -85,15 +123,17 @@ func (i *Index) updateIndex(index string, addLinks map[string]string, removeLink
 	}()
 
 	// Read current state
-	msgBytes, err := io.ReadAll(f)
-	if err != nil {
-		return err
-	}
 	links := map[string]string{}
-	if len(msgBytes) > 0 {
+	msgBytes, err := os.ReadFile(indexPath)
+	switch {
+	case errors.Is(err, os.ErrNotExist):
+		// no index yet
+	case err != nil:
+		return errors.Wrap(err, "unable to read index")
+	case len(msgBytes) > 0:
 		err = msgpack.Unmarshal(msgBytes, &links)
 		if err != nil {
-			return err
+			return errors.Wrap(err, "unable to parse index")
 		}
 	}
 
@@ -104,22 +144,13 @@ func (i *Index) updateIndex(index string, addLinks map[string]string, removeLink
 	for _, key := range removeLinks {
 		delete(links, key)
 	}
-	// Truncate file
-	_, err = f.Seek(0, io.SeekStart)
-	if err != nil {
-		return err
-	}
-	err = f.Truncate(0)
-	if err != nil {
-		return err
-	}
 
-	// Write new metadata to file
+	// Write new metadata to a temporary file next to the index, fsync it and rename it over the index
 	d, err := msgpack.Marshal(links)
 	if err != nil {
 		return errors.Wrap(err, "unable to marshal index")
 	}
-	_, err = f.Write(d)
+	err = renameio.WriteFile(indexPath, d, 0600, renameio.WithTempDir(filepath.Dir(indexPath)))
 	if err != nil {
 		return errors.Wrap(err, "unable to write index")
 	}
