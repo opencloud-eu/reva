@@ -126,6 +126,11 @@ type Tree struct {
 	// deletes old revisions after a change on disk created a new one, disabled without a strategy
 	revisionsCleanup *revisioncleanup.Service
 
+	// called by createDirNode between creating a folder and setting its id, for tests only
+	dirCreated func(path string)
+	// called by assimilate between claiming the id of a new item and caching it, for tests only
+	idClaimed func(path string)
+
 	es  events.Stream
 	log *zerolog.Logger
 }
@@ -989,6 +994,79 @@ func (t *Tree) createFileNode(n *node.Node, nodePath string) (os.FileInfo, error
 	return fi, nil
 }
 
+// reservePath reserves path in the id cache for the new node n, see IDCache.ReservePath. The
+// caller holds the node lock of n until the id is written to the new item.
+//
+// If another node holds the path we wait for its node lock: a request that reserved the path
+// holds it until its item has its id. If the item exists then, the name is taken. If it does not,
+// the reservation is stale (its request failed or crashed) and we take it over, unless someone
+// else was faster. A node that holds a reservation never waits for another node's lock, so this
+// cannot deadlock.
+func (t *Tree) reservePath(ctx context.Context, n *node.Node, path string) error {
+	idcache := t.lookup.IDCache
+	for range 3 {
+		heldBySpace, heldByNode, revision, err := idcache.ReservePath(ctx, n.SpaceID, n.ID, path)
+		if err != nil {
+			return errors.Wrap(err, "posixfs: could not reserve the path of the new node")
+		}
+		if heldByNode == "" {
+			return nil
+		}
+
+		unlock, err := t.lookup.MetadataBackend().Lock(&assimilationNode{spaceID: heldBySpace, nodeId: heldByNode, path: path})
+		if err != nil {
+			return err
+		}
+		_, statErr := os.Lstat(path)
+		_ = unlock()
+		switch {
+		case statErr == nil:
+			// the name only: the message reaches the client, the path is the server's
+			return errtypes.AlreadyExists(n.Name)
+		case !os.IsNotExist(statErr):
+			return statErr
+		}
+
+		ok, err := idcache.TakeOverPath(ctx, n.SpaceID, n.ID, path, revision)
+		if err != nil {
+			return errors.Wrap(err, "posixfs: could not take over the path of the new node")
+		}
+		if ok {
+			return nil
+		}
+	}
+	return errtypes.AlreadyExists(n.Name)
+}
+
+// takeOverDirNode makes n the folder at path that an assimilation gave an id of its own before
+// createDirNode could set ours. It releases our reservation and lock, switches n to the id on
+// disk and locks that, which waits for the assimilation to finish. It returns the unlock func of
+// the new lock. If the id is still ours, e.g. after a retry, nothing changes.
+func (t *Tree) takeOverDirNode(n *node.Node, d *os.File, path string, unlock metadata.UnlockFunc, release func()) (metadata.UnlockFunc, error) {
+	id, err := xattr.FGet(d, prefixes.IDAttr)
+	if err != nil {
+		release()
+		return unlock, errors.Wrap(err, "posixfs: could not read the id of the new node")
+	}
+	if string(id) == n.ID {
+		return unlock, nil
+	}
+	t.log.Debug().Str("path", path).Str("id", n.ID).Str("assimilatedID", string(id)).Msg("the new folder was assimilated before it got its id, taking over the assimilated id")
+
+	// The path entry points at the assimilated id by now or soon, Release leaves that alone.
+	release()
+	noop := func() error { return nil }
+	if err := unlock(); err != nil {
+		return noop, err
+	}
+	n.ID = string(id)
+	newUnlock, err := t.lookup.MetadataBackend().Lock(n)
+	if err != nil {
+		return noop, err
+	}
+	return newUnlock, nil
+}
+
 // releaseNewNodeLock releases the lock of a node InitNewNode failed to create.
 func releaseNewNodeLock(ctx context.Context, n *node.Node, unlock metadata.UnlockFunc) {
 	if err := unlock(); err != nil {
@@ -1019,15 +1097,38 @@ func (t *Tree) createDirNode(ctx context.Context, n *node.Node) (err error) {
 		return err
 	}
 	defer func() {
+		// the lock we hold, see takeOverDirNode
 		_ = unlock()
 	}()
 
-	if err := os.MkdirAll(path, 0700); err != nil {
+	// Reserve the path for our id before the folder exists. A folder cannot be created with its
+	// id already set, so the watcher can see it without one. Its assimilation finds the
+	// reservation and waits for the node lock we hold until the id is written, instead of
+	// giving the folder an id of its own.
+	if err := t.reservePath(ctx, n, path); err != nil {
+		return err
+	}
+	release := func() {
+		if err := idcache.Release(ctx, n.SpaceID, n.ID, path); err != nil {
+			t.log.Error().Err(err).Str("spaceID", n.SpaceID).Str("id", n.ID).Str("path", path).Msg("could not release the id cache reservation")
+		}
+	}
+
+	if err := os.MkdirAll(parentPath, 0700); err != nil {
+		release()
+		return errors.Wrap(err, "posixfs: error creating node")
+	}
+	// Mkdir, not MkdirAll: a folder that already has the name is not ours
+	if err := os.Mkdir(path, 0700); err != nil {
+		release()
+		if os.IsExist(err) {
+			return errtypes.AlreadyExists(n.Name)
+		}
 		return errors.Wrap(err, "posixfs: error creating node")
 	}
 
-	if err := idcache.Set(ctx, n.SpaceID, n.ID, path); err != nil {
-		t.log.Error().Err(err).Str("spaceID", n.SpaceID).Str("id", n.ID).Str("path", path).Msg("could not cache id")
+	if t.dirCreated != nil {
+		t.dirCreated(path)
 	}
 
 	// Write mtime from filesystem to metadata to preven re-assimilation
@@ -1038,6 +1139,21 @@ func (t *Tree) createDirNode(ctx context.Context, n *node.Node) (err error) {
 	defer func() {
 		_ = d.Close()
 	}()
+
+	// Write the id before anything else. If the watcher missed our reservation, e.g. because the
+	// id cache read failed or came from a replica that lags behind, its assimilation sets an id
+	// of its own. Both set the id with XATTR_CREATE, so whoever is first owns the folder and it
+	// never gets two ids. If the assimilation was first, the folder is known under its id and
+	// we take that over.
+	if err := xattr.FSetWithFlags(d, prefixes.IDAttr, []byte(n.ID), xattr.XATTR_CREATE); err != nil {
+		if !errors.Is(err, syscall.EEXIST) {
+			release()
+			return errors.Wrap(err, "posixfs: could not set the id of the new node")
+		}
+		if unlock, err = t.takeOverDirNode(n, d, path, unlock, release); err != nil {
+			return err
+		}
+	}
 
 	fi, err := d.Stat()
 	if err != nil {

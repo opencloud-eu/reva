@@ -130,6 +130,90 @@ func (c *IDCache) DeletePath(ctx context.Context, path string) error {
 }
 
 // Set adds a new entry to the cache
+// ReservePath claims path for a node that is about to be created, before it exists on disk. It
+// only writes the path entry if there is none, so it never overwrites the entry of another node.
+// If another node holds the path, it reports that node and the revision of its entry instead,
+// see TakeOverPath. An entry that already points at the node counts as reserved.
+func (c *IDCache) ReservePath(ctx context.Context, spaceID, nodeID, path string) (heldBySpace, heldByNode string, revision uint64, err error) {
+	key := cacheKey(spaceID, nodeID)
+	rk := reverseCacheKey(path)
+	for range 3 {
+		_, err = c.kv.Create(ctx, rk, []byte(key))
+		if err == nil {
+			return "", "", 0, c.setForward(ctx, key, path)
+		}
+		if !isWrongRevision(err) {
+			return "", "", 0, err
+		}
+		e, err := c.kv.Get(ctx, rk)
+		if err == jetstream.ErrKeyNotFound {
+			// removed in between, try again
+			continue
+		}
+		if err != nil {
+			return "", "", 0, err
+		}
+		if string(e.Value()) == key {
+			return "", "", 0, c.setForward(ctx, key, path)
+		}
+		heldBySpace, heldByNode, err = decodeCacheKey(string(e.Value()))
+		if err != nil {
+			return "", "", 0, err
+		}
+		return heldBySpace, heldByNode, e.Revision(), nil
+	}
+	return "", "", 0, errtypes.Aborted("the path entry kept changing while reserving " + path)
+}
+
+// TakeOverPath points the path entry at the node if it is still at revision, see ReservePath.
+// It reports false if the entry changed in between.
+func (c *IDCache) TakeOverPath(ctx context.Context, spaceID, nodeID, path string, revision uint64) (bool, error) {
+	key := cacheKey(spaceID, nodeID)
+	_, err := c.kv.Update(ctx, reverseCacheKey(path), []byte(key), revision)
+	switch {
+	case err == nil:
+		return true, c.setForward(ctx, key, path)
+	case isWrongRevision(err):
+		return false, nil
+	default:
+		return false, err
+	}
+}
+
+// Release removes the entries of a node that was reserved for path but never created. The
+// path entry is only removed while it still points at the node, so the entry of another node
+// that got the path in the meantime stays.
+func (c *IDCache) Release(ctx context.Context, spaceID, nodeID, path string) error {
+	key := cacheKey(spaceID, nodeID)
+	rk := reverseCacheKey(path)
+	e, err := retry(ctx, func() (jetstream.KeyValueEntry, error) { return c.kv.Get(ctx, rk) })
+	switch {
+	case err == nil && string(e.Value()) == key:
+		if err := c.kv.Purge(ctx, rk, jetstream.LastRevision(e.Revision())); err != nil && !isWrongRevision(err) {
+			return err
+		}
+	case err != nil && err != jetstream.ErrKeyNotFound:
+		return err
+	}
+	return retryErr(ctx, func() error { return c.kv.Purge(ctx, key) })
+}
+
+func (c *IDCache) setForward(ctx context.Context, key, path string) error {
+	_, err := retry(ctx, func() (uint64, error) {
+		return c.kv.Put(ctx, key, []byte(path))
+	})
+	return err
+}
+
+// isWrongRevision reports whether a conditional write failed because the key had another revision
+func isWrongRevision(err error) bool {
+	if errors.Is(err, jetstream.ErrKeyExists) {
+		return true
+	}
+	var apiErr *jetstream.APIError
+	return errors.As(err, &apiErr) && apiErr.ErrorCode == jetstream.JSErrCodeStreamWrongLastSequence
+}
+
 func (c *IDCache) Set(ctx context.Context, spaceID, nodeID, val string) error {
 	_, err := retry(ctx, func() (uint64, error) {
 		return c.kv.Put(ctx, cacheKey(spaceID, nodeID), []byte(val))
@@ -168,7 +252,11 @@ func (c *IDCache) getByReverseCacheKey(ctx context.Context, reverseKey string) (
 		}
 		return "", "", err
 	}
-	decoded, err := base32.StdEncoding.DecodeString(string(record.Value()))
+	return decodeCacheKey(string(record.Value()))
+}
+
+func decodeCacheKey(key string) (string, string, error) {
+	decoded, err := base32.StdEncoding.DecodeString(key)
 	if err != nil {
 		return "", "", err
 	}

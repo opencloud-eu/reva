@@ -19,3 +19,18 @@ package tree
 func (t *Tree) AssimilateForTest(path string) error {
 	return t.assimilate(scanItem{Path: path})
 }
+
+// OnDirCreatedForTest sets a function that createDirNode calls between creating a folder and
+// setting its id, to step into that window. nil removes it.
+func (t *Tree) OnDirCreatedForTest(f func(path string)) {
+	t.dirCreated = f
+}
+
+// OnIDClaimedForTest sets a function that assimilate calls between claiming the id of a new item
+// and caching it, to step into that window. nil removes it.
+func (t *Tree) OnIDClaimedForTest(f func(path string)) {
+	t.idClaimed = f
+}
+
+// ErrSkipAlreadyKnown is returned by assimilate for an item it already knows.
+var ErrSkipAlreadyKnown = _errSkipAlreadyKnown

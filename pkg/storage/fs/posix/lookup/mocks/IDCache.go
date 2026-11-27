@@ -303,6 +303,128 @@ func (_c *IDCache_GetByPath_Call) RunAndReturn(run func(context.Context, string)
 	return _c
 }
 
+// Release provides a mock function with given fields: ctx, spaceID, nodeID, path
+func (_m *IDCache) Release(ctx context.Context, spaceID string, nodeID string, path string) error {
+	ret := _m.Called(ctx, spaceID, nodeID, path)
+
+	if len(ret) == 0 {
+		panic("no return value specified for Release")
+	}
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(context.Context, string, string, string) error); ok {
+		r0 = rf(ctx, spaceID, nodeID, path)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+// IDCache_Release_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Release'
+type IDCache_Release_Call struct {
+	*mock.Call
+}
+
+// Release is a helper method to define mock.On call
+//   - ctx context.Context
+//   - spaceID string
+//   - nodeID string
+//   - path string
+func (_e *IDCache_Expecter) Release(ctx interface{}, spaceID interface{}, nodeID interface{}, path interface{}) *IDCache_Release_Call {
+	return &IDCache_Release_Call{Call: _e.mock.On("Release", ctx, spaceID, nodeID, path)}
+}
+
+func (_c *IDCache_Release_Call) Run(run func(ctx context.Context, spaceID string, nodeID string, path string)) *IDCache_Release_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string), args[2].(string), args[3].(string))
+	})
+	return _c
+}
+
+func (_c *IDCache_Release_Call) Return(_a0 error) *IDCache_Release_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *IDCache_Release_Call) RunAndReturn(run func(context.Context, string, string, string) error) *IDCache_Release_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// ReservePath provides a mock function with given fields: ctx, spaceID, nodeID, path
+func (_m *IDCache) ReservePath(ctx context.Context, spaceID string, nodeID string, path string) (string, string, uint64, error) {
+	ret := _m.Called(ctx, spaceID, nodeID, path)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ReservePath")
+	}
+
+	var r0 string
+	var r1 string
+	var r2 uint64
+	var r3 error
+	if rf, ok := ret.Get(0).(func(context.Context, string, string, string) (string, string, uint64, error)); ok {
+		return rf(ctx, spaceID, nodeID, path)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, string, string, string) string); ok {
+		r0 = rf(ctx, spaceID, nodeID, path)
+	} else {
+		r0 = ret.Get(0).(string)
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, string, string, string) string); ok {
+		r1 = rf(ctx, spaceID, nodeID, path)
+	} else {
+		r1 = ret.Get(1).(string)
+	}
+
+	if rf, ok := ret.Get(2).(func(context.Context, string, string, string) uint64); ok {
+		r2 = rf(ctx, spaceID, nodeID, path)
+	} else {
+		r2 = ret.Get(2).(uint64)
+	}
+
+	if rf, ok := ret.Get(3).(func(context.Context, string, string, string) error); ok {
+		r3 = rf(ctx, spaceID, nodeID, path)
+	} else {
+		r3 = ret.Error(3)
+	}
+
+	return r0, r1, r2, r3
+}
+
+// IDCache_ReservePath_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ReservePath'
+type IDCache_ReservePath_Call struct {
+	*mock.Call
+}
+
+// ReservePath is a helper method to define mock.On call
+//   - ctx context.Context
+//   - spaceID string
+//   - nodeID string
+//   - path string
+func (_e *IDCache_Expecter) ReservePath(ctx interface{}, spaceID interface{}, nodeID interface{}, path interface{}) *IDCache_ReservePath_Call {
+	return &IDCache_ReservePath_Call{Call: _e.mock.On("ReservePath", ctx, spaceID, nodeID, path)}
+}
+
+func (_c *IDCache_ReservePath_Call) Run(run func(ctx context.Context, spaceID string, nodeID string, path string)) *IDCache_ReservePath_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string), args[2].(string), args[3].(string))
+	})
+	return _c
+}
+
+func (_c *IDCache_ReservePath_Call) Return(heldBySpace string, heldByNode string, revision uint64, err error) *IDCache_ReservePath_Call {
+	_c.Call.Return(heldBySpace, heldByNode, revision, err)
+	return _c
+}
+
+func (_c *IDCache_ReservePath_Call) RunAndReturn(run func(context.Context, string, string, string) (string, string, uint64, error)) *IDCache_ReservePath_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // Set provides a mock function with given fields: ctx, spaceID, nodeID, val
 func (_m *IDCache) Set(ctx context.Context, spaceID string, nodeID string, val string) error {
 	ret := _m.Called(ctx, spaceID, nodeID, val)
@@ -348,6 +470,66 @@ func (_c *IDCache_Set_Call) Return(_a0 error) *IDCache_Set_Call {
 }
 
 func (_c *IDCache_Set_Call) RunAndReturn(run func(context.Context, string, string, string) error) *IDCache_Set_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// TakeOverPath provides a mock function with given fields: ctx, spaceID, nodeID, path, revision
+func (_m *IDCache) TakeOverPath(ctx context.Context, spaceID string, nodeID string, path string, revision uint64) (bool, error) {
+	ret := _m.Called(ctx, spaceID, nodeID, path, revision)
+
+	if len(ret) == 0 {
+		panic("no return value specified for TakeOverPath")
+	}
+
+	var r0 bool
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, string, string, string, uint64) (bool, error)); ok {
+		return rf(ctx, spaceID, nodeID, path, revision)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, string, string, string, uint64) bool); ok {
+		r0 = rf(ctx, spaceID, nodeID, path, revision)
+	} else {
+		r0 = ret.Get(0).(bool)
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, string, string, string, uint64) error); ok {
+		r1 = rf(ctx, spaceID, nodeID, path, revision)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// IDCache_TakeOverPath_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'TakeOverPath'
+type IDCache_TakeOverPath_Call struct {
+	*mock.Call
+}
+
+// TakeOverPath is a helper method to define mock.On call
+//   - ctx context.Context
+//   - spaceID string
+//   - nodeID string
+//   - path string
+//   - revision uint64
+func (_e *IDCache_Expecter) TakeOverPath(ctx interface{}, spaceID interface{}, nodeID interface{}, path interface{}, revision interface{}) *IDCache_TakeOverPath_Call {
+	return &IDCache_TakeOverPath_Call{Call: _e.mock.On("TakeOverPath", ctx, spaceID, nodeID, path, revision)}
+}
+
+func (_c *IDCache_TakeOverPath_Call) Run(run func(ctx context.Context, spaceID string, nodeID string, path string, revision uint64)) *IDCache_TakeOverPath_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string), args[2].(string), args[3].(string), args[4].(uint64))
+	})
+	return _c
+}
+
+func (_c *IDCache_TakeOverPath_Call) Return(_a0 bool, _a1 error) *IDCache_TakeOverPath_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *IDCache_TakeOverPath_Call) RunAndReturn(run func(context.Context, string, string, string, uint64) (bool, error)) *IDCache_TakeOverPath_Call {
 	_c.Call.Return(run)
 	return _c
 }
