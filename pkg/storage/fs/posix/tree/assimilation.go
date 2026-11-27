@@ -490,9 +490,15 @@ func (t *Tree) assimilate(item scanItem) error {
 
 		// read the metadata and the file again now that we hold the lock. The previous holder may have changed
 		// both, e.g. an upload sets the mtime on disk before it writes the mtime attribute.
-		_, _, parentID, mtime, err := t.lookup.MetadataBackend().IdentifyPath(context.Background(), item.Path)
+		_, idNow, parentID, mtime, err := t.lookup.MetadataBackend().IdentifyPath(context.Background(), item.Path)
 		if err != nil {
 			return err
+		}
+		if idNow != id {
+			// the id changed while we waited, e.g. a new item's assimilation failed and removed its claim
+			_ = unlock()
+			locked = false
+			return t.assimilate(item)
 		}
 		fi, err = os.Lstat(item.Path)
 		if err != nil {
@@ -635,13 +641,13 @@ func (t *Tree) assimilate(item scanItem) error {
 			return nil
 		}
 
-		assimilationNode := &assimilationNode{
+		tempNode := &assimilationNode{
 			spaceID: spaceID,
 			// Use the path as the node ID (which is used for calculating the lock file path) since we do not have an ID yet
 			// In the case path is too long, we do sha256 and extract first 240 characters
 			nodeId: t.generateTempNodeId(item.Path),
 		}
-		unlock, err := t.lookup.MetadataBackend().Lock(assimilationNode)
+		unlock, err := t.lookup.MetadataBackend().Lock(tempNode)
 		if err != nil {
 			return err
 		}
@@ -660,8 +666,37 @@ func (t *Tree) assimilate(item scanItem) error {
 
 		// assimilate new file
 		newId := uuid.New().String()
+
+		// Lock the new id before claiming it. From the claim on, another assimilation finds the
+		// id on disk and takes the known-item path, which locks by id. It has to wait until the
+		// item is cached, or it updates and propagates it a second time.
+		idUnlock, err := t.lookup.MetadataBackend().Lock(&assimilationNode{spaceID: spaceID, nodeId: newId, path: item.Path})
+		if err != nil {
+			return err
+		}
+		defer func() { _ = idUnlock() }()
+
+		// Claim the id before anything else. XATTR_CREATE fails when the item got an id since we
+		// looked, e.g. from a request that created it and whose reservation we missed. Whoever
+		// sets the id first owns the item, so it never gets two. Other errors, e.g. on a
+		// read-only file, are left to updateFile, which fails the same way and records it.
+		claimErr := xattr.SetWithFlags(item.Path, prefixes.IDAttr, []byte(newId), xattr.XATTR_CREATE)
+		if errors.Is(claimErr, syscall.EEXIST) {
+			t.log.Debug().Str("path", item.Path).Msg("item got an id meanwhile")
+			return nil
+		}
+		if claimErr == nil && t.idClaimed != nil {
+			t.idClaimed(item.Path)
+		}
+
 		fi, attrs, err := t.updateFile(item.Path, newId, spaceID, nil)
 		if err != nil {
+			if claimErr == nil {
+				// nobody else can have set an id since our claim, so this only removes ours
+				if rErr := xattr.Remove(item.Path, prefixes.IDAttr); rErr != nil && !metadata.IsAttrUnset(rErr) {
+					t.log.Error().Err(rErr).Str("path", item.Path).Msg("could not remove the id of an item that failed to assimilate")
+				}
+			}
 			return err
 		}
 
@@ -1220,10 +1255,17 @@ func (t *Tree) isDirty(path string) (bool, error) {
 // the path in the id cache. It waits for the node lock of the reserved id, so the request has
 // written the id by then. A stale reservation, with the lock free and still no id on the item,
 // reports false: the item is assimilated as a new one, it must not take the stale id, which may
-// belong to a deleted node.
+// belong to a deleted node. An error from the id cache is returned, so the item is retried
+// instead of assimilated without looking at a reservation.
 func (t *Tree) waitForReservation(spaceID, path string) (bool, error) {
 	reservedSpace, reservedID, err := t.lookup.IDCache.GetByPath(context.Background(), path)
-	if err != nil || reservedID == "" || reservedSpace != spaceID {
+	var notFound errtypes.IsNotFound
+	switch {
+	case errors.As(err, &notFound):
+		return false, nil
+	case err != nil:
+		return false, errors.Wrap(err, "failed to look up a reservation for the new item")
+	case reservedID == "" || reservedSpace != spaceID:
 		return false, nil
 	}
 	unlock, err := t.lookup.MetadataBackend().Lock(&assimilationNode{

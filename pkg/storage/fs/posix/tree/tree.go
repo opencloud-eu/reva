@@ -126,6 +126,11 @@ type Tree struct {
 	// deletes old revisions after a change on disk created a new one, disabled without a strategy
 	revisionsCleanup *revisioncleanup.Service
 
+	// called by createDirNode between creating a folder and setting its id, for tests only
+	dirCreated func(path string)
+	// called by assimilate between claiming the id of a new item and caching it, for tests only
+	idClaimed func(path string)
+
 	es  events.Stream
 	log *zerolog.Logger
 }
@@ -1033,6 +1038,35 @@ func (t *Tree) reservePath(ctx context.Context, n *node.Node, path string) error
 	return errtypes.AlreadyExists(n.Name)
 }
 
+// takeOverDirNode makes n the folder at path that an assimilation gave an id of its own before
+// createDirNode could set ours. It releases our reservation and lock, switches n to the id on
+// disk and locks that, which waits for the assimilation to finish. It returns the unlock func of
+// the new lock. If the id is still ours, e.g. after a retry, nothing changes.
+func (t *Tree) takeOverDirNode(n *node.Node, d *os.File, path string, unlock metadata.UnlockFunc, release func()) (metadata.UnlockFunc, error) {
+	id, err := xattr.FGet(d, prefixes.IDAttr)
+	if err != nil {
+		release()
+		return unlock, errors.Wrap(err, "posixfs: could not read the id of the new node")
+	}
+	if string(id) == n.ID {
+		return unlock, nil
+	}
+	t.log.Debug().Str("path", path).Str("id", n.ID).Str("assimilatedID", string(id)).Msg("the new folder was assimilated before it got its id, taking over the assimilated id")
+
+	// The path entry points at the assimilated id by now or soon, Release leaves that alone.
+	release()
+	noop := func() error { return nil }
+	if err := unlock(); err != nil {
+		return noop, err
+	}
+	n.ID = string(id)
+	newUnlock, err := t.lookup.MetadataBackend().Lock(n)
+	if err != nil {
+		return noop, err
+	}
+	return newUnlock, nil
+}
+
 // releaseNewNodeLock releases the lock of a node InitNewNode failed to create.
 func releaseNewNodeLock(ctx context.Context, n *node.Node, unlock metadata.UnlockFunc) {
 	if err := unlock(); err != nil {
@@ -1063,6 +1097,7 @@ func (t *Tree) createDirNode(ctx context.Context, n *node.Node) (err error) {
 		return err
 	}
 	defer func() {
+		// the lock we hold, see takeOverDirNode
 		_ = unlock()
 	}()
 
@@ -1092,6 +1127,10 @@ func (t *Tree) createDirNode(ctx context.Context, n *node.Node) (err error) {
 		return errors.Wrap(err, "posixfs: error creating node")
 	}
 
+	if t.dirCreated != nil {
+		t.dirCreated(path)
+	}
+
 	// Write mtime from filesystem to metadata to preven re-assimilation
 	d, err := os.Open(path)
 	if err != nil {
@@ -1100,6 +1139,21 @@ func (t *Tree) createDirNode(ctx context.Context, n *node.Node) (err error) {
 	defer func() {
 		_ = d.Close()
 	}()
+
+	// Write the id before anything else. If the watcher missed our reservation, e.g. because the
+	// id cache read failed or came from a replica that lags behind, its assimilation sets an id
+	// of its own. Both set the id with XATTR_CREATE, so whoever is first owns the folder and it
+	// never gets two ids. If the assimilation was first, the folder is known under its id and
+	// we take that over.
+	if err := xattr.FSetWithFlags(d, prefixes.IDAttr, []byte(n.ID), xattr.XATTR_CREATE); err != nil {
+		if !errors.Is(err, syscall.EEXIST) {
+			release()
+			return errors.Wrap(err, "posixfs: could not set the id of the new node")
+		}
+		if unlock, err = t.takeOverDirNode(n, d, path, unlock, release); err != nil {
+			return err
+		}
+	}
 
 	fi, err := d.Stat()
 	if err != nil {

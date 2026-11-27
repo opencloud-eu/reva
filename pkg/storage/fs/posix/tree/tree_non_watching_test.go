@@ -9,11 +9,13 @@ import (
 	"time"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/google/uuid"
 	"github.com/opencloud-eu/reva/v3/pkg/errtypes"
 	"github.com/opencloud-eu/reva/v3/pkg/storage"
 	"github.com/opencloud-eu/reva/v3/pkg/storage/fs/posix/blobstore"
 	"github.com/opencloud-eu/reva/v3/pkg/storage/fs/posix/lookup"
 	"github.com/opencloud-eu/reva/v3/pkg/storage/fs/posix/timemanager"
+	"github.com/opencloud-eu/reva/v3/pkg/storage/fs/posix/tree"
 	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/metadata/prefixes"
 	"github.com/opencloud-eu/reva/v3/pkg/storage/pkg/decomposedfs/node"
 	"github.com/pkg/xattr"
@@ -306,6 +308,100 @@ var _ = Describe("Non-watching tree", func() {
 		Expect(err).To(HaveOccurred())
 		_, ok = err.(errtypes.IsPermissionDenied)
 		Expect(ok).To(BeTrue())
+	})
+
+	// The watcher can miss the reservation of a new folder, e.g. when the id cache read fails or
+	// comes from a replica that lags behind. The folder must still end up with one id.
+	It("takes over the id of a new folder that was assimilated before it got its id", func() {
+		n, err := non_watching_env.Lookup.NodeFromResource(non_watching_env.Ctx, &provider.Reference{
+			ResourceId: non_watching_env.SpaceRootRes,
+			Path:       subtree + "/folder",
+		})
+		Expect(err).ToNot(HaveOccurred())
+		n.ID = uuid.NewString()
+		ourID := n.ID
+		path := filepath.Join(n.ParentPath(), n.Name)
+
+		// the watcher finds the folder before it has our id and doesn't see the reservation
+		non_watching_env.Tree.OnDirCreatedForTest(func(p string) {
+			if p != path {
+				return
+			}
+			Expect(non_watching_env.Lookup.IDCache.DeletePath(non_watching_env.Ctx, p)).To(Succeed())
+			Expect(non_watching_env.Tree.AssimilateForTest(p)).To(Succeed())
+		})
+		DeferCleanup(func() { non_watching_env.Tree.OnDirCreatedForTest(nil) })
+
+		Expect(non_watching_env.Tree.CreateDir(non_watching_env.Ctx, n)).To(Succeed())
+
+		// the folder keeps the id of the assimilation, on disk, in the cache and in the node
+		idOnDisk, err := xattr.Get(path, prefixes.IDAttr)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(string(idOnDisk)).ToNot(Equal(ourID))
+		Expect(n.ID).To(Equal(string(idOnDisk)))
+		_, cachedID, err := non_watching_env.Lookup.IDsForPath(non_watching_env.Ctx, path)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(cachedID).To(Equal(n.ID))
+		_, err = non_watching_env.Lookup.GetCachedID(non_watching_env.Ctx, n.SpaceID, ourID)
+		Expect(err).To(HaveOccurred(), "our id must not be cached")
+
+		// with the metadata of the request
+		resolved, err := non_watching_env.Lookup.NodeFromResource(non_watching_env.Ctx, &provider.Reference{
+			ResourceId: non_watching_env.SpaceRootRes,
+			Path:       subtree + "/folder",
+		})
+		Expect(err).ToNot(HaveOccurred())
+		Expect(resolved.ID).To(Equal(n.ID))
+		Expect(resolved.Name).To(Equal("folder"))
+		Expect(resolved.ParentID).To(Equal(n.ParentID))
+
+		// and both locks are free
+		for _, id := range []string{ourID, n.ID} {
+			unlock, err := non_watching_env.Lookup.MetadataBackend().Lock(node.New(n.SpaceID, id, "", "", 0, "", provider.ResourceType_RESOURCE_TYPE_CONTAINER, nil, non_watching_env.Lookup))
+			Expect(err).ToNot(HaveOccurred())
+			Expect(unlock()).To(Succeed())
+		}
+	})
+
+	It("makes a second assimilation of a new file wait until the first has cached it", func() {
+		parentSize := func() uint64 {
+			parent, err := non_watching_env.Lookup.NodeFromResource(non_watching_env.Ctx, &provider.Reference{
+				ResourceId: non_watching_env.SpaceRootRes,
+				Path:       subtree,
+			})
+			Expect(err).ToNot(HaveOccurred())
+			size, err := parent.GetTreeSize(non_watching_env.Ctx)
+			Expect(err).ToNot(HaveOccurred())
+			return size
+		}
+		initialSize := parentSize()
+
+		path := filepath.Join(root, "file")
+		content := make([]byte, 4096)
+		Expect(os.WriteFile(path, content, 0600)).To(Succeed())
+
+		// a second listing finds the file once the first one has claimed an id for it
+		second := make(chan error, 1)
+		secondFinishedEarly := false
+		non_watching_env.Tree.OnIDClaimedForTest(func(p string) {
+			if p != path {
+				return
+			}
+			go func() { second <- non_watching_env.Tree.AssimilateForTest(path) }()
+			select {
+			case <-second:
+				secondFinishedEarly = true
+			case <-time.After(200 * time.Millisecond):
+			}
+		})
+		DeferCleanup(func() { non_watching_env.Tree.OnIDClaimedForTest(nil) })
+
+		Expect(non_watching_env.Tree.AssimilateForTest(path)).To(Succeed())
+		Expect(secondFinishedEarly).To(BeFalse(), "the second assimilation didn't wait for the first")
+		Eventually(second).Should(Receive(MatchError(tree.ErrSkipAlreadyKnown)))
+
+		Eventually(parentSize).Should(Equal(initialSize + uint64(len(content))))
+		Consistently(parentSize, 200*time.Millisecond).Should(Equal(initialSize + uint64(len(content))))
 	})
 
 	It("does not change the tree size when a file fails to assimilate", func() {
