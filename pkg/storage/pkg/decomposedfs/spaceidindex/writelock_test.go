@@ -1,3 +1,6 @@
+// Copyright 2026 Michael Bortlik <michael@bortlik.io>
+// SPDX-License-Identifier: Apache-2.0
+
 package spaceidindex
 
 import (
