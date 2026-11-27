@@ -14,6 +14,7 @@
 
 ### 🐛 Bug Fixes
 
+- fix(posix): give new files their id before they get their name [[#1076](https://github.com/opencloud-eu/reva/pull/1076)]
 - fix(decomposedfs): replace the space index atomically [[#1082](https://github.com/opencloud-eu/reva/pull/1082)]
 - fix: don't cache a nil map after a failed xattr read, and don't panic on one [[#1074](https://github.com/opencloud-eu/reva/pull/1074)]
 - ci: raise golangci-lint timeout to 15m [[#1065](https://github.com/opencloud-eu/reva/pull/1065)]
