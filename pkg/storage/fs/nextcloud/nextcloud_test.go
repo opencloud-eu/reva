@@ -899,7 +899,7 @@ var _ = Describe("Nextcloud", func() {
 					"meta": "data",
 				},
 			}
-			err := nc.SetArbitraryMetadata(ctx, ref, md)
+			_, err := nc.SetArbitraryMetadata(ctx, ref, md)
 			Expect(err).ToNot(HaveOccurred())
 			checkCalled(called, `POST /apps/sciencemesh/~tester/api/storage/SetArbitraryMetadata {"ref":{"resource_id":{"storage_id":"storage-id","opaque_id":"opaque-id"},"path":"some/file/path.txt"},"md":{"metadata":{"arbi":"trary","meta":"data"}}}`)
 		})
@@ -918,7 +918,7 @@ var _ = Describe("Nextcloud", func() {
 				Path: "some/file/path.txt",
 			}
 			keys := []string{"arbi"}
-			err := nc.UnsetArbitraryMetadata(ctx, ref, keys)
+			_, err := nc.UnsetArbitraryMetadata(ctx, ref, keys)
 			Expect(err).ToNot(HaveOccurred())
 			checkCalled(called, `POST /apps/sciencemesh/~tester/api/storage/UnsetArbitraryMetadata {"ref":{"resource_id":{"storage_id":"storage-id","opaque_id":"opaque-id"},"path":"some/file/path.txt"},"keys":["arbi"]}`)
 		})
